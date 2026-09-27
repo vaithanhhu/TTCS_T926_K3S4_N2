@@ -1,0 +1,4 @@
+# Tương thích với lệnh tiêu chuẩn `docker compose up -d`
+# Xem cấu hình chi tiết tại docker.yml
+include:
+  - path: docker.yml
