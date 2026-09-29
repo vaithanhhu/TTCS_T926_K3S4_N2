@@ -1,0 +1,536 @@
+const { getDatabase } = require('./database');
+const { hashPassword } = require('../utils/password');
+
+function seedDatabase(db) {
+  const database = db || getDatabase();
+
+  // 1. Seed Roles (AC-01 7 standard roles)
+  const roles = [
+    { id: 'role-admin', code: 'ADMIN', name: 'Quản trị hệ thống', description: 'Quản lý tài khoản, vai trò, danh mục và giám sát hệ thống', defaultPath: '/admin' },
+    { id: 'role-hr-mgr', code: 'HR_MANAGER', name: 'Trưởng phòng Nhân sự', description: 'Chủ sở hữu hoạt động tuyển dụng, phân công recruiter, giám sát ngân sách', defaultPath: '/dashboard' },
+    { id: 'role-recruiter', code: 'RECRUITER', name: 'Nhân viên tuyển dụng', description: 'Vận hành tuyển dụng, điều phối pipeline, đặt lịch phỏng vấn, soạn offer', defaultPath: '/recruitment' },
+    { id: 'role-hiring-mgr', code: 'HIRING_MGR', name: 'Trưởng bộ phận', description: 'Sở hữu vị trí tuyển dụng, tạo yêu cầu, đánh giá ứng viên', defaultPath: '/hiring' },
+    { id: 'role-interviewer', code: 'INTERVIEWER', name: 'Người phỏng vấn', description: 'Xem lịch, đọc CV, nộp phiếu đánh giá năng lực', defaultPath: '/interviews' },
+    { id: 'role-approver', code: 'APPROVER', name: 'Người duyệt', description: 'Ban giám đốc hoặc cấp duyệt theo hạn mức phê duyệt yêu cầu & offer', defaultPath: '/approvals' },
+    { id: 'role-candidate', code: 'CANDIDATE', name: 'Ứng viên', description: 'Ứng viên nộp hồ sơ, theo dõi trạng thái, xác nhận lịch & phản hồi offer', defaultPath: '/candidate' }
+  ];
+
+  const insertRole = database.prepare(`
+    INSERT INTO roles (id, code, name, description, default_path)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(code) DO UPDATE SET
+      name = excluded.name,
+      description = excluded.description,
+      default_path = excluded.default_path
+  `);
+
+  for (const r of roles) {
+    insertRole.run(r.id, r.code, r.name, r.description, r.defaultPath);
+  }
+
+  // 2. Seed Permissions (S1-05 RBAC Matrix)
+  const permissions = [
+    // Users & Roles Management
+    { id: 'perm-user-read', code: 'user.read', name: 'Xem danh sách người dùng', module: 'USERS', description: 'Xem danh sách và chi tiết thông tin người dùng nội bộ' },
+    { id: 'perm-user-create', code: 'user.create', name: 'Tạo người dùng mới', module: 'USERS', description: 'Tạo tài khoản người dùng nội bộ và gửi thông tin xác thực' },
+    { id: 'perm-user-update', code: 'user.update', name: 'Cập nhật người dùng', module: 'USERS', description: 'Sửa thông tin hồ sơ, phòng ban, chức danh người dùng' },
+    { id: 'perm-user-delete', code: 'user.delete', name: 'Xóa người dùng', module: 'USERS', description: 'Xóa tài khoản người dùng khỏi hệ thống' },
+    { id: 'perm-role-read', code: 'role.read', name: 'Xem danh sách vai trò', module: 'ROLES', description: 'Xem ma trận vai trò và quyền hạn tương ứng' },
+    { id: 'perm-role-assign', code: 'role.assign', name: 'Gán vai trò cho người dùng', module: 'ROLES', description: 'Phân quyền và gán các vai trò nghiệp vụ' },
+    { id: 'perm-account-lock', code: 'account.lock', name: 'Khóa tài khoản', module: 'ACCOUNTS', description: 'Khóa tài khoản người dùng kèm lý do bắt buộc' },
+    { id: 'perm-account-unlock', code: 'account.unlock', name: 'Mở khóa tài khoản', module: 'ACCOUNTS', description: 'Mở khóa tài khoản người dùng đã bị khóa' },
+
+    // Requisitions Management
+    { id: 'perm-req-read', code: 'requisition.read', name: 'Xem yêu cầu tuyển dụng', module: 'REQUISITIONS', description: 'Xem danh sách và chi tiết phiếu yêu cầu tuyển dụng' },
+    { id: 'perm-req-create', code: 'requisition.create', name: 'Tạo yêu cầu tuyển dụng', module: 'REQUISITIONS', description: 'Khởi tạo phiếu yêu cầu tuyển dụng nhân sự mới' },
+    { id: 'perm-req-approve', code: 'requisition.approve', name: 'Phê duyệt yêu cầu tuyển dụng', module: 'REQUISITIONS', description: 'Ký duyệt hoặc từ chối phiếu yêu cầu tuyển dụng' },
+
+    // Candidate Pipeline Management
+    { id: 'perm-cand-read', code: 'candidate.read', name: 'Xem hồ sơ ứng viên', module: 'CANDIDATES', description: 'Xem danh sách hồ sơ ứng viên và CV trong pipeline tuyển dụng' },
+    { id: 'perm-cand-create', code: 'candidate.create', name: 'Tạo/nộp hồ sơ ứng viên', module: 'CANDIDATES', description: 'Thêm mới hoặc ứng viên nộp hồ sơ ứng tuyển' },
+    { id: 'perm-cand-update', code: 'candidate.update', name: 'Cập nhật hồ sơ ứng viên', module: 'CANDIDATES', description: 'Cập nhật trạng thái ứng viên theo các vòng tuyển dụng' },
+
+    // Interviews & Evaluations
+    { id: 'perm-int-read', code: 'interview.read', name: 'Xem lịch phỏng vấn', module: 'INTERVIEWS', description: 'Xem danh sách lịch phỏng vấn và thông tin ứng viên' },
+    { id: 'perm-int-eval', code: 'interview.evaluate', name: 'Đánh giá phỏng vấn', module: 'INTERVIEWS', description: 'Gửi kết quả nhận xét và phiếu đánh giá năng lực ứng viên' },
+
+    // Offers & Approvals
+    { id: 'perm-off-read', code: 'offer.read', name: 'Xem thông tin offer', module: 'OFFERS', description: 'Xem thư mời nhận việc và chế độ đãi ngộ' },
+    { id: 'perm-off-create', code: 'offer.create', name: 'Soạn thảo offer', module: 'OFFERS', description: 'Lập phiếu đề xuất offer lương và chế độ đãi ngộ' },
+    { id: 'perm-off-approve', code: 'offer.approve', name: 'Phê duyệt offer', module: 'OFFERS', description: 'Phê duyệt phiếu offer theo hạn mức ngân sách' },
+
+    // System Security Audit
+    { id: 'perm-audit-read', code: 'audit.read', name: 'Xem nhật ký bảo mật', module: 'AUDIT', description: 'Xem nhật ký đăng nhập, đăng xuất, khóa tài khoản và kiểm toán' }
+  ];
+
+  const insertPerm = database.prepare(`
+    INSERT INTO permissions (id, code, name, module, description)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(code) DO UPDATE SET
+      name = excluded.name,
+      module = excluded.module,
+      description = excluded.description
+  `);
+
+  for (const p of permissions) {
+    insertPerm.run(p.id, p.code, p.name, p.module, p.description);
+  }
+
+  // 3. Seed Role_Permissions (AC-01 RBAC Matrix for 7 roles)
+  const rolePermissionsMatrix = {
+    ADMIN: [
+      'user.read', 'user.create', 'user.update', 'user.delete',
+      'role.read', 'role.assign',
+      'account.lock', 'account.unlock',
+      'requisition.read',
+      'candidate.read', 'candidate.create', 'candidate.update',
+      'interview.read',
+      'offer.read',
+      'audit.read'
+    ],
+    HR_MANAGER: [
+      'user.read',
+      'role.read',
+      'requisition.read', 'requisition.create', 'requisition.approve',
+      'candidate.read', 'candidate.update',
+      'interview.read',
+      'offer.read', 'offer.create', 'offer.approve'
+    ],
+    RECRUITER: [
+      'requisition.read',
+      'candidate.read', 'candidate.create', 'candidate.update',
+      'interview.read',
+      'offer.read', 'offer.create'
+    ],
+    HIRING_MGR: [
+      'requisition.read', 'requisition.create',
+      'candidate.read',
+      'interview.read', 'interview.evaluate'
+    ],
+    INTERVIEWER: [
+      'interview.read', 'interview.evaluate'
+    ],
+    APPROVER: [
+      'requisition.read', 'requisition.approve',
+      'offer.read', 'offer.approve'
+    ],
+    CANDIDATE: [
+      'candidate.create', 'offer.read'
+    ]
+  };
+
+  const deleteRolePerms = database.prepare('DELETE FROM role_permissions WHERE role_id = (SELECT id FROM roles WHERE code = ?)');
+  const insertRolePerm = database.prepare(`
+    INSERT INTO role_permissions (role_id, permission_id)
+    VALUES (
+      (SELECT id FROM roles WHERE code = ?),
+      (SELECT id FROM permissions WHERE code = ?)
+    )
+  `);
+
+  let totalRolePerms = 0;
+  for (const [roleCode, permCodes] of Object.entries(rolePermissionsMatrix)) {
+    deleteRolePerms.run(roleCode);
+    for (const permCode of permCodes) {
+      insertRolePerm.run(roleCode, permCode);
+      totalRolePerms++;
+    }
+  }
+
+  // Default hashed password for seed accounts: "Ats@123456"
+  const defaultPasswordHash = hashPassword('Ats@123456');
+
+  // 4. Seed Users
+  const users = [
+    {
+      id: 'usr-admin',
+      email: 'admin@company.com',
+      fullName: 'Nguyễn Quản Trị',
+      jobTitle: 'System Administrator & IT Lead',
+      departmentId: 'dept-3',
+      departmentName: 'Khối Công Nghệ & Kỹ Thuật',
+      phoneNumber: '0901234567',
+      status: 'ACTIVE',
+      roles: ['ADMIN']
+    },
+    {
+      id: 'usr-hr-mgr',
+      email: 'hrmanager@company.com',
+      fullName: 'Trần Thị Mai',
+      jobTitle: 'Trưởng Phòng Nhân Sự',
+      departmentId: 'dept-2',
+      departmentName: 'Phòng Nhân Sự',
+      phoneNumber: '0912345678',
+      status: 'ACTIVE',
+      roles: ['HR_MANAGER']
+    },
+    {
+      id: 'usr-recruiter',
+      email: 'recruiter@company.com',
+      fullName: 'Hoàng Thu Thảo',
+      jobTitle: 'Senior Recruiter',
+      departmentId: 'dept-2',
+      departmentName: 'Phòng Nhân Sự',
+      phoneNumber: '0923456789',
+      status: 'ACTIVE',
+      roles: ['RECRUITER']
+    },
+    {
+      id: 'usr-recruiter-2',
+      email: 'recruiter2@company.com',
+      fullName: 'Vũ Văn Thắng',
+      jobTitle: 'Talent Acquisition Partner',
+      departmentId: 'dept-2',
+      departmentName: 'Phòng Nhân Sự',
+      phoneNumber: '0934567890',
+      status: 'ACTIVE',
+      roles: ['RECRUITER']
+    },
+    {
+      id: 'usr-hiring-mgr',
+      email: 'hiringmgr@company.com',
+      fullName: 'Lê Hoàng Nam',
+      jobTitle: 'Giám Đốc Khối Công Nghệ',
+      departmentId: 'dept-3',
+      departmentName: 'Khối Công Nghệ & Kỹ Thuật',
+      phoneNumber: '0945678901',
+      status: 'ACTIVE',
+      roles: ['HIRING_MGR']
+    },
+    {
+      id: 'usr-interviewer',
+      email: 'interviewer@company.com',
+      fullName: 'Đặng Tuấn Anh',
+      jobTitle: 'Tech Lead / Thành viên Hội đồng Phỏng vấn',
+      departmentId: 'dept-5',
+      departmentName: 'Phòng Phát Triển Phần Mềm',
+      phoneNumber: '0956789012',
+      status: 'ACTIVE',
+      roles: ['INTERVIEWER']
+    },
+    {
+      id: 'usr-approver',
+      email: 'approver@company.com',
+      fullName: 'Vũ Minh Đức (CEO)',
+      jobTitle: 'Tổng Giám Đốc Điều Hành',
+      departmentId: 'dept-1',
+      departmentName: 'Ban Giám Đốc',
+      phoneNumber: '0967890123',
+      status: 'ACTIVE',
+      roles: ['APPROVER']
+    },
+    {
+      id: 'usr-dual-role',
+      email: 'dualrole@company.com',
+      fullName: 'Vũ Hồng Hạnh',
+      jobTitle: 'QA Lead & Trưởng Ban Phỏng Vấn Kỹ Thuật',
+      departmentId: 'dept-6',
+      departmentName: 'Phòng Đảm Bảo Chất Lượng (QA/QC)',
+      phoneNumber: '0967890123',
+      status: 'ACTIVE',
+      roles: ['HIRING_MGR', 'INTERVIEWER']
+    },
+    {
+      id: 'usr-admin-02',
+      email: 'security.admin@company.com',
+      fullName: 'Phan Bảo An',
+      jobTitle: 'Security Administrator',
+      departmentId: 'dept-3',
+      departmentName: 'Khối Công Nghệ & Kỹ Thuật',
+      phoneNumber: '0926777999',
+      status: 'ACTIVE',
+      roles: ['ADMIN']
+    },
+    {
+      id: 'usr-candidate',
+      email: 'candidate@example.com',
+      fullName: 'Nguyễn Ứng Viên',
+      jobTitle: 'Ứng viên tự do',
+      departmentId: 'dept-ext',
+      departmentName: 'Cổng Tuyển Dụng Công Khai',
+      phoneNumber: '0978901234',
+      status: 'ACTIVE',
+      roles: ['CANDIDATE']
+    },
+    {
+      id: 'usr-locked',
+      email: 'cuunhanvien@company.com',
+      fullName: 'Đỗ Hữu Nghĩa',
+      jobTitle: 'Cựu Recruiter',
+      departmentId: 'dept-2',
+      departmentName: 'Phòng Nhân Sự',
+      phoneNumber: '0919998887',
+      status: 'LOCKED',
+      lockReason: 'Nhân sự đã nghỉ việc theo quyết định số 142/QĐ-NS ngày 15/09/2026. Đã thu hồi toàn bộ quyền truy cập dữ liệu ứng viên.',
+      roles: ['RECRUITER']
+    },
+    {
+      id: 'usr-dev-01',
+      email: 'dev1@company.com',
+      fullName: 'Phạm Đức Huy',
+      jobTitle: 'Backend Senior Engineer',
+      departmentId: 'dept-5',
+      departmentName: 'Phòng Phát Triển Phần Mềm',
+      phoneNumber: '0981112233',
+      status: 'ACTIVE',
+      roles: ['INTERVIEWER']
+    },
+    {
+      id: 'usr-dev-02',
+      email: 'dev2@company.com',
+      fullName: 'Lê Quỳnh Nga',
+      jobTitle: 'Frontend Lead / Senior UI Engineer',
+      departmentId: 'dept-5',
+      departmentName: 'Phòng Phát Triển Phần Mềm',
+      phoneNumber: '0982223344',
+      status: 'ACTIVE',
+      roles: ['INTERVIEWER']
+    },
+    {
+      id: 'usr-dev-03',
+      email: 'devops@company.com',
+      fullName: 'Bùi Minh Quân',
+      jobTitle: 'Cloud & DevOps Specialist',
+      departmentId: 'dept-3',
+      departmentName: 'Khối Công Nghệ & Kỹ Thuật',
+      phoneNumber: '0983334455',
+      status: 'ACTIVE',
+      roles: ['INTERVIEWER']
+    },
+    {
+      id: 'usr-hr-03',
+      email: 'recruiter3@company.com',
+      fullName: 'Dương Thảo Linh',
+      jobTitle: 'Technical Recruiter',
+      departmentId: 'dept-2',
+      departmentName: 'Phòng Nhân Sự',
+      phoneNumber: '0984445566',
+      status: 'ACTIVE',
+      roles: ['RECRUITER']
+    },
+    {
+      id: 'usr-hr-04',
+      email: 'hr.officer@company.com',
+      fullName: 'Trịnh Thu Hà',
+      jobTitle: 'HR Operation Officer',
+      departmentId: 'dept-2',
+      departmentName: 'Phòng Nhân Sự',
+      phoneNumber: '0985556677',
+      status: 'ACTIVE',
+      roles: ['RECRUITER']
+    },
+    {
+      id: 'usr-finance-01',
+      email: 'cfo@company.com',
+      fullName: 'Lâm Đình Bảo (CFO)',
+      jobTitle: 'Giám Đốc Tài Chính',
+      departmentId: 'dept-4',
+      departmentName: 'Phòng Tài Chính - Kế Toán',
+      phoneNumber: '0986667788',
+      status: 'ACTIVE',
+      roles: ['APPROVER']
+    },
+    {
+      id: 'usr-finance-02',
+      email: 'finance.mgr@company.com',
+      fullName: 'Ngô Bích Thủy',
+      jobTitle: 'Trưởng Ban Kế Hoạch Ngân Sách',
+      departmentId: 'dept-4',
+      departmentName: 'Phòng Tài Chính - Kế Toán',
+      phoneNumber: '0987778899',
+      status: 'ACTIVE',
+      roles: ['HIRING_MGR']
+    },
+    {
+      id: 'usr-mkt-01',
+      email: 'cmo@company.com',
+      fullName: 'Hồ Trọng Đạt',
+      jobTitle: 'Giám Đốc Tiếp Thị & Thương Hiệu',
+      departmentId: 'dept-7',
+      departmentName: 'Phòng Marketing & Truyền Thông',
+      phoneNumber: '0988889900',
+      status: 'ACTIVE',
+      roles: ['HIRING_MGR']
+    },
+    {
+      id: 'usr-mkt-02',
+      email: 'content.lead@company.com',
+      fullName: 'Đỗ Phương Uyên',
+      jobTitle: 'Employer Branding Specialist',
+      departmentId: 'dept-7',
+      departmentName: 'Phòng Marketing & Truyền Thông',
+      phoneNumber: '0989990011',
+      status: 'ACTIVE',
+      roles: ['INTERVIEWER']
+    },
+    {
+      id: 'usr-product-01',
+      email: 'cpo@company.com',
+      fullName: 'Cao Văn Kiên',
+      jobTitle: 'Giám Đốc Sản Phẩm',
+      departmentId: 'dept-8',
+      departmentName: 'Khối Quản Trị Sản Phẩm',
+      phoneNumber: '0971112233',
+      status: 'ACTIVE',
+      roles: ['HIRING_MGR']
+    },
+    {
+      id: 'usr-product-02',
+      email: 'po@company.com',
+      fullName: 'Mai Tuấn Lộc',
+      jobTitle: 'Senior Product Owner',
+      departmentId: 'dept-8',
+      departmentName: 'Khối Quản Trị Sản Phẩm',
+      phoneNumber: '0972223344',
+      status: 'ACTIVE',
+      roles: ['INTERVIEWER']
+    },
+    {
+      id: 'usr-data-01',
+      email: 'ai.lead@company.com',
+      fullName: 'Lý Gia Huy',
+      jobTitle: 'AI Research & Data Lead',
+      departmentId: 'dept-3',
+      departmentName: 'Khối Công Nghệ & Kỹ Thuật',
+      phoneNumber: '0973334455',
+      status: 'ACTIVE',
+      roles: ['INTERVIEWER']
+    },
+    {
+      id: 'usr-legal-01',
+      email: 'legal@company.com',
+      fullName: 'Võ Hoàng Trâm',
+      jobTitle: 'Trưởng Ban Pháp Chế & Tuân Thủ',
+      departmentId: 'dept-9',
+      departmentName: 'Ban Pháp Chế',
+      phoneNumber: '0974445566',
+      status: 'ACTIVE',
+      roles: ['APPROVER']
+    },
+    {
+      id: 'usr-locked-02',
+      email: 'locked.dev@company.com',
+      fullName: 'Trương Vĩnh Phát',
+      jobTitle: 'Cựu Kỹ sư Phần mềm',
+      departmentId: 'dept-5',
+      departmentName: 'Phòng Phát Triển Phần Mềm',
+      phoneNumber: '0975556677',
+      status: 'LOCKED',
+      lockReason: 'Tài khoản bị khóa do đình chỉ công tác phục vụ thanh tra an ninh.',
+      roles: ['INTERVIEWER']
+    }
+  ];
+
+  const insertUser = database.prepare(`
+    INSERT INTO users (id, email, password_hash, full_name, job_title, department_id, department_name, phone_number, status, lock_reason, failed_attempts, locked_until)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL)
+    ON CONFLICT(email) DO UPDATE SET
+      password_hash = excluded.password_hash,
+      full_name = excluded.full_name,
+      job_title = excluded.job_title,
+      department_name = excluded.department_name,
+      phone_number = excluded.phone_number,
+      status = excluded.status,
+      lock_reason = excluded.lock_reason,
+      failed_attempts = 0,
+      locked_until = NULL
+  `);
+
+  const deleteUserRoles = database.prepare('DELETE FROM user_roles WHERE user_id = ?');
+  const insertUserRole = database.prepare(`
+    INSERT INTO user_roles (user_id, role_id)
+    VALUES (?, (SELECT id FROM roles WHERE code = ?))
+  `);
+
+  for (const u of users) {
+    insertUser.run(
+      u.id,
+      u.email,
+      defaultPasswordHash,
+      u.fullName,
+      u.jobTitle,
+      u.departmentId,
+      u.departmentName,
+      u.phoneNumber,
+      u.status,
+      u.lockReason || null
+    );
+
+    deleteUserRoles.run(u.id);
+    for (const rCode of u.roles) {
+      insertUserRole.run(u.id, rCode);
+    }
+  }
+
+  // 5. Seed Requisitions (S1-10 AC-03 Handover tracking)
+  const requisitions = [
+    {
+      id: 'req-001',
+      code: 'REQ-2026-001',
+      title: 'Senior Backend Engineer (NodeJS/Go)',
+      departmentName: 'Phòng Phát Triển Phần Mềm',
+      hiringManagerId: 'usr-hiring-mgr',
+      recruiterId: 'usr-recruiter',
+      status: 'OPEN',
+      headcount: 2
+    },
+    {
+      id: 'req-002',
+      code: 'REQ-2026-002',
+      title: 'Senior Frontend Engineer (React/TypeScript)',
+      departmentName: 'Phòng Phát Triển Phần Mềm',
+      hiringManagerId: 'usr-hiring-mgr',
+      recruiterId: 'usr-recruiter-2',
+      status: 'OPEN',
+      headcount: 2
+    },
+    {
+      id: 'req-003',
+      code: 'REQ-2026-003',
+      title: 'DevOps / SRE Specialist',
+      departmentName: 'Khối Công Nghệ & Kỹ Thuật',
+      hiringManagerId: 'usr-hiring-mgr',
+      recruiterId: 'usr-recruiter',
+      status: 'IN_PROGRESS',
+      headcount: 1
+    },
+    {
+      id: 'req-004',
+      code: 'REQ-2026-004',
+      title: 'Talent Acquisition Partner',
+      departmentName: 'Phòng Nhân Sự',
+      hiringManagerId: 'usr-hr-mgr',
+      recruiterId: 'usr-recruiter-2',
+      status: 'OPEN',
+      headcount: 1
+    }
+  ];
+
+  const insertReq = database.prepare(`
+    INSERT INTO requisitions (id, code, title, department_name, hiring_manager_id, recruiter_id, status, headcount, handover_required, handover_notes, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, datetime('now'), datetime('now'))
+    ON CONFLICT(code) DO UPDATE SET
+      title = excluded.title,
+      department_name = excluded.department_name,
+      hiring_manager_id = excluded.hiring_manager_id,
+      recruiter_id = excluded.recruiter_id,
+      status = excluded.status,
+      headcount = excluded.headcount,
+      handover_required = 0,
+      handover_notes = NULL
+  `);
+
+  for (const r of requisitions) {
+    insertReq.run(r.id, r.code, r.title, r.departmentName, r.hiringManagerId, r.recruiterId, r.status, r.headcount);
+  }
+
+  console.log(`[Seed] Seeded ${roles.length} roles, ${permissions.length} permissions, ${totalRolePerms} role-permissions mappings, ${users.length} users, and ${requisitions.length} requisitions successfully with secure password hashing.`);
+}
+
+if (require.main === module) {
+  seedDatabase();
+}
+
+module.exports = {
+  seedDatabase
+};
