@@ -23,6 +23,11 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+*.log
+
+# SQLite Temporary WAL / SHM files
+backend/data/*.db-shm
+backend/data/*.db-wal
 
 # Docker
 postgres_data/
@@ -42,4 +47,3 @@ __pycache__/
 
 # Temporary
 *.tmp
-*.log
