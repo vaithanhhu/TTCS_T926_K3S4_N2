@@ -2,6 +2,7 @@ const crypto = require('node:crypto');
 const { getDatabase } = require('../db/database');
 const { verifyPassword } = require('../utils/password');
 const config = require('../config/config');
+const { getEmailService } = require('./emailService');
 
 // Dummy hash used for constant-time failure when email is not found
 const DUMMY_HASH = '0123456789abcdef0123456789abcdef:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
@@ -9,6 +10,7 @@ const DUMMY_HASH = '0123456789abcdef0123456789abcdef:0123456789abcdef0123456789a
 class AuthService {
   constructor(db) {
     this.db = db || getDatabase();
+    this.emailService = getEmailService(this.db);
   }
 
   /**
@@ -424,6 +426,13 @@ class AuthService {
       `).run(tokenId, user.id, resetToken, resetExpiresAt);
 
       this.logAudit(normalizedEmail, ipAddress, 'SUCCESS', 'Yêu cầu đặt lại mật khẩu. Đã tạo token 30 phút.');
+
+      // Dispatch real transactional email
+      if (this.emailService) {
+        this.emailService.sendPasswordResetEmail(normalizedEmail, resetToken, resetExpiresAt).catch(err => {
+          console.error('[AuthService] Error dispatching reset email:', err.message);
+        });
+      }
     } else {
       // User not found or inactive: Still log audit failure
       this.logAudit(normalizedEmail, ipAddress, 'FAILURE', 'Yêu cầu đặt lại mật khẩu cho email không tồn tại hoặc tài khoản bị khóa.');

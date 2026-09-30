@@ -524,7 +524,67 @@ function seedDatabase(db) {
     insertReq.run(r.id, r.code, r.title, r.departmentName, r.hiringManagerId, r.recruiterId, r.status, r.headcount);
   }
 
-  console.log(`[Seed] Seeded ${roles.length} roles, ${permissions.length} permissions, ${totalRolePerms} role-permissions mappings, ${users.length} users, and ${requisitions.length} requisitions successfully with secure password hashing.`);
+  // 6. Seed Candidates
+  const candidates = [
+    { id: 'cand-001', fullName: 'Đặng Minh Tuấn', email: 'tuan.dang@gmail.com', phone: '0912345678', reqId: 'req-001', stage: 'INTERVIEW', exp: 4, company: 'VNG Corp', salary: '35.000.000 đ', notes: 'Kỹ năng Node.js, Go và kiến trúc Microservices rất tốt.' },
+    { id: 'cand-002', fullName: 'Trần Bảo Trâm', email: 'tram.tran@outlook.com', phone: '0987654321', reqId: 'req-001', stage: 'SCREENING', exp: 3, company: 'FPT Software', salary: '30.000.000 đ', notes: 'Kinh nghiệm RESTful API, PostgreSQL và Docker.' },
+    { id: 'cand-003', fullName: 'Vũ Quốc Hùng', email: 'hung.vu@gmail.com', phone: '0903112233', reqId: 'req-002', stage: 'OFFER', exp: 5, company: 'Tiki Corporation', salary: '42.000.000 đ', notes: 'Frontend Lead, React, TypeScript và Design System xuất sắc.' },
+    { id: 'cand-004', fullName: 'Nguyễn Thùy Chi', email: 'chi.nguyen@yahoo.com', phone: '0934556677', reqId: 'req-002', stage: 'NEW', exp: 2, company: 'Viettel Telecom', salary: '25.000.000 đ', notes: 'Hồ sơ mới tiếp nhận qua cổng thông tin tuyển dụng.' },
+    { id: 'cand-005', fullName: 'Phạm Hoàng Long', email: 'long.pham@gmail.com', phone: '0978998877', reqId: 'req-003', stage: 'INTERVIEW', exp: 4, company: 'MoMo Wallet', salary: '38.000.000 đ', notes: 'Thành thạo Kubernetes, CI/CD pipeline và AWS Cloud.' },
+    { id: 'cand-006', fullName: 'Đỗ Mai Phương', email: 'phuong.do@gmail.com', phone: '0918776655', reqId: 'req-004', stage: 'HIRED', exp: 3, company: 'Shopee Vietnam', salary: '28.000.000 đ', notes: 'Đã hoàn tất thủ tục ký hợp đồng lao động.' }
+  ];
+
+  const insertCand = database.prepare(`
+    INSERT INTO candidates (id, full_name, email, phone_number, requisition_id, stage, experience_years, current_company, expected_salary, notes, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(id) DO UPDATE SET
+      full_name = excluded.full_name,
+      stage = excluded.stage,
+      expected_salary = excluded.expected_salary
+  `);
+
+  for (const c of candidates) {
+    insertCand.run(c.id, c.fullName, c.email, c.phone, c.reqId, c.stage, c.exp, c.company, c.salary, c.notes);
+  }
+
+  // 7. Seed Interviews
+  const interviews = [
+    { id: 'int-001', candId: 'cand-001', reqId: 'req-001', interviewerId: 'usr-interviewer', round: 'Phỏng vấn Kỹ thuật Backend', time: '2026-10-02 14:00', location: 'Google Meet: meet.google.com/ats-backend-01', status: 'SCHEDULED', score: 8, feedback: 'Nắm vững concurrency và database indexing.' },
+    { id: 'int-002', candId: 'cand-005', reqId: 'req-003', interviewerId: 'usr-interviewer', round: 'Phỏng vấn SRE / Hạ tầng', time: '2026-10-03 10:00', location: 'Phòng họp Kỹ thuật P.402', status: 'SCHEDULED', score: null, feedback: null },
+    { id: 'int-003', candId: 'cand-003', reqId: 'req-002', interviewerId: 'usr-hiring-mgr', round: 'Phỏng vấn Văn hóa & Định hướng', time: '2026-09-29 15:30', location: 'Phòng họp Hội đồng Quản trị', status: 'COMPLETED', score: 9, feedback: 'Tư duy sản phẩm và tinh thần trách nhiệm cao.' }
+  ];
+
+  const insertInt = database.prepare(`
+    INSERT INTO interviews (id, candidate_id, requisition_id, interviewer_id, round_name, scheduled_time, location_or_link, status, feedback, score, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(id) DO UPDATE SET
+      status = excluded.status,
+      scheduled_time = excluded.scheduled_time
+  `);
+
+  for (const i of interviews) {
+    insertInt.run(i.id, i.candId, i.reqId, i.interviewerId, i.round, i.time, i.location, i.status, i.feedback, i.score);
+  }
+
+  // 8. Seed Offers
+  const offers = [
+    { id: 'off-001', candId: 'cand-003', reqId: 'req-002', salary: 42000000, startDate: '2026-11-01', status: 'APPROVED', approverId: 'usr-approver' },
+    { id: 'off-002', candId: 'cand-006', reqId: 'req-004', salary: 28000000, startDate: '2026-10-15', status: 'ACCEPTED', approverId: 'usr-approver' }
+  ];
+
+  const insertOff = database.prepare(`
+    INSERT INTO offers (id, candidate_id, requisition_id, salary_monthly, start_date, status, approver_id, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(id) DO UPDATE SET
+      status = excluded.status,
+      salary_monthly = excluded.salary_monthly
+  `);
+
+  for (const o of offers) {
+    insertOff.run(o.id, o.candId, o.reqId, o.salary, o.startDate, o.status, o.approverId);
+  }
+
+  console.log(`[Seed] Seeded ${roles.length} roles, ${permissions.length} permissions, ${totalRolePerms} role-permissions mappings, ${users.length} users, ${requisitions.length} requisitions, ${candidates.length} candidates, ${interviews.length} interviews, and ${offers.length} offers successfully with secure password hashing.`);
 }
 
 if (require.main === module) {

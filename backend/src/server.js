@@ -8,6 +8,7 @@ const AuthController = require('./controllers/authController');
 const RbacMiddleware = require('./middlewares/rbacMiddleware');
 const UserService = require('./services/userService');
 const UserController = require('./controllers/userController');
+const RequisitionService = require('./services/requisitionService');
 
 // Ensure DB is initialized and seeded
 const db = getDatabase();
@@ -17,6 +18,7 @@ const authController = new AuthController();
 const rbacMiddleware = new RbacMiddleware(db);
 const userService = new UserService(db);
 const userController = new UserController(userService, rbacMiddleware, authController.authService);
+const requisitionService = new RequisitionService(db);
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -189,12 +191,28 @@ const server = http.createServer(async (req, res) => {
   }
 
   // 10. API: S1-05 Get Full RBAC Matrix (AC-01)
-  if (req.method === 'GET' && (pathname === '/api/v1/rbac/matrix' || pathname === '/rbac/matrix')) {
-    const matrix = rbacMiddleware.getRbacMatrix();
+  if (req.method === 'GET' && (pathname === '/api/v1/rbac/matrix' || pathname === '/rbac/matrix' || pathname === '/api/v1/admin/roles-matrix' || pathname === '/admin/roles-matrix')) {
+    const rawMatrix = rbacMiddleware.getRbacMatrix();
+    const roles = db.prepare('SELECT id, code AS name, name AS description FROM roles ORDER BY code ASC').all();
+    const permissions = db.prepare('SELECT id, code AS name, name AS description, module FROM permissions ORDER BY module, code ASC').all();
+    const simpleMatrix = {};
+    for (const [code, info] of Object.entries(rawMatrix)) {
+      simpleMatrix[code] = info.permissions;
+    }
+
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify({ success: true, matrix }));
+    res.end(JSON.stringify({
+      success: true,
+      matrix: rawMatrix,
+      data: {
+        roles,
+        permissions,
+        matrix: simpleMatrix
+      }
+    }));
     return;
   }
+
 
   // 11. API: S1-05 Protected Action Demo 1 - User Create (requires user.create) (AC-02 & AC-03)
   if (req.method === 'POST' && (pathname === '/api/v1/admin/users/test-create' || pathname === '/admin/users/test-create')) {
@@ -321,6 +339,185 @@ const server = http.createServer(async (req, res) => {
     }));
     return;
   }
+
+  // 13.1 API: Real Enterprise Dashboard Statistics
+  if (req.method === 'GET' && (pathname === '/api/v1/dashboard/stats' || pathname === '/dashboard/stats' || pathname === '/api/v1/requisitions/dashboard-stats' || pathname === '/requisitions/dashboard-stats')) {
+    const authHeader = req.headers['authorization'] || '';
+    if (!authHeader.startsWith('Bearer ')) {
+      res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({
+        success: false,
+        statusCode: 401,
+        message: 'Yêu cầu thiếu token xác thực.',
+        code: 'UNAUTHORIZED'
+      }));
+      return;
+    }
+    const token = authHeader.substring(7).trim();
+    const sessionResult = authController.authService.validateSession(token, true);
+    if (!sessionResult.valid) {
+      res.writeHead(sessionResult.statusCode || 401, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({
+        success: false,
+        statusCode: sessionResult.statusCode || 401,
+        message: sessionResult.message,
+        code: sessionResult.code
+      }));
+      return;
+    }
+
+    const stats = requisitionService.getDashboardStats();
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(stats));
+    return;
+  }
+
+  // 13.2 API: Real Recruitment Requisitions List
+  if (req.method === 'GET' && (pathname === '/api/v1/requisitions' || pathname === '/requisitions')) {
+    const authHeader = req.headers['authorization'] || '';
+    if (!authHeader.startsWith('Bearer ')) {
+      res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({
+        success: false,
+        statusCode: 401,
+        message: 'Yêu cầu thiếu token xác thực.',
+        code: 'UNAUTHORIZED'
+      }));
+      return;
+    }
+    const token = authHeader.substring(7).trim();
+    const sessionResult = authController.authService.validateSession(token, true);
+    if (!sessionResult.valid) {
+      res.writeHead(sessionResult.statusCode || 401, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({
+        success: false,
+        statusCode: sessionResult.statusCode || 401,
+        message: sessionResult.message,
+        code: sessionResult.code
+      }));
+      return;
+    }
+
+    const options = {
+      search: parsedUrl.searchParams.get('search') || '',
+      status: parsedUrl.searchParams.get('status') || '',
+      handoverOnly: parsedUrl.searchParams.get('handoverOnly') === 'true'
+    };
+    const result = requisitionService.getRequisitions(options);
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(result));
+    return;
+  }
+
+  // 13.3 API: Create Requisition
+  if (req.method === 'POST' && (pathname === '/api/v1/requisitions' || pathname === '/requisitions')) {
+    const user = rbacMiddleware.authorize(req, res, authController.authService, 'requisition.create');
+    if (!user) return;
+    try {
+      const body = await parseBody(req);
+      const result = requisitionService.createRequisition(body);
+      res.writeHead(result.statusCode || 201, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
+    }
+    return;
+  }
+
+  // 13.4 API: Reassign Handover Requisition
+  if (req.method === 'PUT' && ((pathname.startsWith('/api/v1/requisitions/') && pathname.endsWith('/handover')) || (pathname.startsWith('/requisitions/') && pathname.endsWith('/handover')))) {
+    const user = rbacMiddleware.authorize(req, res, authController.authService, 'requisition.edit');
+    if (!user) return;
+    try {
+      const reqId = pathname.replace(/^\/api\/v1\/requisitions\//, '').replace(/^\/requisitions\//, '').replace(/\/handover$/, '');
+      const body = await parseBody(req);
+      const result = requisitionService.reassignHandover(reqId, body.newRecruiterId, body.notes);
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
+    }
+    return;
+  }
+
+  // 13.5 API: Get Email Logs (Admin)
+  if (req.method === 'GET' && (pathname === '/api/v1/admin/email-logs' || pathname === '/admin/email-logs')) {
+    const user = rbacMiddleware.authorize(req, res, authController.authService, 'audit.read');
+    if (!user) return;
+    const logs = db.prepare('SELECT * FROM email_logs ORDER BY created_at DESC LIMIT 50').all();
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ success: true, total: logs.length, logs }));
+    return;
+  }
+
+  // 13.6 API: Get Audit Logs (Admin)
+  if (req.method === 'GET' && (pathname === '/api/v1/admin/audit-logs' || pathname === '/admin/audit-logs')) {
+    const user = rbacMiddleware.authorize(req, res, authController.authService, 'audit.read');
+    if (!user) return;
+    const logs = db.prepare('SELECT * FROM login_audit_logs ORDER BY attempted_at DESC LIMIT 50').all();
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ success: true, total: logs.length, logs }));
+    return;
+  }
+
+  // 13.7 API: Candidates List (Real SQLite Data)
+  if (req.method === 'GET' && (pathname === '/api/v1/candidates' || pathname === '/candidates')) {
+    const user = rbacMiddleware.authorize(req, res, authController.authService, 'candidate.read');
+    if (!user) return;
+    const options = {
+      search: parsedUrl.searchParams.get('search') || '',
+      stage: parsedUrl.searchParams.get('stage') || 'ALL',
+      requisitionId: parsedUrl.searchParams.get('requisitionId') || 'ALL'
+    };
+    const result = requisitionService.getCandidates(options);
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(result));
+    return;
+  }
+
+  // 13.8 API: Interviews List (Real SQLite Data)
+  if (req.method === 'GET' && (pathname === '/api/v1/interviews' || pathname === '/interviews')) {
+    const user = rbacMiddleware.authorize(req, res, authController.authService, 'interview.read');
+    if (!user) return;
+    const result = requisitionService.getInterviews();
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(result));
+    return;
+  }
+
+  // 13.9 API: Offers List (Real SQLite Data)
+  if (req.method === 'GET' && (pathname === '/api/v1/offers' || pathname === '/offers')) {
+    const user = rbacMiddleware.authorize(req, res, authController.authService, 'offer.read');
+    if (!user) return;
+    const result = requisitionService.getOffers();
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(result));
+    return;
+  }
+
+  // 13.10 API: Recruitment Reports (Real SQLite Analytics)
+  if (req.method === 'GET' && (pathname === '/api/v1/reports/recruitment' || pathname === '/reports/recruitment')) {
+    const authHeader = req.headers['authorization'] || '';
+    if (!authHeader.startsWith('Bearer ')) {
+      res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 401, message: 'Yêu cầu thiếu token xác thực.', code: 'UNAUTHORIZED' }));
+      return;
+    }
+    const token = authHeader.substring(7).trim();
+    const sessionResult = authController.authService.validateSession(token, true);
+    if (!sessionResult.valid) {
+      res.writeHead(sessionResult.statusCode || 401, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: sessionResult.statusCode || 401, message: sessionResult.message, code: sessionResult.code }));
+      return;
+    }
+    const result = requisitionService.getReports();
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(result));
+    return;
+  }
+
 
   // 14. API: S1-06 Role-Based Navigation Menu (AC-01, AC-02, AC-03)
   if (req.method === 'GET' && (pathname === '/api/v1/navigation/menu' || pathname === '/navigation/menu')) {

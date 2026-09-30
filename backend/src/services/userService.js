@@ -1,6 +1,7 @@
 const crypto = require('node:crypto');
 const { getDatabase } = require('../db/database');
 const { hashPassword } = require('../utils/password');
+const { getEmailService } = require('./emailService');
 
 /**
  * UserService: Quản lý tài khoản nội bộ (S1-08 AC-01, AC-02, AC-03, AC-04)
@@ -9,6 +10,7 @@ const { hashPassword } = require('../utils/password');
 class UserService {
   constructor(db) {
     this.db = db || getDatabase();
+    this.emailService = getEmailService(this.db);
   }
 
   /**
@@ -264,12 +266,19 @@ class UserService {
     `);
     insertRoleStmt.run(newUserId, roleRow.id);
 
-    // Chuẩn bị email kích hoạt mô phỏng (AC-01)
+    // Chuẩn bị email kích hoạt (AC-01)
     const activationEmail = {
       recipient: email,
       subject: '🔐 [ATS] Kích hoạt tài khoản nội bộ & Mật khẩu tạm thời',
       body: `Kính gửi ${fullName},\n\nTài khoản của bạn trên Hệ thống Tuyển dụng Nội bộ (ATS) đã được tạo thành công.\n\nThông tin đăng nhập:\n- Email: ${email}\n- Mật khẩu tạm: ${tempPassword}\n- Vai trò cấp quyền: ${roleRow.name} (${roleRow.code})\n\nVui lòng đăng nhập và đổi mật khẩu trong phiên làm việc đầu tiên.`
     };
+
+    // Dispatch real email via EmailService
+    if (this.emailService) {
+      this.emailService.sendAccountActivationEmail(email, fullName, tempPassword, roleRow.name).catch(err => {
+        console.error('[UserService] Error dispatching activation email:', err.message);
+      });
+    }
 
     return {
       success: true,

@@ -376,15 +376,168 @@ async function unlockUserApi(token, userId) {
   }
 }
 
+async function getDashboardStatsApi(token) {
+  try {
+    const response = await fetch(`${API_BASE}/dashboard/stats`, {
+      method: 'GET',
+      headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi lấy số liệu thống kê.' } };
+  }
+}
+
+async function getRequisitionsApi(token, params = {}) {
+  try {
+    const query = new URLSearchParams();
+    if (params.search) query.append('search', params.search);
+    if (params.status && params.status !== 'ALL') query.append('status', params.status);
+    if (params.handoverOnly) query.append('handoverOnly', 'true');
+    const qs = query.toString() ? `?${query.toString()}` : '';
+
+    const response = await fetch(`${API_BASE}/requisitions${qs}`, {
+      method: 'GET',
+      headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi lấy danh sách vị trí tuyển dụng.' } };
+  }
+}
+
+async function createRequisitionApi(token, reqData) {
+  try {
+    const response = await fetch(`${API_BASE}/requisitions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify(reqData)
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi khởi tạo vị trí tuyển dụng.' } };
+  }
+}
+
+async function reassignHandoverApi(token, reqId, newRecruiterId, notes) {
+  try {
+    const response = await fetch(`${API_BASE}/requisitions/${reqId}/handover`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify({ newRecruiterId, notes })
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi bàn giao vị trí tuyển dụng.' } };
+  }
+}
+
+async function getEmailLogsApi(token) {
+  try {
+    const response = await fetch(`${API_BASE}/admin/email-logs`, {
+      method: 'GET',
+      headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi lấy nhật ký email.' } };
+  }
+}
+
+async function getAuditLogsApi(token) {
+  try {
+    const response = await fetch(`${API_BASE}/admin/audit-logs`, {
+      method: 'GET',
+      headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi lấy nhật ký bảo mật.' } };
+  }
+}
+
+async function getCandidatesApi(token, params = {}) {
+  try {
+    const qs = new URLSearchParams();
+    if (params.search) qs.append('search', params.search);
+    if (params.stage && params.stage !== 'ALL') qs.append('stage', params.stage);
+    if (params.requisitionId && params.requisitionId !== 'ALL') qs.append('requisitionId', params.requisitionId);
+    const queryString = qs.toString() ? `?${qs.toString()}` : '';
+
+    const response = await fetch(`${API_BASE}/candidates${queryString}`, {
+      method: 'GET',
+      headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi lấy danh sách ứng viên.' } };
+  }
+}
+
+async function getInterviewsApi(token) {
+  try {
+    const response = await fetch(`${API_BASE}/interviews`, {
+      method: 'GET',
+      headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi lấy lịch phỏng vấn.' } };
+  }
+}
+
+async function getOffersApi(token) {
+  try {
+    const response = await fetch(`${API_BASE}/offers`, {
+      method: 'GET',
+      headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi lấy danh sách offer.' } };
+  }
+}
+
+async function getRecruitmentReportsApi(token) {
+  try {
+    const response = await fetch(`${API_BASE}/reports/recruitment`, {
+      method: 'GET',
+      headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi lấy báo cáo tuyển dụng.' } };
+  }
+}
+
 window.ATS_API = {
   loginApi,
   logoutApi,
   getMeApi,
   forgotPasswordApi,
+  requestPasswordResetApi: forgotPasswordApi,
   resetPasswordApi,
+  confirmPasswordResetApi: resetPasswordApi,
   changePasswordApi,
   getPermissionsApi,
   getRbacMatrixApi,
+  getRolesMatrixApi: getRbacMatrixApi,
   testCreateUserApi,
   testCandidateListApi,
   testInterviewListApi,
@@ -398,5 +551,20 @@ window.ATS_API = {
   getUserRolesApi,
   assignUserRolesApi,
   lockUserApi,
-  unlockUserApi
+  unlockUserApi,
+  getDashboardStatsApi,
+  getDashboardStats: getDashboardStatsApi,
+  getRequisitionsApi,
+  getRequisitions: getRequisitionsApi,
+  createRequisitionApi,
+  createRequisition: createRequisitionApi,
+  reassignHandoverApi,
+  handoverRequisition: reassignHandoverApi,
+  getEmailLogsApi,
+  getAuditLogsApi,
+  getCandidatesApi,
+  getInterviewsApi,
+  getOffersApi,
+  getRecruitmentReportsApi
 };
+

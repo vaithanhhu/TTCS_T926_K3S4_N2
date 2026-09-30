@@ -27,5 +27,8 @@
   ],
   "engines": {
     "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "nodemailer": "^10.0.12"
   }
 }
