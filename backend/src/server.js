@@ -567,9 +567,105 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && (pathname === '/api/v1/admin/audit-logs' || pathname === '/admin/audit-logs')) {
     const user = rbacMiddleware.authorize(req, res, authController.authService, 'audit.read');
     if (!user) return;
-    const logs = db.prepare('SELECT * FROM login_audit_logs ORDER BY attempted_at DESC LIMIT 50').all();
+    const search = (parsedUrl.searchParams.get('search') || '').trim();
+    const status = (parsedUrl.searchParams.get('status') || '').trim();
+    const limit = Math.min(Math.max(parseInt(parsedUrl.searchParams.get('limit')) || 50, 1), 200);
+
+    let query = 'SELECT * FROM login_audit_logs';
+    const conditions = [];
+    const params = [];
+
+    if (status && status !== 'ALL') {
+      conditions.push('status = ?');
+      params.push(status);
+    }
+    if (search) {
+      conditions.push('(email LIKE ? OR reason LIKE ? OR ip_address LIKE ?)');
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    }
+
+    if (conditions.length > 0) {
+      query += ' WHERE ' + conditions.join(' AND ');
+    }
+    query += ' ORDER BY attempted_at DESC LIMIT ?';
+    params.push(limit);
+
+    const logs = db.prepare(query).all(...params);
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify({ success: true, total: logs.length, logs }));
+    res.end(JSON.stringify({ success: true, total: logs.length, logs, data: { logs } }));
+    return;
+  }
+
+  // 13.6.1 API: Get Single Audit Log Detail (Admin)
+  if (req.method === 'GET' && (pathname.startsWith('/api/v1/admin/audit-logs/') || pathname.startsWith('/admin/audit-logs/'))) {
+    const user = rbacMiddleware.authorize(req, res, authController.authService, 'audit.read');
+    if (!user) return;
+    const logId = pathname.split('/').pop();
+    const log = db.prepare('SELECT * FROM login_audit_logs WHERE id = ?').get(logId);
+    if (!log) {
+      res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 404, message: 'Không tìm thấy bản ghi nhật ký.' }));
+      return;
+    }
+
+    // Enrich with associated user details if available
+    const userInfo = db.prepare('SELECT id, full_name, email, department_name, status, failed_attempts, locked_until FROM users WHERE email = ?').get(log.email);
+    let roles = [];
+    if (userInfo) {
+      roles = db.prepare(`
+        SELECT r.code, r.name 
+        FROM user_roles ur
+        JOIN roles r ON ur.role_id = r.id
+        WHERE ur.user_id = ?
+      `).all(userInfo.id);
+    }
+
+    // Determine security risk and event classification
+    let riskLevel = 'LOW';
+    let riskLabel = 'Thấp (An toàn)';
+    let eventType = 'AUTH_LOGIN';
+
+    if (log.status === 'LOCKED' || log.status === 'ACCOUNT_LOCKED') {
+      riskLevel = 'HIGH';
+      riskLabel = 'Cao (Bảo mật / Giới hạn truy cập)';
+      eventType = 'ACCOUNT_LOCKOUT';
+    } else if (log.status === 'FAILURE') {
+      riskLevel = 'MEDIUM';
+      riskLabel = 'Trung bình (Cảnh báo sai thông tin)';
+      eventType = 'AUTH_FAILED';
+    } else if (log.status === 'ACCOUNT_UNLOCKED') {
+      riskLevel = 'LOW';
+      riskLabel = 'Thấp (Thao tác quản trị)';
+      eventType = 'ACCOUNT_UNLOCKED';
+    } else if (log.status === 'LOGOUT') {
+      riskLevel = 'LOW';
+      riskLabel = 'Thấp (Kết thúc phiên)';
+      eventType = 'AUTH_LOGOUT';
+    } else if (log.status === 'SUCCESS') {
+      riskLevel = 'LOW';
+      riskLabel = 'Thấp (Bình thường)';
+      eventType = 'AUTH_SUCCESS';
+    }
+
+    const enrichedLog = {
+      ...log,
+      eventType,
+      riskLevel,
+      riskLabel,
+      user: userInfo ? {
+        id: userInfo.id,
+        fullName: userInfo.full_name,
+        email: userInfo.email,
+        department: userInfo.department_name,
+        accountStatus: userInfo.status,
+        failedAttempts: userInfo.failed_attempts,
+        lockedUntil: userInfo.locked_until,
+        roles: roles.map(r => r.name || r.code)
+      } : null
+    };
+
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ success: true, log: enrichedLog, data: { log: enrichedLog } }));
     return;
   }
 

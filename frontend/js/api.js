@@ -455,9 +455,15 @@ async function getEmailLogsApi(token) {
   }
 }
 
-async function getAuditLogsApi(token) {
+async function getAuditLogsApi(token, params = {}) {
   try {
-    const response = await fetch(`${API_BASE}/admin/audit-logs`, {
+    const qs = new URLSearchParams();
+    if (params.search) qs.append('search', params.search);
+    if (params.status && params.status !== 'ALL') qs.append('status', params.status);
+    if (params.limit) qs.append('limit', params.limit);
+    const queryString = qs.toString() ? `?${qs.toString()}` : '';
+
+    const response = await fetch(`${API_BASE}/admin/audit-logs${queryString}`, {
       method: 'GET',
       headers: { 'Authorization': token ? `Bearer ${token}` : '' }
     });
@@ -465,6 +471,19 @@ async function getAuditLogsApi(token) {
     return { status: response.status, ok: response.ok, data };
   } catch (error) {
     return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi lấy nhật ký bảo mật.' } };
+  }
+}
+
+async function getAuditLogDetailApi(token, logId) {
+  try {
+    const response = await fetch(`${API_BASE}/admin/audit-logs/${encodeURIComponent(logId)}`, {
+      method: 'GET',
+      headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi lấy chi tiết nhật ký.' } };
   }
 }
 
@@ -754,6 +773,7 @@ window.ATS_API = {
   handoverRequisition: reassignHandoverApi,
   getEmailLogsApi,
   getAuditLogsApi,
+  getAuditLogDetailApi,
   getCandidatesApi,
   createCandidateApi,
   updateCandidateStageApi,
