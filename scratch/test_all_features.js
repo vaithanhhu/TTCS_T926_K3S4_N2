@@ -79,197 +79,205 @@ function assert(condition, testName, details = '') {
 
 async function runTestSuite() {
   console.log('\n================================================================');
-  console.log(' KIỂM THỬ TOÀN DIỆN HỆ THỐNG TUYỂN DỤNG NỘI BỘ (ATS)');
-  console.log(' Target URL:', BASE_URL);
+  console.log(' KIỂM THỬ TOÀN DIỆN MỌI CHỨC NĂNG HỆ THỐNG TUYỂN DỤNG ATS');
+  console.log(' Target Server:', BASE_URL);
   console.log('================================================================\n');
 
   let adminToken = null;
+  let hrManagerToken = null;
   let recruiterToken = null;
   let interviewerToken = null;
 
   // -------------------------------------------------------------
   // PHẦN 1: GIAO DIỆN & TÀI NGUYÊN TĨNH
   // -------------------------------------------------------------
-  console.log('\x1b[36m▶ 1. Kiểm tra Web App Shell & Tài nguyên tĩnh\x1b[0m');
+  console.log('\x1b[36m▶ 1. Giao diện người dùng & Tài nguyên tĩnh (App Shell & Assets)\x1b[0m');
   const htmlRes = await request('GET', '/');
-  assert(htmlRes.status === 200, 'Tải trang chủ Enterprise HTML (HTTP 200)');
-  assert(htmlRes.rawText.includes('INTERNAL ATS'), 'Chứa nhận diện hệ thống INTERNAL ATS');
-  assert(htmlRes.rawText.includes('id="error-view"'), 'Bảo vệ giao diện lỗi chuẩn bảo mật (id="error-view")');
-  assert(htmlRes.rawText.includes('id="app-shell"'), 'Chứa Enterprise App Shell (id="app-shell")');
+  assert(htmlRes.status === 200, 'Tải thành công trang chủ HTML (HTTP 200)');
+  assert(htmlRes.rawText.includes('INTERNAL ATS'), 'Nhận diện thương hiệu hệ thống: INTERNAL ATS');
+  assert(htmlRes.rawText.includes('id="error-view"'), 'Bảo vệ giao diện trang lỗi tiêu chuẩn bảo mật (id="error-view")');
+  assert(htmlRes.rawText.includes('id="app-shell"'), 'Chứa khung làm việc doanh nghiệp App Shell (id="app-shell")');
 
   const cssRes = await request('GET', '/css/style.css');
-  assert(cssRes.status === 200, 'Tải bộ CSS Light Corporate SaaS (HTTP 200)');
-  assert(cssRes.rawText.includes('--color-primary: #1e40af'), 'CSS chứa Design Token Corporate Blue (#1e40af)');
+  assert(cssRes.status === 200, 'Tải bộ stylesheet giao diện Light Corporate SaaS (HTTP 200)');
+  assert(cssRes.rawText.includes('--color-primary: #1e40af'), 'Định nghĩa đúng mã màu chuẩn doanh nghiệp Corporate Blue (#1e40af)');
 
   // -------------------------------------------------------------
-  // PHẦN 2: XÁC THỰC & QUẢN LÝ PHIÊN (AUTHENTICATION & SESSIONS)
+  // PHẦN 2: XÁC THỰC & ĐĂNG NHẬP THEO VAI TRÒ (AUTHENTICATION)
   // -------------------------------------------------------------
-  console.log('\n\x1b[36m▶ 2. Kiểm tra Xác thực & Đăng nhập các vai trò\x1b[0m');
+  console.log('\n\x1b[36m▶ 2. Xác thực & Đăng nhập theo từng vai trò (Authentication & RBAC)\x1b[0m');
   
   // Login Admin
   const adminLogin = await request('POST', '/api/v1/auth/login', {}, {
     email: 'admin@company.com',
     password: 'Ats@123456'
   });
-  assert(adminLogin.status === 200 && adminLogin.data?.success, 'Đăng nhập thành công với tài khoản Admin (HTTP 200)');
+  assert(adminLogin.status === 200 && adminLogin.data?.success, 'Đăng nhập vai trò Quản trị viên (Admin) thành công (HTTP 200)');
   adminToken = adminLogin.data?.data?.token;
-  assert(adminToken && adminToken.length > 20, 'Nhận token phiên làm việc bảo mật cao');
+  assert(Boolean(adminToken && adminToken.length > 20), 'Cấp phát token phiên làm việc bảo mật cao');
   assert(adminLogin.data?.data?.user?.roles?.includes('ADMIN'), 'Tài khoản sở hữu vai trò ADMIN');
+
+  // Login HR Manager
+  const hrLogin = await request('POST', '/api/v1/auth/login', {}, {
+    email: 'hrmanager@company.com',
+    password: 'Ats@123456'
+  });
+  assert(hrLogin.status === 200 && hrLogin.data?.success, 'Đăng nhập vai trò Trưởng phòng Nhân sự (HR Manager) thành công (HTTP 200)');
+  hrManagerToken = hrLogin.data?.data?.token;
 
   // Login Recruiter
   const recLogin = await request('POST', '/api/v1/auth/login', {}, {
     email: 'recruiter@company.com',
     password: 'Ats@123456'
   });
-  assert(recLogin.status === 200, 'Đăng nhập thành công với tài khoản Chuyên viên Tuyển dụng (Recruiter)');
+  assert(recLogin.status === 200 && recLogin.data?.success, 'Đăng nhập vai trò Chuyên viên Tuyển dụng (Recruiter) thành công (HTTP 200)');
   recruiterToken = recLogin.data?.data?.token;
 
-  // Login Interviewer (interviewer@company.com)
+  // Login Interviewer
   const intLogin = await request('POST', '/api/v1/auth/login', {}, {
     email: 'interviewer@company.com',
     password: 'Ats@123456'
   });
-  assert(intLogin.status === 200, 'Đăng nhập thành công với tài khoản Người phỏng vấn (Interviewer)');
+  assert(intLogin.status === 200 && intLogin.data?.success, 'Đăng nhập vai trò Người phỏng vấn (Interviewer) thành công (HTTP 200)');
   interviewerToken = intLogin.data?.data?.token;
 
-  // Login sai mật khẩu
+  // Chống brute-force / sai mật khẩu
   const badLogin = await request('POST', '/api/v1/auth/login', {}, {
     email: 'admin@company.com',
-    password: 'WrongPassword@999'
+    password: 'SaiMatKhau@123'
   });
-  assert(badLogin.status === 401, 'Từ chối mật khẩu sai với mã HTTP 401 Unauthorized');
+  assert(badLogin.status === 401, 'Từ chối mật khẩu không chính xác với mã HTTP 401 Unauthorized');
 
   // Kiểm tra Session Heartbeat / Me
   const meRes = await request('GET', '/api/v1/auth/me', { Authorization: `Bearer ${adminToken}` });
-  assert(meRes.status === 200 && meRes.data?.data?.user?.email === 'admin@company.com', 'Xác thực phiên làm việc còn hiệu lực (GET /api/v1/auth/me)');
+  assert(meRes.status === 200 && meRes.data?.data?.user?.email === 'admin@company.com', 'Duy trì và kiểm tra trạng thái phiên làm việc (GET /api/v1/auth/me)');
 
   // -------------------------------------------------------------
-  // PHẦN 3: DASHBOARD STATS & FUNNEL METRICS
+  // PHẦN 3: BẢNG ĐIỀU KHIỂN & CHỈ SỐ KPI (DASHBOARD STATS)
   // -------------------------------------------------------------
-  console.log('\n\x1b[36m▶ 3. Kiểm tra Bảng điều khiển (Dashboard KPIs & Funnel)\x1b[0m');
+  console.log('\n\x1b[36m▶ 3. Bảng điều khiển & Chỉ số Tuyển dụng (Dashboard KPIs & Funnel)\x1b[0m');
   const dashRes = await request('GET', '/api/v1/dashboard/stats', { Authorization: `Bearer ${adminToken}` });
-  assert(dashRes.status === 200 && dashRes.data?.success, 'Lấy dữ liệu thống kê Dashboard (HTTP 200)');
+  assert(dashRes.status === 200 && dashRes.data?.success, 'Tải dữ liệu phân tích Dashboard từ SQLite (HTTP 200)');
   const stats = dashRes.data?.stats;
-  assert(typeof stats?.requisitions?.open === 'number', 'Có chỉ số vị trí tuyển dụng đang mở');
-  assert(typeof stats?.candidates?.total === 'number' && stats.candidates.total > 0, 'Có thống kê tổng số ứng viên (>0)');
-  assert(typeof stats?.candidates?.screening === 'number', 'Phễu ứng viên có phân loại giai đoạn chi tiết');
-  assert(Array.isArray(stats?.recentRequisitions), 'Danh sách đợt tuyển dụng gần đây');
+  assert(typeof stats?.requisitions?.open === 'number', `Số vị trí đang tuyển: ${stats?.requisitions?.open}`);
+  assert(typeof stats?.candidates?.total === 'number' && stats.candidates.total > 0, `Tổng số hồ sơ ứng viên trong hệ thống: ${stats.candidates.total}`);
+  assert(typeof stats?.candidates?.screening === 'number', 'Phễu ứng viên phân tách rõ ràng từng vòng tuyển');
+  assert(Array.isArray(stats?.recentRequisitions) && stats.recentRequisitions.length > 0, 'Danh sách đợt tuyển dụng gần đây');
 
   // -------------------------------------------------------------
   // PHẦN 4: QUẢN LÝ YÊU CẦU TUYỂN DỤNG (REQUISITIONS)
   // -------------------------------------------------------------
-  console.log('\n\x1b[36m▶ 4. Kiểm tra Quản lý Yêu cầu Tuyển dụng (Requisitions)\x1b[0m');
+  console.log('\n\x1b[36m▶ 4. Quản lý Yêu cầu Tuyển dụng (Requisitions Management)\x1b[0m');
   const reqListRes = await request('GET', '/api/v1/requisitions', { Authorization: `Bearer ${recruiterToken}` });
-  assert(reqListRes.status === 200 && reqListRes.data?.success, 'Lấy danh sách đợt tuyển dụng thành công');
-  assert(reqListRes.data.requisitions.length >= 4, 'Hệ thống có ít nhất 4 đợt tuyển dụng thực tế');
+  assert(reqListRes.status === 200 && reqListRes.data?.success, 'Lấy danh sách đợt tuyển dụng (HTTP 200)');
+  assert(reqListRes.data.requisitions.length >= 4, `Tổng số đợt tuyển dụng hiện có: ${reqListRes.data.requisitions.length}`);
 
-  // Tạo yêu cầu tuyển dụng mới
-  const newReqTitle = 'Senior Cloud Architect ' + Date.now();
-  const createReqRes = await request('POST', '/api/v1/requisitions', { Authorization: `Bearer ${recruiterToken}` }, {
+  // Tạo đợt tuyển dụng mới (với HR Manager có quyền requisition.create)
+  const newReqTitle = 'Kỹ sư Trí tuệ Nhân tạo (AI Engineer) ' + Date.now();
+  const createReqRes = await request('POST', '/api/v1/requisitions', { Authorization: `Bearer ${hrManagerToken}` }, {
     title: newReqTitle,
     departmentName: 'Khối Công Nghệ & Kỹ Thuật',
-    headcount: 2
+    headcount: 3
   });
-  assert(createReqRes.status === 201 && createReqRes.data?.success, 'Tạo mới yêu cầu tuyển dụng thành công (HTTP 201)');
-  const createdReqId = createReqRes.data?.data?.id;
-  assert(Boolean(createdReqId), `Đợt tuyển dụng mới được cấp ID: ${createdReqId}`);
+  assert(createReqRes.status === 201 && createReqRes.data?.success, 'Tạo mới yêu cầu tuyển dụng thành công với quyền hợp lệ (HTTP 201)');
+  const newReqId = createReqRes.data?.data?.id;
+  assert(Boolean(newReqId), `Mã định danh đợt tuyển dụng mới: ${newReqId}`);
 
   // -------------------------------------------------------------
-  // PHẦN 5: QUẢN LÝ ỨNG VIÊN & VÒNG TUYỂN DỤNG (CANDIDATES)
+  // PHẦN 5: QUẢN LÝ ỨNG VIÊN & VÒNG TUYỂN (CANDIDATES PIPELINE)
   // -------------------------------------------------------------
-  console.log('\n\x1b[36m▶ 5. Kiểm tra Quản lý Ứng viên & Pipeline (Candidates)\x1b[0m');
+  console.log('\n\x1b[36m▶ 5. Quản lý Hồ sơ Ứng viên & Pipeline (Candidate Management)\x1b[0m');
   const candRes = await request('GET', '/api/v1/candidates', { Authorization: `Bearer ${recruiterToken}` });
-  assert(candRes.status === 200 && candRes.data?.success, 'Lấy danh sách ứng viên (HTTP 200)');
-  assert(candRes.data.candidates.length >= 6, 'Hệ thống có ít nhất 6 hồ sơ ứng viên mẫu');
+  assert(candRes.status === 200 && candRes.data?.success, 'Lấy danh sách ứng viên từ CSDL SQLite (HTTP 200)');
+  assert(candRes.data.candidates.length >= 6, `Hệ thống đang quản lý ${candRes.data.candidates.length} hồ sơ ứng viên`);
   const firstCand = candRes.data.candidates[0];
-  assert(firstCand.fullName && firstCand.email && firstCand.stage, 'Hồ sơ ứng viên đầy đủ thông tin: họ tên, email, giai đoạn tuyển');
+  assert(Boolean(firstCand.fullName && firstCand.email && firstCand.stage), `Hồ sơ ứng viên chuẩn cấu trúc: ${firstCand.fullName} (${firstCand.stage})`);
 
-  // Lọc ứng viên theo trạng thái
-  const filteredCandRes = await request('GET', '/api/v1/candidates?stage=INTERVIEW', { Authorization: `Bearer ${recruiterToken}` });
-  assert(filteredCandRes.status === 200 && Array.isArray(filteredCandRes.data.candidates), 'Lọc ứng viên theo giai đoạn INTERVIEW thành công');
+  // Lọc ứng viên theo giai đoạn
+  const filterCandRes = await request('GET', '/api/v1/candidates?stage=INTERVIEW', { Authorization: `Bearer ${recruiterToken}` });
+  assert(filterCandRes.status === 200 && Array.isArray(filterCandRes.data.candidates), 'Lọc ứng viên ở giai đoạn Phỏng vấn (INTERVIEW) chính xác');
 
   // -------------------------------------------------------------
-  // PHẦN 6: LỊCH PHỎNG VẤN & HỘI ĐỒNG (INTERVIEWS)
+  // PHẦN 6: LỊCH PHỎNG VẤN & HỘI ĐỒNG ĐÁNH GIÁ (INTERVIEWS)
   // -------------------------------------------------------------
-  console.log('\n\x1b[36m▶ 6. Kiểm tra Lịch Phỏng vấn (Interviews)\x1b[0m');
+  console.log('\n\x1b[36m▶ 6. Quản lý Lịch Phỏng vấn (Interview Scheduling)\x1b[0m');
   const intRes = await request('GET', '/api/v1/interviews', { Authorization: `Bearer ${interviewerToken}` });
-  assert(intRes.status === 200 && intRes.data?.success, 'Lấy danh sách lịch phỏng vấn (HTTP 200)');
-  assert(intRes.data.interviews.length >= 3, 'Hệ thống có ít nhất 3 lịch phỏng vấn');
+  assert(intRes.status === 200 && intRes.data?.success, 'Lấy danh sách lịch phỏng vấn chuyên môn (HTTP 200)');
+  assert(intRes.data.interviews.length >= 3, `Đang có ${intRes.data.interviews.length} buổi phỏng vấn đã được lên lịch`);
   const firstInt = intRes.data.interviews[0];
-  assert(firstInt.candidateName && firstInt.scheduledTime, 'Lịch phỏng vấn thể hiện rõ ứng viên và thời gian phỏng vấn');
+  assert(Boolean(firstInt.candidate?.fullName && firstInt.scheduledTime), `Lịch phỏng vấn thể hiện: ${firstInt.roundName} cho ứng viên ${firstInt.candidate?.fullName}`);
 
   // -------------------------------------------------------------
-  // PHẦN 7: LỜI MỜI NHẬN VIỆC (JOB OFFERS)
+  // PHẦN 7: LỜI MỜI NHẬN VIỆC & MỨC LƯƠNG (JOB OFFERS)
   // -------------------------------------------------------------
-  console.log('\n\x1b[36m▶ 7. Kiểm tra Lời mời Nhận việc (Job Offers)\x1b[0m');
+  console.log('\n\x1b[36m▶ 7. Quản lý Lời mời Nhận việc (Job Offers & Approvals)\x1b[0m');
   const offersRes = await request('GET', '/api/v1/offers', { Authorization: `Bearer ${adminToken}` });
-  assert(offersRes.status === 200 && offersRes.data?.success, 'Lấy danh sách đề nghị nhận việc (HTTP 200)');
-  assert(offersRes.data.offers.length >= 2, 'Hệ thống có ít nhất 2 hồ sơ đề nghị việc làm');
+  assert(offersRes.status === 200 && offersRes.data?.success, 'Lấy danh sách đề nghị tuyển dụng (HTTP 200)');
+  assert(offersRes.data.offers.length >= 2, `Hệ thống ghi nhận ${offersRes.data.offers.length} lời mời việc làm`);
   const firstOffer = offersRes.data.offers[0];
-  assert(firstOffer.candidateName && firstOffer.offeredSalary, 'Lời mời việc làm có chi tiết lương đề xuất và ứng viên');
+  assert(Boolean(firstOffer.candidate?.fullName && firstOffer.salaryMonthly), `Offer có đầy đủ ứng viên ${firstOffer.candidate?.fullName} và mức lương đề xuất`);
 
   // -------------------------------------------------------------
-  // PHẦN 8: BÁO CÁO & PHÂN TÍCH (REPORTS)
+  // PHẦN 8: BÁO CÁO & PHÂN TÍCH TUYỂN DỤNG (REPORTS)
   // -------------------------------------------------------------
-  console.log('\n\x1b[36m▶ 8. Kiểm tra Báo cáo & Phân tích (Reports)\x1b[0m');
+  console.log('\n\x1b[36m▶ 8. Báo cáo & Phân tích Tuyển dụng (Recruitment Reports)\x1b[0m');
   const reportRes = await request('GET', '/api/v1/reports/recruitment', { Authorization: `Bearer ${adminToken}` });
-  assert(reportRes.status === 200 && reportRes.data?.success, 'Lấy báo cáo tuyển dụng tổng thể (HTTP 200)');
-  const report = reportRes.data.report;
-  assert(Array.isArray(report?.departmentBreakdown), 'Báo cáo có thống kê chi tiết theo phòng ban');
-  assert(Array.isArray(report?.sourceAnalytics), 'Báo cáo có phân tích kênh nguồn tuyển dụng (LinkedIn, Referral, Website)');
+  assert(reportRes.status === 200 && reportRes.data?.success, 'Tải báo cáo tổng quan chỉ số tuyển dụng (HTTP 200)');
+  const reportData = reportRes.data.report;
+  assert(Array.isArray(reportData?.pipelineFunnel), 'Báo cáo có thống kê tỷ lệ chuyển đổi qua từng phễu ứng tuyển');
+  assert(typeof reportData?.timeToHireAverageDays === 'number', `Thời gian tuyển dụng trung bình (Time-to-Hire): ${reportData?.timeToHireAverageDays} ngày`);
 
   // -------------------------------------------------------------
-  // PHẦN 9: QUẢN TRỊ NGƯỜI DÙNG & PHÂN TRANG (USERS)
+  // PHẦN 9: QUẢN TRỊ TÀI KHOẢN & PHÂN TRANG (USER ADMINISTRATION)
   // -------------------------------------------------------------
-  console.log('\n\x1b[36m▶ 9. Kiểm tra Quản trị Người dùng & Phân trang (Users)\x1b[0m');
-  const usersPage1 = await request('GET', '/api/v1/admin/users?page=1&limit=20', { Authorization: `Bearer ${adminToken}` });
-  assert(usersPage1.status === 200 && usersPage1.data?.success, 'Phân trang người dùng trang 1 (HTTP 200)');
-  assert(usersPage1.data.data.items.length === 20, 'Trang 1 hiển thị đúng 20 người dùng theo chuẩn AC-04');
-  assert(usersPage1.data.data.pagination.total_items >= 25, 'Tổng số người dùng công ty >= 25');
+  console.log('\n\x1b[36m▶ 9. Quản trị Tài khoản & Phân trang (User Management)\x1b[0m');
+  const userPage = await request('GET', '/api/v1/admin/users?page=1&limit=20', { Authorization: `Bearer ${adminToken}` });
+  assert(userPage.status === 200 && userPage.data?.success, 'Lấy danh sách người dùng trang 1 (HTTP 200)');
+  assert(userPage.data.data.items.length === 20, 'Phân trang chuẩn AC-04: Đúng 20 bản ghi ở trang 1');
+  assert(userPage.data.data.pagination.totalItems >= 25, `Tổng số nhân sự công ty: ${userPage.data.data.pagination.totalItems}`);
 
-  // Tìm kiếm người dùng
-  const searchUser = await request('GET', '/api/v1/admin/users?q=Admin', { Authorization: `Bearer ${adminToken}` });
-  assert(searchUser.status === 200 && searchUser.data.data.items.length >= 1, 'Tìm kiếm người dùng theo từ khóa chính xác');
+  // Tìm kiếm nhân sự
+  const searchRes = await request('GET', '/api/v1/admin/users?q=Admin', { Authorization: `Bearer ${adminToken}` });
+  assert(searchRes.status === 200 && searchRes.data.data.items.length >= 1, 'Tìm kiếm nhân sự theo từ khóa thành công');
 
   // -------------------------------------------------------------
   // PHẦN 10: MA TRẬN PHÂN QUYỀN RBAC (ROLES & PERMISSIONS)
   // -------------------------------------------------------------
-  console.log('\n\x1b[36m▶ 10. Kiểm tra Ma trận Phân quyền (RBAC Matrix)\x1b[0m');
+  console.log('\n\x1b[36m▶ 10. Ma trận Phân quyền Động (Dynamic RBAC Matrix)\x1b[0m');
   const matrixRes = await request('GET', '/api/v1/admin/roles-matrix', { Authorization: `Bearer ${adminToken}` });
-  assert(matrixRes.status === 200 && matrixRes.data?.success, 'Lấy dữ liệu ma trận quyền động (HTTP 200)');
-  assert(matrixRes.data.data.roles.length === 7, 'Ma trận thể hiện đủ 7 vai trò chuẩn doanh nghiệp');
-  assert(matrixRes.data.data.permissions.length >= 20, 'Hệ thống định nghĩa ít nhất 20 quyền nghiệp vụ chi tiết');
+  assert(matrixRes.status === 200 && matrixRes.data?.success, 'Lấy ma trận phân quyền hệ thống (HTTP 200)');
+  assert(matrixRes.data.data.roles.length === 7, 'Đủ 7 vai trò chuẩn doanh nghiệp (Admin, HR Mgr, Recruiter, Hiring Mgr, Interviewer, Approver, Candidate)');
+  assert(matrixRes.data.data.permissions.length >= 20, 'Đầy đủ hơn 20 quyền nghiệp vụ chi tiết');
 
   // -------------------------------------------------------------
   // PHẦN 11: BẢO MẬT & DEFAULT DENY RBAC
   // -------------------------------------------------------------
-  console.log('\n\x1b[36m▶ 11. Kiểm tra An ninh & Phân quyền Default Deny\x1b[0m');
-  // Không có token -> 401
-  const noTokenRes = await request('GET', '/api/v1/admin/users');
-  assert(noTokenRes.status === 401, 'Chặn truy cập khi thiếu Token xác thực (HTTP 401)');
+  console.log('\n\x1b[36m▶ 11. An ninh & Cơ chế Default Deny (Security Protection)\x1b[0m');
+  // Chặn không có token
+  const noToken = await request('GET', '/api/v1/admin/users');
+  assert(noToken.status === 401, 'Chặn truy cập trái phép khi thiếu token xác thực (HTTP 401)');
 
-  // Token của Interviewer cố truy cập quyền Admin -> 403
-  const forbiddenRes = await request('GET', '/api/v1/admin/users', { Authorization: `Bearer ${interviewerToken}` });
-  assert(forbiddenRes.status === 403, 'Chặn vai trò không đủ quyền theo chuẩn Default Deny (HTTP 403)');
+  // Chặn vai trò không có quyền
+  const forbidden = await request('GET', '/api/v1/admin/users', { Authorization: `Bearer ${interviewerToken}` });
+  assert(forbidden.status === 403, 'Cơ chế Default Deny chặn vai trò không có quyền quản trị (HTTP 403)');
 
   // -------------------------------------------------------------
-  // PHẦN 12: ĐĂNG XUẤT & THU HỒI PHIÊN (LOGOUT)
+  // PHẦN 12: ĐĂNG XUẤT & THU HỒI PHIÊN (LOGOUT & SESSION REVOCATION)
   // -------------------------------------------------------------
-  console.log('\n\x1b[36m▶ 12. Kiểm tra Đăng xuất & Thu hồi phiên tức thì\x1b[0m');
+  console.log('\n\x1b[36m▶ 12. Đăng xuất & Thu hồi phiên tức thì (Logout & Session Revocation)\x1b[0m');
   const logoutRes = await request('POST', '/api/v1/auth/logout', { Authorization: `Bearer ${recruiterToken}` });
-  assert(logoutRes.status === 200 && logoutRes.data?.success, 'Đăng xuất thành công (HTTP 200)');
+  assert(logoutRes.status === 200 && logoutRes.data?.success, 'Đăng xuất tài khoản thành công (HTTP 200)');
 
-  // Dùng lại token vừa đăng xuất -> Phải bị từ chối 401
-  const reuseTokenRes = await request('GET', '/api/v1/auth/me', { Authorization: `Bearer ${recruiterToken}` });
-  assert(reuseTokenRes.status === 401, 'Phiên đăng xuất bị thu hồi ngay lập tức, không thể tái sử dụng (HTTP 401)');
+  const reuseToken = await request('GET', '/api/v1/auth/me', { Authorization: `Bearer ${recruiterToken}` });
+  assert(reuseToken.status === 401, 'Thu hồi phiên lập tức: Token đã đăng xuất bị từ chối 401');
 
   // =============================================================
   // TỔNG KẾT
   // =============================================================
   console.log('\n================================================================');
-  console.log(` TỔNG KẾT KIỂM THỬ: ${passedTests}/${totalTests} TESTS PASS (${Math.round((passedTests/totalTests)*100)}%)`);
+  console.log(` KẾT QUẢ KIỂM THỬ: ${passedTests}/${totalTests} TESTS PASS (${Math.round((passedTests/totalTests)*100)}%)`);
   if (failedTests === 0) {
-    console.log(' \x1b[32m✔ TẤT CẢ CHỨC NĂNG HỆ THỐNG ĐÃ HOẠT ĐỘNG HOÀN HẢO 100%!\x1b[0m');
+    console.log(' \x1b[32m✔ 100% TẤT CẢ CÁC CHỨC NĂNG HỆ THỐNG ĐÃ HOẠT ĐỘNG HOÀN HẢO!\x1b[0m');
   } else {
     console.log(` \x1b[31m✖ CÓ ${failedTests} KIỂM THỬ THẤT BẠI!\x1b[0m`);
   }
