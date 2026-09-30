@@ -1002,6 +1002,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const candidatesTableBody = document.getElementById('candidates-table-body');
   const candidatesTotalBadge = document.getElementById('candidates-total-badge');
 
+  function formatCandCode(c) {
+    if (!c) return 'CAND-001';
+    if (c.code) return c.code;
+    if (c.id) {
+      if (c.id.startsWith('cand-0')) return 'CAND-' + c.id.replace('cand-', '');
+      const raw = c.id.replace(/^cand-/, '');
+      return 'CAND-' + (raw.length <= 4 ? raw.toUpperCase() : raw.substring(0, 4).toUpperCase());
+    }
+    return 'CAND-001';
+  }
+
   async function loadCandidates() {
     const token = sessionStorage.getItem('ats_token');
     if (!token) return;
@@ -1050,13 +1061,16 @@ document.addEventListener('DOMContentLoaded', () => {
           const name = c.fullName || c.full_name || 'Ứng viên';
           const phone = c.phoneNumber || c.phone || '';
           const reqTitle = (c.requisition && c.requisition.title) ? c.requisition.title : (c.requisition_title || 'Chưa gắn vị trí');
-          const code = c.code || (c.id ? c.id.toUpperCase() : 'UV');
+          const code = formatCandCode(c);
           const appliedDate = c.createdAt || c.created_at || c.applied_at;
 
           return `
             <tr>
               <td><code class="font-mono" style="font-weight: 600; color: var(--color-primary);">${code}</code></td>
-              <td><strong>${name}</strong></td>
+              <td>
+                <div style="font-weight: 600; color: var(--color-text);">${name}</div>
+                <div style="font-size: 0.75rem; color: var(--color-text-muted); font-family: monospace;">Mã: ${code}</div>
+              </td>
               <td>${reqTitle}</td>
               <td>
                 <div style="font-size: 0.8rem; color: var(--color-text);">${c.email}</div>
@@ -1087,7 +1101,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       const headers = ['Mã UV', 'Họ và tên', 'Vị trí ứng tuyển', 'Email', 'Điện thoại', 'Giai đoạn', 'Ngày nộp', 'Đánh giá'];
       const rows = currentCandidatesList.map(c => [
-        c.code || (c.id ? c.id.toUpperCase() : 'UV'),
+        formatCandCode(c),
         c.fullName || c.full_name || '',
         (c.requisition && c.requisition.title) ? c.requisition.title : (c.requisition_title || ''),
         c.email || '',
@@ -3119,7 +3133,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (avatar) avatar.textContent = name.charAt(0).toUpperCase();
     if (nameEl) nameEl.textContent = name;
-    if (codeEl) codeEl.textContent = c.code || (c.id ? c.id.toUpperCase() : 'UV');
+    if (codeEl) codeEl.textContent = formatCandCode(c);
     if (reqTitleEl) reqTitleEl.textContent = (c.requisition && c.requisition.title) ? c.requisition.title : (c.requisition_title || 'Chưa gắn vị trí');
     if (emailEl) emailEl.textContent = c.email || '—';
     if (phoneEl) phoneEl.textContent = c.phoneNumber || c.phone || 'Chưa cập nhật';
@@ -3200,7 +3214,7 @@ document.addEventListener('DOMContentLoaded', () => {
       candSelect.innerHTML = `<option value="">-- Chọn ứng viên trong danh sách --</option>` +
         currentCandidatesList.map(c => `
           <option value="${c.id}" ${c.id === preselectedCandidateId ? 'selected' : ''}>
-            ${c.fullName || c.full_name} (${c.code || 'UV'}) - ${c.requisition_title || (c.requisition && c.requisition.title) || 'Vị trí'}
+            ${c.fullName || c.full_name} (${formatCandCode(c)}) - ${c.requisition_title || (c.requisition && c.requisition.title) || 'Vị trí'}
           </option>
         `).join('');
     }
@@ -3390,7 +3404,7 @@ document.addEventListener('DOMContentLoaded', () => {
       candSelect.innerHTML = `<option value="">-- Chọn ứng viên --</option>` +
         currentCandidatesList.map(c => `
           <option value="${c.id}" ${c.id === preselectedCandidateId ? 'selected' : ''}>
-            ${c.fullName || c.full_name} (${c.code || 'UV'}) - ${c.requisition_title || (c.requisition && c.requisition.title) || 'Vị trí'}
+            ${c.fullName || c.full_name} (${formatCandCode(c)}) - ${c.requisition_title || (c.requisition && c.requisition.title) || 'Vị trí'}
           </option>
         `).join('');
     }

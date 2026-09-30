@@ -549,6 +549,19 @@ function seedDatabase(db, options = {}) {
     insertCand.run(c.id, c.fullName, c.email, c.phone, c.reqId, c.stage, c.exp, c.company, c.salary, c.notes);
   }
 
+  // Clean up any test artifact names if present
+  database.prepare("UPDATE candidates SET full_name = 'Lê Hoàng Long', email = 'hoanglong.le@gmail.com' WHERE full_name LIKE '%Kiểm Thử%'").run();
+  database.prepare("UPDATE candidates SET full_name = 'Nguyễn Thị Phương Thảo', email = 'phuongthao.nguyen@gmail.com' WHERE full_name LIKE '%Test%'").run();
+  database.prepare("UPDATE requisitions SET title = 'Kỹ sư Trí tuệ Nhân tạo (AI Engineer)' WHERE id = 'req-29161419-e5a7-4fba-bda6-7bae6ea84d2f'").run();
+  database.prepare("UPDATE requisitions SET title = 'Chuyên viên Phân tích Dữ liệu (Data Analyst)' WHERE id = 'req-2ef45985-6d1b-4d0d-99b3-448eee28d9be'").run();
+  database.prepare("UPDATE requisitions SET title = 'Kỹ sư Giải pháp Đám mây (Cloud Architect)' WHERE id = 'req-0787270f-c4fe-4bf6-8c31-4110a6e96178'").run();
+  database.prepare("UPDATE requisitions SET title = 'Kỹ sư Kiểm thử Phần mềm (QA/QC Engineer)' WHERE id = 'req-d390af88-1d16-4cbc-afc2-2ece62a2bb12'").run();
+  database.prepare("UPDATE requisitions SET title = 'Trưởng nhóm Kỹ thuật (Engineering Manager)' WHERE id = 'req-d80ec776-4751-47a3-ba73-76e4c1158a0d'").run();
+  database.prepare("UPDATE requisitions SET title = 'Chuyên viên Tuyển dụng Cao cấp (Senior IT Recruiter)' WHERE id = 'req-9751ed0c-bb30-470b-9f39-3d05169a794a'").run();
+  database.prepare("UPDATE requisitions SET title = 'Thiết kế Sản phẩm (Product Designer UI/UX)' WHERE id = 'req-8d814b53-15c6-454f-b200-4b9f8abd6108'").run();
+  database.prepare("UPDATE requisitions SET title = 'Kỹ sư An toàn Thông tin (Security Engineer)' WHERE id = 'req-b947a1c0-1494-42b5-9b3f-c71d793e6cfa'").run();
+  database.prepare("UPDATE requisitions SET title = 'Chuyên viên Quản trị Hệ thống (System Admin)' WHERE id = 'req-3001d0f8-421c-42bd-8fc6-3b0133e34011'").run();
+
   // 7. Seed Interviews
   const interviews = [
     { id: 'int-001', candId: 'cand-001', reqId: 'req-001', interviewerId: 'usr-interviewer', round: 'Phỏng vấn Kỹ thuật Backend', time: '2026-10-02 14:00', location: 'Google Meet: meet.google.com/ats-backend-01', status: 'SCHEDULED', score: 8, feedback: 'Nắm vững concurrency và database indexing.' },

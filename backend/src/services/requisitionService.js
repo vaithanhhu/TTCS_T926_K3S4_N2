@@ -454,24 +454,34 @@ class RequisitionService {
     return {
       success: true,
       total: rows.length,
-      candidates: rows.map(r => ({
-        id: r.id,
-        fullName: r.full_name,
-        email: r.email,
-        phoneNumber: r.phone_number,
-        stage: r.stage,
-        experienceYears: r.experience_years,
-        currentCompany: r.current_company,
-        expectedSalary: r.expected_salary,
-        notes: r.notes,
-        createdAt: r.created_at,
-        requisition: r.requisition_id ? {
-          id: r.requisition_id,
-          code: r.requisition_code,
-          title: r.requisition_title,
-          departmentName: r.department_name
-        } : null
-      }))
+      candidates: rows.map(r => {
+        let code = 'CAND-001';
+        if (r.id && r.id.startsWith('cand-0')) {
+          code = 'CAND-' + r.id.replace('cand-', '');
+        } else if (r.id) {
+          const raw = r.id.replace(/^cand-/, '');
+          code = 'CAND-' + (raw.length <= 4 ? raw.toUpperCase() : raw.substring(0, 4).toUpperCase());
+        }
+        return {
+          id: r.id,
+          code,
+          fullName: r.full_name,
+          email: r.email,
+          phoneNumber: r.phone_number,
+          stage: r.stage,
+          experienceYears: r.experience_years,
+          currentCompany: r.current_company,
+          expectedSalary: r.expected_salary,
+          notes: r.notes,
+          createdAt: r.created_at,
+          requisition: r.requisition_id ? {
+            id: r.requisition_id,
+            code: r.requisition_code,
+            title: r.requisition_title,
+            departmentName: r.department_name
+          } : null
+        };
+      })
     };
   }
 
@@ -647,7 +657,7 @@ class RequisitionService {
       success: true,
       statusCode: 201,
       message: 'Thêm hồ sơ ứng viên thành công.',
-      data: { id, fullName, email, stage }
+      data: { id, code: 'CAND-' + id.replace(/^cand-/, '').substring(0, 4).toUpperCase(), fullName, email, stage }
     };
   }
 
