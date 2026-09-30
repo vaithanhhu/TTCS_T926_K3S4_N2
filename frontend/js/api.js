@@ -1,7 +1,18 @@
 /**
  * ATS API Client
  */
-const API_BASE = '/api/v1';
+const API_BASE = (function() {
+  if (typeof window !== 'undefined' && window.location) {
+    const proto = window.location.protocol;
+    const host = window.location.hostname;
+    const port = window.location.port;
+    // If opened directly from file system (file://) or from another local dev server (e.g. Live Server on port 5500)
+    if (proto === 'file:' || ((host === 'localhost' || host === '127.0.0.1') && port && port !== '5050')) {
+      return 'http://localhost:5050/api/v1';
+    }
+  }
+  return '/api/v1';
+})();
 
 async function loginApi(email, password) {
   try {
@@ -328,6 +339,10 @@ async function assignUserRolesApi(token, userId, roles) {
     const data = await response.json();
     return { status: response.status, ok: response.ok, data };
   } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi gán vai trò người dùng.' } };
+  }
+}
+
 async function lockUserApi(token, userId, reason) {
   try {
     const response = await fetch(`${API_BASE}/admin/users/${userId}/lock`, {

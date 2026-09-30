@@ -58,6 +58,15 @@ document.addEventListener('DOMContentLoaded', () => {
     alertBox.classList.add('hidden');
   }
 
+  // Check if opened via file:// protocol
+  if (window.location.protocol === 'file:') {
+    showAlert(
+      'warning',
+      '⚠️ Mở qua file:// cục bộ',
+      'Bạn đang mở file trực tiếp trong máy tính thay vì qua web server. Trình duyệt sẽ chặn kết nối API từ file://. Vui lòng mở trình duyệt và truy cập đúng địa chỉ: http://localhost:5050'
+    );
+  }
+
   // 3. Clear errors on input
   emailInput.addEventListener('input', () => {
     emailInput.classList.remove('is-invalid');
