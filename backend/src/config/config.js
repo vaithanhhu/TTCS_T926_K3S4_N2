@@ -41,11 +41,11 @@ module.exports = {
   PASSWORD_RESET_TTL_MINUTES: parseInt(process.env.PASSWORD_RESET_TTL_MINUTES, 10) || 30,
   STATIC_DIR: path.join(__dirname, '..', '..', '..', 'frontend'),
 
-  // Real SMTP Configuration
-  SMTP_HOST: process.env.SMTP_HOST || '',
-  SMTP_PORT: parseInt(process.env.SMTP_PORT, 10) || 587,
-  SMTP_SECURE: process.env.SMTP_SECURE === 'true',
-  SMTP_USER: process.env.SMTP_USER || '',
-  SMTP_PASSWORD: process.env.SMTP_PASSWORD || '',
-  MAIL_FROM: process.env.MAIL_FROM || 'ATS Internal Recruitment <no-reply@company.com>'
+  // Real SMTP Configuration (Supports both MAIL_* and SMTP_* env standards)
+  SMTP_HOST: process.env.MAIL_HOST || process.env.SMTP_HOST || '',
+  SMTP_PORT: parseInt(process.env.MAIL_PORT || process.env.SMTP_PORT, 10) || 587,
+  SMTP_SECURE: process.env.SMTP_SECURE === 'true' || (process.env.MAIL_PORT === '465' || process.env.SMTP_PORT === '465'),
+  SMTP_USER: process.env.MAIL_USERNAME || process.env.SMTP_USER || '',
+  SMTP_PASSWORD: process.env.MAIL_PASSWORD || process.env.SMTP_PASSWORD || '',
+  MAIL_FROM: process.env.MAIL_FROM || process.env.SMTP_FROM || ((process.env.MAIL_USERNAME || process.env.SMTP_USER) ? `Hệ thống Tuyển dụng ATS <${process.env.MAIL_USERNAME || process.env.SMTP_USER}>` : 'ATS Internal Recruitment <no-reply@company.com>')
 };

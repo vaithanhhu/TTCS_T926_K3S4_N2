@@ -179,13 +179,57 @@ class AuthController {
   }
 
   /**
+   * Handle POST /api/v1/auth/verify-otp
+   */
+  async handleVerifyOtp(req, res, body) {
+    try {
+      const { email, otp } = body || {};
+      const result = this.authService.verifyOtp(email, otp);
+
+      res.writeHead(result.statusCode, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({
+        success: result.valid,
+        message: result.message,
+        code: result.code,
+        resetToken: result.resetToken
+      }));
+    } catch (err) {
+      console.error('[Verify OTP Error]', err);
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, message: 'Lỗi máy chủ nội bộ.', code: 'INTERNAL_ERROR' }));
+    }
+  }
+
+  /**
+   * Handle POST /api/v1/auth/resend-otp
+   */
+  async handleResendOtp(req, res, body) {
+    try {
+      const { email } = body || {};
+      const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
+      const result = await this.authService.resendOtp(email, ipAddress);
+
+      res.writeHead(result.statusCode, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({
+        success: result.success,
+        message: result.message,
+        code: result.code
+      }));
+    } catch (err) {
+      console.error('[Resend OTP Error]', err);
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, message: 'Lỗi máy chủ nội bộ.', code: 'INTERNAL_ERROR' }));
+    }
+  }
+
+  /**
    * Handle POST /api/v1/auth/reset-password (S1-03 AC-01 & AC-02)
    */
   async handleResetPassword(req, res, body) {
     try {
-      const { token, newPassword } = body || {};
+      const { token, newPassword, email, otp } = body || {};
       const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
-      const result = this.authService.resetPassword(token, newPassword, ipAddress);
+      const result = this.authService.resetPassword(token, newPassword, ipAddress, email, otp);
 
       res.writeHead(result.statusCode, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({

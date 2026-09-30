@@ -128,6 +128,30 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // 6b. API: Verify OTP (6-digit code)
+  if (req.method === 'POST' && (pathname === '/api/v1/auth/verify-otp' || pathname === '/auth/verify-otp')) {
+    try {
+      const body = await parseBody(req);
+      await authController.handleVerifyOtp(req, res, body);
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, message: 'Dữ liệu yêu cầu không hợp lệ.', code: 'BAD_REQUEST' }));
+    }
+    return;
+  }
+
+  // 6c. API: Resend / Send OTP
+  if (req.method === 'POST' && (pathname === '/api/v1/auth/resend-otp' || pathname === '/auth/resend-otp' || pathname === '/api/v1/auth/send-otp' || pathname === '/auth/send-otp')) {
+    try {
+      const body = await parseBody(req);
+      await authController.handleResendOtp(req, res, body);
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, message: 'Dữ liệu yêu cầu không hợp lệ.', code: 'BAD_REQUEST' }));
+    }
+    return;
+  }
+
   // 7. API: S1-03 Reset Password (AC-01 & AC-02)
   if (req.method === 'POST' && (pathname === '/api/v1/auth/reset-password' || pathname === '/auth/reset-password')) {
     try {

@@ -102,6 +102,18 @@ function initSchema(db) {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS otps (
+      id TEXT PRIMARY KEY,
+      email TEXT NOT NULL,
+      otp_code TEXT NOT NULL,
+      purpose TEXT NOT NULL DEFAULT 'PASSWORD_RESET',
+      expires_at TEXT NOT NULL,
+      verified_at TEXT,
+      used_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_otps_email ON otps(email);
+
     CREATE TABLE IF NOT EXISTS requisitions (
       id TEXT PRIMARY KEY,
       code TEXT UNIQUE NOT NULL,

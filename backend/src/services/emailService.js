@@ -12,7 +12,7 @@ class EmailService {
   }
 
   initTransporter() {
-    if (config.SMTP_HOST && config.SMTP_USER) {
+    if (config.SMTP_HOST && config.SMTP_USER && config.SMTP_PASSWORD) {
       try {
         this.transporter = nodemailer.createTransport({
           host: config.SMTP_HOST,
@@ -221,6 +221,111 @@ class EmailService {
       html,
       text,
       templateName: 'ACCOUNT_ACTIVATION'
+    });
+  }
+
+  /**
+   * Send 6-digit OTP Verification Email for Password Reset
+   */
+  async sendOtpEmail(recipientEmail, otpCode, fullName = '') {
+    const greeting = fullName ? `Xin chào <strong>${fullName}</strong>,` : `Xin chào <strong>${recipientEmail}</strong>,`;
+    const subject = `🔐 [ATS] Mã xác thực OTP khôi phục mật khẩu: ${otpCode}`;
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #0f172a; padding: 24px; margin: 0; }
+          .card { max-width: 560px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); padding: 32px; }
+          .header { border-bottom: 2px solid #3b82f6; padding-bottom: 16px; margin-bottom: 24px; }
+          .title { font-size: 18px; font-weight: 800; color: #1e3a8a; margin: 0; text-transform: uppercase; letter-spacing: 0.5px; }
+          .body-text { font-size: 14px; line-height: 1.6; color: #334155; }
+          .otp-container { background: #eff6ff; border: 2px dashed #3b82f6; border-radius: 8px; padding: 20px; text-align: center; margin: 24px 0; }
+          .otp-code { font-family: 'Courier New', Courier, monospace; font-size: 36px; font-weight: 800; color: #1d4ed8; letter-spacing: 8px; margin: 0; }
+          .otp-hint { font-size: 12px; color: #64748b; margin-top: 8px; }
+          .warning-box { background: #fef2f2; border-left: 4px solid #ef4444; padding: 12px 16px; border-radius: 4px; font-size: 13px; color: #991b1b; margin-top: 20px; }
+          .footer { font-size: 12px; color: #94a3b8; margin-top: 28px; border-top: 1px solid #e2e8f0; padding-top: 16px; text-align: center; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <div class="header">
+            <h2 class="title">Hệ Thống Tuyển Dụng Nội Bộ (ATS)</h2>
+          </div>
+          <p class="body-text">${greeting}</p>
+          <p class="body-text">Hệ thống nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn. Dưới đây là <strong>mã xác thực OTP gồm 6 chữ số</strong> của bạn:</p>
+          
+          <div class="otp-container">
+            <div class="otp-code">${otpCode}</div>
+            <div class="otp-hint">Hiệu lực trong vòng <strong>10 phút</strong> · Chỉ sử dụng 1 lần</div>
+          </div>
+
+          <div class="warning-box">
+            <strong>Cảnh báo an ninh:</strong> Tuyệt đối không chia sẻ mã OTP này cho bất kỳ ai, bao gồm cả quản trị viên hệ thống để bảo vệ tài khoản nội bộ.
+          </div>
+
+          <p class="body-text" style="font-size: 13px; color: #64748b; margin-top: 16px;">
+            Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email hoặc liên hệ ngay với bộ phận IT Lead để kiểm tra an toàn thông tin.
+          </p>
+
+          <div class="footer">
+            <p>© 2026 Internal Recruitment Management System · Bảo mật Doanh nghiệp</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const text = `Xin chào,\n\nMã xác thực OTP của bạn là: ${otpCode}\nMã có hiệu lực trong vòng 10 phút. Tuyệt đối không chia sẻ mã này cho người khác.`;
+
+    return this.sendMail({
+      to: recipientEmail,
+      subject,
+      html,
+      text,
+      templateName: 'OTP_VERIFICATION'
+    });
+  }
+
+  /**
+   * Send Password Changed Success Notification
+   */
+  async sendPasswordChangedEmail(recipientEmail, fullName = '') {
+    const greeting = fullName ? `Xin chào <strong>${fullName}</strong>,` : `Xin chào <strong>${recipientEmail}</strong>,`;
+    const subject = '🔒 [ATS] Thông báo: Mật khẩu tài khoản của bạn đã được thay đổi thành công';
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; color: #0f172a; padding: 24px; }
+          .card { max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; padding: 32px; }
+          .title { font-size: 18px; font-weight: 800; color: #059669; }
+          .body-text { font-size: 14px; line-height: 1.6; color: #334155; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <h2 class="title">✅ Đổi Mật Khẩu Thành Công</h2>
+          <p class="body-text">${greeting}</p>
+          <p class="body-text">Mật khẩu tài khoản của bạn trên Hệ thống Tuyển dụng Nội bộ (ATS) vừa được thay đổi thành công vào lúc <strong>${new Date().toLocaleString('vi-VN')}</strong>.</p>
+          <p class="body-text">Mọi phiên làm việc cũ trên các thiết bị khác đã được hệ thống tự động thu hồi để bảo vệ an toàn thông tin.</p>
+          <p class="body-text" style="color: #dc2626; font-size: 13px;">Nếu bạn KHÔNG thực hiện thay đổi này, vui lòng liên hệ ngay với Quản trị viên hệ thống để phong tỏa tài khoản.</p>
+        </div>
+      </body>
+      </html>
+    `;
+
+    return this.sendMail({
+      to: recipientEmail,
+      subject,
+      html,
+      text: 'Mật khẩu tài khoản của bạn đã được thay đổi thành công.',
+      templateName: 'PASSWORD_CHANGED'
     });
   }
 

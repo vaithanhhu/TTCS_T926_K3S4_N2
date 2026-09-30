@@ -115,12 +115,40 @@ async function forgotPasswordApi(email) {
   }
 }
 
-async function resetPasswordApi(token, newPassword) {
+async function verifyOtpApi(email, otp) {
+  try {
+    const response = await fetch(`${API_BASE}/auth/verify-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, otp })
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi xác thực OTP.' } };
+  }
+}
+
+async function resendOtpApi(email) {
+  try {
+    const response = await fetch(`${API_BASE}/auth/resend-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi gửi lại OTP.' } };
+  }
+}
+
+async function resetPasswordApi(token, newPassword, email, otp) {
   try {
     const response = await fetch(`${API_BASE}/auth/reset-password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, newPassword })
+      body: JSON.stringify({ token, newPassword, email, otp })
     });
     const data = await response.json();
     return { status: response.status, ok: response.ok, data };
@@ -739,6 +767,8 @@ window.ATS_API = {
   getMeApi,
   forgotPasswordApi,
   requestPasswordResetApi: forgotPasswordApi,
+  verifyOtpApi,
+  resendOtpApi,
   resetPasswordApi,
   confirmPasswordResetApi: resetPasswordApi,
   changePasswordApi,

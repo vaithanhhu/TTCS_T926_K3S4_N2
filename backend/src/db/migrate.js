@@ -113,6 +113,19 @@ function runMigrations(customPath) {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- 8.1 OTPS TABLE (6-digit random numeric OTP verification)
+    CREATE TABLE IF NOT EXISTS otps (
+      id TEXT PRIMARY KEY,
+      email TEXT NOT NULL,
+      otp_code TEXT NOT NULL,
+      purpose TEXT NOT NULL DEFAULT 'PASSWORD_RESET',
+      expires_at TEXT NOT NULL,
+      verified_at TEXT,
+      used_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_otps_email ON otps(email);
+
     -- 9. REQUISITIONS TABLE (S1-10 AC-03 Handover Warning & Assignment)
     CREATE TABLE IF NOT EXISTS requisitions (
       id TEXT PRIMARY KEY,

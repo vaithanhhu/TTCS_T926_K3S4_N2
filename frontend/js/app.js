@@ -256,6 +256,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
           if (status === 423) {
             showAlert('warning', 'Tài khoản tạm thời bị khóa', msg);
+            // Disable login button as requested: khi nhập sai mật khẩu quá 5 lần nút đăng nhập sẽ không ấn được nữa và chuyển sang disable
+            if (submitBtn) {
+              submitBtn.disabled = true;
+              submitBtn.classList.add('btn-disabled');
+              const remainingMin = (res.data && res.data.remainingMinutes) ? res.data.remainingMinutes : 15;
+              let timeLeft = remainingMin * 60;
+              if (btnText) btnText.textContent = `Tạm khóa (${Math.ceil(timeLeft / 60)} phút)`;
+              if (window._lockoutTimer) clearInterval(window._lockoutTimer);
+              window._lockoutTimer = setInterval(() => {
+                timeLeft -= 1;
+                if (timeLeft <= 0) {
+                  clearInterval(window._lockoutTimer);
+                  submitBtn.disabled = false;
+                  submitBtn.classList.remove('btn-disabled');
+                  if (btnText) btnText.textContent = 'Đăng nhập';
+                } else {
+                  const m = Math.floor(timeLeft / 60);
+                  const s = timeLeft % 60;
+                  if (btnText) btnText.textContent = `Tạm khóa (${m}:${s < 10 ? '0' : ''}${s})`;
+                }
+              }, 1000);
+            }
           } else if (status === 403) {
             showAlert('danger', 'Tài khoản đã bị vô hiệu hóa', msg);
           } else {
@@ -2536,38 +2558,185 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Modal: Forgot Password
+  // Modal: Forgot Password & OTP Flow
   const openForgotPwdBtn = document.getElementById('open-forgot-pwd-btn');
   const forgotModal = document.getElementById('forgot-modal');
   const closeForgotModal = document.getElementById('close-forgot-modal');
   const forgotForm = document.getElementById('forgot-form');
   const forgotAlert = document.getElementById('forgot-alert');
   const forgotAlertMsg = document.getElementById('forgot-alert-msg');
+  const otpForm = document.getElementById('otp-form');
+  const forgotOtpInput = document.getElementById('forgot-otp-input');
+  const verifyOtpBtn = document.getElementById('verify-otp-btn');
+  const resendOtpBtn = document.getElementById('resend-otp-btn');
+  const backToForgotStep1Btn = document.getElementById('back-to-forgot-step1-btn');
+  const otpNotice = document.getElementById('otp-notice');
+
+  let currentForgotEmail = '';
+  let resendCooldownTimer = null;
+
+  function startResendCooldown(seconds = 60) {
+    if (!resendOtpBtn) return;
+    if (resendCooldownTimer) clearInterval(resendCooldownTimer);
+    let remaining = seconds;
+    resendOtpBtn.disabled = true;
+    resendOtpBtn.style.pointerEvents = 'none';
+    resendOtpBtn.textContent = `Gửi lại mã (${remaining}s)`;
+
+    resendCooldownTimer = setInterval(() => {
+      remaining -= 1;
+      if (remaining <= 0) {
+        clearInterval(resendCooldownTimer);
+        resendOtpBtn.disabled = false;
+        resendOtpBtn.style.pointerEvents = '';
+        resendOtpBtn.textContent = 'Gửi lại mã OTP';
+      } else {
+        resendOtpBtn.textContent = `Gửi lại mã (${remaining}s)`;
+      }
+    }, 1000);
+  }
+
+  function resetForgotModalState() {
+    if (forgotForm) {
+      forgotForm.reset();
+      forgotForm.classList.remove('hidden');
+    }
+    if (otpForm) {
+      otpForm.reset();
+      otpForm.classList.add('hidden');
+    }
+    if (forgotAlert) forgotAlert.classList.add('hidden');
+    if (resendCooldownTimer) clearInterval(resendCooldownTimer);
+    if (resendOtpBtn) {
+      resendOtpBtn.disabled = false;
+      resendOtpBtn.style.pointerEvents = '';
+      resendOtpBtn.textContent = 'Gửi lại mã OTP';
+    }
+  }
 
   if (openForgotPwdBtn && forgotModal) {
     openForgotPwdBtn.addEventListener('click', () => {
-      if (forgotForm) forgotForm.reset();
-      if (forgotAlert) forgotAlert.classList.add('hidden');
+      resetForgotModalState();
       forgotModal.classList.remove('hidden');
     });
   }
 
   if (closeForgotModal && forgotModal) {
-    closeForgotModal.addEventListener('click', () => forgotModal.classList.add('hidden'));
+    closeForgotModal.addEventListener('click', () => {
+      resetForgotModalState();
+      forgotModal.classList.add('hidden');
+    });
   }
 
+  // Step 1: Request Password Reset OTP
   if (forgotForm) {
     forgotForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const email = document.getElementById('forgot-email').value.trim();
+      if (!email) return;
+
+      const submitBtn = document.getElementById('forgot-submit-btn');
+      if (submitBtn) submitBtn.disabled = true;
+      if (forgotAlert) forgotAlert.classList.add('hidden');
+
       try {
         const res = await window.ATS_API.requestPasswordResetApi(email);
+        if (submitBtn) submitBtn.disabled = false;
+
         if (res.ok && res.data && res.data.success) {
-          showToast('success', 'Liên kết đã gửi', 'Nếu email tồn tại trong hệ thống, hướng dẫn đặt lại mật khẩu đã được gửi đến hòm thư.');
-          forgotModal.classList.add('hidden');
+          currentForgotEmail = email;
+          showToast('success', 'Mã OTP đã gửi', `Mã xác thực gồm 6 chữ số đã được gửi tới ${email}.`);
+
+          if (otpForm) {
+            forgotForm.classList.add('hidden');
+            otpForm.classList.remove('hidden');
+            if (otpNotice) {
+              otpNotice.innerHTML = `Mã xác thực OTP gồm 6 chữ số đã được gửi đến email <strong>${email}</strong>. Mã có hiệu lực trong vòng <strong>10 phút</strong>.`;
+            }
+            if (forgotOtpInput) {
+              forgotOtpInput.value = '';
+              forgotOtpInput.focus();
+            }
+            startResendCooldown(60);
+          } else {
+            forgotModal.classList.add('hidden');
+          }
         } else {
           if (forgotAlert && forgotAlertMsg) {
             forgotAlertMsg.textContent = res.data.message || 'Yêu cầu không thành công.';
+            forgotAlert.classList.remove('hidden');
+          }
+        }
+      } catch (err) {
+        if (submitBtn) submitBtn.disabled = false;
+        if (forgotAlert && forgotAlertMsg) {
+          forgotAlertMsg.textContent = err.message;
+          forgotAlert.classList.remove('hidden');
+        }
+      }
+    });
+  }
+
+  // Step 2: Verify 6-digit OTP
+  if (otpForm) {
+    otpForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const otp = forgotOtpInput ? forgotOtpInput.value.trim() : '';
+
+      if (!otp || otp.length !== 6 || !/^\d{6}$/.test(otp)) {
+        if (forgotAlert && forgotAlertMsg) {
+          forgotAlertMsg.textContent = 'Vui lòng nhập chính xác mã OTP gồm 6 chữ số.';
+          forgotAlert.classList.remove('hidden');
+        }
+        return;
+      }
+
+      if (verifyOtpBtn) verifyOtpBtn.disabled = true;
+      if (forgotAlert) forgotAlert.classList.add('hidden');
+
+      try {
+        const res = await window.ATS_API.verifyOtpApi(currentForgotEmail, otp);
+        if (verifyOtpBtn) verifyOtpBtn.disabled = false;
+
+        if (res.ok && res.data && res.data.success) {
+          forgotModal.classList.add('hidden');
+          showToast('success', 'Xác thực OTP thành công', 'Mã OTP hợp lệ. Vui lòng thiết lập mật khẩu mới.');
+          const resetToken = res.data.resetToken || '';
+          openResetModal(resetToken);
+        } else {
+          if (forgotAlert && forgotAlertMsg) {
+            forgotAlertMsg.textContent = res.data.message || 'Mã OTP không chính xác hoặc đã hết hạn.';
+            forgotAlert.classList.remove('hidden');
+          }
+        }
+      } catch (err) {
+        if (verifyOtpBtn) verifyOtpBtn.disabled = false;
+        if (forgotAlert && forgotAlertMsg) {
+          forgotAlertMsg.textContent = err.message;
+          forgotAlert.classList.remove('hidden');
+        }
+      }
+    });
+  }
+
+  // Resend OTP button
+  if (resendOtpBtn) {
+    resendOtpBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      if (!currentForgotEmail) return;
+
+      try {
+        const res = await window.ATS_API.resendOtpApi(currentForgotEmail);
+        if (res.ok && res.data && res.data.success) {
+          showToast('success', 'Đã gửi lại mã OTP', `Mã OTP mới đã được gửi tới email ${currentForgotEmail}.`);
+          startResendCooldown(60);
+          if (forgotOtpInput) {
+            forgotOtpInput.value = '';
+            forgotOtpInput.focus();
+          }
+        } else {
+          if (forgotAlert && forgotAlertMsg) {
+            forgotAlertMsg.textContent = res.data.message || 'Không thể gửi lại mã OTP lúc này.';
             forgotAlert.classList.remove('hidden');
           }
         }
@@ -2577,6 +2746,17 @@ document.addEventListener('DOMContentLoaded', () => {
           forgotAlert.classList.remove('hidden');
         }
       }
+    });
+  }
+
+  // Back to step 1 (change email)
+  if (backToForgotStep1Btn) {
+    backToForgotStep1Btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (otpForm) otpForm.classList.add('hidden');
+      if (forgotForm) forgotForm.classList.remove('hidden');
+      if (forgotAlert) forgotAlert.classList.add('hidden');
+      if (resendCooldownTimer) clearInterval(resendCooldownTimer);
     });
   }
 
