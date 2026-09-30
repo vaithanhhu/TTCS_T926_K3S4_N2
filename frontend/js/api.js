@@ -327,7 +327,11 @@ async function assignUserRolesApi(token, userId, roles) {
     });
     const data = await response.json();
     return { status: response.status, ok: response.ok, data };
-  } catch (error) {
+    } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi gán vai trò người dùng.' } };
+  }
+}
+
 async function lockUserApi(token, userId, reason) {
   try {
     const response = await fetch(`${API_BASE}/admin/users/${userId}/lock`, {
