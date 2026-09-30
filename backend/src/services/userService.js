@@ -633,6 +633,84 @@ class UserService {
       }
     };
   }
+
+  /**
+   * Reset mật khẩu người dùng bởi Quản trị viên
+   * Sinh mật khẩu tạm mới, cập nhật CSDL và gửi email
+   */
+  resetUserPassword(targetUserId, requestingUser = {}) {
+    if (!targetUserId) {
+      return { success: false, statusCode: 400, code: 'MISSING_USER_ID', message: 'Mã người dùng không hợp lệ.' };
+    }
+
+    const targetUser = this.getUserById(targetUserId);
+    if (!targetUser) {
+      return { success: false, statusCode: 404, code: 'USER_NOT_FOUND', message: 'Không tìm thấy người dùng cần đặt lại mật khẩu.' };
+    }
+
+    const tempPassword = this.generateTemporaryPassword();
+    const passwordHash = hashPassword(tempPassword);
+
+    const updateStmt = this.db.prepare(`
+      UPDATE users
+      SET password_hash = ?, failed_attempts = 0, locked_until = NULL, updated_at = datetime('now')
+      WHERE id = ?
+    `);
+    updateStmt.run(passwordHash, targetUserId);
+
+    // Chấm dứt các session cũ
+    this.db.prepare('DELETE FROM sessions WHERE user_id = ?').run(targetUserId);
+
+    // Gửi email thông báo
+    if (this.emailService) {
+      this.emailService.sendAccountActivationEmail(targetUser.email, targetUser.fullName, tempPassword, targetUser.roles.join(', ')).catch(err => {
+        console.error('[UserService] Error sending reset email:', err.message);
+      });
+    }
+
+    return {
+      success: true,
+      statusCode: 200,
+      code: 'PASSWORD_RESET_SUCCESS',
+      message: `Đặt lại mật khẩu cho tài khoản '${targetUser.email}' thành công.`,
+      data: {
+        userId: targetUserId,
+        email: targetUser.email,
+        temporaryPassword: tempPassword
+      }
+    };
+  }
+
+  /**
+   * Xóa tài khoản người dùng
+   */
+  deleteUser(targetUserId, requestingUser = {}) {
+    if (!targetUserId) {
+      return { success: false, statusCode: 400, code: 'MISSING_USER_ID', message: 'Mã người dùng không hợp lệ.' };
+    }
+
+    const targetUser = this.getUserById(targetUserId);
+    if (!targetUser) {
+      return { success: false, statusCode: 404, code: 'USER_NOT_FOUND', message: 'Không tìm thấy người dùng cần xóa.' };
+    }
+
+    // Không thể xóa chính mình
+    if (requestingUser && (requestingUser.id === targetUserId || requestingUser.email === targetUser.email)) {
+      return { success: false, statusCode: 400, code: 'CANNOT_DELETE_SELF', message: 'Bạn không thể tự xóa tài khoản của chính mình.' };
+    }
+
+    // Xóa session, user_roles và user
+    this.db.prepare('DELETE FROM sessions WHERE user_id = ?').run(targetUserId);
+    this.db.prepare('DELETE FROM user_roles WHERE user_id = ?').run(targetUserId);
+    this.db.prepare('DELETE FROM users WHERE id = ?').run(targetUserId);
+
+    return {
+      success: true,
+      statusCode: 200,
+      code: 'USER_DELETED_SUCCESS',
+      message: `Đã xóa tài khoản '${targetUser.email}' khỏi hệ thống.`
+    };
+  }
 }
 
 module.exports = UserService;

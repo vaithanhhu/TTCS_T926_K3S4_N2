@@ -169,6 +169,71 @@ class RequisitionService {
   }
 
   /**
+   * Get single requisition by ID
+   */
+  getRequisitionById(id) {
+    if (!id) return null;
+    const stmt = this.db.prepare(`
+      SELECT 
+        r.id, r.code, r.title, r.department_name, r.headcount, r.status, r.handover_required, r.handover_notes,
+        r.created_at, r.updated_at,
+        r.recruiter_id, rec.full_name AS recruiter_name, rec.email AS recruiter_email,
+        r.hiring_manager_id, hm.full_name AS hiring_manager_name, hm.email AS hiring_manager_email
+      FROM requisitions r
+      LEFT JOIN users hm ON r.hiring_manager_id = hm.id
+      LEFT JOIN users rec ON r.recruiter_id = rec.id
+      WHERE r.id = ?
+    `);
+    const r = stmt.get(id);
+    if (!r) return null;
+    return {
+      id: r.id,
+      code: r.code,
+      title: r.title,
+      departmentName: r.department_name,
+      headcount: r.headcount,
+      status: r.status,
+      handoverRequired: Boolean(r.handover_required),
+      handoverNotes: r.handover_notes,
+      recruiterId: r.recruiter_id,
+      recruiterName: r.recruiter_name,
+      hiringManagerId: r.hiring_manager_id,
+      hiringManagerName: r.hiring_manager_name,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at
+    };
+  }
+
+  /**
+   * Update requisition details and status
+   */
+  updateRequisition(id, data = {}) {
+    if (!id) return { success: false, statusCode: 400, message: 'Thiếu mã vị trí cần cập nhật.' };
+    const current = this.getRequisitionById(id);
+    if (!current) return { success: false, statusCode: 404, message: 'Không tìm thấy vị trí tuyển dụng.' };
+
+    const title = typeof data.title === 'string' && data.title.trim() ? data.title.trim() : current.title;
+    const departmentName = typeof data.departmentName === 'string' && data.departmentName.trim() ? data.departmentName.trim() : current.departmentName;
+    const headcount = data.headcount !== undefined ? (parseInt(data.headcount, 10) || current.headcount) : current.headcount;
+    const status = typeof data.status === 'string' && data.status.trim() ? data.status.trim().toUpperCase() : current.status;
+    const recruiterId = data.recruiterId !== undefined ? (data.recruiterId || null) : current.recruiterId;
+
+    const stmt = this.db.prepare(`
+      UPDATE requisitions
+      SET title = ?, department_name = ?, headcount = ?, status = ?, recruiter_id = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `);
+    stmt.run(title, departmentName, headcount, status, recruiterId, id);
+
+    return {
+      success: true,
+      statusCode: 200,
+      message: 'Cập nhật vị trí tuyển dụng thành công.',
+      data: this.getRequisitionById(id)
+    };
+  }
+
+  /**
    * Get enterprise real-time dashboard statistics from SQLite
    */
   getDashboardStats() {
@@ -548,6 +613,149 @@ class RequisitionService {
         costPerHireAverageVnd: '12.500.000 đ'
       }
     };
+  }
+
+  /**
+   * Create candidate record
+   */
+  createCandidate(data = {}) {
+    const fullName = typeof data.fullName === 'string' ? data.fullName.trim() : '';
+    const email = typeof data.email === 'string' ? data.email.trim() : '';
+    const phoneNumber = typeof data.phoneNumber === 'string' ? data.phoneNumber.trim() : '';
+    const requisitionId = data.requisitionId || null;
+    const stage = data.stage || 'NEW';
+    const experienceYears = parseInt(data.experienceYears, 10) || 1;
+    const currentCompany = data.currentCompany || '';
+    const expectedSalary = data.expectedSalary || '';
+    const notes = data.notes || '';
+
+    if (!fullName) {
+      return { success: false, statusCode: 400, message: 'Họ và tên ứng viên là bắt buộc.' };
+    }
+    if (!email) {
+      return { success: false, statusCode: 400, message: 'Email ứng viên là bắt buộc.' };
+    }
+
+    const id = 'cand-' + crypto.randomUUID();
+    const insertStmt = this.db.prepare(`
+      INSERT INTO candidates (id, full_name, email, phone_number, requisition_id, stage, experience_years, current_company, expected_salary, notes, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    `);
+    insertStmt.run(id, fullName, email, phoneNumber, requisitionId, stage, experienceYears, currentCompany, expectedSalary, notes);
+
+    return {
+      success: true,
+      statusCode: 201,
+      message: 'Thêm hồ sơ ứng viên thành công.',
+      data: { id, fullName, email, stage }
+    };
+  }
+
+  /**
+   * Update candidate stage / pipeline status
+   */
+  updateCandidateStage(id, stage, notes) {
+    if (!id) return { success: false, statusCode: 400, message: 'Thiếu mã ứng viên.' };
+    const validStages = ['NEW', 'APPLIED', 'SCREENING', 'INTERVIEW', 'OFFER', 'HIRED', 'REJECTED'];
+    if (!validStages.includes(stage)) {
+      return { success: false, statusCode: 400, message: 'Giai đoạn không hợp lệ.' };
+    }
+    const updateStmt = this.db.prepare(`
+      UPDATE candidates 
+      SET stage = ?, notes = COALESCE(?, notes)
+      WHERE id = ?
+    `);
+    const res = updateStmt.run(stage, notes || null, id);
+    if (res.changes === 0) {
+      return { success: false, statusCode: 404, message: 'Không tìm thấy hồ sơ ứng viên.' };
+    }
+    return { success: true, statusCode: 200, message: 'Cập nhật giai đoạn ứng viên thành công.' };
+  }
+
+  /**
+   * Schedule new interview
+   */
+  createInterview(data = {}) {
+    const candidateId = data.candidateId;
+    const requisitionId = data.requisitionId || null;
+    const interviewerId = data.interviewerId || null;
+    const roundName = data.roundName || 'Phỏng vấn chuyên môn';
+    const scheduledTime = data.scheduledTime;
+    const locationOrLink = data.locationOrLink || 'Google Meet Online';
+
+    if (!candidateId) return { success: false, statusCode: 400, message: 'Vui lòng chọn ứng viên.' };
+    if (!scheduledTime) return { success: false, statusCode: 400, message: 'Vui lòng chọn thời gian phỏng vấn.' };
+
+    const id = 'int-' + crypto.randomUUID();
+    const stmt = this.db.prepare(`
+      INSERT INTO interviews (id, candidate_id, requisition_id, interviewer_id, round_name, scheduled_time, location_or_link, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'SCHEDULED', datetime('now'))
+    `);
+    stmt.run(id, candidateId, requisitionId, interviewerId, roundName, scheduledTime, locationOrLink);
+
+    // Update candidate stage to INTERVIEW
+    this.db.prepare("UPDATE candidates SET stage = 'INTERVIEW' WHERE id = ?").run(candidateId);
+
+    return { success: true, statusCode: 201, message: 'Lên lịch phỏng vấn thành công.', data: { id } };
+  }
+
+  /**
+   * Update interview status / score / feedback
+   */
+  updateInterviewStatus(id, status, feedback, score) {
+    if (!id) return { success: false, statusCode: 400, message: 'Thiếu mã phỏng vấn.' };
+    const stmt = this.db.prepare(`
+      UPDATE interviews
+      SET status = ?, feedback = COALESCE(?, feedback), score = COALESCE(?, score)
+      WHERE id = ?
+    `);
+    const res = stmt.run(status, feedback || null, score ? parseInt(score, 10) : null, id);
+    if (res.changes === 0) return { success: false, statusCode: 404, message: 'Không tìm thấy lịch phỏng vấn.' };
+    return { success: true, statusCode: 200, message: 'Cập nhật lịch phỏng vấn thành công.' };
+  }
+
+  /**
+   * Create Job Offer
+   */
+  createOffer(data = {}) {
+    const candidateId = data.candidateId;
+    const requisitionId = data.requisitionId || null;
+    const salaryMonthly = parseInt(data.salaryMonthly, 10) || 0;
+    const startDate = data.startDate || null;
+    const approverId = data.approverId || null;
+
+    if (!candidateId) return { success: false, statusCode: 400, message: 'Vui lòng chọn ứng viên.' };
+    if (!salaryMonthly) return { success: false, statusCode: 400, message: 'Vui lòng nhập mức lương đề xuất.' };
+
+    const id = 'off-' + crypto.randomUUID();
+    const stmt = this.db.prepare(`
+      INSERT INTO offers (id, candidate_id, requisition_id, salary_monthly, start_date, status, approver_id, created_at)
+      VALUES (?, ?, ?, ?, ?, 'PENDING_APPROVAL', ?, datetime('now'))
+    `);
+    stmt.run(id, candidateId, requisitionId, salaryMonthly, startDate, approverId);
+
+    // Update candidate stage to OFFER
+    this.db.prepare("UPDATE candidates SET stage = 'OFFER' WHERE id = ?").run(candidateId);
+
+    return { success: true, statusCode: 201, message: 'Khởi tạo đề xuất việc làm (Offer) thành công.', data: { id } };
+  }
+
+  /**
+   * Approve / Reject Offer
+   */
+  updateOfferStatus(id, status) {
+    if (!id) return { success: false, statusCode: 400, message: 'Thiếu mã offer.' };
+    const stmt = this.db.prepare(`UPDATE offers SET status = ? WHERE id = ?`);
+    const res = stmt.run(status, id);
+    if (res.changes === 0) return { success: false, statusCode: 404, message: 'Không tìm thấy offer.' };
+
+    if (status === 'APPROVED') {
+      const off = this.db.prepare('SELECT candidate_id FROM offers WHERE id = ?').get(id);
+      if (off && off.candidate_id) {
+        this.db.prepare("UPDATE candidates SET stage = 'HIRED' WHERE id = ?").run(off.candidate_id);
+      }
+    }
+    return { success: true, statusCode: 200, message: 'Cập nhật trạng thái offer thành công.' };
   }
 }
 

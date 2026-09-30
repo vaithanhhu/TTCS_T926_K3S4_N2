@@ -27,9 +27,13 @@ function loadEnv() {
 
 loadEnv();
 
+const isTestEnv = process.env.NODE_ENV === 'test' || (process.argv[1] && (process.argv[1].includes('tests') || process.argv[1].includes('test_s1_')));
+
 module.exports = {
   PORT: parseInt(process.env.PORT, 10) || 5050,
-  DB_PATH: process.env.DB_PATH || path.join(__dirname, '..', '..', 'data', 'ats.db'),
+  DB_PATH: isTestEnv
+    ? path.join(__dirname, '..', '..', 'data', 'ats_test.db')
+    : (process.env.DB_PATH ? path.resolve(process.env.DB_PATH) : path.join(__dirname, '..', '..', 'data', 'ats.db')),
   APP_URL: process.env.APP_URL || 'http://localhost:5050',
   LOCK_TIME_MINUTES: parseInt(process.env.LOCK_TIME_MINUTES, 10) || 15,
   MAX_FAILED_ATTEMPTS: parseInt(process.env.MAX_FAILED_ATTEMPTS, 10) || 5,

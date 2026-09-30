@@ -51,11 +51,13 @@ document.addEventListener('DOMContentLoaded', () => {
     candidates: document.getElementById('candidates-view'),
     interviews: document.getElementById('interviews-view'),
     offers: document.getElementById('offers-view'),
+    approvals: document.getElementById('approvals-view'),
     reports: document.getElementById('reports-view'),
     users: document.getElementById('users-view'),
     roles: document.getElementById('roles-view'),
     audit: document.getElementById('audit-view'),
     profile: document.getElementById('profile-view'),
+    candidatePortal: document.getElementById('candidate-portal-view'),
     error: document.getElementById('error-view')
   };
 
@@ -66,6 +68,10 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentAuthenticatedUser = null;
   let currentActiveView = 'dashboard';
   let heartbeatTimer = null;
+  let currentRequisitionsList = [];
+  let currentCandidatesList = [];
+  let currentInterviewsList = [];
+  let currentOffersList = [];
 
   // Role Mappings (Friendly Vietnamese Names)
   const ROLE_LABELS = {
@@ -179,6 +185,16 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Pre-fill remembered email
+  const rememberMeCheckbox = document.getElementById('remember-me');
+  try {
+    const savedEmail = localStorage.getItem('ats_remember_email');
+    if (savedEmail && emailInput) {
+      emailInput.value = savedEmail;
+      if (rememberMeCheckbox) rememberMeCheckbox.checked = true;
+    }
+  } catch {}
+
   function setLoginLoading(isLoading) {
     if (!submitBtn) return;
     submitBtn.disabled = isLoading;
@@ -223,6 +239,14 @@ document.addEventListener('DOMContentLoaded', () => {
           sessionStorage.setItem('ats_token', authData.token);
           sessionStorage.setItem('ats_user', JSON.stringify(authData.user));
           sessionStorage.setItem('ats_expires_at', authData.expiresAt);
+
+          try {
+            if (rememberMeCheckbox && rememberMeCheckbox.checked) {
+              localStorage.setItem('ats_remember_email', email);
+            } else {
+              localStorage.removeItem('ats_remember_email');
+            }
+          } catch {}
 
           setupAuthenticatedSession(authData.user);
           showToast('success', 'Đăng nhập thành công', `Chào mừng ${authData.user.fullName || authData.user.email} vào hệ thống.`);
@@ -275,11 +299,57 @@ document.addEventListener('DOMContentLoaded', () => {
     const userDisplayName = document.getElementById('user-display-name');
     if (userDisplayName) userDisplayName.textContent = fullName;
 
+    // Filter Navigation Menu by Real Roles & Permissions (S1-06 AC-01 & AC-02)
+    const token = sessionStorage.getItem('ats_token');
+    if (token) filterNavigationMenu(token);
+
     // Start Session Heartbeat Auto-Renew
     startSessionHeartbeat();
 
-    // Default View: switch to dashboard and load real data
-    switchView('dashboard');
+    // Default View: Candidate goes to candidatePortal, internal staff to dashboard
+    if (user.roles && user.roles.includes('CANDIDATE')) {
+      switchView('candidatePortal');
+    } else {
+      switchView('dashboard');
+    }
+  }
+
+  async function filterNavigationMenu(token) {
+    if (!token) return;
+    try {
+      const res = await window.ATS_API.getNavigationMenuApi(token);
+      if (res.ok && res.data && res.data.menuItems) {
+        const allowedPaths = res.data.menuItems.map(m => m.path);
+        const navItemMap = [
+          { path: '/dashboard', id: 'nav-item-dashboard' },
+          { path: '/requisitions', id: 'nav-item-requisitions' },
+          { path: '/candidates', id: 'nav-item-candidates' },
+          { path: '/interviews', id: 'nav-item-interviews' },
+          { path: '/offers', id: 'nav-item-offers' },
+          { path: '/approvals', id: 'nav-item-approvals' },
+          { path: '/reports', id: 'nav-item-reports' },
+          { path: '/admin/users', id: 'nav-item-users' },
+          { path: '/admin/roles', id: 'nav-item-roles' },
+          { path: '/admin/audit', id: 'nav-item-audit' },
+          { path: '/candidate', id: 'nav-item-candidate-portal' }
+        ];
+
+        navItemMap.forEach(item => {
+          const el = document.getElementById(item.id);
+          if (el) {
+            if (allowedPaths.includes(item.path)) {
+              el.classList.remove('hidden');
+              el.style.display = '';
+            } else {
+              el.classList.add('hidden');
+              el.style.display = 'none';
+            }
+          }
+        });
+      }
+    } catch (e) {
+      console.error('Failed to filter navigation menu:', e);
+    }
   }
 
   function startSessionHeartbeat() {
@@ -313,7 +383,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Logout Implementation (Required by S1-07 tests: performLogout)
-  async function performLogout() {
+  async function performLogout(showToastMsg = true) {
     const token = sessionStorage.getItem('ats_token');
     if (heartbeatTimer) clearInterval(heartbeatTimer);
 
@@ -338,8 +408,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (emailInput) emailInput.value = '';
     if (passwordInput) passwordInput.value = '';
-    hideAlert();
-    showToast('info', 'Đăng xuất', 'Bạn đã đăng xuất an toàn khỏi hệ thống tuyển dụng.');
+    if (showToastMsg) {
+      hideAlert();
+      showToast('info', 'Đăng xuất', 'Bạn đã đăng xuất an toàn khỏi hệ thống tuyển dụng.');
+    }
   }
 
   if (logoutBtn) {
@@ -376,11 +448,13 @@ document.addEventListener('DOMContentLoaded', () => {
     candidates: 'Hồ sơ Ứng viên',
     interviews: 'Lịch Phỏng vấn',
     offers: 'Quản lý Thư Mời Nhận Việc (Offer)',
+    approvals: 'Trung tâm Phê duyệt Tuyển dụng',
     reports: 'Báo cáo & Phân tích Tuyển dụng',
     users: 'Quản lý Người dùng & Tài khoản',
     roles: 'Vai trò & Ma trận Phân quyền',
     audit: 'Nhật ký Kiểm toán Hệ thống',
     profile: 'Hồ sơ Cá nhân',
+    candidatePortal: 'Cổng Thông Tin Ứng Viên',
     error: 'Thông báo Lỗi'
   };
 
@@ -435,6 +509,8 @@ document.addEventListener('DOMContentLoaded', () => {
       loadInterviews();
     } else if (viewName === 'offers') {
       loadOffers();
+    } else if (viewName === 'approvals') {
+      loadApprovals();
     } else if (viewName === 'reports') {
       loadReports();
     } else if (viewName === 'users') {
@@ -445,6 +521,8 @@ document.addEventListener('DOMContentLoaded', () => {
       loadAuditLogs();
     } else if (viewName === 'profile') {
       loadUserProfile();
+    } else if (viewName === 'candidatePortal') {
+      loadCandidatePortal();
     }
   }
 
@@ -495,6 +573,53 @@ document.addEventListener('DOMContentLoaded', () => {
     sidebarToggleBtn.addEventListener('click', () => {
       sidebar.classList.toggle('open');
     });
+  }
+
+  // Global Search in Topbar
+  const globalSearchInput = document.getElementById('global-search-input');
+  if (globalSearchInput) {
+    globalSearchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const query = globalSearchInput.value.trim();
+        if (!query) return;
+        if (currentView === 'requisitions') {
+          if (reqSearchInput) reqSearchInput.value = query;
+          loadRequisitions();
+        } else if (currentView === 'users') {
+          if (usersSearchInput) usersSearchInput.value = query;
+          usersCurrentPage = 1;
+          loadUsers();
+        } else if (currentView === 'interviews') {
+          if (interviewsSearchInput) interviewsSearchInput.value = query;
+          loadInterviews();
+        } else if (currentView === 'offers') {
+          if (offersSearchInput) offersSearchInput.value = query;
+          loadOffers();
+        } else {
+          switchView('candidates');
+          if (candidatesSearchInput) candidatesSearchInput.value = query;
+          loadCandidates();
+          showToast('info', 'Tìm kiếm', `Đang tìm ứng viên theo từ khóa: "${query}"`);
+        }
+      }
+    });
+  }
+
+  // Enterprise CSV Export Utility
+  function exportTableToCsv(filename, headers, rows) {
+    const csvContent = '\uFEFF' + [
+      headers.map(h => `"${String(h).replace(/"/g, '""')}"`).join(','),
+      ...rows.map(row => row.map(cell => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
+    ].join('\r\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast('info', 'Xuất dữ liệu', `Đã xuất tệp ${filename} thành công.`);
   }
 
   // Quick jump buttons from Dashboard
@@ -713,6 +838,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const res = await window.ATS_API.getRequisitions(token, { search, status, handoverOnly });
       if (res.ok && res.data && res.data.success) {
         const list = res.data.requisitions || res.data.data || [];
+        currentRequisitionsList = list;
         if (requisitionsTotalBadge) {
           requisitionsTotalBadge.textContent = `${list.length} vị trí`;
         }
@@ -743,6 +869,9 @@ document.addEventListener('DOMContentLoaded', () => {
               <td><span class="badge ${statusBadge}">${statusText}</span></td>
               <td style="text-align: center;">
                 <div style="display: flex; gap: 6px; justify-content: center;">
+                  <button type="button" class="btn btn-outline btn-xs btn-edit-req" data-id="${req.id}">
+                    Chi tiết / Sửa
+                  </button>
                   ${isHandover ? `
                     <button type="button" class="btn btn-outline btn-xs btn-reassign-req" data-id="${req.id}" data-code="${req.code}" data-title="${req.title}" style="color: var(--color-warning); border-color: var(--color-warning);">
                       Bàn giao
@@ -758,6 +887,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }).join('');
 
         // Wire Action Buttons
+        document.querySelectorAll('.btn-edit-req').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const reqId = btn.getAttribute('data-id');
+            openRequisitionDetails(reqId);
+          });
+        });
+
         document.querySelectorAll('.btn-reassign-req').forEach(btn => {
           btn.addEventListener('click', () => {
             const reqId = btn.getAttribute('data-id');
@@ -769,13 +905,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
         document.querySelectorAll('.btn-view-candidates-req').forEach(btn => {
           btn.addEventListener('click', () => {
+            const reqTitle = btn.getAttribute('data-title');
             switchView('candidates');
+            if (candidatesSearchInput) candidatesSearchInput.value = reqTitle;
+            loadCandidates();
+            showToast('info', 'Ứng viên theo vị trí', `Đang lọc danh sách ứng viên cho vị trí: "${reqTitle}"`);
           });
         });
       }
     } catch (e) {
       console.error('Failed to load requisitions:', e);
     }
+  }
+
+  const reqExportBtn = document.getElementById('req-export-btn');
+  if (reqExportBtn) {
+    reqExportBtn.addEventListener('click', () => {
+      if (!currentRequisitionsList || currentRequisitionsList.length === 0) {
+        showToast('warning', 'Xuất dữ liệu', 'Không có dữ liệu vị trí tuyển dụng để xuất.');
+        return;
+      }
+      const headers = ['Mã vị trí', 'Tiêu đề tuyển dụng', 'Phòng ban', 'Chỉ tiêu', 'Recruiter phụ trách', 'Trạng thái'];
+      const rows = currentRequisitionsList.map(r => [
+        r.code,
+        r.title,
+        r.departmentName || r.department || '',
+        r.headcount,
+        r.recruiter_name || r.recruiterName || (r.recruiter ? r.recruiter.fullName : 'Chưa phân công'),
+        r.status
+      ]);
+      exportTableToCsv('danh_sach_vi_tri_tuyen_dung.csv', headers, rows);
+    });
   }
 
   if (reqRefreshBtn) reqRefreshBtn.addEventListener('click', loadRequisitions);
@@ -793,6 +953,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const candidatesSearchInput = document.getElementById('candidates-search-input');
   const candidatesStageFilter = document.getElementById('candidates-stage-filter');
+  const candidatesReqFilter = document.getElementById('candidates-req-filter');
+  const candidatesExportBtn = document.getElementById('candidates-export-btn');
   const candidatesRefreshBtn = document.getElementById('candidates-refresh-btn');
   const candidatesTableBody = document.getElementById('candidates-table-body');
   const candidatesTotalBadge = document.getElementById('candidates-total-badge');
@@ -801,8 +963,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const token = sessionStorage.getItem('ats_token');
     if (!token) return;
 
-    const search = candidatesSearchInput ? candidatesSearchInput.value.trim() : '';
+    // Populate requisition filter dropdown if empty
+    if (candidatesReqFilter && candidatesReqFilter.children.length <= 1 && currentRequisitionsList.length > 0) {
+      candidatesReqFilter.innerHTML = `<option value="ALL">Tất cả vị trí ứng tuyển</option>` +
+        currentRequisitionsList.map(r => `<option value="${r.title}">${r.code} - ${r.title}</option>`).join('');
+    }
+
+    const search = candidatesSearchInput ? candidatesSearchInput.value.trim().toLowerCase() : '';
     const stage = candidatesStageFilter ? candidatesStageFilter.value : 'ALL';
+    const reqFilter = candidatesReqFilter ? candidatesReqFilter.value : 'ALL';
 
     if (candidatesTableBody) {
       candidatesTableBody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--color-text-muted); padding: 24px;">Đang tải danh sách ứng viên...</td></tr>`;
@@ -811,7 +980,17 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const res = await window.ATS_API.getCandidatesApi(token, { search, stage });
       if (res.ok && res.data && res.data.success) {
-        const list = res.data.candidates || res.data.data || [];
+        let list = res.data.candidates || res.data.data || [];
+
+        // Apply requisition filter if selected
+        if (reqFilter && reqFilter !== 'ALL') {
+          list = list.filter(c => {
+            const reqTitle = (c.requisition && c.requisition.title) ? c.requisition.title : (c.requisition_title || '');
+            return reqTitle.toLowerCase().includes(reqFilter.toLowerCase());
+          });
+        }
+
+        currentCandidatesList = list;
         if (candidatesTotalBadge) {
           candidatesTotalBadge.textContent = `${list.length} ứng viên`;
         }
@@ -857,8 +1036,30 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  if (candidatesExportBtn) {
+    candidatesExportBtn.addEventListener('click', () => {
+      if (!currentCandidatesList || currentCandidatesList.length === 0) {
+        showToast('warning', 'Xuất dữ liệu', 'Không có dữ liệu ứng viên để xuất.');
+        return;
+      }
+      const headers = ['Mã UV', 'Họ và tên', 'Vị trí ứng tuyển', 'Email', 'Điện thoại', 'Giai đoạn', 'Ngày nộp', 'Đánh giá'];
+      const rows = currentCandidatesList.map(c => [
+        c.code || (c.id ? c.id.toUpperCase() : 'UV'),
+        c.fullName || c.full_name || '',
+        (c.requisition && c.requisition.title) ? c.requisition.title : (c.requisition_title || ''),
+        c.email || '',
+        c.phoneNumber || c.phone || '',
+        STAGE_LABELS[c.stage] || c.stage,
+        (c.createdAt || c.created_at) ? new Date(c.createdAt || c.created_at).toLocaleDateString('vi-VN') : '',
+        (c.rating || 4) + ' sao'
+      ]);
+      exportTableToCsv('danh_sach_ung_vien.csv', headers, rows);
+    });
+  }
+
   if (candidatesRefreshBtn) candidatesRefreshBtn.addEventListener('click', loadCandidates);
   if (candidatesStageFilter) candidatesStageFilter.addEventListener('change', loadCandidates);
+  if (candidatesReqFilter) candidatesReqFilter.addEventListener('change', loadCandidates);
   if (candidatesSearchInput) {
     candidatesSearchInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') loadCandidates();
@@ -890,6 +1091,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const res = await window.ATS_API.getInterviewsApi(token, { search, status });
       if (res.ok && res.data && res.data.success) {
         const list = res.data.interviews || res.data.data || [];
+        currentInterviewsList = list;
         if (interviewsTotalBadge) {
           interviewsTotalBadge.textContent = `${list.length} phiên`;
         }
@@ -937,6 +1139,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (interviewsRefreshBtn) interviewsRefreshBtn.addEventListener('click', loadInterviews);
   if (interviewsStatusFilter) interviewsStatusFilter.addEventListener('change', loadInterviews);
+  if (interviewsSearchInput) {
+    interviewsSearchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') loadInterviews();
+    });
+  }
 
   // ==============================================================================
   // 10. OFFERS MANAGEMENT (REAL BACKEND API)
@@ -963,6 +1170,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const res = await window.ATS_API.getOffersApi(token, { search, status });
       if (res.ok && res.data && res.data.success) {
         const list = res.data.offers || res.data.data || [];
+        currentOffersList = list;
         if (offersTotalBadge) {
           offersTotalBadge.textContent = `${list.length} thư mời`;
         }
@@ -1005,6 +1213,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (offersRefreshBtn) offersRefreshBtn.addEventListener('click', loadOffers);
   if (offersStatusFilter) offersStatusFilter.addEventListener('change', loadOffers);
+  if (offersSearchInput) {
+    offersSearchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') loadOffers();
+    });
+  }
 
   // ==============================================================================
   // 11. REPORTS & ANALYTICS (REAL BACKEND API)
@@ -1060,6 +1273,23 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) {
       console.error('Failed to load reports:', e);
     }
+  }
+
+  const reportsExportBtn = document.getElementById('reports-export-btn');
+  if (reportsExportBtn) {
+    reportsExportBtn.addEventListener('click', () => {
+      const rows = [];
+      const trs = document.querySelectorAll('#report-dept-table-body tr');
+      trs.forEach(tr => {
+        const tds = Array.from(tr.querySelectorAll('td')).map(td => td.textContent.trim());
+        if (tds.length >= 6) rows.push(tds);
+      });
+      if (rows.length === 0) {
+        showToast('warning', 'Xuất dữ liệu', 'Chưa có dữ liệu báo cáo để xuất.');
+        return;
+      }
+      exportTableToCsv('bao_cao_hieu_qua_tuyen_dung.csv', ['Phòng ban', 'Vị trí', 'Chỉ tiêu', 'Hồ sơ', 'Hoàn thành', 'Tỷ lệ đạt'], rows);
+    });
   }
 
 
@@ -1171,6 +1401,12 @@ document.addEventListener('DOMContentLoaded', () => {
                       Khóa
                     </button>
                   `}
+                  <button type="button" class="btn btn-outline btn-xs btn-reset-user-pwd" data-id="${u.id}" data-name="${u.fullName || u.email}" data-email="${u.email}">
+                    Reset MK
+                  </button>
+                  <button type="button" class="btn btn-outline btn-xs btn-delete-user" data-id="${u.id}" data-name="${u.fullName || u.email}" style="color: var(--color-danger); border-color: var(--color-danger);">
+                    Xóa
+                  </button>
                 </div>
               </td>
             </tr>
@@ -1198,6 +1434,36 @@ document.addEventListener('DOMContentLoaded', () => {
             const name = btn.getAttribute('data-name');
             const email = btn.getAttribute('data-email');
             openLockUserModal(id, name, email);
+          });
+        });
+
+        document.querySelectorAll('.btn-reset-user-pwd').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const id = btn.getAttribute('data-id');
+            const name = btn.getAttribute('data-name');
+            const email = btn.getAttribute('data-email');
+            openAdminResetPwdModal(id, name, email);
+          });
+        });
+
+        document.querySelectorAll('.btn-delete-user').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const id = btn.getAttribute('data-id');
+            const name = btn.getAttribute('data-name');
+            if (confirm(`Bạn có chắc chắn muốn xóa tài khoản nhân sự ${name}? Hành động này không thể hoàn tác.`)) {
+              try {
+                const delRes = await window.ATS_API.deleteUserApi(token, id);
+                if (delRes.ok && delRes.data && delRes.data.success) {
+                  showToast('success', 'Đã xóa tài khoản', `Tài khoản ${name} đã được xóa thành công.`);
+                  loadUsers();
+                  loadDashboardData();
+                } else {
+                  showToast('danger', 'Lỗi xóa', delRes.data.message || 'Không thể xóa tài khoản.');
+                }
+              } catch (e) {
+                showToast('danger', 'Lỗi kết nối', e.message);
+              }
+            }
           });
         });
 
@@ -1370,14 +1636,47 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  const auditExportBtn = document.getElementById('audit-export-btn');
+  if (auditExportBtn) {
+    auditExportBtn.addEventListener('click', () => {
+      const rows = [];
+      const trs = document.querySelectorAll('#audit-table-body tr');
+      trs.forEach(tr => {
+        const tds = Array.from(tr.querySelectorAll('td')).map(td => td.textContent.trim());
+        if (tds.length >= 5) rows.push(tds);
+      });
+      if (rows.length === 0) {
+        showToast('warning', 'Xuất dữ liệu', 'Chưa có nhật ký kiểm toán để xuất.');
+        return;
+      }
+      exportTableToCsv('nhat_ky_kiem_toan.csv', ['Thời gian', 'Tài khoản', 'Hành động', 'Kết quả', 'Chi tiết', 'IP'], rows);
+    });
+  }
+
   // ==============================================================================
   // 15. USER PROFILE VIEW
   // ==============================================================================
 
-  function loadUserProfile() {
+  async function loadUserProfile() {
     if (!currentAuthenticatedUser) return;
-    const u = currentAuthenticatedUser;
+    const token = sessionStorage.getItem('ats_token');
 
+    // Attempt live profile sync from backend
+    if (token) {
+      try {
+        const res = await window.ATS_API.getProfileApi(token);
+        if (res.ok && res.data && res.data.success && res.data.data) {
+          const freshUser = res.data.data;
+          currentAuthenticatedUser.fullName = freshUser.fullName || freshUser.full_name;
+          currentAuthenticatedUser.jobTitle = freshUser.jobTitle || freshUser.job_title;
+          currentAuthenticatedUser.phoneNumber = freshUser.phoneNumber || freshUser.phone_number;
+          currentAuthenticatedUser.department = freshUser.departmentName || freshUser.department_name;
+          sessionStorage.setItem('ats_user', JSON.stringify(currentAuthenticatedUser));
+        }
+      } catch {}
+    }
+
+    const u = currentAuthenticatedUser;
     const avatar = document.getElementById('profile-card-avatar');
     const name = document.getElementById('profile-card-name');
     const email = document.getElementById('profile-card-email');
@@ -1391,7 +1690,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (email) email.textContent = u.email;
     if (title) title.textContent = u.jobTitle || 'Chưa cập nhật';
     if (dept) dept.textContent = u.department || 'Chưa cập nhật';
-    if (phone) phone.textContent = u.phone || 'Chưa cập nhật';
+    if (phone) phone.textContent = u.phoneNumber || u.phone || 'Chưa cập nhật';
 
     if (rolesContainer) {
       rolesContainer.innerHTML = (u.roles || []).map(r => `
@@ -1403,6 +1702,73 @@ document.addEventListener('DOMContentLoaded', () => {
   const profileOpenChangePwdBtn = document.getElementById('profile-open-change-pwd-btn');
   if (profileOpenChangePwdBtn) {
     profileOpenChangePwdBtn.addEventListener('click', openChangePwdModal);
+  }
+
+  // Edit Profile Modal Wiring
+  const profileEditBtn = document.getElementById('profile-edit-btn');
+  const editProfileModal = document.getElementById('edit-profile-modal');
+  const closeEditProfileModal = document.getElementById('close-edit-profile-modal');
+  const cancelEditProfileBtn = document.getElementById('cancel-edit-profile-btn');
+  const editProfileForm = document.getElementById('edit-profile-form');
+  const editProfileAlert = document.getElementById('edit-profile-alert');
+  const editProfileAlertMsg = document.getElementById('edit-profile-alert-msg');
+  const editProfileNameInput = document.getElementById('edit-profile-name-input');
+  const editProfileTitleInput = document.getElementById('edit-profile-title-input');
+  const editProfilePhoneInput = document.getElementById('edit-profile-phone-input');
+
+  function openEditProfileModal() {
+    if (!editProfileModal || !currentAuthenticatedUser) return;
+    if (editProfileAlert) editProfileAlert.classList.add('hidden');
+    editProfileNameInput.value = currentAuthenticatedUser.fullName || '';
+    editProfileTitleInput.value = currentAuthenticatedUser.jobTitle || '';
+    editProfilePhoneInput.value = currentAuthenticatedUser.phoneNumber || currentAuthenticatedUser.phone || '';
+    editProfileModal.classList.remove('hidden');
+  }
+
+  if (profileEditBtn) profileEditBtn.addEventListener('click', openEditProfileModal);
+  if (closeEditProfileModal) closeEditProfileModal.addEventListener('click', () => editProfileModal.classList.add('hidden'));
+  if (cancelEditProfileBtn) cancelEditProfileBtn.addEventListener('click', () => editProfileModal.classList.add('hidden'));
+
+  if (editProfileForm) {
+    editProfileForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const token = sessionStorage.getItem('ats_token');
+      if (!token) return;
+
+      const fullName = editProfileNameInput.value.trim();
+      const jobTitle = editProfileTitleInput.value.trim();
+      const phoneNumber = editProfilePhoneInput.value.trim();
+
+      try {
+        const res = await window.ATS_API.updateProfileApi(token, { fullName, jobTitle, phoneNumber });
+        if (res.ok && res.data && res.data.success) {
+          editProfileModal.classList.add('hidden');
+          showToast('success', 'Đã lưu hồ sơ', 'Thông tin cá nhân của bạn đã được cập nhật thành công.');
+          currentAuthenticatedUser.fullName = fullName;
+          currentAuthenticatedUser.jobTitle = jobTitle;
+          currentAuthenticatedUser.phoneNumber = phoneNumber;
+          currentAuthenticatedUser.phone = phoneNumber;
+          sessionStorage.setItem('ats_user', JSON.stringify(currentAuthenticatedUser));
+          loadUserProfile();
+          const topbarName = document.getElementById('topbar-user-name');
+          const sidebarName = document.getElementById('sidebar-user-name');
+          const userDisplay = document.getElementById('user-display-name');
+          if (topbarName) topbarName.textContent = fullName;
+          if (sidebarName) sidebarName.textContent = fullName;
+          if (userDisplay) userDisplay.textContent = fullName;
+        } else {
+          if (editProfileAlert && editProfileAlertMsg) {
+            editProfileAlertMsg.textContent = res.data.message || 'Không thể cập nhật hồ sơ.';
+            editProfileAlert.classList.remove('hidden');
+          }
+        }
+      } catch (err) {
+        if (editProfileAlert && editProfileAlertMsg) {
+          editProfileAlertMsg.textContent = err.message;
+          editProfileAlert.classList.remove('hidden');
+        }
+      }
+    });
   }
 
   // ==============================================================================
@@ -1931,6 +2297,99 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Modal: Reset Password with Token
+  const resetModal = document.getElementById('reset-modal');
+  const closeResetModal = document.getElementById('close-reset-modal');
+  const resetForm = document.getElementById('reset-form');
+  const resetAlert = document.getElementById('reset-alert');
+  const resetAlertMsg = document.getElementById('reset-alert-msg');
+  const resetTokenInput = document.getElementById('reset-token-input');
+  const resetNewPassword = document.getElementById('reset-new-password');
+  const resetConfirmPassword = document.getElementById('reset-confirm-password');
+  const linkOpenResetModal = document.getElementById('link-open-reset-modal');
+
+  function openResetModal(token = '') {
+    if (!resetModal) return;
+    if (resetForm) resetForm.reset();
+    if (resetTokenInput) resetTokenInput.value = token;
+    if (resetAlert) resetAlert.classList.add('hidden');
+    resetModal.classList.remove('hidden');
+  }
+
+  if (closeResetModal && resetModal) {
+    closeResetModal.addEventListener('click', () => resetModal.classList.add('hidden'));
+  }
+
+  if (linkOpenResetModal) {
+    linkOpenResetModal.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (forgotModal) forgotModal.classList.add('hidden');
+      const manualToken = prompt('Vui lòng dán mã token đặt lại mật khẩu nhận được từ email:') || '';
+      if (manualToken.trim()) {
+        openResetModal(manualToken.trim());
+      }
+    });
+  }
+
+  if (resetForm) {
+    resetForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const token = resetTokenInput ? resetTokenInput.value.trim() : '';
+      const newPassword = resetNewPassword ? resetNewPassword.value : '';
+      const confirmPassword = resetConfirmPassword ? resetConfirmPassword.value : '';
+
+      if (!token) {
+        if (resetAlert && resetAlertMsg) {
+          resetAlertMsg.textContent = 'Mã token đặt lại mật khẩu không được để trống.';
+          resetAlert.classList.remove('hidden');
+        }
+        return;
+      }
+      if (newPassword !== confirmPassword) {
+        if (resetAlert && resetAlertMsg) {
+          resetAlertMsg.textContent = 'Mật khẩu xác nhận không khớp.';
+          resetAlert.classList.remove('hidden');
+        }
+        return;
+      }
+      if (newPassword.length < 8 || !/[A-Za-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+        if (resetAlert && resetAlertMsg) {
+          resetAlertMsg.textContent = 'Mật khẩu phải tối thiểu 8 ký tự, bao gồm cả chữ và số.';
+          resetAlert.classList.remove('hidden');
+        }
+        return;
+      }
+
+      try {
+        const res = await window.ATS_API.confirmPasswordResetApi(token, newPassword);
+        if (res.ok && res.data && res.data.success) {
+          resetModal.classList.add('hidden');
+          showToast('success', 'Đổi mật khẩu thành công', 'Mật khẩu của bạn đã được đặt lại. Vui lòng đăng nhập bằng mật khẩu mới.');
+          showAlert('success', 'Mật khẩu đã được cập nhật thành công. Vui lòng đăng nhập lại.');
+        } else {
+          if (resetAlert && resetAlertMsg) {
+            resetAlertMsg.textContent = res.data.message || 'Mã token không hợp lệ hoặc đã hết hạn.';
+            resetAlert.classList.remove('hidden');
+          }
+        }
+      } catch (err) {
+        if (resetAlert && resetAlertMsg) {
+          resetAlertMsg.textContent = err.message;
+          resetAlert.classList.remove('hidden');
+        }
+      }
+    });
+  }
+
+  // Check URL query parameters for ?token= or ?reset_token=
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    const resetTokenFromUrl = urlParams.get('token') || urlParams.get('reset_token');
+    if (resetTokenFromUrl) {
+      openResetModal(resetTokenFromUrl);
+    }
+  } catch {}
+
   // Modal: Change Password in Session
   const changePwdModal = document.getElementById('change-pwd-modal');
   const closeChangePwdModal = document.getElementById('close-change-pwd-modal');
@@ -1970,9 +2429,18 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         const res = await window.ATS_API.changePasswordApi(token, currentPassword, newPassword);
         if (res.ok && res.data && res.data.success) {
+          const userEmail = currentAuthenticatedUser ? currentAuthenticatedUser.email : '';
           changePwdModal.classList.add('hidden');
+          await performLogout(false);
+          if (emailInput && userEmail) {
+            emailInput.value = userEmail;
+          }
+          if (passwordInput) {
+            passwordInput.value = '';
+            passwordInput.focus();
+          }
+          showAlert('success', 'Đổi mật khẩu thành công', 'Mật khẩu tài khoản đã được cập nhật. Vui lòng nhập mật khẩu mới để đăng nhập.');
           showToast('success', 'Đổi mật khẩu thành công', 'Mật khẩu đã được đổi. Vui lòng đăng nhập lại với mật khẩu mới.');
-          performLogout();
         } else {
           if (changePwdAlert && changePwdAlertMsg) {
             changePwdAlertMsg.textContent = res.data.message || 'Không thể đổi mật khẩu.';
@@ -2087,22 +2555,934 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==============================================================================
+  // 17. CANDIDATE, INTERVIEW & OFFER MODALS & ACTIONS
+  // ==============================================================================
+
+  // --- CANDIDATE MODALS ---
+  const openCreateCandidateModalBtn = document.getElementById('open-create-candidate-modal-btn');
+  const createCandidateModal = document.getElementById('create-candidate-modal');
+  const closeCreateCandidateModal = document.getElementById('close-create-candidate-modal');
+  const cancelCreateCandidateBtn = document.getElementById('cancel-create-candidate-btn');
+  const createCandidateForm = document.getElementById('create-candidate-form');
+  const createCandidateAlert = document.getElementById('create-candidate-alert');
+  const createCandidateAlertMsg = document.getElementById('create-candidate-alert-msg');
+
+  if (openCreateCandidateModalBtn) {
+    openCreateCandidateModalBtn.addEventListener('click', () => {
+      if (createCandidateModal) createCandidateModal.classList.remove('hidden');
+      if (createCandidateForm) createCandidateForm.reset();
+      if (createCandidateAlert) createCandidateAlert.classList.add('hidden');
+
+      const reqSelect = document.getElementById('create-cand-req-select');
+      if (reqSelect) {
+        reqSelect.innerHTML = `<option value="">-- Chọn vị trí tuyển dụng --</option>` +
+          currentRequisitionsList.map(r => `<option value="${r.id}">${r.code} - ${r.title}</option>`).join('');
+      }
+    });
+  }
+
+  function closeCreateCandidate() {
+    if (createCandidateModal) createCandidateModal.classList.add('hidden');
+  }
+  if (closeCreateCandidateModal) closeCreateCandidateModal.addEventListener('click', closeCreateCandidate);
+  if (cancelCreateCandidateBtn) cancelCreateCandidateBtn.addEventListener('click', closeCreateCandidate);
+
+  if (createCandidateForm) {
+    createCandidateForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const token = sessionStorage.getItem('ats_token');
+      if (!token) return;
+
+      const fullName = document.getElementById('create-cand-fullname').value.trim();
+      const email = document.getElementById('create-cand-email').value.trim();
+      const phoneNumber = document.getElementById('create-cand-phone').value.trim();
+      const requisitionId = document.getElementById('create-cand-req-select').value;
+      const stage = document.getElementById('create-cand-stage-select').value;
+      const rating = parseInt(document.getElementById('create-cand-rating').value, 10);
+      const experienceYears = parseInt(document.getElementById('create-cand-exp').value, 10) || 0;
+      const expectedSalary = document.getElementById('create-cand-salary').value.trim();
+      const notes = document.getElementById('create-cand-notes').value.trim();
+
+      try {
+        const res = await window.ATS_API.createCandidateApi(token, {
+          fullName, email, phoneNumber, requisitionId, stage, rating, experienceYears, expectedSalary, notes
+        });
+
+        if (res.ok && res.data && res.data.success) {
+          closeCreateCandidate();
+          showToast('success', 'Thêm ứng viên thành công', `Hồ sơ ứng viên ${fullName} đã được lưu vào hệ thống.`);
+          loadCandidates();
+          loadDashboardData();
+        } else {
+          if (createCandidateAlert && createCandidateAlertMsg) {
+            createCandidateAlertMsg.textContent = res.data.message || 'Không thể tạo hồ sơ ứng viên.';
+            createCandidateAlert.classList.remove('hidden');
+          }
+        }
+      } catch (err) {
+        if (createCandidateAlert && createCandidateAlertMsg) {
+          createCandidateAlertMsg.textContent = 'Lỗi kết nối khi gửi dữ liệu.';
+          createCandidateAlert.classList.remove('hidden');
+        }
+      }
+    });
+  }
+
+  // Candidate Details Modal
+  const candidateDetailModal = document.getElementById('candidate-detail-modal');
+  const closeCandidateDetailModal = document.getElementById('close-candidate-detail-modal');
+  const candDetailSaveStageBtn = document.getElementById('cand-detail-save-stage-btn');
+  const candDetailScheduleBtn = document.getElementById('cand-detail-schedule-btn');
+  const candDetailOfferBtn = document.getElementById('cand-detail-offer-btn');
+
+  function openCandidateDetails(id) {
+    let c = currentCandidatesList.find(x => x.id === id);
+    if (!c) {
+      showToast('warning', 'Hồ sơ', `Đang tải chi tiết hồ sơ ứng viên...`);
+      return;
+    }
+
+    const name = c.fullName || c.full_name || 'Ứng viên';
+    const avatar = document.getElementById('cand-detail-avatar');
+    const nameEl = document.getElementById('cand-detail-name');
+    const codeEl = document.getElementById('cand-detail-code');
+    const reqTitleEl = document.getElementById('cand-detail-req-title');
+    const emailEl = document.getElementById('cand-detail-email');
+    const phoneEl = document.getElementById('cand-detail-phone');
+    const stageBadge = document.getElementById('cand-detail-stage-badge');
+    const idInput = document.getElementById('cand-detail-id');
+    const stageSelect = document.getElementById('cand-detail-change-stage-select');
+    const ratingEl = document.getElementById('cand-detail-rating');
+
+    if (avatar) avatar.textContent = name.charAt(0).toUpperCase();
+    if (nameEl) nameEl.textContent = name;
+    if (codeEl) codeEl.textContent = c.code || (c.id ? c.id.toUpperCase() : 'UV');
+    if (reqTitleEl) reqTitleEl.textContent = (c.requisition && c.requisition.title) ? c.requisition.title : (c.requisition_title || 'Chưa gắn vị trí');
+    if (emailEl) emailEl.textContent = c.email || '—';
+    if (phoneEl) phoneEl.textContent = c.phoneNumber || c.phone || 'Chưa cập nhật';
+    if (stageBadge) {
+      stageBadge.className = `badge ${STAGE_BADGES[c.stage] || 'badge-neutral'}`;
+      stageBadge.textContent = STAGE_LABELS[c.stage] || c.stage;
+    }
+    if (idInput) idInput.value = c.id;
+    if (stageSelect) stageSelect.value = c.stage;
+    if (ratingEl) ratingEl.textContent = '★'.repeat(c.rating || 4) + '☆'.repeat(5 - (c.rating || 4));
+
+    if (candidateDetailModal) candidateDetailModal.classList.remove('hidden');
+  }
+
+  if (closeCandidateDetailModal) {
+    closeCandidateDetailModal.addEventListener('click', () => {
+      if (candidateDetailModal) candidateDetailModal.classList.add('hidden');
+    });
+  }
+
+  if (candDetailSaveStageBtn) {
+    candDetailSaveStageBtn.addEventListener('click', async () => {
+      const token = sessionStorage.getItem('ats_token');
+      const id = document.getElementById('cand-detail-id').value;
+      const stage = document.getElementById('cand-detail-change-stage-select').value;
+      if (!token || !id) return;
+
+      try {
+        const res = await window.ATS_API.updateCandidateStageApi(token, id, stage);
+        if (res.ok && res.data && res.data.success) {
+          showToast('success', 'Chuyển vòng thành công', `Đã cập nhật trạng thái ứng viên sang "${STAGE_LABELS[stage] || stage}".`);
+          if (candidateDetailModal) candidateDetailModal.classList.add('hidden');
+          loadCandidates();
+          loadDashboardData();
+        } else {
+          showToast('danger', 'Lỗi cập nhật', res.data.message || 'Không thể chuyển vòng.');
+        }
+      } catch (err) {
+        showToast('danger', 'Lỗi kết nối', err.message);
+      }
+    });
+  }
+
+  if (candDetailScheduleBtn) {
+    candDetailScheduleBtn.addEventListener('click', () => {
+      const id = document.getElementById('cand-detail-id').value;
+      if (candidateDetailModal) candidateDetailModal.classList.add('hidden');
+      openScheduleInterviewForCandidate(id);
+    });
+  }
+
+  if (candDetailOfferBtn) {
+    candDetailOfferBtn.addEventListener('click', () => {
+      const id = document.getElementById('cand-detail-id').value;
+      if (candidateDetailModal) candidateDetailModal.classList.add('hidden');
+      openCreateOfferForCandidate(id);
+    });
+  }
+
+
+  // --- INTERVIEW MODALS ---
+  const openCreateInterviewModalBtn = document.getElementById('open-create-interview-modal-btn');
+  const scheduleInterviewModal = document.getElementById('schedule-interview-modal');
+  const closeScheduleInterviewModal = document.getElementById('close-schedule-interview-modal');
+  const cancelScheduleInterviewBtn = document.getElementById('cancel-schedule-interview-btn');
+  const scheduleInterviewForm = document.getElementById('schedule-interview-form');
+  const scheduleInterviewAlert = document.getElementById('schedule-interview-alert');
+  const scheduleInterviewAlertMsg = document.getElementById('schedule-interview-alert-msg');
+
+  function openScheduleInterviewForCandidate(preselectedCandidateId = '') {
+    if (scheduleInterviewModal) scheduleInterviewModal.classList.remove('hidden');
+    if (scheduleInterviewForm) scheduleInterviewForm.reset();
+    if (scheduleInterviewAlert) scheduleInterviewAlert.classList.add('hidden');
+
+    // Populate candidate dropdown
+    const candSelect = document.getElementById('schedule-candidate-select');
+    if (candSelect) {
+      candSelect.innerHTML = `<option value="">-- Chọn ứng viên trong danh sách --</option>` +
+        currentCandidatesList.map(c => `
+          <option value="${c.id}" ${c.id === preselectedCandidateId ? 'selected' : ''}>
+            ${c.fullName || c.full_name} (${c.code || 'UV'}) - ${c.requisition_title || (c.requisition && c.requisition.title) || 'Vị trí'}
+          </option>
+        `).join('');
+    }
+
+    // Populate requisitions
+    const reqSelect = document.getElementById('schedule-req-select');
+    if (reqSelect) {
+      reqSelect.innerHTML = `<option value="">-- Theo vị trí tuyển dụng --</option>` +
+        currentRequisitionsList.map(r => `<option value="${r.id}">${r.code} - ${r.title}</option>`).join('');
+    }
+
+    // Populate interviewers
+    const interviewerSelect = document.getElementById('schedule-interviewer-select');
+    if (interviewerSelect) {
+      interviewerSelect.innerHTML = `
+        <option value="">-- Chọn cán bộ phỏng vấn --</option>
+        <option value="usr-interviewer">Nguyễn Văn D - Interviewer (Kỹ thuật)</option>
+        <option value="usr-hiring-mgr">Lê Thị C - Hiring Manager (Trưởng bộ phận)</option>
+        <option value="usr-recruiter">Trần Thị B - Recruiter (Tuyển dụng)</option>
+        <option value="usr-admin">Administrator - Quản trị viên</option>
+      `;
+    }
+
+    // Pre-fill time with tomorrow 09:00 AM
+    const timeInput = document.getElementById('schedule-time');
+    if (timeInput) {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(9, 0, 0, 0);
+      const tzOffset = tomorrow.getTimezoneOffset() * 60000;
+      const localISOTime = new Date(tomorrow.getTime() - tzOffset).toISOString().slice(0, 16);
+      timeInput.value = localISOTime;
+    }
+  }
+
+  if (openCreateInterviewModalBtn) {
+    openCreateInterviewModalBtn.addEventListener('click', () => {
+      openScheduleInterviewForCandidate();
+    });
+  }
+
+  function closeScheduleInterview() {
+    if (scheduleInterviewModal) scheduleInterviewModal.classList.add('hidden');
+  }
+  if (closeScheduleInterviewModal) closeScheduleInterviewModal.addEventListener('click', closeScheduleInterview);
+  if (cancelScheduleInterviewBtn) cancelScheduleInterviewBtn.addEventListener('click', closeScheduleInterview);
+
+  if (scheduleInterviewForm) {
+    scheduleInterviewForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const token = sessionStorage.getItem('ats_token');
+      if (!token) return;
+
+      const candidateId = document.getElementById('schedule-candidate-select').value;
+      const requisitionId = document.getElementById('schedule-req-select').value;
+      const interviewerId = document.getElementById('schedule-interviewer-select').value;
+      const roundName = document.getElementById('schedule-round-name').value.trim();
+      const scheduledTime = document.getElementById('schedule-time').value;
+      const locationOrLink = document.getElementById('schedule-location').value.trim();
+
+      try {
+        const res = await window.ATS_API.createInterviewApi(token, {
+          candidateId, requisitionId, interviewerId, roundName, scheduledTime, locationOrLink
+        });
+
+        if (res.ok && res.data && res.data.success) {
+          closeScheduleInterview();
+          showToast('success', 'Lên lịch phỏng vấn thành công', 'Phiên phỏng vấn đã được ghi nhận và gửi lời mời.');
+          loadInterviews();
+          loadCandidates();
+          loadDashboardData();
+        } else {
+          if (scheduleInterviewAlert && scheduleInterviewAlertMsg) {
+            scheduleInterviewAlertMsg.textContent = res.data.message || 'Không thể tạo lịch phỏng vấn.';
+            scheduleInterviewAlert.classList.remove('hidden');
+          }
+        }
+      } catch (err) {
+        if (scheduleInterviewAlert && scheduleInterviewAlertMsg) {
+          scheduleInterviewAlertMsg.textContent = 'Lỗi kết nối khi gửi dữ liệu.';
+          scheduleInterviewAlert.classList.remove('hidden');
+        }
+      }
+    });
+  }
+
+  // Interview Evaluation Details Modal
+  const interviewDetailModal = document.getElementById('interview-detail-modal');
+  const closeInterviewDetailModal = document.getElementById('close-interview-detail-modal');
+  const cancelInterviewEvalBtn = document.getElementById('cancel-interview-eval-btn');
+  const interviewEvalForm = document.getElementById('interview-eval-form');
+
+  function openInterviewDetails(id) {
+    const iv = currentInterviewsList.find(x => x.id === id);
+    if (!iv) {
+      showToast('warning', 'Lịch phỏng vấn', `Đang tải chi tiết buổi phỏng vấn...`);
+      return;
+    }
+
+    const candName = (iv.candidate && iv.candidate.fullName) ? iv.candidate.fullName : (iv.candidate_name || 'Ứng viên');
+    const reqTitle = (iv.requisition && iv.requisition.title) ? iv.requisition.title : (iv.requisition_title || 'Vị trí');
+    const interviewer = (iv.interviewer && iv.interviewer.fullName) ? iv.interviewer.fullName : (iv.interviewer_name || 'Hội đồng tuyển dụng');
+    const schedTime = iv.scheduledTime || iv.scheduled_time || iv.scheduled_at;
+    const location = iv.locationOrLink || iv.location || 'Google Meet';
+
+    const codeEl = document.getElementById('int-detail-code');
+    const statusBadge = document.getElementById('int-detail-status-badge');
+    const candNameEl = document.getElementById('int-detail-cand-name');
+    const reqTitleEl = document.getElementById('int-detail-req-title');
+    const roundEl = document.getElementById('int-detail-round');
+    const timeEl = document.getElementById('int-detail-time');
+    const locationEl = document.getElementById('int-detail-location');
+    const interviewerEl = document.getElementById('int-detail-interviewer');
+    const idInput = document.getElementById('int-detail-id');
+    const statusSelect = document.getElementById('int-eval-status');
+    const scoreSelect = document.getElementById('int-eval-score');
+    const feedbackInput = document.getElementById('int-eval-feedback');
+
+    if (codeEl) codeEl.textContent = iv.code || (iv.id ? iv.id.toUpperCase() : 'PV');
+    if (statusBadge) {
+      statusBadge.className = `badge ${iv.status === 'SCHEDULED' ? 'badge-warning' : (iv.status === 'COMPLETED' ? 'badge-success' : 'badge-danger')}`;
+      statusBadge.textContent = iv.status === 'SCHEDULED' ? 'Sắp diễn ra' : (iv.status === 'COMPLETED' ? 'Đã hoàn thành' : 'Đã hủy');
+    }
+    if (candNameEl) candNameEl.textContent = candName;
+    if (reqTitleEl) reqTitleEl.textContent = reqTitle;
+    if (roundEl) roundEl.textContent = iv.roundName || iv.round_name || 'Vòng 1';
+    if (timeEl) timeEl.textContent = new Date(schedTime).toLocaleString('vi-VN');
+    if (locationEl) locationEl.textContent = location;
+    if (interviewerEl) interviewerEl.textContent = interviewer;
+    if (idInput) idInput.value = iv.id;
+    if (statusSelect) statusSelect.value = iv.status || 'SCHEDULED';
+    if (scoreSelect) scoreSelect.value = iv.score || 4;
+    if (feedbackInput) feedbackInput.value = iv.feedback || '';
+
+    if (interviewDetailModal) interviewDetailModal.classList.remove('hidden');
+  }
+
+  function closeInterviewDetail() {
+    if (interviewDetailModal) interviewDetailModal.classList.add('hidden');
+  }
+  if (closeInterviewDetailModal) closeInterviewDetailModal.addEventListener('click', closeInterviewDetail);
+  if (cancelInterviewEvalBtn) cancelInterviewEvalBtn.addEventListener('click', closeInterviewDetail);
+
+  if (interviewEvalForm) {
+    interviewEvalForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const token = sessionStorage.getItem('ats_token');
+      const id = document.getElementById('int-detail-id').value;
+      const status = document.getElementById('int-eval-status').value;
+      const score = document.getElementById('int-eval-score').value;
+      const feedback = document.getElementById('int-eval-feedback').value.trim();
+      if (!token || !id) return;
+
+      try {
+        const res = await window.ATS_API.updateInterviewStatusApi(token, id, status, feedback, score);
+        if (res.ok && res.data && res.data.success) {
+          closeInterviewDetail();
+          showToast('success', 'Đánh giá hoàn tất', 'Đã lưu biên bản và cập nhật kết quả phỏng vấn.');
+          loadInterviews();
+          loadDashboardData();
+        } else {
+          showToast('danger', 'Lỗi đánh giá', res.data.message || 'Không thể lưu đánh giá.');
+        }
+      } catch (err) {
+        showToast('danger', 'Lỗi kết nối', err.message);
+      }
+    });
+  }
+
+
+  // --- OFFER MODALS ---
+  const openCreateOfferModalBtn = document.getElementById('open-create-offer-modal-btn');
+  const createOfferModal = document.getElementById('create-offer-modal');
+  const closeCreateOfferModal = document.getElementById('close-create-offer-modal');
+  const cancelCreateOfferBtn = document.getElementById('cancel-create-offer-btn');
+  const createOfferForm = document.getElementById('create-offer-form');
+  const createOfferAlert = document.getElementById('create-offer-alert');
+  const createOfferAlertMsg = document.getElementById('create-offer-alert-msg');
+
+  function openCreateOfferForCandidate(preselectedCandidateId = '') {
+    if (createOfferModal) createOfferModal.classList.remove('hidden');
+    if (createOfferForm) createOfferForm.reset();
+    if (createOfferAlert) createOfferAlert.classList.add('hidden');
+
+    const candSelect = document.getElementById('create-offer-cand-select');
+    if (candSelect) {
+      candSelect.innerHTML = `<option value="">-- Chọn ứng viên --</option>` +
+        currentCandidatesList.map(c => `
+          <option value="${c.id}" ${c.id === preselectedCandidateId ? 'selected' : ''}>
+            ${c.fullName || c.full_name} (${c.code || 'UV'}) - ${c.requisition_title || (c.requisition && c.requisition.title) || 'Vị trí'}
+          </option>
+        `).join('');
+    }
+
+    const reqSelect = document.getElementById('create-offer-req-select');
+    if (reqSelect) {
+      reqSelect.innerHTML = `<option value="">-- Theo vị trí tuyển dụng --</option>` +
+        currentRequisitionsList.map(r => `<option value="${r.id}">${r.code} - ${r.title}</option>`).join('');
+    }
+
+    const approverSelect = document.getElementById('create-offer-approver-select');
+    if (approverSelect) {
+      approverSelect.innerHTML = `
+        <option value="">-- Chọn người phê duyệt --</option>
+        <option value="usr-hr-mgr">Trần Thị B - HR Manager</option>
+        <option value="usr-admin">Administrator - Quản trị viên</option>
+      `;
+    }
+
+    const dateInput = document.getElementById('create-offer-start-date');
+    if (dateInput) {
+      const nextMonth = new Date();
+      nextMonth.setDate(nextMonth.getDate() + 14);
+      dateInput.value = nextMonth.toISOString().split('T')[0];
+    }
+  }
+
+  if (openCreateOfferModalBtn) {
+    openCreateOfferModalBtn.addEventListener('click', () => {
+      openCreateOfferForCandidate();
+    });
+  }
+
+  function closeCreateOffer() {
+    if (createOfferModal) createOfferModal.classList.add('hidden');
+  }
+  if (closeCreateOfferModal) closeCreateOfferModal.addEventListener('click', closeCreateOffer);
+  if (cancelCreateOfferBtn) cancelCreateOfferBtn.addEventListener('click', closeCreateOffer);
+
+  if (createOfferForm) {
+    createOfferForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const token = sessionStorage.getItem('ats_token');
+      if (!token) return;
+
+      const candidateId = document.getElementById('create-offer-cand-select').value;
+      const requisitionId = document.getElementById('create-offer-req-select').value;
+      const salaryMonthly = document.getElementById('create-offer-salary').value;
+      const startDate = document.getElementById('create-offer-start-date').value;
+      const approverId = document.getElementById('create-offer-approver-select').value;
+
+      try {
+        const res = await window.ATS_API.createOfferApi(token, {
+          candidateId, requisitionId, salaryMonthly, startDate, approverId
+        });
+
+        if (res.ok && res.data && res.data.success) {
+          closeCreateOffer();
+          showToast('success', 'Lập Offer thành công', 'Bản chào mời nhận việc đã được tạo và gửi phê duyệt.');
+          loadOffers();
+          loadCandidates();
+          loadDashboardData();
+        } else {
+          if (createOfferAlert && createOfferAlertMsg) {
+            createOfferAlertMsg.textContent = res.data.message || 'Không thể tạo Offer.';
+            createOfferAlert.classList.remove('hidden');
+          }
+        }
+      } catch (err) {
+        if (createOfferAlert && createOfferAlertMsg) {
+          createOfferAlertMsg.textContent = 'Lỗi kết nối khi gửi dữ liệu.';
+          createOfferAlert.classList.remove('hidden');
+        }
+      }
+    });
+  }
+
+  // Offer Details & Approval Modal
+  const offerDetailModal = document.getElementById('offer-detail-modal');
+  const closeOfferDetailModal = document.getElementById('close-offer-detail-modal');
+  const btnActionApproveOffer = document.getElementById('btn-action-approve-offer');
+  const btnActionSendOffer = document.getElementById('btn-action-send-offer');
+  const btnActionRejectOffer = document.getElementById('btn-action-reject-offer');
+
+  function openOfferDetails(id) {
+    const o = currentOffersList.find(x => x.id === id);
+    if (!o) {
+      showToast('warning', 'Offer', `Đang tải chi tiết offer...`);
+      return;
+    }
+
+    const candName = (o.candidate && o.candidate.fullName) ? o.candidate.fullName : (o.candidate_name || 'Ứng viên');
+    const reqTitle = (o.requisition && o.requisition.title) ? o.requisition.title : (o.requisition_title || 'Vị trí');
+    const salaryVal = o.salaryMonthly || o.salary_monthly || o.salary;
+    const startDateVal = o.startDate || o.start_date;
+    const approverName = (o.approver && o.approver.fullName) ? o.approver.fullName : (o.approver_name || 'HR Manager');
+
+    const codeEl = document.getElementById('off-detail-code');
+    const statusBadge = document.getElementById('off-detail-status-badge');
+    const candNameEl = document.getElementById('off-detail-cand-name');
+    const reqTitleEl = document.getElementById('off-detail-req-title');
+    const salaryEl = document.getElementById('off-detail-salary');
+    const startDateEl = document.getElementById('off-detail-start-date');
+    const approverEl = document.getElementById('off-detail-approver');
+    const idInput = document.getElementById('off-detail-id');
+
+    if (codeEl) codeEl.textContent = o.code || (o.id ? o.id.toUpperCase() : 'OFF');
+    if (statusBadge) {
+      statusBadge.className = `badge ${o.status === 'APPROVED' ? 'badge-success' : (o.status === 'PENDING' ? 'badge-warning' : 'badge-primary')}`;
+      statusBadge.textContent = o.status === 'APPROVED' ? 'Đã phê duyệt' : (o.status === 'PENDING' ? 'Chờ duyệt' : o.status);
+    }
+    if (candNameEl) candNameEl.textContent = candName;
+    if (reqTitleEl) reqTitleEl.textContent = reqTitle;
+    if (salaryEl) salaryEl.textContent = salaryVal ? Number(salaryVal).toLocaleString('vi-VN') + ' đ' : 'Thỏa thuận';
+    if (startDateEl) startDateEl.textContent = startDateVal ? new Date(startDateVal).toLocaleDateString('vi-VN') : 'Thỏa thuận';
+    if (approverEl) approverEl.textContent = approverName;
+    if (idInput) idInput.value = o.id;
+
+    if (offerDetailModal) offerDetailModal.classList.remove('hidden');
+  }
+
+  if (closeOfferDetailModal) {
+    closeOfferDetailModal.addEventListener('click', () => {
+      if (offerDetailModal) offerDetailModal.classList.add('hidden');
+    });
+  }
+
+  if (btnActionApproveOffer) {
+    btnActionApproveOffer.addEventListener('click', async () => {
+      const token = sessionStorage.getItem('ats_token');
+      const id = document.getElementById('off-detail-id').value;
+      if (!token || !id) return;
+
+      try {
+        const res = await window.ATS_API.updateOfferStatusApi(token, id, 'APPROVED');
+        if (res.ok && res.data && res.data.success) {
+          if (offerDetailModal) offerDetailModal.classList.add('hidden');
+          showToast('success', 'Tuyển dụng thành công!', 'Offer đã được duyệt. Ứng viên chính thức chuyển sang giai đoạn Đã nhận việc (Hired).');
+          loadOffers();
+          loadCandidates();
+          loadDashboardData();
+        } else {
+          showToast('danger', 'Lỗi phê duyệt', res.data.message || 'Không thể phê duyệt offer.');
+        }
+      } catch (err) {
+        showToast('danger', 'Lỗi kết nối', err.message);
+      }
+    });
+  }
+
+  if (btnActionSendOffer) {
+    btnActionSendOffer.addEventListener('click', async () => {
+      const token = sessionStorage.getItem('ats_token');
+      const id = document.getElementById('off-detail-id').value;
+      if (!token || !id) return;
+
+      try {
+        const res = await window.ATS_API.updateOfferStatusApi(token, id, 'SENT');
+        if (res.ok && res.data && res.data.success) {
+          if (offerDetailModal) offerDetailModal.classList.add('hidden');
+          showToast('info', 'Đã gửi Offer', 'Đã cập nhật trạng thái phát hành thư mời cho ứng viên.');
+          loadOffers();
+        } else {
+          showToast('danger', 'Lỗi gửi Offer', res.data.message || 'Không thể gửi offer.');
+        }
+      } catch (err) {
+        showToast('danger', 'Lỗi kết nối', err.message);
+      }
+    });
+  }
+
+  if (btnActionRejectOffer) {
+    btnActionRejectOffer.addEventListener('click', async () => {
+      const token = sessionStorage.getItem('ats_token');
+      const id = document.getElementById('off-detail-id').value;
+      if (!token || !id) return;
+
+      try {
+        const res = await window.ATS_API.updateOfferStatusApi(token, id, 'REJECTED');
+        if (res.ok && res.data && res.data.success) {
+          if (offerDetailModal) offerDetailModal.classList.add('hidden');
+          showToast('warning', 'Từ chối Offer', 'Đã từ chối bản đề xuất offer.');
+          loadOffers();
+        } else {
+          showToast('danger', 'Lỗi', res.data.message || 'Không thể từ chối offer.');
+        }
+      } catch (err) {
+        showToast('danger', 'Lỗi kết nối', err.message);
+      }
+    });
+  }
+
+  // ==============================================================================
+  // 17.1 APPROVALS CENTER & CANDIDATE PORTAL & REQUISITION EDIT
+  // ==============================================================================
+
+  // --- APPROVALS CENTER ---
+  async function loadApprovals() {
+    const token = sessionStorage.getItem('ats_token');
+    if (!token) return;
+
+    const offersTableBody = document.getElementById('approvals-offers-table-body');
+    const reqsTableBody = document.getElementById('approvals-reqs-table-body');
+    const totalBadge = document.getElementById('approvals-total-badge');
+    const pendingBadge = document.getElementById('pending-offers-badge');
+    const sidebarBadge = document.getElementById('sidebar-badge-approvals');
+
+    try {
+      const [offersRes, reqsRes] = await Promise.all([
+        window.ATS_API.getOffersApi(token),
+        window.ATS_API.getRequisitionsApi(token)
+      ]);
+
+      const offers = (offersRes.ok && offersRes.data && offersRes.data.offers) ? offersRes.data.offers : [];
+      const pendingOffers = offers.filter(o => o.status === 'PENDING_APPROVAL');
+
+      if (totalBadge) totalBadge.textContent = `${pendingOffers.length} yêu cầu chờ duyệt`;
+      if (pendingBadge) pendingBadge.textContent = `${pendingOffers.length} offer`;
+      if (sidebarBadge) sidebarBadge.textContent = String(pendingOffers.length);
+
+      if (offersTableBody) {
+        if (pendingOffers.length === 0) {
+          offersTableBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--color-text-muted); padding: 24px;">Hiện không có đề xuất Offer nào đang chờ phê duyệt.</td></tr>`;
+        } else {
+          offersTableBody.innerHTML = pendingOffers.map(o => {
+            const candName = o.candidate ? o.candidate.fullName : 'Ứng viên';
+            const reqTitle = o.requisition ? o.requisition.title : 'Vị trí';
+            const salary = o.salaryMonthly ? Number(o.salaryMonthly).toLocaleString('vi-VN') + ' đ' : 'Thỏa thuận';
+            const startDate = o.startDate ? new Date(o.startDate).toLocaleDateString('vi-VN') : '—';
+            return `
+              <tr>
+                <td><code class="font-mono" style="color: var(--color-primary); font-weight: 600;">${o.id.substring(0, 8).toUpperCase()}</code></td>
+                <td><strong>${candName}</strong></td>
+                <td>${reqTitle}</td>
+                <td style="color: var(--color-primary); font-weight: 600;">${salary}</td>
+                <td>${startDate}</td>
+                <td><span class="badge badge-warning">Chờ phê duyệt</span></td>
+                <td style="text-align: center;">
+                  <div style="display: flex; gap: 6px; justify-content: center;">
+                    <button type="button" class="btn btn-outline btn-xs btn-quick-approve-offer" data-id="${o.id}" style="color: var(--color-success); border-color: var(--color-success);">
+                      Phê duyệt (Hired)
+                    </button>
+                    <button type="button" class="btn btn-outline btn-xs btn-quick-reject-offer" data-id="${o.id}" style="color: var(--color-danger); border-color: var(--color-danger);">
+                      Từ chối
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            `;
+          }).join('');
+
+          document.querySelectorAll('.btn-quick-approve-offer').forEach(btn => {
+            btn.addEventListener('click', async () => {
+              const id = btn.getAttribute('data-id');
+              try {
+                const res = await window.ATS_API.updateOfferStatusApi(token, id, 'APPROVED');
+                if (res.ok && res.data && res.data.success) {
+                  showToast('success', 'Đã phê duyệt!', 'Offer đã được duyệt. Ứng viên chính thức được tuyển dụng (Hired).');
+                  loadApprovals();
+                  loadDashboardData();
+                } else {
+                  showToast('danger', 'Lỗi phê duyệt', res.data.message || 'Không thể duyệt offer.');
+                }
+              } catch (e) {
+                showToast('danger', 'Lỗi kết nối', e.message);
+              }
+            });
+          });
+
+          document.querySelectorAll('.btn-quick-reject-offer').forEach(btn => {
+            btn.addEventListener('click', async () => {
+              const id = btn.getAttribute('data-id');
+              try {
+                const res = await window.ATS_API.updateOfferStatusApi(token, id, 'REJECTED');
+                if (res.ok && res.data && res.data.success) {
+                  showToast('warning', 'Đã từ chối', 'Đã từ chối đề xuất offer.');
+                  loadApprovals();
+                } else {
+                  showToast('danger', 'Lỗi', res.data.message || 'Không thể từ chối.');
+                }
+              } catch (e) {
+                showToast('danger', 'Lỗi kết nối', e.message);
+              }
+            });
+          });
+        }
+      }
+
+      if (reqsTableBody) {
+        const reqs = (reqsRes.ok && reqsRes.data && reqsRes.data.requisitions) ? reqsRes.data.requisitions : [];
+        if (reqs.length === 0) {
+          reqsTableBody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--color-text-muted); padding: 24px;">Không có vị trí tuyển dụng nào.</td></tr>`;
+        } else {
+          reqsTableBody.innerHTML = reqs.slice(0, 5).map(r => `
+            <tr>
+              <td><code class="font-mono" style="color: var(--color-primary);">${r.code}</code></td>
+              <td><strong>${r.title}</strong></td>
+              <td>${r.departmentName}</td>
+              <td style="text-align: center; font-weight: 600;">${r.headcount}</td>
+              <td><span class="badge ${r.status === 'OPEN' ? 'badge-primary' : 'badge-neutral'}">${r.status}</span></td>
+              <td style="text-align: center;">
+                <button type="button" class="btn btn-outline btn-xs btn-view-candidates-req" data-title="${r.title}">
+                  Xem ứng viên
+                </button>
+              </td>
+            </tr>
+          `).join('');
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load approvals:', e);
+    }
+  }
+
+  // --- CANDIDATE PORTAL ---
+  async function loadCandidatePortal() {
+    const token = sessionStorage.getItem('ats_token');
+    if (!token) return;
+
+    const candNameEl = document.getElementById('cand-portal-name');
+    const candEmailEl = document.getElementById('cand-portal-email');
+    const candAvatarEl = document.getElementById('cand-portal-avatar');
+    const candStageBadge = document.getElementById('cand-portal-stage-badge');
+
+    if (currentAuthenticatedUser) {
+      if (candNameEl) candNameEl.textContent = currentAuthenticatedUser.fullName || 'Ứng viên';
+      if (candEmailEl) candEmailEl.textContent = currentAuthenticatedUser.email;
+      if (candAvatarEl) candAvatarEl.textContent = (currentAuthenticatedUser.fullName || 'U').charAt(0).toUpperCase();
+    }
+
+    try {
+      const [candRes, ivRes, offRes] = await Promise.all([
+        window.ATS_API.getCandidatesApi(token),
+        window.ATS_API.getInterviewsApi(token),
+        window.ATS_API.getOffersApi(token)
+      ]);
+
+      const candidates = (candRes.ok && candRes.data && candRes.data.candidates) ? candRes.data.candidates : [];
+      const userEmail = currentAuthenticatedUser ? currentAuthenticatedUser.email.toLowerCase() : '';
+      let myCand = candidates.find(c => c.email && c.email.toLowerCase() === userEmail) || candidates[0];
+
+      if (myCand) {
+        if (candNameEl) candNameEl.textContent = myCand.fullName;
+        if (candStageBadge) {
+          candStageBadge.className = `badge ${STAGE_BADGES[myCand.stage] || 'badge-primary'}`;
+          candStageBadge.textContent = STAGE_LABELS[myCand.stage] || myCand.stage;
+        }
+
+        // Update Tracker Steps
+        const stagesOrder = ['NEW', 'SCREENING', 'INTERVIEW', 'OFFER', 'HIRED'];
+        const currentIdx = stagesOrder.indexOf(myCand.stage) !== -1 ? stagesOrder.indexOf(myCand.stage) : 0;
+
+        const stepIds = ['portal-step-applied', 'portal-step-screening', 'portal-step-interview', 'portal-step-offer', 'portal-step-hired'];
+        stepIds.forEach((sid, idx) => {
+          const el = document.getElementById(sid);
+          if (el) {
+            if (idx <= currentIdx) {
+              el.style.borderColor = 'var(--color-primary)';
+              el.style.background = 'rgba(37,99,235,0.08)';
+              const countEl = el.querySelector('.funnel-step-count');
+              if (countEl) countEl.style.color = 'var(--color-primary)';
+            }
+          }
+        });
+      }
+
+      // Check upcoming interview
+      const interviews = (ivRes.ok && ivRes.data && ivRes.data.interviews) ? ivRes.data.interviews : [];
+      const myIv = interviews.find(i => i.candidate && (i.candidate.email === userEmail || (myCand && i.candidate.id === myCand.id)));
+      if (myIv) {
+        const timeEl = document.getElementById('cand-portal-interview-time');
+        const locEl = document.getElementById('cand-portal-interview-location');
+        if (timeEl) timeEl.textContent = new Date(myIv.scheduledTime).toLocaleString('vi-VN');
+        if (locEl) locEl.textContent = myIv.locationOrLink || 'Google Meet';
+      }
+
+      // Check offer
+      const offers = (offRes.ok && offRes.data && offRes.data.offers) ? offRes.data.offers : [];
+      const myOff = offers.find(o => o.candidate && (o.candidate.email === userEmail || (myCand && o.candidate.id === myCand.id)));
+      const offerContainer = document.getElementById('cand-portal-offer-container');
+      if (myOff && offerContainer) {
+        offerContainer.innerHTML = `
+          <div style="background: var(--color-success-bg); border: 1px solid var(--color-success-border); border-radius: var(--radius-sm); padding: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <strong style="color: var(--color-success-text); font-size: 1.05rem;">Chúc mừng! Bạn đã nhận được Thư Mời Nhận Việc (Offer)</strong>
+              <span class="badge ${myOff.status === 'APPROVED' ? 'badge-success' : 'badge-primary'}">${myOff.status}</span>
+            </div>
+            <div style="margin-top: 10px; font-size: 1.15rem; font-weight: 700; color: var(--color-success);">
+              Mức lương: ${Number(myOff.salaryMonthly).toLocaleString('vi-VN')} đ/tháng
+            </div>
+            <div style="color: var(--color-text-secondary); margin-top: 4px; font-size: 0.85rem;">
+              Ngày bắt đầu dự kiến: <strong>${myOff.startDate ? new Date(myOff.startDate).toLocaleDateString('vi-VN') : 'Thỏa thuận'}</strong>
+            </div>
+          </div>
+        `;
+      }
+    } catch (e) {
+      console.error('Failed to load candidate portal:', e);
+    }
+  }
+
+  // --- REQUISITION DETAILS & EDIT MODAL ---
+  const reqDetailModal = document.getElementById('requisition-detail-modal');
+  const closeReqDetailModal = document.getElementById('close-req-detail-modal');
+  const cancelReqDetailBtn = document.getElementById('cancel-req-detail-btn');
+  const reqDetailForm = document.getElementById('req-detail-form');
+  const reqDetailAlert = document.getElementById('req-detail-alert');
+  const reqDetailAlertMsg = document.getElementById('req-detail-alert-msg');
+  const reqDetailRecruiterSelect = document.getElementById('req-detail-recruiter-select');
+
+  async function openRequisitionDetails(id) {
+    if (!reqDetailModal) return;
+    const req = currentRequisitionsList.find(r => r.id === id);
+    if (!req) return;
+
+    document.getElementById('req-detail-id').value = req.id;
+    document.getElementById('req-detail-code').textContent = req.code;
+    document.getElementById('req-detail-title-input').value = req.title;
+    document.getElementById('req-detail-dept-input').value = req.departmentName || req.department || '';
+    document.getElementById('req-detail-headcount-input').value = req.headcount;
+    document.getElementById('req-detail-status-select').value = req.status;
+
+    const statusBadge = document.getElementById('req-detail-status-badge');
+    if (statusBadge) {
+      statusBadge.className = `badge ${req.status === 'OPEN' ? 'badge-primary' : (req.status === 'IN_PROGRESS' ? 'badge-warning' : 'badge-neutral')}`;
+      statusBadge.textContent = req.status === 'OPEN' ? 'Đang mở' : (req.status === 'IN_PROGRESS' ? 'Đang tuyển' : 'Đã đóng');
+    }
+
+    const token = sessionStorage.getItem('ats_token');
+    if (token && reqDetailRecruiterSelect) {
+      try {
+        const usersRes = await window.ATS_API.getUsersApi(token, { role: 'RECRUITER', status: 'ACTIVE' });
+        if (usersRes.ok && usersRes.data && usersRes.data.success) {
+          const recruiters = usersRes.data.data.users || [];
+          reqDetailRecruiterSelect.innerHTML = `<option value="">-- Chưa chỉ định --</option>` +
+            recruiters.map(r => `<option value="${r.id}" ${r.id === req.recruiterId ? 'selected' : ''}>${r.fullName || r.email}</option>`).join('');
+        }
+      } catch {}
+    }
+
+    if (reqDetailAlert) reqDetailAlert.classList.add('hidden');
+    reqDetailModal.classList.remove('hidden');
+  }
+
+  if (closeReqDetailModal) closeReqDetailModal.addEventListener('click', () => reqDetailModal.classList.add('hidden'));
+  if (cancelReqDetailBtn) cancelReqDetailBtn.addEventListener('click', () => reqDetailModal.classList.add('hidden'));
+
+  if (reqDetailForm) {
+    reqDetailForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const token = sessionStorage.getItem('ats_token');
+      if (!token) return;
+
+      const id = document.getElementById('req-detail-id').value;
+      const title = document.getElementById('req-detail-title-input').value.trim();
+      const departmentName = document.getElementById('req-detail-dept-input').value.trim();
+      const headcount = parseInt(document.getElementById('req-detail-headcount-input').value, 10);
+      const status = document.getElementById('req-detail-status-select').value;
+      const recruiterId = reqDetailRecruiterSelect ? reqDetailRecruiterSelect.value : null;
+
+      try {
+        const res = await window.ATS_API.updateRequisitionApi(token, id, { title, departmentName, headcount, status, recruiterId });
+        if (res.ok && res.data && res.data.success) {
+          reqDetailModal.classList.add('hidden');
+          showToast('success', 'Cập nhật thành công', `Vị trí "${title}" đã được lưu.`);
+          loadRequisitions();
+          loadDashboardData();
+        } else {
+          if (reqDetailAlert && reqDetailAlertMsg) {
+            reqDetailAlertMsg.textContent = res.data.message || 'Không thể cập nhật.';
+            reqDetailAlert.classList.remove('hidden');
+          }
+        }
+      } catch (err) {
+        if (reqDetailAlert && reqDetailAlertMsg) {
+          reqDetailAlertMsg.textContent = err.message;
+          reqDetailAlert.classList.remove('hidden');
+        }
+      }
+    });
+  }
+
+  // --- ADMIN RESET PASSWORD MODAL ---
+  const adminResetPwdModal = document.getElementById('admin-reset-pwd-modal');
+  const closeAdminResetPwdModal = document.getElementById('close-admin-reset-pwd-modal');
+  const cancelAdminResetPwdBtn = document.getElementById('cancel-admin-reset-pwd-btn');
+  const confirmAdminResetPwdBtn = document.getElementById('confirm-admin-reset-pwd-btn');
+  const adminResetResultBox = document.getElementById('admin-reset-result-box');
+  const adminResetNewPwdDisplay = document.getElementById('admin-reset-new-pwd-display');
+  const adminResetCopyPwdBtn = document.getElementById('admin-reset-copy-pwd-btn');
+
+  function openAdminResetPwdModal(id, name, email) {
+    if (!adminResetPwdModal) return;
+    document.getElementById('admin-reset-user-id').value = id;
+    document.getElementById('admin-reset-user-name').textContent = name;
+    document.getElementById('admin-reset-user-email').textContent = email;
+    if (adminResetResultBox) adminResetResultBox.classList.add('hidden');
+    if (confirmAdminResetPwdBtn) confirmAdminResetPwdBtn.classList.remove('hidden');
+    adminResetPwdModal.classList.remove('hidden');
+  }
+
+  if (closeAdminResetPwdModal) closeAdminResetPwdModal.addEventListener('click', () => adminResetPwdModal.classList.add('hidden'));
+  if (cancelAdminResetPwdBtn) cancelAdminResetPwdBtn.addEventListener('click', () => adminResetPwdModal.classList.add('hidden'));
+
+  if (confirmAdminResetPwdBtn) {
+    confirmAdminResetPwdBtn.addEventListener('click', async () => {
+      const token = sessionStorage.getItem('ats_token');
+      const userId = document.getElementById('admin-reset-user-id').value;
+      if (!token || !userId) return;
+
+      try {
+        const res = await window.ATS_API.resetUserPasswordApi(token, userId);
+        if (res.ok && res.data && res.data.success) {
+          confirmAdminResetPwdBtn.classList.add('hidden');
+          if (adminResetResultBox) {
+            adminResetResultBox.classList.remove('hidden');
+            if (adminResetNewPwdDisplay) adminResetNewPwdDisplay.textContent = res.data.data.temporaryPassword;
+          }
+          showToast('success', 'Đặt lại mật khẩu thành công', 'Mật khẩu tạm mới đã được tạo và gửi qua email.');
+        } else {
+          showToast('danger', 'Lỗi', res.data.message || 'Không thể đặt lại mật khẩu.');
+        }
+      } catch (e) {
+        showToast('danger', 'Lỗi kết nối', e.message);
+      }
+    });
+  }
+
+  if (adminResetCopyPwdBtn) {
+    adminResetCopyPwdBtn.addEventListener('click', () => {
+      const pwd = adminResetNewPwdDisplay.textContent;
+      navigator.clipboard.writeText(pwd).then(() => {
+        showToast('info', 'Đã sao chép', 'Đã sao chép mật khẩu tạm vào bộ nhớ tạm.');
+      });
+    });
+  }
+
+  // ==============================================================================
   // 18. INITIALIZATION
   // ==============================================================================
 
   // Global helper functions exposed for onclick table buttons
   window.ATS_APP_HELPERS = {
     viewCandidateDetails(id) {
-      showToast('info', 'Hồ sơ ứng viên', `Đang mở hồ sơ chi tiết mã ${id}`);
+      openCandidateDetails(id);
     },
     viewInterviewDetails(id) {
-      showToast('info', 'Chi tiết phỏng vấn', `Đang mở chi tiết buổi phỏng vấn mã ${id}`);
+      openInterviewDetails(id);
     },
     viewOfferDetails(id) {
-      showToast('info', 'Chi tiết Offer', `Đang mở bản chào mời nhận việc mã ${id}`);
+      openOfferDetails(id);
     },
     showErrorView
   };
 
   checkExistingSession();
 });
+

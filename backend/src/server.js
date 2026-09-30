@@ -12,7 +12,11 @@ const RequisitionService = require('./services/requisitionService');
 
 // Ensure DB is initialized and seeded
 const db = getDatabase();
-seedDatabase(db);
+const isTestEnv = process.env.NODE_ENV === 'test' || (process.argv[1] && (process.argv[1].includes('tests') || process.argv[1].includes('test_s1_')));
+const userCount = db.prepare('SELECT COUNT(*) AS c FROM users').get().c;
+if (isTestEnv || userCount === 0) {
+  seedDatabase(db);
+}
 
 const authController = new AuthController();
 const rbacMiddleware = new RbacMiddleware(db);
@@ -190,6 +194,58 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // 9.1 API: Get Current User Profile
+  if (req.method === 'GET' && (pathname === '/api/v1/profile' || pathname === '/profile')) {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 401, message: 'Yêu cầu thiếu token xác thực.', code: 'UNAUTHORIZED' }));
+      return;
+    }
+    const token = authHeader.substring(7).trim();
+    const sessionResult = authController.authService.validateSession(token, true);
+    if (!sessionResult.valid) {
+      res.writeHead(sessionResult.statusCode || 401, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: sessionResult.statusCode || 401, message: sessionResult.message, code: sessionResult.code }));
+      return;
+    }
+    const userProfile = userService.getUserById(sessionResult.user.id);
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ success: true, data: userProfile }));
+    return;
+  }
+
+  // 9.2 API: Update Current User Profile
+  if (req.method === 'PUT' && (pathname === '/api/v1/profile' || pathname === '/profile')) {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 401, message: 'Yêu cầu thiếu token xác thực.', code: 'UNAUTHORIZED' }));
+      return;
+    }
+    const token = authHeader.substring(7).trim();
+    const sessionResult = authController.authService.validateSession(token, true);
+    if (!sessionResult.valid) {
+      res.writeHead(sessionResult.statusCode || 401, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: sessionResult.statusCode || 401, message: sessionResult.message, code: sessionResult.code }));
+      return;
+    }
+    try {
+      const body = await parseBody(req);
+      const updateResult = userService.updateUser(sessionResult.user.id, {
+        fullName: body.fullName,
+        jobTitle: body.jobTitle,
+        phoneNumber: body.phoneNumber
+      }, sessionResult.user.id);
+      res.writeHead(updateResult.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(updateResult));
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
+    }
+    return;
+  }
+
   // 10. API: S1-05 Get Full RBAC Matrix (AC-01)
   if (req.method === 'GET' && (pathname === '/api/v1/rbac/matrix' || pathname === '/rbac/matrix' || pathname === '/api/v1/admin/roles-matrix' || pathname === '/admin/roles-matrix')) {
     const rawMatrix = rbacMiddleware.getRbacMatrix();
@@ -300,7 +356,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   // 11.9 S1-08: Update User Information (AC-03)
-  if (req.method === 'PUT' && (pathname.startsWith('/api/v1/admin/users/') || pathname.startsWith('/admin/users/')) && !pathname.endsWith('/roles') && !pathname.endsWith('/lock') && !pathname.endsWith('/unlock')) {
+  if (req.method === 'PUT' && (pathname.startsWith('/api/v1/admin/users/') || pathname.startsWith('/admin/users/')) && !pathname.endsWith('/roles') && !pathname.endsWith('/lock') && !pathname.endsWith('/unlock') && !pathname.endsWith('/reset-password')) {
     try {
       const userId = pathname.replace(/^\/api\/v1\/admin\/users\//, '').replace(/^\/admin\/users\//, '');
       const body = await parseBody(req);
@@ -309,6 +365,28 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu yêu cầu không hợp lệ.', code: 'BAD_REQUEST' }));
     }
+    return;
+  }
+
+  // 11.10 Reset User Password (Admin)
+  if (req.method === 'POST' && ((pathname.startsWith('/api/v1/admin/users/') && pathname.endsWith('/reset-password')) || (pathname.startsWith('/admin/users/') && pathname.endsWith('/reset-password')))) {
+    const user = rbacMiddleware.authorize(req, res, authController.authService, 'user.create');
+    if (!user) return;
+    const userId = pathname.replace(/^\/api\/v1\/admin\/users\//, '').replace(/^\/admin\/users\//, '').replace(/\/reset-password$/, '');
+    const result = userService.resetUserPassword(userId, user);
+    res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(result));
+    return;
+  }
+
+  // 11.11 Delete User Account (Admin)
+  if (req.method === 'DELETE' && (pathname.startsWith('/api/v1/admin/users/') || pathname.startsWith('/admin/users/')) && !pathname.endsWith('/roles') && !pathname.endsWith('/lock') && !pathname.endsWith('/unlock') && !pathname.endsWith('/reset-password')) {
+    const user = rbacMiddleware.authorize(req, res, authController.authService, 'user.create');
+    if (!user) return;
+    const userId = pathname.replace(/^\/api\/v1\/admin\/users\//, '').replace(/^\/admin\/users\//, '');
+    const result = userService.deleteUser(userId, user);
+    res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(result));
     return;
   }
 
@@ -442,6 +520,39 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // 13.4.1 API: Get Single Requisition Details
+  if (req.method === 'GET' && (pathname.startsWith('/api/v1/requisitions/') || pathname.startsWith('/requisitions/')) && !pathname.endsWith('/handover') && !pathname.endsWith('/dashboard-stats')) {
+    const user = rbacMiddleware.authorize(req, res, authController.authService, 'requisition.read');
+    if (!user) return;
+    const reqId = pathname.replace(/^\/api\/v1\/requisitions\//, '').replace(/^\/requisitions\//, '');
+    const item = requisitionService.getRequisitionById(reqId);
+    if (!item) {
+      res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 404, message: 'Không tìm thấy vị trí tuyển dụng.' }));
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ success: true, data: item }));
+    return;
+  }
+
+  // 13.4.2 API: Update Requisition Details
+  if (req.method === 'PUT' && (pathname.startsWith('/api/v1/requisitions/') || pathname.startsWith('/requisitions/')) && !pathname.endsWith('/handover')) {
+    const user = rbacMiddleware.authorize(req, res, authController.authService, 'requisition.edit');
+    if (!user) return;
+    try {
+      const reqId = pathname.replace(/^\/api\/v1\/requisitions\//, '').replace(/^\/requisitions\//, '');
+      const body = await parseBody(req);
+      const result = requisitionService.updateRequisition(reqId, body);
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
+    }
+    return;
+  }
+
   // 13.5 API: Get Email Logs (Admin)
   if (req.method === 'GET' && (pathname === '/api/v1/admin/email-logs' || pathname === '/admin/email-logs')) {
     const user = rbacMiddleware.authorize(req, res, authController.authService, 'audit.read');
@@ -477,6 +588,39 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // 13.7.1 API: Create Candidate
+  if (req.method === 'POST' && (pathname === '/api/v1/candidates' || pathname === '/candidates')) {
+    const user = rbacMiddleware.authorize(req, res, authController.authService, 'candidate.read');
+    if (!user) return;
+    try {
+      const body = await parseBody(req);
+      const result = requisitionService.createCandidate(body);
+      res.writeHead(result.statusCode || 201, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
+    }
+    return;
+  }
+
+  // 13.7.2 API: Update Candidate Stage
+  if (req.method === 'PUT' && ((pathname.startsWith('/api/v1/candidates/') && pathname.endsWith('/stage')) || (pathname.startsWith('/candidates/') && pathname.endsWith('/stage')))) {
+    const user = rbacMiddleware.authorize(req, res, authController.authService, 'candidate.read');
+    if (!user) return;
+    try {
+      const candId = pathname.replace(/^\/api\/v1\/candidates\//, '').replace(/^\/candidates\//, '').replace(/\/stage$/, '');
+      const body = await parseBody(req);
+      const result = requisitionService.updateCandidateStage(candId, body.stage);
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
+    }
+    return;
+  }
+
   // 13.8 API: Interviews List (Real SQLite Data)
   if (req.method === 'GET' && (pathname === '/api/v1/interviews' || pathname === '/interviews')) {
     const user = rbacMiddleware.authorize(req, res, authController.authService, 'interview.read');
@@ -487,6 +631,39 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // 13.8.1 API: Create Interview
+  if (req.method === 'POST' && (pathname === '/api/v1/interviews' || pathname === '/interviews')) {
+    const user = rbacMiddleware.authorize(req, res, authController.authService, 'interview.read');
+    if (!user) return;
+    try {
+      const body = await parseBody(req);
+      const result = requisitionService.createInterview(body);
+      res.writeHead(result.statusCode || 201, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
+    }
+    return;
+  }
+
+  // 13.8.2 API: Update Interview Status / Feedback / Score
+  if (req.method === 'PUT' && ((pathname.startsWith('/api/v1/interviews/') && pathname.endsWith('/status')) || (pathname.startsWith('/interviews/') && pathname.endsWith('/status')))) {
+    const user = rbacMiddleware.authorize(req, res, authController.authService, 'interview.read');
+    if (!user) return;
+    try {
+      const intId = pathname.replace(/^\/api\/v1\/interviews\//, '').replace(/^\/interviews\//, '').replace(/\/status$/, '');
+      const body = await parseBody(req);
+      const result = requisitionService.updateInterviewStatus(intId, body.status, body.feedback, body.score);
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
+    }
+    return;
+  }
+
   // 13.9 API: Offers List (Real SQLite Data)
   if (req.method === 'GET' && (pathname === '/api/v1/offers' || pathname === '/offers')) {
     const user = rbacMiddleware.authorize(req, res, authController.authService, 'offer.read');
@@ -494,6 +671,39 @@ const server = http.createServer(async (req, res) => {
     const result = requisitionService.getOffers();
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(result));
+    return;
+  }
+
+  // 13.9.1 API: Create Offer
+  if (req.method === 'POST' && (pathname === '/api/v1/offers' || pathname === '/offers')) {
+    const user = rbacMiddleware.authorize(req, res, authController.authService, 'offer.read');
+    if (!user) return;
+    try {
+      const body = await parseBody(req);
+      const result = requisitionService.createOffer(body);
+      res.writeHead(result.statusCode || 201, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
+    }
+    return;
+  }
+
+  // 13.9.2 API: Update Offer Status
+  if (req.method === 'PUT' && ((pathname.startsWith('/api/v1/offers/') && pathname.endsWith('/status')) || (pathname.startsWith('/offers/') && pathname.endsWith('/status')))) {
+    const user = rbacMiddleware.authorize(req, res, authController.authService, 'offer.read');
+    if (!user) return;
+    try {
+      const offId = pathname.replace(/^\/api\/v1\/offers\//, '').replace(/^\/offers\//, '').replace(/\/status$/, '');
+      const body = await parseBody(req);
+      const result = requisitionService.updateOfferStatus(offId, body.status);
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
+    }
     return;
   }
 

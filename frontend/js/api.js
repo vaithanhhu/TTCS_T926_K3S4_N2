@@ -526,6 +526,194 @@ async function getRecruitmentReportsApi(token) {
   }
 }
 
+async function createCandidateApi(token, candidateData) {
+  try {
+    const response = await fetch(`${API_BASE}/candidates`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify(candidateData)
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi tạo hồ sơ ứng viên.' } };
+  }
+}
+
+async function updateCandidateStageApi(token, id, stage) {
+  try {
+    const response = await fetch(`${API_BASE}/candidates/${id}/stage`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify({ stage })
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi cập nhật vòng tuyển dụng.' } };
+  }
+}
+
+async function createInterviewApi(token, interviewData) {
+  try {
+    const response = await fetch(`${API_BASE}/interviews`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify(interviewData)
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi lên lịch phỏng vấn.' } };
+  }
+}
+
+async function updateInterviewStatusApi(token, id, status, feedback, score) {
+  try {
+    const response = await fetch(`${API_BASE}/interviews/${id}/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify({ status, feedback, score })
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi cập nhật buổi phỏng vấn.' } };
+  }
+}
+
+async function createOfferApi(token, offerData) {
+  try {
+    const response = await fetch(`${API_BASE}/offers`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify(offerData)
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi tạo bản đề xuất offer.' } };
+  }
+}
+
+async function updateOfferStatusApi(token, id, status) {
+  try {
+    const response = await fetch(`${API_BASE}/offers/${id}/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify({ status })
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi cập nhật trạng thái offer.' } };
+  }
+}
+
+async function getRequisitionByIdApi(token, id) {
+  try {
+    const response = await fetch(`${API_BASE}/requisitions/${id}`, {
+      method: 'GET',
+      headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi lấy chi tiết vị trí tuyển dụng.' } };
+  }
+}
+
+async function updateRequisitionApi(token, id, reqData) {
+  try {
+    const response = await fetch(`${API_BASE}/requisitions/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify(reqData)
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi cập nhật vị trí tuyển dụng.' } };
+  }
+}
+
+async function resetUserPasswordApi(token, userId) {
+  try {
+    const response = await fetch(`${API_BASE}/admin/users/${userId}/reset-password`, {
+      method: 'POST',
+      headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi đặt lại mật khẩu.' } };
+  }
+}
+
+async function deleteUserApi(token, userId) {
+  try {
+    const response = await fetch(`${API_BASE}/admin/users/${userId}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi xóa tài khoản.' } };
+  }
+}
+
+async function getProfileApi(token) {
+  try {
+    const response = await fetch(`${API_BASE}/profile`, {
+      method: 'GET',
+      headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi tải hồ sơ.' } };
+  }
+}
+
+async function updateProfileApi(token, profileData) {
+  try {
+    const response = await fetch(`${API_BASE}/profile`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify(profileData)
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi cập nhật hồ sơ.' } };
+  }
+}
+
 window.ATS_API = {
   loginApi,
   logoutApi,
@@ -547,6 +735,8 @@ window.ATS_API = {
   getUserByIdApi,
   createUserApi,
   updateUserApi,
+  resetUserPasswordApi,
+  deleteUserApi,
   getAdminRolesApi,
   getUserRolesApi,
   assignUserRolesApi,
@@ -556,6 +746,8 @@ window.ATS_API = {
   getDashboardStats: getDashboardStatsApi,
   getRequisitionsApi,
   getRequisitions: getRequisitionsApi,
+  getRequisitionByIdApi,
+  updateRequisitionApi,
   createRequisitionApi,
   createRequisition: createRequisitionApi,
   reassignHandoverApi,
@@ -563,8 +755,17 @@ window.ATS_API = {
   getEmailLogsApi,
   getAuditLogsApi,
   getCandidatesApi,
+  createCandidateApi,
+  updateCandidateStageApi,
   getInterviewsApi,
+  createInterviewApi,
+  updateInterviewStatusApi,
   getOffersApi,
-  getRecruitmentReportsApi
+  createOfferApi,
+  updateOfferStatusApi,
+  getRecruitmentReportsApi,
+  getProfileApi,
+  updateProfileApi
 };
+
 

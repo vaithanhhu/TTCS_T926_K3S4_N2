@@ -117,13 +117,73 @@ function initSchema(db) {
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS email_logs (
+      id TEXT PRIMARY KEY,
+      recipient TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      template_name TEXT NOT NULL,
+      status TEXT NOT NULL,
+      error_message TEXT,
+      sent_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS candidates (
+      id TEXT PRIMARY KEY,
+      full_name TEXT NOT NULL,
+      email TEXT NOT NULL,
+      phone_number TEXT,
+      requisition_id TEXT REFERENCES requisitions(id) ON DELETE SET NULL,
+      stage TEXT NOT NULL DEFAULT 'NEW',
+      experience_years INTEGER NOT NULL DEFAULT 1,
+      current_company TEXT,
+      expected_salary TEXT,
+      notes TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS interviews (
+      id TEXT PRIMARY KEY,
+      candidate_id TEXT REFERENCES candidates(id) ON DELETE CASCADE,
+      requisition_id TEXT REFERENCES requisitions(id) ON DELETE SET NULL,
+      interviewer_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+      round_name TEXT NOT NULL DEFAULT 'Phỏng vấn chuyên môn',
+      scheduled_time TEXT NOT NULL,
+      location_or_link TEXT,
+      status TEXT NOT NULL DEFAULT 'SCHEDULED',
+      feedback TEXT,
+      score INTEGER,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS offers (
+      id TEXT PRIMARY KEY,
+      candidate_id TEXT REFERENCES candidates(id) ON DELETE CASCADE,
+      requisition_id TEXT REFERENCES requisitions(id) ON DELETE SET NULL,
+      salary_monthly INTEGER NOT NULL,
+      start_date TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'PENDING_APPROVAL',
+      approver_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+    CREATE INDEX IF NOT EXISTS idx_roles_code ON roles(code);
+    CREATE INDEX IF NOT EXISTS idx_permissions_code ON permissions(code);
+    CREATE INDEX IF NOT EXISTS idx_role_permissions_role ON role_permissions(role_id);
+    CREATE INDEX IF NOT EXISTS idx_role_permissions_perm ON role_permissions(permission_id);
+    CREATE INDEX IF NOT EXISTS idx_user_roles_user ON user_roles(user_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
     CREATE INDEX IF NOT EXISTS idx_audit_email ON login_audit_logs(email);
     CREATE INDEX IF NOT EXISTS idx_reset_token ON password_reset_tokens(token);
     CREATE INDEX IF NOT EXISTS idx_requisitions_recruiter ON requisitions(recruiter_id);
     CREATE INDEX IF NOT EXISTS idx_requisitions_hiring_mgr ON requisitions(hiring_manager_id);
     CREATE INDEX IF NOT EXISTS idx_requisitions_status ON requisitions(status);
+    CREATE INDEX IF NOT EXISTS idx_email_logs_recipient ON email_logs(recipient);
+    CREATE INDEX IF NOT EXISTS idx_candidates_requisition ON candidates(requisition_id);
+    CREATE INDEX IF NOT EXISTS idx_candidates_stage ON candidates(stage);
+    CREATE INDEX IF NOT EXISTS idx_interviews_candidate ON interviews(candidate_id);
+    CREATE INDEX IF NOT EXISTS idx_interviews_interviewer ON interviews(interviewer_id);
+    CREATE INDEX IF NOT EXISTS idx_offers_candidate ON offers(candidate_id);
   `);
 }
 

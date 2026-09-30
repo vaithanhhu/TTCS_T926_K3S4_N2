@@ -1,8 +1,9 @@
 const { getDatabase } = require('./database');
 const { hashPassword } = require('../utils/password');
 
-function seedDatabase(db) {
+function seedDatabase(db, options = {}) {
   const database = db || getDatabase();
+  const preservePasswords = options.preservePasswords === true;
 
   // 1. Seed Roles (AC-01 7 standard roles)
   const roles = [
@@ -425,7 +426,7 @@ function seedDatabase(db) {
     INSERT INTO users (id, email, password_hash, full_name, job_title, department_id, department_name, phone_number, status, lock_reason, failed_attempts, locked_until)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL)
     ON CONFLICT(email) DO UPDATE SET
-      password_hash = excluded.password_hash,
+      password_hash = CASE WHEN ? = 1 THEN users.password_hash ELSE excluded.password_hash END,
       full_name = excluded.full_name,
       job_title = excluded.job_title,
       department_name = excluded.department_name,
@@ -453,7 +454,8 @@ function seedDatabase(db) {
       u.departmentName,
       u.phoneNumber,
       u.status,
-      u.lockReason || null
+      u.lockReason || null,
+      preservePasswords ? 1 : 0
     );
 
     deleteUserRoles.run(u.id);
