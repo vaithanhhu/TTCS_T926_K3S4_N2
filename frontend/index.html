@@ -15,6 +15,17 @@
        AUTHENTICATION VIEW (LOGIN)
        ============================================================================== -->
   <div id="login-view" class="login-page-wrapper">
+    <section
+      id="public-career-page-section"
+      class="public-career-page-section"
+      aria-label="Giới thiệu công ty"
+    >
+      <div id="public-career-page-content">
+        <div style="text-align: center; padding: 48px 24px; color: var(--color-text-muted);">
+          Đang tải thông tin công ty...
+        </div>
+      </div>
+    </section>
     <div class="login-container">
       <header class="login-brand-header">
         <div class="login-brand-logo">
@@ -196,6 +207,17 @@
           <span class="nav-badge-pill" id="sidebar-badge-interviews">0</span>
         </div>
 
+        <div class="nav-link" data-view="questionBank" id="nav-item-question-bank">
+          <div class="nav-link-content">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+              <path d="M9 7h7"></path>
+              <path d="M9 11h5"></path>
+            </svg>
+            <span>Ngân hàng câu hỏi phỏng vấn</span>
+          </div>
+        </div>
         <div class="nav-link" data-view="offers" id="nav-item-offers">
           <div class="nav-link-content">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -233,6 +255,48 @@
         </div>
 
         <div class="nav-group-header">QUẢN TRỊ HỆ THỐNG</div>
+                <div class="nav-link" data-view="recruitmentCatalogs" id="nav-item-recruitment-catalogs">
+          <div class="nav-link-content">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="8" y1="6" x2="21" y2="6"></line>
+              <line x1="8" y1="12" x2="21" y2="12"></line>
+              <line x1="8" y1="18" x2="21" y2="18"></line>
+              <line x1="3" y1="6" x2="3.01" y2="6"></line>
+              <line x1="3" y1="12" x2="3.01" y2="12"></line>
+              <line x1="3" y1="18" x2="3.01" y2="18"></line>
+            </svg>
+            <span>Danh mục tuyển dụng</span>
+          </div>
+        </div>
+        <div class="nav-link" data-view="careerPage" id="nav-item-career-page">
+          <div class="nav-link-content">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+              <path d="M8 2v4M16 2v4M3 9h18"></path>
+            </svg>
+            <span>Trang giới thiệu công ty</span>
+          </div>
+        </div>
+        <div class="nav-link" data-view="departments" id="nav-item-departments">
+          <div class="nav-link-content">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+              <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+              <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+              <path d="M6.5 10v4M10 6.5h4a3 3 0 0 1 3 3V14"></path>
+            </svg>
+            <span>Phòng ban & Sơ đồ tổ chức</span>
+          </div>
+        </div>
+        <div class="nav-link" data-view="competencies" id="nav-item-competencies">
+          <div class="nav-link-content">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 11l3 3L22 4"></path>
+              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+            </svg>
+            <span>Khung năng lực & Chức danh</span>
+          </div>
+        </div>
         <div class="nav-link" data-view="users" id="nav-item-users">
           <div class="nav-link-content">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -589,6 +653,7 @@
               <div style="width: 180px;">
                 <select id="req-status-filter" class="form-input">
                   <option value="ALL">Tất cả trạng thái</option>
+                  <option value="DRAFT">Nháp (DRAFT)</option>
                   <option value="OPEN">Đang mở (OPEN)</option>
                   <option value="IN_PROGRESS">Đang tuyển (IN_PROGRESS)</option>
                   <option value="CLOSED">Đã đóng (CLOSED)</option>
@@ -774,6 +839,91 @@
         <!-- ==============================================================================
              5. OFFERS VIEW
              ============================================================================== -->
+        <!-- ==============================================================================
+             INTERVIEW QUESTION BANK VIEW
+             ============================================================================== -->
+        <div id="question-bank-view" class="hidden">
+          <div class="view-header">
+            <div class="view-title-group">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h2>Ngân hàng câu hỏi phỏng vấn</h2>
+                <span id="question-bank-total-badge" class="badge badge-primary font-mono">0 câu hỏi</span>
+              </div>
+              <p>Quản lý và tra cứu câu hỏi phỏng vấn theo chức danh và tiêu chí trong khung năng lực</p>
+            </div>
+
+            <div style="display: flex; gap: 8px;">
+              <button
+                type="button"
+                id="question-bank-create-btn"
+                class="btn btn-primary btn-sm"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2.5"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                <span>+ Thêm câu hỏi</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="filter-toolbar">
+            <div class="toolbar-filters">
+              <div style="min-width: 240px; flex: 1;">
+                <input
+                  type="text"
+                  id="question-bank-search-input"
+                  class="form-input"
+                  placeholder="Tìm nội dung câu hỏi, gợi ý trả lời..."
+                />
+              </div>
+
+              <div style="width: 220px;">
+                <select id="question-bank-job-title-filter" class="form-input">
+                  <option value="">Tất cả chức danh</option>
+                </select>
+              </div>
+
+              <div style="width: 220px;">
+                <select id="question-bank-criterion-filter" class="form-input">
+                  <option value="">Tất cả tiêu chí</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <button
+                type="button"
+                id="question-bank-refresh-btn"
+                class="btn btn-outline btn-sm"
+              >
+                Lọc / Làm mới
+              </button>
+            </div>
+          </div>
+
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Câu hỏi</th>
+                  <th>Tiêu chí</th>
+                  <th>Khung năng lực</th>
+                  <th>Mức độ</th>
+                  <th>Gợi ý câu trả lời tốt</th>
+                  <th>Trạng thái</th>
+                  <th style="text-align: center;">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="question-bank-table-body">
+                <!-- Injected by JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         <div id="offers-view" class="hidden">
           <div class="view-header">
             <div class="view-title-group">
@@ -1000,6 +1150,589 @@
         </div>
 
         <!-- ==============================================================================
+             S2. RECRUITMENT SHARED CATALOGS
+             ============================================================================== -->
+        <div id="recruitment-catalogs-view" class="hidden">
+          <div class="view-header">
+            <div class="view-title-group">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h2>Danh mục dùng chung tuyển dụng</h2>
+                <span id="recruitment-catalog-total-badge" class="badge badge-primary font-mono">0 giá trị</span>
+              </div>
+              <p>Quản lý nguồn ứng viên, lý do loại hồ sơ, địa điểm và hình thức làm việc</p>
+            </div>
+
+            <button type="button" id="recruitment-catalog-new-btn" class="btn btn-primary btn-sm">
+              + Thêm giá trị
+            </button>
+          </div>
+
+          <div class="filter-toolbar">
+            <div class="toolbar-filters">
+              <div style="min-width: 280px;">
+                <select id="recruitment-catalog-type-filter" class="form-input">
+                  <option value="CANDIDATE_SOURCE">Nguồn ứng viên</option>
+                  <option value="REJECTION_REASON">Lý do loại hồ sơ</option>
+                  <option value="WORK_LOCATION">Địa điểm làm việc</option>
+                  <option value="WORK_MODE">Hình thức làm việc</option>
+                </select>
+              </div>
+            </div>
+
+            <button type="button" id="recruitment-catalog-refresh-btn" class="btn btn-outline btn-sm">
+              Làm mới
+            </button>
+          </div>
+
+          <div style="display: grid; grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); gap: 16px; align-items: start;">
+            <div class="panel-card" style="padding: 0; overflow: hidden;">
+              <div class="table-responsive">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 90px;">Thứ tự</th>
+                      <th>Mã</th>
+                      <th>Tên hiển thị</th>
+                      <th style="width: 110px;">Trạng thái</th>
+                      <th style="width: 190px;">Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody id="recruitment-catalog-table-body">
+                    <tr>
+                      <td colspan="5" style="text-align: center; padding: 24px; color: var(--color-text-muted);">
+                        Chưa tải dữ liệu.
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="panel-card" style="padding: 16px;">
+              <h3 id="recruitment-catalog-form-title" style="margin-top: 0;">Thêm giá trị danh mục</h3>
+
+              <div id="recruitment-catalog-form-alert" class="alert-box hidden" role="alert">
+                <div class="alert-content">
+                  <p id="recruitment-catalog-form-alert-msg" style="margin: 0;"></p>
+                </div>
+              </div>
+
+              <form id="recruitment-catalog-form">
+                <input type="hidden" id="recruitment-catalog-id-input" />
+
+                <div class="form-group">
+                  <label for="recruitment-catalog-type-input" class="form-label">
+                    Loại danh mục
+                  </label>
+                  <select id="recruitment-catalog-type-input" class="form-input" required>
+                    <option value="CANDIDATE_SOURCE">Nguồn ứng viên</option>
+                    <option value="REJECTION_REASON">Lý do loại hồ sơ</option>
+                    <option value="WORK_LOCATION">Địa điểm làm việc</option>
+                    <option value="WORK_MODE">Hình thức làm việc</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label for="recruitment-catalog-code-input" class="form-label">
+                    Mã <span class="required">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="recruitment-catalog-code-input"
+                    class="form-input"
+                    placeholder="Ví dụ: LINKEDIN"
+                    required
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label for="recruitment-catalog-name-input" class="form-label">
+                    Tên hiển thị <span class="required">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="recruitment-catalog-name-input"
+                    class="form-input"
+                    placeholder="Ví dụ: LinkedIn"
+                    required
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label for="recruitment-catalog-order-input" class="form-label">
+                    Thứ tự hiển thị
+                  </label>
+                  <input
+                    type="number"
+                    id="recruitment-catalog-order-input"
+                    class="form-input"
+                    min="0"
+                    value="0"
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label for="recruitment-catalog-status-input" class="form-label">
+                    Trạng thái
+                  </label>
+                  <select id="recruitment-catalog-status-input" class="form-input">
+                    <option value="ACTIVE">Đang áp dụng</option>
+                    <option value="INACTIVE">Ngừng áp dụng</option>
+                  </select>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
+                  <button type="button" id="recruitment-catalog-reset-btn" class="btn btn-outline btn-sm">
+                    Làm lại
+                  </button>
+                  <button type="submit" id="recruitment-catalog-save-btn" class="btn btn-primary btn-sm">
+                    Lưu danh mục
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==============================================================================
+             S2. COMPANY CAREER PAGE
+             ============================================================================== -->
+        <div id="career-page-view" class="hidden">
+          <div class="view-header">
+            <div class="view-title-group">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h2>Trang giới thiệu công ty</h2>
+                <span class="badge badge-primary font-mono">Cổng tuyển dụng</span>
+              </div>
+              <p>Soạn nội dung giới thiệu, tải logo và ảnh hiển thị cho ứng viên</p>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: minmax(340px, 0.9fr) minmax(0, 1.1fr); gap: 16px; align-items: start;">
+            <div class="panel-card">
+              <div class="panel-header">
+                <div class="panel-title">
+                  <span>Cấu hình nội dung</span>
+                </div>
+              </div>
+
+              <div class="panel-body">
+                <div id="career-page-form-alert" class="alert-box hidden" role="alert">
+                  <div class="alert-content">
+                    <p id="career-page-form-alert-msg" style="margin: 0;"></p>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="career-page-introduction-input" class="form-label">
+                    Nội dung giới thiệu công ty
+                  </label>
+                  <textarea
+                    id="career-page-introduction-input"
+                    class="form-input"
+                    rows="10"
+                    placeholder="Nhập nội dung giới thiệu về công ty..."
+                    style="resize: vertical;"
+                  ></textarea>
+                </div>
+
+                <div class="form-group">
+                  <label for="career-page-logo-input" class="form-label">
+                    Logo công ty
+                  </label>
+                  <input
+                    type="file"
+                    id="career-page-logo-input"
+                    class="form-input"
+                    accept="image/jpeg,image/png"
+                  />
+                  <div id="career-page-logo-status" style="margin-top: 6px; font-size: 0.775rem; color: var(--color-text-muted);">
+                    JPG hoặc PNG, tối đa 2MB.
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="career-page-hero-input" class="form-label">
+                    Ảnh giới thiệu
+                  </label>
+                  <input
+                    type="file"
+                    id="career-page-hero-input"
+                    class="form-input"
+                    accept="image/jpeg,image/png"
+                  />
+                  <div id="career-page-hero-status" style="margin-top: 6px; font-size: 0.775rem; color: var(--color-text-muted);">
+                    JPG hoặc PNG, tối đa 2MB.
+                  </div>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px;">
+                  <button type="button" id="career-page-preview-btn" class="btn btn-outline">
+                    Xem trước
+                  </button>
+                  <button type="button" id="career-page-save-btn" class="btn btn-primary">
+                    Lưu cấu hình
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel-card">
+              <div class="panel-header">
+                <div class="panel-title">
+                  <span>Xem trước giao diện công khai</span>
+                </div>
+              </div>
+
+              <div class="panel-body">
+                <div
+                  id="career-page-preview-container"
+                  style="min-height: 360px;"
+                >
+                  <div style="text-align: center; padding: 48px 16px; color: var(--color-text-muted);">
+                    Bấm “Xem trước” để xem giao diện trước khi lưu.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- ==============================================================================
+             S2. DEPARTMENTS & ORGANIZATION VIEW
+             ============================================================================== -->
+        <div id="departments-view" class="hidden">
+          <div class="view-header">
+            <div class="view-title-group">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h2>Phòng ban & Sơ đồ tổ chức</h2>
+                <span id="departments-total-badge" class="badge badge-primary font-mono">0 phòng ban</span>
+              </div>
+              <p>Quản lý cấu trúc phòng ban nhiều cấp và người phụ trách từng đơn vị</p>
+            </div>
+
+            <button type="button" id="department-new-btn" class="btn btn-primary btn-sm">
+              + Thêm phòng ban
+            </button>
+          </div>
+
+          <div style="display: grid; grid-template-columns: minmax(360px, 1.2fr) minmax(320px, 0.8fr); gap: var(--space-4); align-items: start;">
+            <div class="panel-card">
+              <div class="panel-header">
+                <div class="panel-title">
+                  <span>Sơ đồ tổ chức</span>
+                </div>
+              </div>
+
+              <div id="departments-tree-container" style="padding: 16px;">
+                <div style="text-align: center; color: var(--color-text-muted); padding: 24px;">
+                  Đang tải phòng ban...
+                </div>
+              </div>
+            </div>
+
+            <div class="panel-card">
+              <div class="panel-header">
+                <div class="panel-title">
+                  <span id="department-form-title">Thêm phòng ban</span>
+                </div>
+              </div>
+
+              <form id="department-form" style="padding: 16px;">
+                <input type="hidden" id="department-id-input" />
+
+                <div class="form-group">
+                  <label for="department-code-input" class="form-label">
+                    Mã phòng ban <span class="required">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="department-code-input"
+                    class="form-input"
+                    placeholder="Ví dụ: DEV"
+                    required
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label for="department-name-input" class="form-label">
+                    Tên phòng ban <span class="required">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="department-name-input"
+                    class="form-input"
+                    placeholder="Ví dụ: Phòng Phát Triển Phần Mềm"
+                    required
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label for="department-parent-select" class="form-label">
+                    Phòng ban cấp trên
+                  </label>
+                  <select id="department-parent-select" class="form-input">
+                    <option value="">-- Cấp cao nhất --</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label for="department-manager-select" class="form-label">
+                    Người phụ trách <span class="required">*</span>
+                  </label>
+                  <select id="department-manager-select" class="form-input" required>
+                    <option value="">-- Chọn người phụ trách --</option>
+                  </select>
+                </div>
+
+                <div id="department-form-alert" class="alert alert-error hidden" style="margin-top: 12px;">
+                  <span id="department-form-alert-msg"></span>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
+                  <button type="button" id="department-reset-btn" class="btn btn-outline btn-sm">
+                    Làm mới
+                  </button>
+
+                  <button type="submit" id="department-save-btn" class="btn btn-primary btn-sm">
+                    Lưu phòng ban
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+        <!-- ==============================================================================
+             S2. COMPETENCY FRAMEWORK & JOB TITLES VIEW
+             ============================================================================== -->
+        <div id="competencies-view" class="hidden">
+          <div class="view-header">
+            <div class="view-title-group">
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <h2>Khung năng lực & Chức danh</h2>
+                <span id="competency-frameworks-total-badge" class="badge badge-primary font-mono">0 khung</span>
+                <span id="job-titles-total-badge" class="badge badge-primary font-mono">0 chức danh</span>
+              </div>
+              <p>Quản lý bộ tiêu chí đánh giá, trọng số và khung năng lực dùng chung cho nhiều chức danh</p>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: minmax(360px, 1fr) minmax(380px, 1fr); gap: var(--space-4); align-items: start;">
+            <div class="panel-card">
+              <div class="panel-header">
+                <div class="panel-title">
+                  <span>Danh sách khung năng lực</span>
+                </div>
+              </div>
+
+              <div id="competency-framework-list" style="padding: 16px;">
+                <div style="text-align: center; color: var(--color-text-muted); padding: 24px;">
+                  Đang tải khung năng lực...
+                </div>
+              </div>
+            </div>
+
+            <div class="panel-card">
+              <div class="panel-header">
+                <div class="panel-title">
+                  <span id="competency-framework-form-title">Thêm khung năng lực</span>
+                </div>
+              </div>
+
+              <form id="competency-framework-form" style="padding: 16px;">
+                <input type="hidden" id="competency-framework-id-input" />
+
+                <div class="form-group">
+                  <label for="competency-framework-code-input" class="form-label">
+                    Mã khung <span class="required">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="competency-framework-code-input"
+                    class="form-input"
+                    placeholder="Ví dụ: SOFTWARE-ENGINEER"
+                    required
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label for="competency-framework-name-input" class="form-label">
+                    Tên khung năng lực <span class="required">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="competency-framework-name-input"
+                    class="form-input"
+                    placeholder="Ví dụ: Khung năng lực Kỹ sư phần mềm"
+                    required
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label for="competency-framework-description-input" class="form-label">
+                    Mô tả
+                  </label>
+                  <textarea
+                    id="competency-framework-description-input"
+                    class="form-input"
+                    rows="3"
+                    placeholder="Mô tả mục đích hoặc phạm vi áp dụng"
+                  ></textarea>
+                </div>
+
+                <div class="form-group">
+                  <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px;">
+                    <label class="form-label" style="margin-bottom: 0;">
+                      Tiêu chí đánh giá <span class="required">*</span>
+                    </label>
+
+                    <button
+                      type="button"
+                      id="competency-add-criterion-btn"
+                      class="btn btn-outline btn-sm"
+                    >
+                      + Thêm tiêu chí
+                    </button>
+                  </div>
+
+                  <div id="competency-criteria-container"></div>
+
+                  <div style="display: flex; justify-content: flex-end; margin-top: 10px;">
+                    <span class="badge badge-primary">
+                      Tổng trọng số:
+                      <strong id="competency-total-weight">0</strong>%
+                    </span>
+                  </div>
+                </div>
+
+                <div id="competency-framework-form-alert" class="alert alert-error hidden" style="margin-top: 12px;">
+                  <span id="competency-framework-form-alert-msg"></span>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
+                  <button
+                    type="button"
+                    id="competency-framework-reset-btn"
+                    class="btn btn-outline btn-sm"
+                  >
+                    Làm mới
+                  </button>
+
+                  <button
+                    type="submit"
+                    id="competency-framework-save-btn"
+                    class="btn btn-primary btn-sm"
+                  >
+                    Lưu khung năng lực
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: minmax(360px, 1fr) minmax(380px, 1fr); gap: var(--space-4); align-items: start; margin-top: var(--space-4);">
+            <div class="panel-card">
+              <div class="panel-header">
+                <div class="panel-title">
+                  <span>Danh sách chức danh</span>
+                </div>
+              </div>
+
+              <div id="job-title-list" style="padding: 16px;">
+                <div style="text-align: center; color: var(--color-text-muted); padding: 24px;">
+                  Đang tải chức danh...
+                </div>
+              </div>
+            </div>
+
+            <div class="panel-card">
+              <div class="panel-header">
+                <div class="panel-title">
+                  <span id="job-title-form-title">Thêm chức danh</span>
+                </div>
+              </div>
+
+              <form id="job-title-form" style="padding: 16px;">
+                <input type="hidden" id="job-title-id-input" />
+
+                <div class="form-group">
+                  <label for="job-title-code-input" class="form-label">
+                    Mã chức danh <span class="required">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="job-title-code-input"
+                    class="form-input"
+                    placeholder="Ví dụ: BACKEND-ENGINEER"
+                    required
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label for="job-title-name-input" class="form-label">
+                    Tên chức danh <span class="required">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="job-title-name-input"
+                    class="form-input"
+                    placeholder="Ví dụ: Backend Engineer"
+                    required
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label for="job-title-level-input" class="form-label">Cấp bậc <span class="required">*</span></label>
+                  <input type="text" id="job-title-level-input" class="form-input" placeholder="Ví dụ: Senior" required />
+                </div>
+                <fieldset id="job-title-salary-fields" class="hidden" disabled style="border:0;padding:0;">
+                  <div class="form-group">
+                    <label for="job-title-min-salary-input" class="form-label">Lương tối thiểu (VNĐ) <span class="required">*</span></label>
+                    <input type="number" id="job-title-min-salary-input" class="form-input" min="0" step="1" required />
+                  </div>
+                  <div class="form-group">
+                    <label for="job-title-max-salary-input" class="form-label">Lương tối đa (VNĐ) <span class="required">*</span></label>
+                    <input type="number" id="job-title-max-salary-input" class="form-input" min="0" step="1" required />
+                  </div>
+                </fieldset>
+                <p id="job-title-salary-access-note" class="text-muted">Trưởng phòng Nhân sự khai báo dải lương khi tạo chức danh. Bạn có thể sửa thông tin chức danh hiện có.</p>
+                <div class="form-group">
+                  <label for="job-title-framework-select" class="form-label">
+                    Khung năng lực
+                  </label>
+                  <select
+                    id="job-title-framework-select"
+                    class="form-input"
+                  >
+                    <option value="">-- Chọn khung năng lực --</option>
+                  </select>
+                </div>
+
+                <div id="job-title-form-alert" class="alert alert-error hidden" style="margin-top: 12px;">
+                  <span id="job-title-form-alert-msg"></span>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
+                  <button
+                    type="button"
+                    id="job-title-reset-btn"
+                    class="btn btn-outline btn-sm"
+                  >
+                    Làm mới
+                  </button>
+
+                  <button
+                    type="submit"
+                    id="job-title-save-btn"
+                    class="btn btn-primary btn-sm"
+                  >
+                    Lưu chức danh
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+        <!-- ==============================================================================
              7. USERS MANAGEMENT VIEW
              ============================================================================== -->
         <div id="users-view" class="hidden">
@@ -1015,6 +1748,14 @@
               <button type="button" id="open-create-user-modal-btn" class="btn btn-primary btn-sm">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                 <span>+ Thêm tài khoản mới</span>
+              </button>
+              <button type="button" id="open-bulk-import-modal-btn" class="btn btn-outline btn-sm">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="17 8 12 3 7 8"></polyline>
+                  <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                <span>Nhập từ Excel</span>
               </button>
             </div>
           </div>
@@ -1218,7 +1959,24 @@
               </div>
               <div class="panel-body">
                 <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 24px;">
-                  <div class="user-avatar-circle" style="width: 56px; height: 56px; font-size: 1.35rem;" id="profile-card-avatar">U</div>
+                  <div style="display: flex; flex-direction: column; align-items: center; gap: 6px; flex-shrink: 0;">
+                    <div class="user-avatar-circle" style="width: 56px; height: 56px; font-size: 1.35rem;" id="profile-card-avatar">U</div>
+
+                    <input
+                      type="file"
+                      id="profile-avatar-input"
+                      accept="image/jpeg,image/png,.jpg,.jpeg,.png"
+                      hidden
+                    />
+
+                    <button type="button" id="profile-avatar-upload-btn" class="btn btn-outline btn-xs">
+                      Đổi ảnh
+                    </button>
+
+                    <span style="font-size: 0.65rem; color: var(--color-text-muted);">
+                      JPG/PNG · tối đa 2MB
+                    </span>
+                  </div>
                   <div>
                     <h3 id="profile-card-name" style="font-size: 1.15rem; font-weight: 700;">Họ và tên</h3>
                     <p id="profile-card-email" style="color: var(--color-text-secondary); font-size: 0.85rem;">email@company.com</p>
@@ -1495,6 +2253,148 @@
     </div>
   </div>
 
+  <!-- MODAL: NHẬP DANH SÁCH NHÂN SỰ TỪ EXCEL -->
+  <div id="bulk-import-user-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="bulk-import-user-title">
+    <div class="modal-card" style="width: min(960px, 96vw); max-width: 960px;">
+      <div class="modal-header">
+        <h3 id="bulk-import-user-title" class="modal-title">Nhập danh sách nhân sự từ Excel</h3>
+        <button type="button" id="close-bulk-import-user-modal" class="modal-close" aria-label="Đóng">&times;</button>
+      </div>
+
+      <p class="modal-desc">
+        Tải tệp mẫu, điền dữ liệu nhân sự, xem trước lỗi theo từng dòng rồi thực hiện nhập.
+        Dòng lỗi sẽ bị bỏ qua, dòng hợp lệ vẫn được tạo tài khoản.
+      </p>
+
+      <div class="modal-body">
+        <div id="bulk-import-alert" class="alert-box hidden" role="alert">
+          <div class="alert-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+          </div>
+          <div class="alert-content">
+            <p id="bulk-import-alert-msg" style="margin: 0;"></p>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-bottom: 16px;">
+          <div style="flex: 1; min-width: 260px;">
+            <label for="bulk-import-file-input" class="form-label">
+              Tệp Excel (.xlsx)
+            </label>
+
+            <input
+              type="file"
+              id="bulk-import-file-input"
+              class="form-input"
+              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            />
+          </div>
+
+          <button type="button" id="download-bulk-template-btn" class="btn btn-outline btn-sm">
+            Tải tệp mẫu
+          </button>
+
+          <button type="button" id="preview-bulk-import-btn" class="btn btn-primary btn-sm" disabled>
+            Xem trước
+          </button>
+        </div>
+
+        <div
+          id="bulk-import-selected-file"
+          class="hidden"
+          style="font-size: 0.825rem; color: var(--color-text-muted); margin-bottom: 14px;">
+        </div>
+
+        <div id="bulk-import-preview-summary" class="hidden" style="margin-bottom: 14px;">
+          <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+            <span class="badge badge-primary">
+              Tổng:
+              <strong id="bulk-import-total-rows">0</strong>
+            </span>
+
+            <span class="badge">
+              Hợp lệ:
+              <strong id="bulk-import-valid-rows">0</strong>
+            </span>
+
+            <span class="badge">
+              Có lỗi:
+              <strong id="bulk-import-invalid-rows">0</strong>
+            </span>
+          </div>
+        </div>
+
+        <div
+          id="bulk-import-preview-container"
+          class="hidden"
+          style="overflow-x: auto; overflow-y: auto; max-height: 360px; margin-bottom: 16px;">
+
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width: 70px;">Dòng</th>
+                <th>Họ và tên</th>
+                <th>Email</th>
+                <th>Chức danh</th>
+                <th>Phòng ban</th>
+                <th>Vai trò</th>
+                <th style="min-width: 220px;">Kết quả kiểm tra</th>
+              </tr>
+            </thead>
+
+            <tbody id="bulk-import-preview-body">
+            </tbody>
+          </table>
+        </div>
+
+        <div
+          id="bulk-import-report"
+          class="hidden"
+          style="margin-bottom: 16px; padding: 14px; background: var(--color-bg-page); border: 1px solid var(--color-border); border-radius: var(--radius-sm);">
+
+          <h4 style="font-size: 14px; margin-bottom: 8px;">
+            Báo cáo nhập nhân sự
+          </h4>
+
+          <div style="display: flex; flex-wrap: wrap; gap: 16px; font-size: 0.875rem;">
+            <span>
+              Tổng:
+              <strong id="bulk-import-report-total">0</strong>
+            </span>
+
+            <span>
+              Đã nhập:
+              <strong id="bulk-import-report-imported">0</strong>
+            </span>
+
+            <span>
+              Bỏ qua:
+              <strong id="bulk-import-report-skipped">0</strong>
+            </span>
+          </div>
+
+          <p
+            id="bulk-import-report-message"
+            style="margin: 8px 0 0; font-size: 0.825rem; color: var(--color-text-muted);">
+          </p>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 8px;">
+          <button type="button" id="cancel-bulk-import-btn" class="btn btn-outline btn-sm">
+            Đóng
+          </button>
+
+          <button type="button" id="confirm-bulk-import-btn" class="btn btn-primary btn-sm" disabled>
+            Nhập các dòng hợp lệ
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
   <!-- MODAL: SỬA THÔNG TIN TÀI KHOẢN -->
   <div id="edit-user-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="edit-user-title">
     <div class="modal-card">
@@ -1667,7 +2567,7 @@
         <h3 id="create-req-title" class="modal-title">Khởi tạo Vị trí Tuyển dụng Mới</h3>
         <button type="button" id="close-create-req-modal" class="modal-close" aria-label="Đóng">&times;</button>
       </div>
-      <p class="modal-desc">Thêm vị trí mới vào pipeline tuyển dụng và phân công recruiter phụ trách.</p>
+      <p class="modal-desc">Khai báo nhu cầu tuyển dụng. Có thể lưu nháp và tiếp tục hoàn thiện sau.</p>
 
       <div class="modal-body">
         <div id="create-req-alert" class="alert-box hidden" role="alert">
@@ -1679,23 +2579,83 @@
           </div>
         </div>
 
-        <form id="create-req-form">
+        <form id="create-req-form" novalidate>
+          <p id="create-req-state" class="form-hint" aria-live="polite"></p>
           <div class="form-group">
-            <label for="create-req-title-input" class="form-label">Tiêu đề vị trí tuyển dụng <span class="required">*</span></label>
-            <input type="text" id="create-req-title-input" class="form-input" placeholder="Ví dụ: Senior Backend Engineer" required />
+            <label for="create-req-job-title-input" class="form-label">Chức danh <span class="required">*</span></label>
+            <select id="create-req-job-title-input" class="form-input"><option value="">-- Chọn chức danh --</option></select>
+            <p id="create-req-standard-salary" class="form-hint" aria-live="polite"></p>
+          </div>
+          <div class="form-group">
+            <label for="create-req-title-input" class="form-label">Tiêu đề vị trí tuyển dụng</label>
+            <input type="text" id="create-req-title-input" class="form-input" placeholder="Có thể để trống để dùng tên chức danh" />
           </div>
 
           <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 10px;">
             <div class="form-group">
               <label for="create-req-dept-input" class="form-label">Phòng ban phụ trách <span class="required">*</span></label>
-              <input type="text" id="create-req-dept-input" class="form-input" placeholder="Khối Công Nghệ" required />
+              <select id="create-req-dept-input" class="form-input">
+                <option value="">-- Chọn phòng ban --</option>
+              </select>
+              <label for="create-req-legacy-dept-input" class="form-label hidden">Hoặc nhập tên phòng ban</label>
+              <input type="text" id="create-req-legacy-dept-input" class="form-input hidden" placeholder="Tên phòng ban theo dữ liệu hiện có" disabled />
             </div>
             <div class="form-group">
               <label for="create-req-headcount-input" class="form-label">Chỉ tiêu (người)</label>
-              <input type="number" id="create-req-headcount-input" class="form-input" min="1" max="100" value="1" required />
+              <input type="number" id="create-req-headcount-input" class="form-input" min="1" step="1" value="1" />
             </div>
           </div>
 
+          <div class="s210-form-grid">
+            <div class="form-group">
+              <label for="create-req-reason-input" class="form-label">Lý do tuyển <span class="required">*</span></label>
+              <select id="create-req-reason-input" class="form-input">
+                <option value="">-- Chọn lý do --</option>
+                <option value="REPLACEMENT">Thay thế</option>
+                <option value="NEW_HEADCOUNT">Tăng mới</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="create-req-needed-date-input" class="form-label">Ngày cần người <span class="required">*</span></label>
+              <input type="date" id="create-req-needed-date-input" class="form-input" />
+            </div>
+            <div class="form-group">
+              <label for="create-req-salary-min-input" class="form-label">Lương đề xuất tối thiểu (VND) <span class="required">*</span></label>
+              <input type="number" id="create-req-salary-min-input" class="form-input" min="0" step="any" />
+            </div>
+            <div class="form-group">
+              <label for="create-req-salary-max-input" class="form-label">Lương đề xuất tối đa (VND) <span class="required">*</span></label>
+              <input type="number" id="create-req-salary-max-input" class="form-input" min="0" step="any" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="create-req-justification-input" class="form-label">Giải trình dải lương ngoài chuẩn</label>
+            <textarea id="create-req-justification-input" class="form-input" rows="3" style="height: auto;"></textarea>
+            <p id="create-req-salary-warning" class="form-hint" aria-live="polite"></p>
+          </div>
+          <div class="form-group">
+            <label for="create-req-description-input" class="form-label">Mô tả công việc <span class="required">*</span></label>
+            <textarea id="create-req-description-input" class="form-input" rows="5" style="height: auto;"></textarea>
+          </div>
+          <div class="form-group">
+            <label for="create-req-requirements-input" class="form-label">Yêu cầu ứng viên <span class="required">*</span></label>
+            <textarea id="create-req-requirements-input" class="form-input" rows="5" style="height: auto;"></textarea>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div class="form-group">
+              <label for="create-req-work-location-select" class="form-label">Địa điểm làm việc</label>
+              <select id="create-req-work-location-select" class="form-input">
+                <option value="">-- Chưa xác định --</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="create-req-work-mode-select" class="form-label">Hình thức làm việc</label>
+              <select id="create-req-work-mode-select" class="form-input">
+                <option value="">-- Chưa xác định --</option>
+              </select>
+            </div>
+          </div>
           <div class="form-group">
             <label for="create-req-recruiter-select" class="form-label">Chuyên viên tuyển dụng phụ trách</label>
             <select id="create-req-recruiter-select" class="form-input">
@@ -1705,6 +2665,7 @@
 
           <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 10px;">
             <button type="button" id="cancel-create-req-btn" class="btn btn-outline btn-sm">Hủy bỏ</button>
+            <button type="button" id="save-create-req-draft-btn" class="btn btn-outline btn-sm">Lưu nháp</button>
             <button type="submit" id="submit-create-req-btn" class="btn btn-primary btn-sm">
               <span>Lưu & Mở tuyển dụng</span>
             </button>
@@ -1952,6 +2913,12 @@
             </div>
           </div>
 
+          <div class="form-group">
+            <label for="create-cand-source-select" class="form-label">Nguồn ứng viên</label>
+            <select id="create-cand-source-select" class="form-input">
+              <option value="">-- Chưa xác định nguồn --</option>
+            </select>
+          </div>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
             <div class="form-group">
               <label for="create-cand-stage-select" class="form-label">Giai đoạn ban đầu</label>
@@ -2024,6 +2991,9 @@
             <div style="font-size: 0.8rem; color: var(--color-text-muted); margin-top: 2px;">
               Email: <span id="cand-detail-email"></span> | SĐT: <span id="cand-detail-phone"></span>
             </div>
+            <div style="font-size: 0.8rem; color: var(--color-text-muted); margin-top: 2px;">
+              Nguồn ứng viên: <strong id="cand-detail-source">Chưa xác định</strong>
+            </div>
           </div>
         </div>
 
@@ -2047,6 +3017,14 @@
             <button type="button" id="cand-detail-save-stage-btn" class="btn btn-primary btn-sm">
               <span>Lưu vòng mới</span>
             </button>
+          </div>
+          <div id="cand-detail-rejection-reason-group" class="form-group hidden" style="margin-top: 10px; margin-bottom: 0;">
+            <label for="cand-detail-rejection-reason-select" class="form-label">
+              Lý do loại hồ sơ
+            </label>
+            <select id="cand-detail-rejection-reason-select" class="form-input">
+              <option value="">-- Chọn lý do loại --</option>
+            </select>
           </div>
         </div>
 
@@ -2127,6 +3105,177 @@
             <button type="button" id="cancel-schedule-interview-btn" class="btn btn-outline btn-sm">Hủy bỏ</button>
             <button type="submit" id="submit-schedule-interview-btn" class="btn btn-primary btn-sm">
               <span>Xác nhận & Gửi lịch</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: THÊM / SỬA CÂU HỎI PHỎNG VẤN -->
+  <div id="question-bank-modal"
+       class="modal-overlay hidden"
+       role="dialog"
+       aria-modal="true"
+       aria-labelledby="question-bank-modal-title">
+
+    <div class="modal-card" style="max-width: 620px;">
+      <div class="modal-header">
+        <h3 id="question-bank-modal-title" class="modal-title">
+          Thêm câu hỏi phỏng vấn
+        </h3>
+
+        <button
+          type="button"
+          id="question-bank-modal-close"
+          class="modal-close"
+          aria-label="Đóng"
+        >&times;</button>
+      </div>
+
+      <p class="modal-desc">
+        Khai báo câu hỏi theo tiêu chí trong khung năng lực,
+        mức độ khó và gợi ý câu trả lời tốt.
+      </p>
+
+      <div class="modal-body">
+        <div id="question-bank-form-alert"
+             class="alert-box hidden"
+             role="alert">
+          <div class="alert-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor"
+                 stroke-width="2"
+                 stroke-linecap="round"
+                 stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+          </div>
+
+          <div class="alert-content">
+            <p id="question-bank-form-alert-msg"
+               style="margin: 0;"></p>
+          </div>
+        </div>
+
+        <form id="question-bank-form">
+          <input
+            type="hidden"
+            id="question-bank-edit-id"
+          />
+
+          <div class="form-group">
+            <label
+              for="question-bank-form-criterion"
+              class="form-label"
+            >
+              Tiêu chí năng lực
+              <span class="required">*</span>
+            </label>
+
+            <select
+              id="question-bank-form-criterion"
+              class="form-input"
+              required
+            >
+              <option value="">
+                -- Chọn tiêu chí năng lực --
+              </option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label
+              for="question-bank-form-text"
+              class="form-label"
+            >
+              Câu hỏi phỏng vấn
+              <span class="required">*</span>
+            </label>
+
+            <textarea
+              id="question-bank-form-text"
+              class="form-input"
+              rows="4"
+              placeholder="Nhập nội dung câu hỏi phỏng vấn..."
+              required
+            ></textarea>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div class="form-group">
+              <label
+                for="question-bank-form-difficulty"
+                class="form-label"
+              >
+                Mức độ khó
+                <span class="required">*</span>
+              </label>
+
+              <select
+                id="question-bank-form-difficulty"
+                class="form-input"
+                required
+              >
+                <option value="EASY">Dễ</option>
+                <option value="MEDIUM" selected>Trung bình</option>
+                <option value="HARD">Khó</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label
+                for="question-bank-form-status"
+                class="form-label"
+              >
+                Trạng thái
+              </label>
+
+              <select
+                id="question-bank-form-status"
+                class="form-input"
+              >
+                <option value="ACTIVE">Đang áp dụng</option>
+                <option value="INACTIVE">Ngừng áp dụng</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label
+              for="question-bank-form-hint"
+              class="form-label"
+            >
+              Gợi ý câu trả lời tốt
+              <span class="required">*</span>
+            </label>
+
+            <textarea
+              id="question-bank-form-hint"
+              class="form-input"
+              rows="5"
+              placeholder="Nhập các ý chính của một câu trả lời tốt..."
+              required
+            ></textarea>
+          </div>
+
+          <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:10px;">
+            <button
+              type="button"
+              id="question-bank-form-cancel"
+              class="btn btn-outline btn-sm"
+            >
+              Hủy bỏ
+            </button>
+
+            <button
+              type="submit"
+              id="question-bank-form-save"
+              class="btn btn-primary btn-sm"
+            >
+              <span>Lưu câu hỏi</span>
             </button>
           </div>
         </form>
@@ -2350,6 +3499,21 @@
             </div>
           </div>
 
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="form-group">
+              <label for="req-detail-work-location-select" class="form-label">Địa điểm làm việc</label>
+              <select id="req-detail-work-location-select" class="form-input">
+                <option value="">-- Chưa xác định --</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="req-detail-work-mode-select" class="form-label">Hình thức làm việc</label>
+              <select id="req-detail-work-mode-select" class="form-input">
+                <option value="">-- Chưa xác định --</option>
+              </select>
+            </div>
+          </div>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
             <div class="form-group">
               <label for="req-detail-status-select" class="form-label">Trạng thái đợt tuyển</label>

@@ -47,3 +47,8 @@ __pycache__/
 
 # Temporary
 *.tmp
+
+# Runtime user avatars
+frontend/public/avatars/
+# Runtime company career page media
+frontend/public/company/

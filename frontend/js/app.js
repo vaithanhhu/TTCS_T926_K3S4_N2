@@ -50,9 +50,14 @@ document.addEventListener('DOMContentLoaded', () => {
     requisitions: document.getElementById('requisitions-view'),
     candidates: document.getElementById('candidates-view'),
     interviews: document.getElementById('interviews-view'),
+    questionBank: document.getElementById('question-bank-view'),
     offers: document.getElementById('offers-view'),
     approvals: document.getElementById('approvals-view'),
     reports: document.getElementById('reports-view'),
+    departments: document.getElementById('departments-view'),
+    recruitmentCatalogs: document.getElementById('recruitment-catalogs-view'),
+    careerPage: document.getElementById('career-page-view'),
+    competencies: document.getElementById('competencies-view'),
     users: document.getElementById('users-view'),
     roles: document.getElementById('roles-view'),
     audit: document.getElementById('audit-view'),
@@ -71,6 +76,8 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentRequisitionsList = [];
   let currentCandidatesList = [];
   let currentInterviewsList = [];
+  let currentQuestionBankList = [];
+  let questionBankFilterOptions = { jobTitles: [], criteria: [] };
   let currentOffersList = [];
 
   // Role Mappings (Friendly Vietnamese Names)
@@ -296,6 +303,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // ==============================================================================
 
   function setupAuthenticatedSession(user) {
+    clearJobTitleSalaryState();
+    clearRequisitionSalaryState();
     currentAuthenticatedUser = user;
 
     // Hide Login, Show App Shell
@@ -310,13 +319,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const friendlyRole = ROLE_LABELS[primaryRole] || primaryRole;
 
     if (topbarUserName) topbarUserName.textContent = fullName;
-    if (topbarUserAvatar) topbarUserAvatar.textContent = initial;
+    renderUserAvatar(topbarUserAvatar, user.id, fullName);
     if (popoverUserName) popoverUserName.textContent = fullName;
     if (popoverUserEmail) popoverUserEmail.textContent = email;
 
     if (sidebarUserName) sidebarUserName.textContent = fullName;
     if (sidebarUserRole) sidebarUserRole.textContent = friendlyRole;
-    if (sidebarUserAvatar) sidebarUserAvatar.textContent = initial;
+    renderUserAvatar(sidebarUserAvatar, user.id, fullName);
 
     const userDisplayName = document.getElementById('user-display-name');
     if (userDisplayName) userDisplayName.textContent = fullName;
@@ -347,9 +356,14 @@ document.addEventListener('DOMContentLoaded', () => {
           { path: '/requisitions', id: 'nav-item-requisitions' },
           { path: '/candidates', id: 'nav-item-candidates' },
           { path: '/interviews', id: 'nav-item-interviews' },
+          { path: '/question-bank', id: 'nav-item-question-bank' },
           { path: '/offers', id: 'nav-item-offers' },
           { path: '/approvals', id: 'nav-item-approvals' },
           { path: '/reports', id: 'nav-item-reports' },
+          { path: '/admin/departments', id: 'nav-item-departments' },
+          { path: '/admin/recruitment-catalogs', id: 'nav-item-recruitment-catalogs' },
+          { path: '/admin/career-page', id: 'nav-item-career-page' },
+          { path: '/admin/competencies', id: 'nav-item-competencies' },
           { path: '/admin/users', id: 'nav-item-users' },
           { path: '/admin/roles', id: 'nav-item-roles' },
           { path: '/admin/audit', id: 'nav-item-audit' },
@@ -406,6 +420,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Logout Implementation (Required by S1-07 tests: performLogout)
   async function performLogout(showToastMsg = true) {
+    clearJobTitleSalaryState();
+    clearRequisitionSalaryState();
     const token = sessionStorage.getItem('ats_token');
     if (heartbeatTimer) clearInterval(heartbeatTimer);
 
@@ -469,9 +485,14 @@ document.addEventListener('DOMContentLoaded', () => {
     requisitions: 'Yêu cầu & Vị trí Tuyển dụng',
     candidates: 'Hồ sơ Ứng viên',
     interviews: 'Lịch Phỏng vấn',
+    questionBank: 'Ngân hàng câu hỏi phỏng vấn',
     offers: 'Quản lý Thư Mời Nhận Việc (Offer)',
     approvals: 'Trung tâm Phê duyệt Tuyển dụng',
     reports: 'Báo cáo & Phân tích Tuyển dụng',
+    departments: 'Phòng ban & Sơ đồ tổ chức',
+    recruitmentCatalogs: 'Danh mục dùng chung tuyển dụng',
+    careerPage: 'Trang giới thiệu công ty',
+    competencies: 'Khung năng lực & Chức danh',
     users: 'Quản lý Người dùng & Tài khoản',
     roles: 'Vai trò & Ma trận Phân quyền',
     audit: 'Nhật ký Kiểm toán Hệ thống',
@@ -529,12 +550,22 @@ document.addEventListener('DOMContentLoaded', () => {
       loadCandidates();
     } else if (viewName === 'interviews') {
       loadInterviews();
+    } else if (viewName === 'questionBank') {
+      loadQuestionBank();
     } else if (viewName === 'offers') {
       loadOffers();
     } else if (viewName === 'approvals') {
       loadApprovals();
     } else if (viewName === 'reports') {
       loadReports();
+    } else if (viewName === 'recruitmentCatalogs') {
+      loadRecruitmentCatalogs();
+    } else if (viewName === 'careerPage') {
+      loadCareerPage();
+    } else if (viewName === 'departments') {
+      loadDepartments();
+    } else if (viewName === 'competencies') {
+      loadCompetencies();
     } else if (viewName === 'users') {
       loadUsers();
     } else if (viewName === 'roles') {
@@ -893,7 +924,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         requisitionsTableBody.innerHTML = list.map(req => {
           const statusBadge = req.status === 'OPEN' ? 'badge-primary' : (req.status === 'IN_PROGRESS' ? 'badge-warning' : 'badge-neutral');
-          const statusText = req.status === 'OPEN' ? 'Đang mở' : (req.status === 'IN_PROGRESS' ? 'Đang tuyển' : 'Đã đóng');
+          const statusText = req.status === 'DRAFT' ? 'Nháp' : (req.status === 'OPEN' ? 'Đang mở' : (req.status === 'IN_PROGRESS' ? 'Đang tuyển' : 'Đã đóng'));
           const isHandover = req.handover_required || req.handoverRequired;
           const handoverAlert = isHandover ? `<span class="badge badge-warning" style="margin-left: 6px;">Cần bàn giao</span>` : '';
           const dept = req.department || req.department_name || req.departmentName || '';
@@ -903,11 +934,11 @@ document.addEventListener('DOMContentLoaded', () => {
             <tr>
               <td><code class="font-mono" style="font-weight: 600; color: var(--color-primary);">${req.code}</code></td>
               <td>
-                <div style="font-weight: 600; color: var(--color-text);">${req.title}</div>
+                <div style="font-weight: 600; color: var(--color-text);">${req.formVersion === 'S2-10' ? escapeDepartmentHtml(req.title || 'Yêu cầu chưa đặt tên') : req.title}</div>
                 ${handoverAlert}
               </td>
-              <td>${dept}</td>
-              <td style="text-align: center; font-weight: 600;">${req.headcount}</td>
+              <td>${req.formVersion === 'S2-10' ? escapeDepartmentHtml(dept) : dept}</td>
+              <td style="text-align: center; font-weight: 600;">${req.headcount ?? '—'}</td>
               <td>${recName ? recName : '<span style="color: var(--color-text-muted); font-style: italic;">Chưa phân công</span>'}</td>
               <td><span class="badge ${statusBadge}">${statusText}</span></td>
               <td style="text-align: center;">
@@ -1144,7 +1175,7 @@ document.addEventListener('DOMContentLoaded', () => {
           return;
         }
 
-        interviewsTableBody.innerHTML = list.map(iv => {
+        interviewsTableBody.innerHTML = list.map((iv, index) => {
           const statusBadge = iv.status === 'SCHEDULED' ? 'badge-warning' : (iv.status === 'COMPLETED' ? 'badge-success' : 'badge-danger');
           const statusText = iv.status === 'SCHEDULED' ? 'Sắp diễn ra' : (iv.status === 'COMPLETED' ? 'Đã hoàn thành' : 'Đã hủy');
           const candName = (iv.candidate && iv.candidate.fullName) ? iv.candidate.fullName : (iv.candidate_name || 'Ứng viên');
@@ -1159,7 +1190,16 @@ document.addEventListener('DOMContentLoaded', () => {
               <td><code class="font-mono" style="font-weight: 600; color: var(--color-primary);">${code}</code></td>
               <td><strong>${candName}</strong></td>
               <td>${reqTitle}</td>
-              <td>${interviewer}</td>
+              <td>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <div
+                    class="user-avatar-circle interview-interviewer-avatar"
+                    data-interview-index="${index}"
+                    style="width: 32px; height: 32px; font-size: 0.75rem;"
+                  >${interviewer.charAt(0).toUpperCase()}</div>
+                  <span>${interviewer}</span>
+                </div>
+              </td>
               <td>
                 <div style="font-weight: 600;">${new Date(schedTime).toLocaleDateString('vi-VN')}</div>
                 <div style="font-size: 0.775rem; color: var(--color-text-muted);">${new Date(schedTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</div>
@@ -1174,6 +1214,25 @@ document.addEventListener('DOMContentLoaded', () => {
             </tr>
           `;
         }).join('');
+
+        interviewsTableBody
+          .querySelectorAll('.interview-interviewer-avatar')
+          .forEach(avatarEl => {
+            const interviewIndex = Number(avatarEl.dataset.interviewIndex);
+            const interview = list[interviewIndex];
+            const interviewerUser = interview && interview.interviewer;
+
+            const fallbackText =
+              interviewerUser && interviewerUser.fullName
+                ? interviewerUser.fullName
+                : ((interview && interview.interviewer_name) || 'Hội đồng tuyển dụng');
+
+            renderUserAvatar(
+              avatarEl,
+              interviewerUser ? interviewerUser.id : '',
+              fallbackText
+            );
+          });
       }
     } catch (e) {
       console.error('Failed to load interviews:', e);
@@ -1189,6 +1248,580 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==============================================================================
+  // ==============================================================================
+  // INTERVIEW QUESTION BANK
+  // ==============================================================================
+
+  const questionBankSearchInput =
+    document.getElementById('question-bank-search-input');
+  const questionBankJobTitleFilter =
+    document.getElementById('question-bank-job-title-filter');
+  const questionBankCriterionFilter =
+    document.getElementById('question-bank-criterion-filter');
+  const questionBankRefreshBtn =
+    document.getElementById('question-bank-refresh-btn');
+  const questionBankTableBody =
+    document.getElementById('question-bank-table-body');
+  const questionBankTotalBadge =
+    document.getElementById('question-bank-total-badge');
+
+  function escapeQuestionBankHtml(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  function renderQuestionBankCriterionFilter() {
+    if (!questionBankCriterionFilter) return;
+
+    const selectedJobTitleId =
+      questionBankJobTitleFilter
+        ? questionBankJobTitleFilter.value
+        : '';
+
+    const selectedJobTitle =
+      questionBankFilterOptions.jobTitles.find(
+        item => item.id === selectedJobTitleId
+      );
+
+    const currentValue = questionBankCriterionFilter.value;
+
+    const criteria = selectedJobTitle
+      ? questionBankFilterOptions.criteria.filter(
+          criterion =>
+            criterion.frameworkId === selectedJobTitle.frameworkId
+        )
+      : questionBankFilterOptions.criteria;
+
+    questionBankCriterionFilter.innerHTML =
+      '<option value="">Tất cả tiêu chí</option>' +
+      criteria.map(criterion => `
+        <option value="${escapeQuestionBankHtml(criterion.id)}">
+          ${escapeQuestionBankHtml(criterion.name)}
+        </option>
+      `).join('');
+
+    if (criteria.some(item => item.id === currentValue)) {
+      questionBankCriterionFilter.value = currentValue;
+    }
+  }
+
+  async function loadQuestionBankFilterOptions(token) {
+    const res =
+      await window.ATS_API.getInterviewQuestionFiltersApi(token);
+
+    if (!res.ok || !res.data || !res.data.success) {
+      throw new Error(
+        res.data?.message ||
+        'Không thể tải bộ lọc ngân hàng câu hỏi.'
+      );
+    }
+
+    questionBankFilterOptions = {
+      jobTitles: Array.isArray(res.data.jobTitles)
+        ? res.data.jobTitles
+        : [],
+      criteria: Array.isArray(res.data.criteria)
+        ? res.data.criteria
+        : []
+    };
+
+    if (questionBankJobTitleFilter) {
+      const currentValue = questionBankJobTitleFilter.value;
+
+      questionBankJobTitleFilter.innerHTML =
+        '<option value="">Tất cả chức danh</option>' +
+        questionBankFilterOptions.jobTitles.map(jobTitle => `
+          <option value="${escapeQuestionBankHtml(jobTitle.id)}">
+            ${escapeQuestionBankHtml(jobTitle.name)}
+          </option>
+        `).join('');
+
+      if (
+        questionBankFilterOptions.jobTitles.some(
+          item => item.id === currentValue
+        )
+      ) {
+        questionBankJobTitleFilter.value = currentValue;
+      }
+    }
+
+    renderQuestionBankCriterionFilter();
+  }
+
+  function renderQuestionBankTable(list) {
+    if (!questionBankTableBody) return;
+
+    if (!Array.isArray(list) || list.length === 0) {
+      questionBankTableBody.innerHTML = `
+        <tr>
+          <td colspan="7"
+              style="text-align:center;color:var(--color-text-muted);padding:24px;">
+            Không có câu hỏi phỏng vấn phù hợp.
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    const difficultyLabels = {
+      EASY: 'Dễ',
+      MEDIUM: 'Trung bình',
+      HARD: 'Khó'
+    };
+
+    questionBankTableBody.innerHTML = list.map(question => `
+      <tr>
+        <td style="min-width:260px;">
+          <strong>${escapeQuestionBankHtml(question.questionText)}</strong>
+        </td>
+        <td>${escapeQuestionBankHtml(question.criterion?.name || '')}</td>
+        <td>${escapeQuestionBankHtml(question.framework?.name || '')}</td>
+        <td>
+          <span class="badge badge-primary">
+            ${escapeQuestionBankHtml(
+              difficultyLabels[question.difficulty] ||
+              question.difficulty
+            )}
+          </span>
+        </td>
+        <td style="min-width:280px;">
+          ${escapeQuestionBankHtml(question.goodAnswerHint)}
+        </td>
+        <td>
+          <span class="badge ${
+            question.status === 'ACTIVE'
+              ? 'badge-success'
+              : 'badge-secondary'
+          }">
+            ${
+              question.status === 'ACTIVE'
+                ? 'Đang áp dụng'
+                : 'Ngừng áp dụng'
+            }
+          </span>
+        </td>
+        <td style="text-align:center;">
+          ${
+            canManageQuestionBank()
+              ? `
+                <button
+                  type="button"
+                  class="btn btn-outline btn-sm question-bank-edit-btn"
+                  data-question-id="${escapeQuestionBankHtml(question.id)}"
+                >
+                  Sửa
+                </button>
+              `
+              : '<span style="color:var(--color-text-muted);">—</span>'
+          }
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  const questionBankCreateBtn =
+    document.getElementById('question-bank-create-btn');
+  const questionBankModal =
+    document.getElementById('question-bank-modal');
+  const questionBankModalTitle =
+    document.getElementById('question-bank-modal-title');
+  const questionBankModalClose =
+    document.getElementById('question-bank-modal-close');
+  const questionBankFormCancel =
+    document.getElementById('question-bank-form-cancel');
+  const questionBankForm =
+    document.getElementById('question-bank-form');
+  const questionBankEditId =
+    document.getElementById('question-bank-edit-id');
+  const questionBankFormCriterion =
+    document.getElementById('question-bank-form-criterion');
+  const questionBankFormText =
+    document.getElementById('question-bank-form-text');
+  const questionBankFormDifficulty =
+    document.getElementById('question-bank-form-difficulty');
+  const questionBankFormStatus =
+    document.getElementById('question-bank-form-status');
+  const questionBankFormHint =
+    document.getElementById('question-bank-form-hint');
+  const questionBankFormAlert =
+    document.getElementById('question-bank-form-alert');
+  const questionBankFormAlertMsg =
+    document.getElementById('question-bank-form-alert-msg');
+  const questionBankFormSave =
+    document.getElementById('question-bank-form-save');
+
+  function canManageQuestionBank() {
+    const roles =
+      currentAuthenticatedUser &&
+      Array.isArray(currentAuthenticatedUser.roles)
+        ? currentAuthenticatedUser.roles
+        : [];
+
+    return (
+      roles.includes('ADMIN') ||
+      roles.includes('HR_MANAGER')
+    );
+  }
+
+  function populateQuestionBankCriterionForm() {
+    if (!questionBankFormCriterion) return;
+
+    questionBankFormCriterion.innerHTML =
+      '<option value="">-- Chọn tiêu chí năng lực --</option>' +
+      questionBankFilterOptions.criteria.map(criterion => `
+        <option value="${escapeQuestionBankHtml(criterion.id)}">
+          ${escapeQuestionBankHtml(criterion.frameworkName)}
+          — ${escapeQuestionBankHtml(criterion.name)}
+        </option>
+      `).join('');
+  }
+
+  function closeQuestionBankModal() {
+    if (questionBankModal) {
+      questionBankModal.classList.add('hidden');
+    }
+  }
+
+  function openQuestionBankModal(question = null) {
+    if (!canManageQuestionBank() || !questionBankModal) return;
+
+    if (questionBankForm) {
+      questionBankForm.reset();
+    }
+
+    if (questionBankFormAlert) {
+      questionBankFormAlert.classList.add('hidden');
+    }
+
+    populateQuestionBankCriterionForm();
+
+    const isEdit = Boolean(question);
+
+    if (questionBankModalTitle) {
+      questionBankModalTitle.textContent =
+        isEdit
+          ? 'Sửa câu hỏi phỏng vấn'
+          : 'Thêm câu hỏi phỏng vấn';
+    }
+
+    if (questionBankEditId) {
+      questionBankEditId.value =
+        isEdit ? question.id : '';
+    }
+
+    if (questionBankFormCriterion) {
+      questionBankFormCriterion.value =
+        isEdit && question.criterion
+          ? question.criterion.id
+          : '';
+    }
+
+    if (questionBankFormText) {
+      questionBankFormText.value =
+        isEdit ? question.questionText : '';
+    }
+
+    if (questionBankFormDifficulty) {
+      questionBankFormDifficulty.value =
+        isEdit ? question.difficulty : 'MEDIUM';
+    }
+
+    if (questionBankFormStatus) {
+      questionBankFormStatus.value =
+        isEdit ? question.status : 'ACTIVE';
+
+      questionBankFormStatus.disabled = !isEdit;
+    }
+
+    if (questionBankFormHint) {
+      questionBankFormHint.value =
+        isEdit ? question.goodAnswerHint : '';
+    }
+
+    questionBankModal.classList.remove('hidden');
+  }
+
+  if (questionBankCreateBtn) {
+    questionBankCreateBtn.addEventListener(
+      'click',
+      () => {
+        if (canManageQuestionBank()) {
+          openQuestionBankModal();
+        }
+      }
+    );
+  }
+
+  if (questionBankModalClose) {
+    questionBankModalClose.addEventListener(
+      'click',
+      closeQuestionBankModal
+    );
+  }
+
+  if (questionBankFormCancel) {
+    questionBankFormCancel.addEventListener(
+      'click',
+      closeQuestionBankModal
+    );
+  }
+
+  if (questionBankTableBody) {
+    questionBankTableBody.addEventListener(
+      'click',
+      event => {
+        const button =
+          event.target.closest('.question-bank-edit-btn');
+
+        if (!button || !canManageQuestionBank()) return;
+
+        const questionId =
+          button.getAttribute('data-question-id');
+
+        const question =
+          currentQuestionBankList.find(
+            item => item.id === questionId
+          );
+
+        if (question) {
+          openQuestionBankModal(question);
+        }
+      }
+    );
+  }
+
+  if (questionBankForm) {
+    questionBankForm.addEventListener(
+      'submit',
+      async event => {
+        event.preventDefault();
+
+        if (!canManageQuestionBank()) return;
+
+        const token =
+          sessionStorage.getItem('ats_token');
+
+        if (!token) return;
+
+        const id =
+          questionBankEditId
+            ? questionBankEditId.value
+            : '';
+
+        const payload = {
+          criterionId:
+            questionBankFormCriterion.value,
+          questionText:
+            questionBankFormText.value.trim(),
+          difficulty:
+            questionBankFormDifficulty.value,
+          goodAnswerHint:
+            questionBankFormHint.value.trim()
+        };
+
+        if (id) {
+          payload.status =
+            questionBankFormStatus.value;
+        }
+
+        if (
+          !payload.criterionId ||
+          !payload.questionText ||
+          !payload.goodAnswerHint
+        ) {
+          if (
+            questionBankFormAlert &&
+            questionBankFormAlertMsg
+          ) {
+            questionBankFormAlertMsg.textContent =
+              'Vui lòng nhập đầy đủ tiêu chí, câu hỏi và gợi ý trả lời.';
+            questionBankFormAlert.classList.remove('hidden');
+          }
+          return;
+        }
+
+        if (questionBankFormSave) {
+          questionBankFormSave.disabled = true;
+        }
+
+        try {
+          const res = id
+            ? await window.ATS_API.updateInterviewQuestionApi(
+                token,
+                id,
+                payload
+              )
+            : await window.ATS_API.createInterviewQuestionApi(
+                token,
+                payload
+              );
+
+          if (res.ok && res.data && res.data.success) {
+            closeQuestionBankModal();
+
+            showToast(
+              'success',
+              id ? 'Đã cập nhật câu hỏi' : 'Đã thêm câu hỏi',
+              res.data.message ||
+                'Dữ liệu ngân hàng câu hỏi đã được lưu.'
+            );
+
+            await loadQuestionBank();
+          } else if (
+            questionBankFormAlert &&
+            questionBankFormAlertMsg
+          ) {
+            questionBankFormAlertMsg.textContent =
+              res.data?.message ||
+              'Không thể lưu câu hỏi phỏng vấn.';
+            questionBankFormAlert.classList.remove('hidden');
+          }
+        } catch (error) {
+          if (
+            questionBankFormAlert &&
+            questionBankFormAlertMsg
+          ) {
+            questionBankFormAlertMsg.textContent =
+              error.message ||
+              'Lỗi kết nối khi lưu câu hỏi.';
+            questionBankFormAlert.classList.remove('hidden');
+          }
+        } finally {
+          if (questionBankFormSave) {
+            questionBankFormSave.disabled = false;
+          }
+        }
+      }
+    );
+  }
+
+  async function loadQuestionBank() {
+    const token = sessionStorage.getItem('ats_token');
+    if (!token) return;
+
+    if (questionBankCreateBtn) {
+      if (canManageQuestionBank()) {
+        questionBankCreateBtn.classList.remove('hidden');
+        questionBankCreateBtn.style.display = '';
+      } else {
+        questionBankCreateBtn.classList.add('hidden');
+        questionBankCreateBtn.style.display = 'none';
+      }
+    }
+
+    if (questionBankTableBody) {
+      questionBankTableBody.innerHTML = `
+        <tr>
+          <td colspan="7"
+              style="text-align:center;color:var(--color-text-muted);padding:24px;">
+            Đang tải ngân hàng câu hỏi...
+          </td>
+        </tr>
+      `;
+    }
+
+    try {
+      if (
+        questionBankFilterOptions.jobTitles.length === 0 &&
+        questionBankFilterOptions.criteria.length === 0
+      ) {
+        await loadQuestionBankFilterOptions(token);
+      }
+
+      const options = {
+        search: questionBankSearchInput
+          ? questionBankSearchInput.value.trim()
+          : '',
+        jobTitleId: questionBankJobTitleFilter
+          ? questionBankJobTitleFilter.value
+          : '',
+        criterionId: questionBankCriterionFilter
+          ? questionBankCriterionFilter.value
+          : ''
+      };
+
+      const res =
+        await window.ATS_API.getInterviewQuestionsApi(
+          token,
+          options
+        );
+
+      if (!res.ok || !res.data || !res.data.success) {
+        throw new Error(
+          res.data?.message ||
+          'Không thể tải ngân hàng câu hỏi.'
+        );
+      }
+
+      currentQuestionBankList =
+        Array.isArray(res.data.questions)
+          ? res.data.questions
+          : [];
+
+      if (questionBankTotalBadge) {
+        questionBankTotalBadge.textContent =
+          `${currentQuestionBankList.length} câu hỏi`;
+      }
+
+      renderQuestionBankTable(currentQuestionBankList);
+    } catch (error) {
+      console.error(
+        'Failed to load interview question bank:',
+        error
+      );
+
+      if (questionBankTableBody) {
+        questionBankTableBody.innerHTML = `
+          <tr>
+            <td colspan="7"
+                style="text-align:center;color:var(--color-danger);padding:24px;">
+              ${escapeQuestionBankHtml(error.message)}
+            </td>
+          </tr>
+        `;
+      }
+    }
+  }
+
+  if (questionBankRefreshBtn) {
+    questionBankRefreshBtn.addEventListener(
+      'click',
+      loadQuestionBank
+    );
+  }
+
+  if (questionBankSearchInput) {
+    questionBankSearchInput.addEventListener(
+      'keydown',
+      event => {
+        if (event.key === 'Enter') {
+          loadQuestionBank();
+        }
+      }
+    );
+  }
+
+  if (questionBankJobTitleFilter) {
+    questionBankJobTitleFilter.addEventListener(
+      'change',
+      () => {
+        renderQuestionBankCriterionFilter();
+        loadQuestionBank();
+      }
+    );
+  }
+
+  if (questionBankCriterionFilter) {
+    questionBankCriterionFilter.addEventListener(
+      'change',
+      loadQuestionBank
+    );
+  }
+
   // 10. OFFERS MANAGEMENT (REAL BACKEND API)
   // ==============================================================================
 
@@ -1337,8 +1970,2569 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
   // ==============================================================================
-  // 12. USERS MANAGEMENT (REAL BACKEND API)
+  // S2. RECRUITMENT SHARED CATALOGS
   // ==============================================================================
+
+  const recruitmentCatalogTypeFilter =
+    document.getElementById('recruitment-catalog-type-filter');
+
+  const recruitmentCatalogTableBody =
+    document.getElementById('recruitment-catalog-table-body');
+
+  const recruitmentCatalogTotalBadge =
+    document.getElementById('recruitment-catalog-total-badge');
+
+  const recruitmentCatalogRefreshBtn =
+    document.getElementById('recruitment-catalog-refresh-btn');
+
+  const recruitmentCatalogNewBtn =
+    document.getElementById('recruitment-catalog-new-btn');
+
+  const recruitmentCatalogForm =
+    document.getElementById('recruitment-catalog-form');
+
+  const recruitmentCatalogFormTitle =
+    document.getElementById('recruitment-catalog-form-title');
+
+  const recruitmentCatalogIdInput =
+    document.getElementById('recruitment-catalog-id-input');
+
+  const recruitmentCatalogTypeInput =
+    document.getElementById('recruitment-catalog-type-input');
+
+  const recruitmentCatalogCodeInput =
+    document.getElementById('recruitment-catalog-code-input');
+
+  const recruitmentCatalogNameInput =
+    document.getElementById('recruitment-catalog-name-input');
+
+  const recruitmentCatalogOrderInput =
+    document.getElementById('recruitment-catalog-order-input');
+
+  const recruitmentCatalogStatusInput =
+    document.getElementById('recruitment-catalog-status-input');
+
+  const recruitmentCatalogFormAlert =
+    document.getElementById('recruitment-catalog-form-alert');
+
+  const recruitmentCatalogFormAlertMsg =
+    document.getElementById('recruitment-catalog-form-alert-msg');
+
+  const recruitmentCatalogResetBtn =
+    document.getElementById('recruitment-catalog-reset-btn');
+
+  const recruitmentCatalogSaveBtn =
+    document.getElementById('recruitment-catalog-save-btn');
+
+  let currentRecruitmentCatalogItems = [];
+
+  function escapeRecruitmentCatalogHtml(value) {
+    return String(value ?? '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#039;');
+  }
+
+  function getRecruitmentCatalogTypeLabel(type) {
+    const labels = {
+      CANDIDATE_SOURCE: 'Nguồn ứng viên',
+      REJECTION_REASON: 'Lý do loại hồ sơ',
+      WORK_LOCATION: 'Địa điểm làm việc',
+      WORK_MODE: 'Hình thức làm việc'
+    };
+
+    return labels[type] || type;
+  }
+
+  function hideRecruitmentCatalogError() {
+    if (recruitmentCatalogFormAlert) {
+      recruitmentCatalogFormAlert.classList.add('hidden');
+    }
+
+    if (recruitmentCatalogFormAlertMsg) {
+      recruitmentCatalogFormAlertMsg.textContent = '';
+    }
+  }
+
+  function showRecruitmentCatalogError(message) {
+    if (recruitmentCatalogFormAlertMsg) {
+      recruitmentCatalogFormAlertMsg.textContent =
+        message || 'Không thể xử lý danh mục tuyển dụng.';
+    }
+
+    if (recruitmentCatalogFormAlert) {
+      recruitmentCatalogFormAlert.classList.remove('hidden');
+    }
+  }
+
+  function resetRecruitmentCatalogForm() {
+    if (recruitmentCatalogForm) {
+      recruitmentCatalogForm.reset();
+    }
+
+    if (recruitmentCatalogIdInput) {
+      recruitmentCatalogIdInput.value = '';
+    }
+
+    if (recruitmentCatalogTypeInput) {
+      recruitmentCatalogTypeInput.value =
+        recruitmentCatalogTypeFilter
+          ? recruitmentCatalogTypeFilter.value
+          : 'CANDIDATE_SOURCE';
+
+      recruitmentCatalogTypeInput.disabled = false;
+    }
+
+    if (recruitmentCatalogOrderInput) {
+      recruitmentCatalogOrderInput.value = '0';
+    }
+
+    if (recruitmentCatalogStatusInput) {
+      recruitmentCatalogStatusInput.value = 'ACTIVE';
+      recruitmentCatalogStatusInput.disabled = true;
+    }
+
+    if (recruitmentCatalogFormTitle) {
+      recruitmentCatalogFormTitle.textContent =
+        'Thêm giá trị danh mục';
+    }
+
+    if (recruitmentCatalogSaveBtn) {
+      recruitmentCatalogSaveBtn.textContent =
+        'Lưu danh mục';
+    }
+
+    hideRecruitmentCatalogError();
+  }
+
+  function editRecruitmentCatalog(id) {
+    const item = currentRecruitmentCatalogItems.find(
+      catalog => catalog.id === id
+    );
+
+    if (!item) return;
+
+    if (recruitmentCatalogIdInput) {
+      recruitmentCatalogIdInput.value = item.id;
+    }
+
+    if (recruitmentCatalogTypeInput) {
+      recruitmentCatalogTypeInput.value = item.type;
+      recruitmentCatalogTypeInput.disabled = true;
+    }
+
+    if (recruitmentCatalogCodeInput) {
+      recruitmentCatalogCodeInput.value = item.code || '';
+    }
+
+    if (recruitmentCatalogNameInput) {
+      recruitmentCatalogNameInput.value = item.name || '';
+    }
+
+    if (recruitmentCatalogOrderInput) {
+      recruitmentCatalogOrderInput.value =
+        String(item.displayOrder ?? 0);
+    }
+
+    if (recruitmentCatalogStatusInput) {
+      recruitmentCatalogStatusInput.value =
+        item.status || 'ACTIVE';
+
+      recruitmentCatalogStatusInput.disabled = false;
+    }
+
+    if (recruitmentCatalogFormTitle) {
+      recruitmentCatalogFormTitle.textContent =
+        'Cập nhật giá trị danh mục';
+    }
+
+    if (recruitmentCatalogSaveBtn) {
+      recruitmentCatalogSaveBtn.textContent = 'Cập nhật';
+    }
+
+    hideRecruitmentCatalogError();
+
+    if (recruitmentCatalogCodeInput) {
+      recruitmentCatalogCodeInput.focus();
+    }
+  }
+
+  function renderRecruitmentCatalogTable() {
+    if (!recruitmentCatalogTableBody) return;
+
+    if (currentRecruitmentCatalogItems.length === 0) {
+      recruitmentCatalogTableBody.innerHTML = `
+        <tr>
+          <td colspan="5"
+              style="text-align: center; padding: 24px; color: var(--color-text-muted);">
+            Chưa có giá trị trong danh mục này.
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    recruitmentCatalogTableBody.innerHTML =
+      currentRecruitmentCatalogItems.map((item, index) => {
+        const active = item.status === 'ACTIVE';
+
+        return `
+          <tr>
+            <td style="text-align: center;">
+              <strong>${escapeRecruitmentCatalogHtml(item.displayOrder)}</strong>
+            </td>
+
+            <td>
+              <code class="font-mono">
+                ${escapeRecruitmentCatalogHtml(item.code)}
+              </code>
+            </td>
+
+            <td>
+              <strong>${escapeRecruitmentCatalogHtml(item.name)}</strong>
+            </td>
+
+            <td>
+              <span class="badge ${active ? 'badge-success' : 'badge-neutral'}">
+                ${active ? 'Đang áp dụng' : 'Ngừng áp dụng'}
+              </span>
+            </td>
+
+            <td>
+              <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                <button
+                  type="button"
+                  class="btn btn-outline btn-xs"
+                  data-catalog-action="up"
+                  data-catalog-id="${escapeRecruitmentCatalogHtml(item.id)}"
+                  ${index === 0 ? 'disabled' : ''}
+                  title="Di chuyển lên">
+                  ↑
+                </button>
+
+                <button
+                  type="button"
+                  class="btn btn-outline btn-xs"
+                  data-catalog-action="down"
+                  data-catalog-id="${escapeRecruitmentCatalogHtml(item.id)}"
+                  ${index === currentRecruitmentCatalogItems.length - 1 ? 'disabled' : ''}
+                  title="Di chuyển xuống">
+                  ↓
+                </button>
+
+                <button
+                  type="button"
+                  class="btn btn-outline btn-xs"
+                  data-catalog-action="edit"
+                  data-catalog-id="${escapeRecruitmentCatalogHtml(item.id)}">
+                  Sửa
+                </button>
+
+                <button
+                  type="button"
+                  class="btn btn-outline btn-xs"
+                  data-catalog-action="delete"
+                  data-catalog-id="${escapeRecruitmentCatalogHtml(item.id)}">
+                  Xóa
+                </button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+  }
+
+  async function loadRecruitmentCatalogs() {
+    const token = sessionStorage.getItem('ats_token');
+    if (!token) return;
+
+    const type = recruitmentCatalogTypeFilter
+      ? recruitmentCatalogTypeFilter.value
+      : 'CANDIDATE_SOURCE';
+
+    if (recruitmentCatalogTableBody) {
+      recruitmentCatalogTableBody.innerHTML = `
+        <tr>
+          <td colspan="5"
+              style="text-align: center; padding: 24px; color: var(--color-text-muted);">
+            Đang tải danh mục...
+          </td>
+        </tr>
+      `;
+    }
+
+    try {
+      const res =
+        await window.ATS_API.getRecruitmentCatalogsApi(
+          token,
+          { type }
+        );
+
+      if (
+        !res.ok ||
+        !res.data ||
+        !res.data.success
+      ) {
+        throw new Error(
+          res.data && res.data.message
+            ? res.data.message
+            : 'Không thể tải danh mục tuyển dụng.'
+        );
+      }
+
+      currentRecruitmentCatalogItems =
+        res.data.items || [];
+
+      if (recruitmentCatalogTotalBadge) {
+        recruitmentCatalogTotalBadge.textContent =
+          `${currentRecruitmentCatalogItems.length} giá trị`;
+      }
+
+      renderRecruitmentCatalogTable();
+
+      if (
+        recruitmentCatalogIdInput &&
+        !recruitmentCatalogIdInput.value
+      ) {
+        resetRecruitmentCatalogForm();
+      }
+    } catch (error) {
+      console.error(
+        'Failed to load recruitment catalogs:',
+        error
+      );
+
+      currentRecruitmentCatalogItems = [];
+
+      if (recruitmentCatalogTableBody) {
+        recruitmentCatalogTableBody.innerHTML = `
+          <tr>
+            <td colspan="5"
+                style="text-align: center; padding: 24px; color: var(--color-danger);">
+              ${escapeRecruitmentCatalogHtml(error.message)}
+            </td>
+          </tr>
+        `;
+      }
+    }
+  }
+
+  async function reorderRecruitmentCatalog(
+    catalogId,
+    direction
+  ) {
+    const token = sessionStorage.getItem('ats_token');
+    if (!token) return;
+
+    const index = currentRecruitmentCatalogItems.findIndex(
+      item => item.id === catalogId
+    );
+
+    if (index < 0) return;
+
+    const targetIndex =
+      direction === 'up'
+        ? index - 1
+        : index + 1;
+
+    if (
+      targetIndex < 0 ||
+      targetIndex >= currentRecruitmentCatalogItems.length
+    ) {
+      return;
+    }
+
+    const ordered = [...currentRecruitmentCatalogItems];
+
+    const temp = ordered[index];
+    ordered[index] = ordered[targetIndex];
+    ordered[targetIndex] = temp;
+
+    const type = recruitmentCatalogTypeFilter
+      ? recruitmentCatalogTypeFilter.value
+      : ordered[0].type;
+
+    try {
+      const res =
+        await window.ATS_API.reorderRecruitmentCatalogsApi(
+          token,
+          type,
+          ordered.map(item => item.id)
+        );
+
+      if (
+        res.ok &&
+        res.data &&
+        res.data.success
+      ) {
+        currentRecruitmentCatalogItems =
+          res.data.items || ordered;
+
+        renderRecruitmentCatalogTable();
+
+        showToast(
+          'success',
+          'Danh mục tuyển dụng',
+          'Đã cập nhật thứ tự hiển thị.'
+        );
+      } else {
+        showToast(
+          'error',
+          'Danh mục tuyển dụng',
+          res.data && res.data.message
+            ? res.data.message
+            : 'Không thể sắp xếp danh mục.'
+        );
+      }
+    } catch (error) {
+      showToast(
+        'error',
+        'Danh mục tuyển dụng',
+        'Lỗi kết nối khi sắp xếp danh mục.'
+      );
+    }
+  }
+
+  async function deleteRecruitmentCatalog(id) {
+    const token = sessionStorage.getItem('ats_token');
+    if (!token || !id) return;
+
+    const item = currentRecruitmentCatalogItems.find(
+      catalog => catalog.id === id
+    );
+
+    if (!item) return;
+
+    const confirmed = window.confirm(
+      `Xóa "${item.name}" khỏi ${getRecruitmentCatalogTypeLabel(item.type)}?`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const res =
+        await window.ATS_API.deleteRecruitmentCatalogApi(
+          token,
+          id
+        );
+
+      if (
+        res.ok &&
+        res.data &&
+        res.data.success
+      ) {
+        showToast(
+          'success',
+          'Danh mục tuyển dụng',
+          res.data.message ||
+            'Đã xóa giá trị danh mục.'
+        );
+
+        resetRecruitmentCatalogForm();
+        await loadRecruitmentCatalogs();
+      } else {
+        showToast(
+          'error',
+          'Không thể xóa',
+          res.data && res.data.message
+            ? res.data.message
+            : 'Giá trị danh mục không thể xóa.'
+        );
+      }
+    } catch (error) {
+      showToast(
+        'error',
+        'Không thể xóa',
+        'Lỗi kết nối khi xóa giá trị danh mục.'
+      );
+    }
+  }
+
+  if (recruitmentCatalogForm) {
+    recruitmentCatalogForm.addEventListener(
+      'submit',
+      async event => {
+        event.preventDefault();
+
+        const token =
+          sessionStorage.getItem('ats_token');
+
+        if (!token) return;
+
+        hideRecruitmentCatalogError();
+
+        const id = recruitmentCatalogIdInput
+          ? recruitmentCatalogIdInput.value.trim()
+          : '';
+
+        const payload = {
+          type: recruitmentCatalogTypeInput
+            ? recruitmentCatalogTypeInput.value
+            : 'CANDIDATE_SOURCE',
+
+          code: recruitmentCatalogCodeInput
+            ? recruitmentCatalogCodeInput.value.trim()
+            : '',
+
+          name: recruitmentCatalogNameInput
+            ? recruitmentCatalogNameInput.value.trim()
+            : '',
+
+          displayOrder: recruitmentCatalogOrderInput
+            ? Number(recruitmentCatalogOrderInput.value || 0)
+            : 0
+        };
+
+        if (id) {
+          payload.status =
+            recruitmentCatalogStatusInput
+              ? recruitmentCatalogStatusInput.value
+              : 'ACTIVE';
+        }
+
+        if (!payload.code || !payload.name) {
+          showRecruitmentCatalogError(
+            'Vui lòng nhập đầy đủ mã và tên hiển thị.'
+          );
+          return;
+        }
+
+        if (recruitmentCatalogSaveBtn) {
+          recruitmentCatalogSaveBtn.disabled = true;
+        }
+
+        try {
+          const res = id
+            ? await window.ATS_API.updateRecruitmentCatalogApi(
+                token,
+                id,
+                payload
+              )
+            : await window.ATS_API.createRecruitmentCatalogApi(
+                token,
+                payload
+              );
+
+          if (
+            res.ok &&
+            res.data &&
+            res.data.success
+          ) {
+            showToast(
+              'success',
+              'Danh mục tuyển dụng',
+              res.data.message ||
+                'Đã lưu giá trị danh mục.'
+            );
+
+            if (
+              recruitmentCatalogTypeFilter &&
+              !id
+            ) {
+              recruitmentCatalogTypeFilter.value =
+                payload.type;
+            }
+
+            resetRecruitmentCatalogForm();
+            await loadRecruitmentCatalogs();
+          } else {
+            showRecruitmentCatalogError(
+              res.data && res.data.message
+                ? res.data.message
+                : 'Không thể lưu giá trị danh mục.'
+            );
+          }
+        } catch (error) {
+          showRecruitmentCatalogError(
+            'Lỗi kết nối khi lưu danh mục.'
+          );
+        } finally {
+          if (recruitmentCatalogSaveBtn) {
+            recruitmentCatalogSaveBtn.disabled = false;
+          }
+        }
+      }
+    );
+  }
+
+  if (recruitmentCatalogTableBody) {
+    recruitmentCatalogTableBody.addEventListener(
+      'click',
+      async event => {
+        const button =
+          event.target.closest('[data-catalog-action]');
+
+        if (!button) return;
+
+        const id = button.dataset.catalogId;
+        const action = button.dataset.catalogAction;
+
+        if (action === 'edit') {
+          editRecruitmentCatalog(id);
+        } else if (
+          action === 'up' ||
+          action === 'down'
+        ) {
+          await reorderRecruitmentCatalog(
+            id,
+            action
+          );
+        } else if (action === 'delete') {
+          await deleteRecruitmentCatalog(id);
+        }
+      }
+    );
+  }
+
+  if (recruitmentCatalogTypeFilter) {
+    recruitmentCatalogTypeFilter.addEventListener(
+      'change',
+      async () => {
+        resetRecruitmentCatalogForm();
+        await loadRecruitmentCatalogs();
+      }
+    );
+  }
+
+  if (recruitmentCatalogNewBtn) {
+    recruitmentCatalogNewBtn.addEventListener(
+      'click',
+      () => {
+        resetRecruitmentCatalogForm();
+
+        if (recruitmentCatalogCodeInput) {
+          recruitmentCatalogCodeInput.focus();
+        }
+      }
+    );
+  }
+
+  if (recruitmentCatalogResetBtn) {
+    recruitmentCatalogResetBtn.addEventListener(
+      'click',
+      resetRecruitmentCatalogForm
+    );
+  }
+
+  if (recruitmentCatalogRefreshBtn) {
+    recruitmentCatalogRefreshBtn.addEventListener(
+      'click',
+      loadRecruitmentCatalogs
+    );
+  }
+  // ==============================================================================
+  // ==============================================================================
+  // S2. COMPANY CAREER PAGE
+  // ==============================================================================
+
+  const careerPageIntroductionInput = document.getElementById('career-page-introduction-input');
+  const careerPageLogoInput = document.getElementById('career-page-logo-input');
+  const careerPageHeroInput = document.getElementById('career-page-hero-input');
+  const careerPageLogoStatus = document.getElementById('career-page-logo-status');
+  const careerPageHeroStatus = document.getElementById('career-page-hero-status');
+  const careerPagePreviewContainer = document.getElementById('career-page-preview-container');
+  const careerPagePreviewBtn = document.getElementById('career-page-preview-btn');
+  const careerPageSaveBtn = document.getElementById('career-page-save-btn');
+  const careerPageFormAlert = document.getElementById('career-page-form-alert');
+  const careerPageFormAlertMsg = document.getElementById('career-page-form-alert-msg');
+
+  let currentCareerPageSettings = {
+    introduction: '',
+    logoUrl: null,
+    heroImageUrl: null,
+    updatedAt: null
+  };
+
+  async function loadCareerPage() {
+    const token = sessionStorage.getItem('ats_token');
+    if (!token) return;
+
+    if (careerPageFormAlert) {
+      careerPageFormAlert.classList.add('hidden');
+    }
+
+    try {
+      const res = await window.ATS_API.getCareerPageApi(token);
+
+      if (!res.ok || !res.data || !res.data.success) {
+        showToast(
+          'error',
+          'Không thể tải cấu hình',
+          (res.data && res.data.message) || 'Không thể tải trang giới thiệu công ty.'
+        );
+        return;
+      }
+
+      const data = res.data.data || {};
+
+      currentCareerPageSettings = {
+        introduction: data.introduction || '',
+        logoUrl: data.logoUrl || null,
+        heroImageUrl: data.heroImageUrl || null,
+        updatedAt: data.updatedAt || null
+      };
+
+      if (careerPageIntroductionInput) {
+        careerPageIntroductionInput.value = currentCareerPageSettings.introduction;
+      }
+
+      if (careerPageLogoInput) {
+        careerPageLogoInput.value = '';
+      }
+
+      if (careerPageHeroInput) {
+        careerPageHeroInput.value = '';
+      }
+
+      if (careerPageLogoStatus) {
+        careerPageLogoStatus.textContent = currentCareerPageSettings.logoUrl
+          ? 'Đang sử dụng logo đã lưu. Chọn tệp mới nếu muốn thay thế.'
+          : 'JPG hoặc PNG, tối đa 2MB.';
+      }
+
+      if (careerPageHeroStatus) {
+        careerPageHeroStatus.textContent = currentCareerPageSettings.heroImageUrl
+          ? 'Đang sử dụng ảnh giới thiệu đã lưu. Chọn tệp mới nếu muốn thay thế.'
+          : 'JPG hoặc PNG, tối đa 2MB.';
+      }
+
+      if (careerPagePreviewContainer) {
+        careerPagePreviewContainer.innerHTML = `
+          <div style="text-align: center; padding: 48px 16px; color: var(--color-text-muted);">
+            Bấm “Xem trước” để xem giao diện trước khi lưu.
+          </div>
+        `;
+      }
+    } catch (error) {
+      showToast(
+        'error',
+        'Không thể tải cấu hình',
+        'Lỗi kết nối khi tải trang giới thiệu công ty.'
+      );
+    }
+  }
+  let careerPagePreviewObjectUrls = [];
+
+  function clearCareerPagePreviewObjectUrls() {
+    careerPagePreviewObjectUrls.forEach(url => URL.revokeObjectURL(url));
+    careerPagePreviewObjectUrls = [];
+  }
+
+  function validateCareerPageImage(file, label) {
+    if (!file) return true;
+
+    const allowedTypes = ['image/jpeg', 'image/png'];
+    const maxFileSize = 2 * 1024 * 1024;
+
+    if (!allowedTypes.includes(file.type)) {
+      showToast(
+        'warning',
+        'Ảnh không hợp lệ',
+        `${label} chỉ chấp nhận ảnh JPG hoặc PNG.`
+      );
+      return false;
+    }
+
+    if (file.size > maxFileSize) {
+      showToast(
+        'warning',
+        'Ảnh quá lớn',
+        `${label} không được vượt quá 2MB.`
+      );
+      return false;
+    }
+
+    return true;
+  }
+
+  function renderCareerPagePublicContent(container, settings = {}) {
+    if (!container) return;
+
+    const introduction = String(settings.introduction || '').trim();
+    const logoUrl = settings.logoUrl || null;
+    const heroImageUrl = settings.heroImageUrl || null;
+
+    container.innerHTML = '';
+
+    const wrapper = document.createElement('div');
+    wrapper.style.border = '1px solid var(--color-border)';
+    wrapper.style.borderRadius = 'var(--radius-sm)';
+    wrapper.style.overflow = 'hidden';
+    wrapper.style.background = '#ffffff';
+
+    if (heroImageUrl) {
+      const hero = document.createElement('img');
+      hero.src = heroImageUrl;
+      hero.alt = 'Ảnh giới thiệu công ty';
+      hero.style.display = 'block';
+      hero.style.width = '100%';
+      hero.style.maxHeight = '320px';
+      hero.style.objectFit = 'cover';
+      wrapper.appendChild(hero);
+    }
+
+    const body = document.createElement('div');
+    body.style.padding = '28px';
+
+    if (logoUrl) {
+      const logo = document.createElement('img');
+      logo.src = logoUrl;
+      logo.alt = 'Logo công ty';
+      logo.style.display = 'block';
+      logo.style.maxWidth = '220px';
+      logo.style.maxHeight = '90px';
+      logo.style.objectFit = 'contain';
+      logo.style.marginBottom = '20px';
+      body.appendChild(logo);
+    }
+
+    const heading = document.createElement('h2');
+    heading.textContent = 'Giới thiệu về công ty';
+    heading.style.margin = '0 0 14px';
+    heading.style.fontSize = '1.4rem';
+    heading.style.color = 'var(--color-text)';
+    body.appendChild(heading);
+
+    const description = document.createElement('div');
+    description.textContent =
+      introduction || 'Thông tin giới thiệu công ty đang được cập nhật.';
+    description.style.whiteSpace = 'pre-line';
+    description.style.lineHeight = '1.7';
+    description.style.color = 'var(--color-text-secondary)';
+    description.style.fontSize = '0.95rem';
+    body.appendChild(description);
+
+    wrapper.appendChild(body);
+    container.appendChild(wrapper);
+  }
+
+  if (careerPageLogoInput) {
+    careerPageLogoInput.addEventListener('change', () => {
+      const file =
+        careerPageLogoInput.files && careerPageLogoInput.files[0];
+
+      if (!file) return;
+
+      if (!validateCareerPageImage(file, 'Logo công ty')) {
+        careerPageLogoInput.value = '';
+        return;
+      }
+
+      if (careerPageLogoStatus) {
+        careerPageLogoStatus.textContent = `Đã chọn: ${file.name}`;
+      }
+    });
+  }
+
+  if (careerPageHeroInput) {
+    careerPageHeroInput.addEventListener('change', () => {
+      const file =
+        careerPageHeroInput.files && careerPageHeroInput.files[0];
+
+      if (!file) return;
+
+      if (!validateCareerPageImage(file, 'Ảnh giới thiệu')) {
+        careerPageHeroInput.value = '';
+        return;
+      }
+
+      if (careerPageHeroStatus) {
+        careerPageHeroStatus.textContent = `Đã chọn: ${file.name}`;
+      }
+    });
+  }
+
+  if (careerPagePreviewBtn) {
+    careerPagePreviewBtn.addEventListener('click', () => {
+      const logoFile =
+        careerPageLogoInput &&
+        careerPageLogoInput.files &&
+        careerPageLogoInput.files[0];
+
+      const heroFile =
+        careerPageHeroInput &&
+        careerPageHeroInput.files &&
+        careerPageHeroInput.files[0];
+
+      if (
+        !validateCareerPageImage(logoFile, 'Logo công ty') ||
+        !validateCareerPageImage(heroFile, 'Ảnh giới thiệu')
+      ) {
+        return;
+      }
+
+      clearCareerPagePreviewObjectUrls();
+
+      let logoUrl = currentCareerPageSettings.logoUrl;
+      let heroImageUrl = currentCareerPageSettings.heroImageUrl;
+
+      if (logoFile) {
+        logoUrl = URL.createObjectURL(logoFile);
+        careerPagePreviewObjectUrls.push(logoUrl);
+      }
+
+      if (heroFile) {
+        heroImageUrl = URL.createObjectURL(heroFile);
+        careerPagePreviewObjectUrls.push(heroImageUrl);
+      }
+
+      renderCareerPagePublicContent(
+        careerPagePreviewContainer,
+        {
+          introduction: careerPageIntroductionInput
+            ? careerPageIntroductionInput.value
+            : '',
+          logoUrl,
+          heroImageUrl
+        }
+      );
+    });
+  }
+  if (careerPageSaveBtn) {
+    careerPageSaveBtn.addEventListener('click', async () => {
+      const token = sessionStorage.getItem('ats_token');
+      if (!token) return;
+
+      const logoFile =
+        careerPageLogoInput &&
+        careerPageLogoInput.files &&
+        careerPageLogoInput.files[0];
+
+      const heroFile =
+        careerPageHeroInput &&
+        careerPageHeroInput.files &&
+        careerPageHeroInput.files[0];
+
+      if (
+        !validateCareerPageImage(logoFile, 'Logo công ty') ||
+        !validateCareerPageImage(heroFile, 'Ảnh giới thiệu')
+      ) {
+        return;
+      }
+
+      const originalButtonText = careerPageSaveBtn.textContent;
+      careerPageSaveBtn.disabled = true;
+      careerPageSaveBtn.textContent = 'Đang lưu...';
+
+      try {
+        let logoUrl = currentCareerPageSettings.logoUrl;
+        let heroImageUrl = currentCareerPageSettings.heroImageUrl;
+
+        if (logoFile) {
+          const logoRes = await window.ATS_API.uploadCareerPageMediaApi(
+            token,
+            'logo',
+            logoFile
+          );
+
+          if (
+            !logoRes.ok ||
+            !logoRes.data ||
+            !logoRes.data.success ||
+            !logoRes.data.data ||
+            !logoRes.data.data.url
+          ) {
+            throw new Error(
+              (logoRes.data && logoRes.data.message) ||
+              'Không thể tải logo công ty.'
+            );
+          }
+
+          logoUrl = logoRes.data.data.url;
+        }
+
+        if (heroFile) {
+          const heroRes = await window.ATS_API.uploadCareerPageMediaApi(
+            token,
+            'hero',
+            heroFile
+          );
+
+          if (
+            !heroRes.ok ||
+            !heroRes.data ||
+            !heroRes.data.success ||
+            !heroRes.data.data ||
+            !heroRes.data.data.url
+          ) {
+            throw new Error(
+              (heroRes.data && heroRes.data.message) ||
+              'Không thể tải ảnh giới thiệu.'
+            );
+          }
+
+          heroImageUrl = heroRes.data.data.url;
+        }
+
+        const saveRes = await window.ATS_API.updateCareerPageApi(
+          token,
+          {
+            introduction: careerPageIntroductionInput
+              ? careerPageIntroductionInput.value
+              : '',
+            logoUrl,
+            heroImageUrl
+          }
+        );
+
+        if (!saveRes.ok || !saveRes.data || !saveRes.data.success) {
+          throw new Error(
+            (saveRes.data && saveRes.data.message) ||
+            'Không thể lưu cấu hình trang tuyển dụng.'
+          );
+        }
+
+        const saved = saveRes.data.data || {};
+
+        currentCareerPageSettings = {
+          introduction: saved.introduction || '',
+          logoUrl: saved.logoUrl || null,
+          heroImageUrl: saved.heroImageUrl || null,
+          updatedAt: saved.updatedAt || null
+        };
+
+        if (careerPageIntroductionInput) {
+          careerPageIntroductionInput.value =
+            currentCareerPageSettings.introduction;
+        }
+
+        if (careerPageLogoInput) {
+          careerPageLogoInput.value = '';
+        }
+
+        if (careerPageHeroInput) {
+          careerPageHeroInput.value = '';
+        }
+
+        if (careerPageLogoStatus) {
+          careerPageLogoStatus.textContent =
+            currentCareerPageSettings.logoUrl
+              ? 'Đang sử dụng logo đã lưu. Chọn tệp mới nếu muốn thay thế.'
+              : 'JPG hoặc PNG, tối đa 2MB.';
+        }
+
+        if (careerPageHeroStatus) {
+          careerPageHeroStatus.textContent =
+            currentCareerPageSettings.heroImageUrl
+              ? 'Đang sử dụng ảnh giới thiệu đã lưu. Chọn tệp mới nếu muốn thay thế.'
+              : 'JPG hoặc PNG, tối đa 2MB.';
+        }
+
+        clearCareerPagePreviewObjectUrls();
+
+        renderCareerPagePublicContent(
+          careerPagePreviewContainer,
+          currentCareerPageSettings
+        );
+
+        showToast(
+          'success',
+          'Đã lưu trang giới thiệu',
+          'Nội dung trang giới thiệu công ty đã được cập nhật.'
+        );
+      } catch (error) {
+        showToast(
+          'error',
+          'Không thể lưu',
+          error.message || 'Không thể lưu cấu hình trang tuyển dụng.'
+        );
+      } finally {
+        careerPageSaveBtn.disabled = false;
+        careerPageSaveBtn.textContent = originalButtonText;
+      }
+    });
+  }
+  // S2. DEPARTMENTS & ORGANIZATION MANAGEMENT
+  // ==============================================================================
+
+  const departmentsTreeContainer = document.getElementById('departments-tree-container');
+  const departmentsTotalBadge = document.getElementById('departments-total-badge');
+  const departmentForm = document.getElementById('department-form');
+  const departmentFormTitle = document.getElementById('department-form-title');
+  const departmentIdInput = document.getElementById('department-id-input');
+  const departmentCodeInput = document.getElementById('department-code-input');
+  const departmentNameInput = document.getElementById('department-name-input');
+  const departmentParentSelect = document.getElementById('department-parent-select');
+  const departmentManagerSelect = document.getElementById('department-manager-select');
+  const departmentFormAlert = document.getElementById('department-form-alert');
+  const departmentFormAlertMsg = document.getElementById('department-form-alert-msg');
+  const departmentNewBtn = document.getElementById('department-new-btn');
+  const departmentResetBtn = document.getElementById('department-reset-btn');
+  const departmentSaveBtn = document.getElementById('department-save-btn');
+  // Competency Framework & Job Title Elements
+  const competencyFrameworkList = document.getElementById('competency-framework-list');
+  const competencyFrameworksTotalBadge = document.getElementById('competency-frameworks-total-badge');
+  const competencyFrameworkForm = document.getElementById('competency-framework-form');
+  const competencyFrameworkFormTitle = document.getElementById('competency-framework-form-title');
+  const competencyFrameworkIdInput = document.getElementById('competency-framework-id-input');
+  const competencyFrameworkCodeInput = document.getElementById('competency-framework-code-input');
+  const competencyFrameworkNameInput = document.getElementById('competency-framework-name-input');
+  const competencyFrameworkDescriptionInput = document.getElementById('competency-framework-description-input');
+  const competencyAddCriterionBtn = document.getElementById('competency-add-criterion-btn');
+  const competencyCriteriaContainer = document.getElementById('competency-criteria-container');
+  const competencyTotalWeight = document.getElementById('competency-total-weight');
+  const competencyFrameworkFormAlert = document.getElementById('competency-framework-form-alert');
+  const competencyFrameworkFormAlertMsg = document.getElementById('competency-framework-form-alert-msg');
+  const competencyFrameworkResetBtn = document.getElementById('competency-framework-reset-btn');
+  const competencyFrameworkSaveBtn = document.getElementById('competency-framework-save-btn');
+
+  const jobTitleList = document.getElementById('job-title-list');
+  const jobTitlesTotalBadge = document.getElementById('job-titles-total-badge');
+  const jobTitleForm = document.getElementById('job-title-form');
+  const jobTitleFormTitle = document.getElementById('job-title-form-title');
+  const jobTitleIdInput = document.getElementById('job-title-id-input');
+  const jobTitleCodeInput = document.getElementById('job-title-code-input');
+  const jobTitleNameInput = document.getElementById('job-title-name-input');
+  const jobTitleLevelInput = document.getElementById('job-title-level-input');
+  const jobTitleMinSalaryInput = document.getElementById('job-title-min-salary-input');
+  const jobTitleMaxSalaryInput = document.getElementById('job-title-max-salary-input');
+  const jobTitleSalaryFields = document.getElementById('job-title-salary-fields');
+  const jobTitleSalaryAccessNote = document.getElementById('job-title-salary-access-note');
+  let canViewJobTitleSalary = false;
+  const jobTitleFrameworkSelect = document.getElementById('job-title-framework-select');
+  const jobTitleFormAlert = document.getElementById('job-title-form-alert');
+  const jobTitleFormAlertMsg = document.getElementById('job-title-form-alert-msg');
+  const jobTitleResetBtn = document.getElementById('job-title-reset-btn');
+  const jobTitleSaveBtn = document.getElementById('job-title-save-btn');
+
+  let currentDepartments = [];
+  let currentDepartmentTree = [];
+  let currentDepartmentUsers = [];
+
+  function escapeDepartmentHtml(value) {
+    const element = document.createElement('div');
+    element.textContent = String(value ?? '');
+    return element.innerHTML;
+  }
+
+  function flattenDepartmentTree(nodes, depth = 0, result = []) {
+    nodes.forEach(node => {
+      result.push({ department: node, depth });
+      flattenDepartmentTree(node.children || [], depth + 1, result);
+    });
+
+    return result;
+  }
+
+  function hideDepartmentFormError() {
+    if (departmentFormAlert) departmentFormAlert.classList.add('hidden');
+    if (departmentFormAlertMsg) departmentFormAlertMsg.textContent = '';
+  }
+
+  function showDepartmentFormError(message) {
+    if (departmentFormAlertMsg) {
+      departmentFormAlertMsg.textContent =
+        message || 'Không thể xử lý phòng ban.';
+    }
+
+    if (departmentFormAlert) {
+      departmentFormAlert.classList.remove('hidden');
+    }
+  }
+
+  function populateDepartmentFormOptions(editingId = null) {
+    if (departmentParentSelect) {
+      const options = flattenDepartmentTree(currentDepartmentTree)
+        .filter(item => item.department.id !== editingId)
+        .map(item => {
+          const department = item.department;
+          const prefix = item.depth > 0 ? '— '.repeat(item.depth) : '';
+          const inactiveLabel =
+            department.status === 'INACTIVE'
+              ? ' (Ngừng áp dụng)'
+              : '';
+
+          return `
+            <option value="${escapeDepartmentHtml(department.id)}">${escapeDepartmentHtml(prefix + department.name + inactiveLabel)}</option>
+          `;
+        })
+        .join('');
+
+      departmentParentSelect.innerHTML =
+        '<option value="">-- Cấp cao nhất --</option>' + options;
+    }
+
+    if (departmentManagerSelect) {
+      const managerOptions = currentDepartmentUsers
+        .map(user => {
+          const label =
+            user.fullName ||
+            user.full_name ||
+            user.email ||
+            user.id;
+
+          const email =
+            user.email && user.email !== label
+              ? ` (${escapeDepartmentHtml(user.email)})`
+              : '';
+
+          return `
+            <option value="${escapeDepartmentHtml(user.id)}">${escapeDepartmentHtml(label)}${email}</option>
+          `;
+        })
+        .join('');
+
+      departmentManagerSelect.innerHTML =
+        '<option value="">-- Chọn người phụ trách --</option>' +
+        managerOptions;
+    }
+  }
+
+  function resetDepartmentForm() {
+    if (departmentForm) departmentForm.reset();
+    if (departmentIdInput) departmentIdInput.value = '';
+
+    if (departmentFormTitle) {
+      departmentFormTitle.textContent = 'Thêm phòng ban';
+    }
+
+    if (departmentSaveBtn) {
+      departmentSaveBtn.textContent = 'Lưu phòng ban';
+    }
+
+    hideDepartmentFormError();
+    populateDepartmentFormOptions();
+  }
+
+  function editDepartment(departmentId) {
+    const department = currentDepartments.find(
+      item => item.id === departmentId
+    );
+
+    if (!department) return;
+
+    populateDepartmentFormOptions(department.id);
+
+    if (departmentIdInput) {
+      departmentIdInput.value = department.id;
+    }
+
+    if (departmentCodeInput) {
+      departmentCodeInput.value = department.code || '';
+    }
+
+    if (departmentNameInput) {
+      departmentNameInput.value = department.name || '';
+    }
+
+    if (departmentParentSelect) {
+      departmentParentSelect.value = department.parentId || '';
+    }
+
+    if (departmentManagerSelect) {
+      departmentManagerSelect.value =
+        department.manager && department.manager.id
+          ? department.manager.id
+          : '';
+    }
+
+    if (departmentFormTitle) {
+      departmentFormTitle.textContent = 'Cập nhật phòng ban';
+    }
+
+    if (departmentSaveBtn) {
+      departmentSaveBtn.textContent = 'Cập nhật';
+    }
+
+    hideDepartmentFormError();
+
+    if (departmentCodeInput) {
+      departmentCodeInput.focus();
+    }
+  }
+
+  function renderDepartmentTree() {
+    if (!departmentsTreeContainer) return;
+
+    if (currentDepartmentTree.length === 0) {
+      departmentsTreeContainer.innerHTML = `
+        <div style="text-align: center; color: var(--color-text-muted); padding: 24px;">
+          Chưa có phòng ban nào.
+        </div>
+      `;
+      return;
+    }
+
+    const renderNodes = (nodes, depth = 0) =>
+      nodes.map(department => {
+        const managerName =
+          department.manager
+            ? (
+                department.manager.fullName ||
+                department.manager.email ||
+                'Chưa xác định'
+              )
+            : 'Chưa xác định';
+
+        const isActive = department.status === 'ACTIVE';
+        const openCount = Number(
+          department.openRequisitionCount || 0
+        );
+
+        return `
+          <div style="
+            margin-left: ${depth * 22}px;
+            margin-bottom: 10px;
+            padding: 12px;
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            ${depth > 0
+              ? 'border-left: 3px solid var(--color-primary);'
+              : ''}
+          ">
+            <div style="display: flex; justify-content: space-between; gap: 12px; align-items: flex-start;">
+              <div style="min-width: 0;">
+                <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
+                  <strong>${escapeDepartmentHtml(department.name)}</strong>
+
+                  <span class="badge badge-primary font-mono">
+                    ${escapeDepartmentHtml(department.code)}
+                  </span>
+
+                  <span class="badge ${isActive
+                    ? 'badge-success'
+                    : 'badge-warning'}">
+                    ${isActive
+                      ? 'Đang áp dụng'
+                      : 'Ngừng áp dụng'}
+                  </span>
+                </div>
+
+                <div style="font-size: 0.8rem; color: var(--color-text-secondary); margin-top: 6px;">
+                  Người phụ trách:
+                  <strong>${escapeDepartmentHtml(managerName)}</strong>
+                </div>
+
+                <div style="font-size: 0.775rem; color: var(--color-text-muted); margin-top: 4px;">
+                  Yêu cầu tuyển dụng đang mở: ${openCount}
+                </div>
+              </div>
+
+              <div style="display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end;">
+                <button
+                  type="button"
+                  class="btn btn-outline btn-sm"
+                  data-department-action="edit"
+                  data-department-id="${escapeDepartmentHtml(department.id)}"
+                >
+                  Sửa
+                </button>
+
+                ${isActive ? `
+                  <button
+                    type="button"
+                    class="btn btn-outline btn-sm"
+                    data-department-action="deactivate"
+                    data-department-id="${escapeDepartmentHtml(department.id)}"
+                  >
+                    Ngừng áp dụng
+                  </button>
+                ` : ''}
+
+                <button
+                  type="button"
+                  class="btn btn-outline btn-sm"
+                  data-department-action="delete"
+                  data-department-id="${escapeDepartmentHtml(department.id)}"
+                >
+                  Xóa
+                </button>
+              </div>
+            </div>
+          </div>
+
+          ${renderNodes(department.children || [], depth + 1)}
+        `;
+      }).join('');
+
+    departmentsTreeContainer.innerHTML =
+      renderNodes(currentDepartmentTree);
+  }
+
+  async function loadDepartments() {
+    const token = sessionStorage.getItem('ats_token');
+    if (!token) return;
+
+    if (departmentsTreeContainer) {
+      departmentsTreeContainer.innerHTML = `
+        <div style="text-align: center; color: var(--color-text-muted); padding: 24px;">
+          Đang tải phòng ban...
+        </div>
+      `;
+    }
+
+    try {
+      const [departmentsRes, usersRes] = await Promise.all([
+        window.ATS_API.getDepartmentsApi(token),
+        window.ATS_API.getUsersApi(token, {
+          page: 1,
+          limit: 100,
+          status: 'ACTIVE'
+        })
+      ]);
+
+      if (
+        !departmentsRes.ok ||
+        !departmentsRes.data ||
+        !departmentsRes.data.success
+      ) {
+        throw new Error(
+          departmentsRes.data &&
+          departmentsRes.data.message
+            ? departmentsRes.data.message
+            : 'Không thể tải danh sách phòng ban.'
+        );
+      }
+
+      currentDepartments =
+        departmentsRes.data.departments || [];
+
+      currentDepartmentTree =
+        departmentsRes.data.tree || [];
+
+      if (
+        usersRes.ok &&
+        usersRes.data &&
+        usersRes.data.success
+      ) {
+        const userData = usersRes.data.data || {};
+
+        currentDepartmentUsers =
+          userData.items ||
+          userData.users ||
+          [];
+      } else {
+        currentDepartmentUsers = [];
+      }
+
+      if (departmentsTotalBadge) {
+        departmentsTotalBadge.textContent =
+          `${departmentsRes.data.total || currentDepartments.length} phòng ban`;
+      }
+
+      renderDepartmentTree();
+
+      const editingId =
+        departmentIdInput
+          ? departmentIdInput.value
+          : '';
+
+      populateDepartmentFormOptions(
+        editingId || null
+      );
+    } catch (error) {
+      console.error(
+        'Failed to load departments:',
+        error
+      );
+
+      if (departmentsTreeContainer) {
+        departmentsTreeContainer.innerHTML = `
+          <div style="text-align: center; color: var(--color-danger); padding: 24px;">
+            ${escapeDepartmentHtml(
+              error.message ||
+              'Không thể tải phòng ban.'
+            )}
+          </div>
+        `;
+      }
+    }
+  }
+
+  async function deactivateDepartment(
+    departmentId,
+    skipConfirm = false
+  ) {
+    const token =
+      sessionStorage.getItem('ats_token');
+
+    if (!token || !departmentId) return;
+
+    if (
+      !skipConfirm &&
+      !window.confirm(
+        'Ngừng áp dụng phòng ban này?'
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const res =
+        await window.ATS_API.deactivateDepartmentApi(
+          token,
+          departmentId
+        );
+
+      if (
+        res.ok &&
+        res.data &&
+        res.data.success
+      ) {
+        showToast(
+          'success',
+          'Đã ngừng áp dụng',
+          res.data.message ||
+            'Phòng ban đã được ngừng áp dụng.'
+        );
+
+        resetDepartmentForm();
+        await loadDepartments();
+      } else {
+        showToast(
+          'error',
+          'Không thể ngừng áp dụng',
+          (res.data && res.data.message) ||
+            'Không thể cập nhật phòng ban.'
+        );
+      }
+    } catch (error) {
+      showToast(
+        'error',
+        'Lỗi',
+        error.message
+      );
+    }
+  }
+
+  async function deleteDepartment(departmentId) {
+    const token =
+      sessionStorage.getItem('ats_token');
+
+    if (!token || !departmentId) return;
+
+    if (
+      !window.confirm(
+        'Bạn có chắc muốn xóa phòng ban này?'
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const res =
+        await window.ATS_API.deleteDepartmentApi(
+          token,
+          departmentId
+        );
+
+      if (
+        res.ok &&
+        res.data &&
+        res.data.success
+      ) {
+        showToast(
+          'success',
+          'Đã xóa phòng ban',
+          res.data.message ||
+            'Xóa phòng ban thành công.'
+        );
+
+        resetDepartmentForm();
+        await loadDepartments();
+        return;
+      }
+
+      if (
+        res.data &&
+        res.data.code ===
+          'DEPARTMENT_HAS_OPEN_REQUISITIONS' &&
+        res.data.canDeactivate === true
+      ) {
+        const shouldDeactivate =
+          window.confirm(
+            `${res.data.message}\n\nBạn có muốn ngừng áp dụng phòng ban này thay thế không?`
+          );
+
+        if (shouldDeactivate) {
+          await deactivateDepartment(
+            departmentId,
+            true
+          );
+        }
+
+        return;
+      }
+
+      showToast(
+        'error',
+        'Không thể xóa phòng ban',
+        (res.data && res.data.message) ||
+          'Không thể xóa phòng ban.'
+      );
+    } catch (error) {
+      showToast(
+        'error',
+        'Lỗi',
+        error.message
+      );
+    }
+  }
+
+  if (departmentForm) {
+    departmentForm.addEventListener(
+      'submit',
+      async event => {
+        event.preventDefault();
+
+        const token =
+          sessionStorage.getItem('ats_token');
+
+        if (!token) return;
+
+        hideDepartmentFormError();
+
+        const departmentId =
+          departmentIdInput
+            ? departmentIdInput.value.trim()
+            : '';
+
+        const payload = {
+          code: departmentCodeInput
+            ? departmentCodeInput.value.trim()
+            : '',
+
+          name: departmentNameInput
+            ? departmentNameInput.value.trim()
+            : '',
+
+          parentId: departmentParentSelect
+            ? departmentParentSelect.value || null
+            : null,
+
+          managerId: departmentManagerSelect
+            ? departmentManagerSelect.value
+            : ''
+        };
+
+        if (
+          !payload.code ||
+          !payload.name ||
+          !payload.managerId
+        ) {
+          showDepartmentFormError(
+            'Vui lòng nhập mã, tên phòng ban và chọn người phụ trách.'
+          );
+          return;
+        }
+
+        if (departmentSaveBtn) {
+          departmentSaveBtn.disabled = true;
+        }
+
+        try {
+          const res = departmentId
+            ? await window.ATS_API.updateDepartmentApi(
+                token,
+                departmentId,
+                payload
+              )
+            : await window.ATS_API.createDepartmentApi(
+                token,
+                payload
+              );
+
+          if (
+            res.ok &&
+            res.data &&
+            res.data.success
+          ) {
+            showToast(
+              'success',
+              departmentId
+                ? 'Cập nhật thành công'
+                : 'Tạo thành công',
+              res.data.message ||
+                'Đã lưu phòng ban.'
+            );
+
+            resetDepartmentForm();
+            await loadDepartments();
+          } else {
+            showDepartmentFormError(
+              (res.data && res.data.message) ||
+                'Không thể lưu phòng ban.'
+            );
+          }
+        } catch (error) {
+          showDepartmentFormError(
+            error.message
+          );
+        } finally {
+          if (departmentSaveBtn) {
+            departmentSaveBtn.disabled = false;
+          }
+        }
+      }
+    );
+  }
+
+  if (departmentsTreeContainer) {
+    departmentsTreeContainer.addEventListener(
+      'click',
+      async event => {
+        const button =
+          event.target.closest(
+            '[data-department-action]'
+          );
+
+        if (!button) return;
+
+        const departmentId =
+          button.dataset.departmentId;
+
+        const action =
+          button.dataset.departmentAction;
+
+        if (action === 'edit') {
+          editDepartment(departmentId);
+        } else if (action === 'deactivate') {
+          await deactivateDepartment(
+            departmentId
+          );
+        } else if (action === 'delete') {
+          await deleteDepartment(
+            departmentId
+          );
+        }
+      }
+    );
+  }
+
+  if (departmentNewBtn) {
+    departmentNewBtn.addEventListener(
+      'click',
+      () => {
+        resetDepartmentForm();
+
+        if (departmentCodeInput) {
+          departmentCodeInput.focus();
+        }
+      }
+    );
+  }
+
+  if (departmentResetBtn) {
+    departmentResetBtn.addEventListener(
+      'click',
+      resetDepartmentForm
+    );
+  }
+
+
+  // ==============================================================================  // 12. USERS MANAGEMENT (REAL BACKEND API)
+  // ==============================================================================
+
+  // ==============================================================================
+  // S2. COMPETENCY FRAMEWORK & JOB TITLE MANAGEMENT
+  // ==============================================================================
+
+  let currentCompetencyFrameworks = [];
+  let currentJobTitles = [];
+
+  function clearJobTitleSalaryState() {
+    canViewJobTitleSalary = false;
+    currentJobTitles = currentJobTitles.map(({ minSalary, maxSalary, ...item }) => item);
+    if (jobTitleMinSalaryInput) jobTitleMinSalaryInput.value = '';
+    if (jobTitleMaxSalaryInput) jobTitleMaxSalaryInput.value = '';
+    if (jobTitleSalaryFields) {
+      jobTitleSalaryFields.disabled = true;
+      jobTitleSalaryFields.classList.add('hidden');
+    }
+    if (jobTitleSaveBtn) jobTitleSaveBtn.disabled = true;
+    renderJobTitles();
+  }
+
+  function escapeCompetencyHtml(value) {
+    const element = document.createElement('div');
+    element.textContent = String(value ?? '');
+    return element.innerHTML;
+  }
+
+  function updateCompetencyTotalWeight() {
+    if (!competencyCriteriaContainer || !competencyTotalWeight) return;
+
+    const inputs = competencyCriteriaContainer.querySelectorAll(
+      '[data-criterion-weight]'
+    );
+
+    let total = 0;
+
+    inputs.forEach(input => {
+      total += Number(input.value) || 0;
+    });
+
+    competencyTotalWeight.textContent = String(total);
+  }
+
+  function addCompetencyCriterionRow(criterion = {}) {
+    if (!competencyCriteriaContainer) return;
+
+    const row = document.createElement('div');
+    row.className = 'competency-criterion-row';
+    row.style.cssText =
+      'display:grid;grid-template-columns:minmax(180px,1fr) 100px auto;gap:8px;align-items:end;margin-bottom:8px;';
+
+    row.dataset.criterionId = criterion.id || '';
+
+    row.innerHTML = `
+      <div>
+        <label class="form-label">Tên tiêu chí</label>
+        <input
+          type="text"
+          class="form-input"
+          data-criterion-name
+          value="${escapeCompetencyHtml(criterion.name || '')}"
+          placeholder="Ví dụ: Kiến thức chuyên môn"
+          required
+        />
+      </div>
+
+      <div>
+        <label class="form-label">Trọng số (%)</label>
+        <input
+          type="number"
+          class="form-input"
+          data-criterion-weight
+          min="1"
+          max="100"
+          value="${Number(criterion.weight) || ''}"
+          required
+        />
+      </div>
+
+      <button
+        type="button"
+        class="btn btn-outline btn-sm"
+        data-remove-criterion
+        style="margin-bottom:1px;"
+      >
+        Xóa
+      </button>
+    `;
+
+    competencyCriteriaContainer.appendChild(row);
+    updateCompetencyTotalWeight();
+  }
+
+  function renderCompetencyFrameworks() {
+    if (!competencyFrameworkList) return;
+
+    if (competencyFrameworksTotalBadge) {
+      competencyFrameworksTotalBadge.textContent =
+        `${currentCompetencyFrameworks.length} khung`;
+    }
+
+    if (currentCompetencyFrameworks.length === 0) {
+      competencyFrameworkList.innerHTML = `
+        <div style="text-align:center;color:var(--color-text-muted);padding:24px;">
+          Chưa có khung năng lực nào.
+        </div>
+      `;
+      return;
+    }
+
+    competencyFrameworkList.innerHTML = currentCompetencyFrameworks
+      .map(framework => {
+        const criteria = Array.isArray(framework.criteria)
+          ? framework.criteria
+          : [];
+
+        const criteriaHtml = criteria
+          .map(criterion => `
+            <div style="display:flex;justify-content:space-between;gap:12px;padding:4px 0;">
+              <span>${escapeCompetencyHtml(criterion.name)}</span>
+              <strong>${Number(criterion.weight) || 0}%</strong>
+            </div>
+          `)
+          .join('');
+
+        return `
+          <div
+            style="border:1px solid var(--color-border);border-radius:8px;padding:12px;margin-bottom:10px;"
+          >
+            <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;">
+              <div>
+                <strong>${escapeCompetencyHtml(framework.name)}</strong>
+                <div style="font-size:12px;color:var(--color-text-muted);margin-top:2px;">
+                  ${escapeCompetencyHtml(framework.code)}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                class="btn btn-outline btn-sm"
+                data-competency-edit="${escapeCompetencyHtml(framework.id)}"
+              >
+                Sửa
+              </button>
+            </div>
+
+            <div style="margin-top:10px;">
+              ${criteriaHtml}
+            </div>
+
+            <div style="margin-top:8px;font-size:12px;color:var(--color-text-muted);">
+              Tổng trọng số:
+              <strong>${Number(framework.totalWeight) || 0}%</strong>
+              · ${Array.isArray(framework.jobTitles) ? framework.jobTitles.length : 0} chức danh
+            </div>
+          </div>
+        `;
+      })
+      .join('');
+  }
+
+  function renderJobTitles() {
+    if (!jobTitleList) return;
+
+    if (jobTitlesTotalBadge) {
+      jobTitlesTotalBadge.textContent =
+        `${currentJobTitles.length} chức danh`;
+    }
+
+    if (currentJobTitles.length === 0) {
+      jobTitleList.innerHTML = `
+        <div style="text-align:center;color:var(--color-text-muted);padding:24px;">
+          Chưa có chức danh nào.
+        </div>
+      `;
+      return;
+    }
+
+    jobTitleList.innerHTML = currentJobTitles
+      .map(jobTitle => `
+        <div
+          style="border:1px solid var(--color-border);border-radius:8px;padding:12px;margin-bottom:10px;"
+        >
+          <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;">
+            <div>
+              <strong>${escapeCompetencyHtml(jobTitle.name)}</strong>
+
+              <div style="font-size:12px;color:var(--color-text-muted);margin-top:2px;">
+                ${escapeCompetencyHtml(jobTitle.code)}
+                · Cấp bậc: ${escapeCompetencyHtml(jobTitle.level || 'Chưa khai báo')}
+              </div>
+
+              ${canViewJobTitleSalary ? `<div style="margin-top:6px;">Dải lương: ${jobTitle.minSalary == null || jobTitle.maxSalary == null ? 'Chưa khai báo' : `${Number(jobTitle.minSalary).toLocaleString('vi-VN')} – ${Number(jobTitle.maxSalary).toLocaleString('vi-VN')} VNĐ`}</div>` : ''}
+
+              <div style="margin-top:6px;font-size:13px;">
+                Khung:
+                <strong>
+                  ${
+                    jobTitle.framework
+                      ? escapeCompetencyHtml(jobTitle.framework.name)
+                      : 'Chưa gán'
+                  }
+                </strong>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              class="btn btn-outline btn-sm"
+              data-job-title-edit="${escapeCompetencyHtml(jobTitle.id)}"
+            >
+              Sửa
+            </button>
+          </div>
+        </div>
+      `)
+      .join('');
+  }
+
+  function populateJobTitleFrameworkOptions() {
+    if (!jobTitleFrameworkSelect) return;
+
+    const selectedValue = jobTitleFrameworkSelect.value;
+
+    jobTitleFrameworkSelect.innerHTML =
+      '<option value="">-- Chọn khung năng lực --</option>' +
+      currentCompetencyFrameworks
+        .filter(framework => framework.status === 'ACTIVE')
+        .map(framework => `
+          <option value="${escapeCompetencyHtml(framework.id)}">
+            ${escapeCompetencyHtml(framework.name)} (${escapeCompetencyHtml(framework.code)})
+          </option>
+        `)
+        .join('');
+
+    if (
+      selectedValue &&
+      currentCompetencyFrameworks.some(
+        framework => framework.id === selectedValue
+      )
+    ) {
+      jobTitleFrameworkSelect.value = selectedValue;
+    }
+  }
+
+  async function loadCompetencies() {
+    const token = sessionStorage.getItem('ats_token');
+    if (!token) return;
+
+    if (competencyFrameworkList) {
+      competencyFrameworkList.innerHTML = `
+        <div style="text-align:center;color:var(--color-text-muted);padding:24px;">
+          Đang tải khung năng lực...
+        </div>
+      `;
+    }
+
+    if (jobTitleList) {
+      jobTitleList.innerHTML = `
+        <div style="text-align:center;color:var(--color-text-muted);padding:24px;">
+          Đang tải chức danh...
+        </div>
+      `;
+    }
+
+    try {
+      const [frameworkRes, jobTitleRes] = await Promise.all([
+        window.ATS_API.getCompetencyFrameworksApi(token),
+        window.ATS_API.getJobTitlesApi(token)
+      ]);
+
+      if (!frameworkRes.ok) {
+        throw new Error(
+          frameworkRes.data?.message ||
+          'Không thể tải danh sách khung năng lực.'
+        );
+      }
+
+      if (!jobTitleRes.ok) {
+        throw new Error(
+          jobTitleRes.data?.message ||
+          'Không thể tải danh sách chức danh.'
+        );
+      }
+
+      currentCompetencyFrameworks =
+        frameworkRes.data.frameworks || [];
+
+      currentJobTitles =
+        jobTitleRes.data.jobTitles || [];
+      canViewJobTitleSalary = jobTitleRes.data.canViewSalary === true;
+      if (jobTitleSalaryFields) {
+        jobTitleSalaryFields.disabled = !canViewJobTitleSalary;
+        jobTitleSalaryFields.classList.toggle('hidden', !canViewJobTitleSalary);
+      }
+      if (jobTitleSalaryAccessNote) jobTitleSalaryAccessNote.classList.toggle('hidden', canViewJobTitleSalary);
+      if (jobTitleSaveBtn) jobTitleSaveBtn.disabled = !canViewJobTitleSalary && !jobTitleIdInput?.value;
+
+      renderCompetencyFrameworks();
+      renderJobTitles();
+      populateJobTitleFrameworkOptions();
+
+      if (
+        competencyCriteriaContainer &&
+        competencyCriteriaContainer.children.length === 0
+      ) {
+        addCompetencyCriterionRow();
+      }
+    } catch (error) {
+      console.error('Failed to load competencies:', error);
+
+      if (competencyFrameworkList) {
+        competencyFrameworkList.innerHTML = `
+          <div style="text-align:center;color:var(--color-danger);padding:24px;">
+            ${escapeCompetencyHtml(error.message)}
+          </div>
+        `;
+      }
+
+      if (jobTitleList) {
+        jobTitleList.innerHTML = `
+          <div style="text-align:center;color:var(--color-danger);padding:24px;">
+            ${escapeCompetencyHtml(error.message)}
+          </div>
+        `;
+      }
+    }
+  }
+
+  function hideCompetencyFrameworkError() {
+    if (competencyFrameworkFormAlert) {
+      competencyFrameworkFormAlert.classList.add('hidden');
+    }
+
+    if (competencyFrameworkFormAlertMsg) {
+      competencyFrameworkFormAlertMsg.textContent = '';
+    }
+  }
+
+  function showCompetencyFrameworkError(message) {
+    if (competencyFrameworkFormAlertMsg) {
+      competencyFrameworkFormAlertMsg.textContent =
+        message || 'Không thể lưu khung năng lực.';
+    }
+
+    if (competencyFrameworkFormAlert) {
+      competencyFrameworkFormAlert.classList.remove('hidden');
+    }
+  }
+
+  function resetCompetencyFrameworkForm() {
+    if (competencyFrameworkForm) {
+      competencyFrameworkForm.reset();
+    }
+
+    if (competencyFrameworkIdInput) {
+      competencyFrameworkIdInput.value = '';
+    }
+
+    if (competencyFrameworkFormTitle) {
+      competencyFrameworkFormTitle.textContent = 'Thêm khung năng lực';
+    }
+
+    if (competencyFrameworkSaveBtn) {
+      competencyFrameworkSaveBtn.textContent = 'Lưu khung năng lực';
+    }
+
+    if (competencyCriteriaContainer) {
+      competencyCriteriaContainer.innerHTML = '';
+      addCompetencyCriterionRow();
+    }
+
+    hideCompetencyFrameworkError();
+    updateCompetencyTotalWeight();
+  }
+
+  function editCompetencyFramework(frameworkId) {
+    const framework = currentCompetencyFrameworks.find(
+      item => item.id === frameworkId
+    );
+
+    if (!framework) return;
+
+    if (competencyFrameworkIdInput) {
+      competencyFrameworkIdInput.value = framework.id;
+    }
+
+    if (competencyFrameworkCodeInput) {
+      competencyFrameworkCodeInput.value = framework.code || '';
+    }
+
+    if (competencyFrameworkNameInput) {
+      competencyFrameworkNameInput.value = framework.name || '';
+    }
+
+    if (competencyFrameworkDescriptionInput) {
+      competencyFrameworkDescriptionInput.value =
+        framework.description || '';
+    }
+
+    if (competencyCriteriaContainer) {
+      competencyCriteriaContainer.innerHTML = '';
+
+      const criteria = Array.isArray(framework.criteria)
+        ? framework.criteria
+        : [];
+
+      criteria.forEach(criterion => {
+        addCompetencyCriterionRow(criterion);
+      });
+
+      if (criteria.length === 0) {
+        addCompetencyCriterionRow();
+      }
+    }
+
+    if (competencyFrameworkFormTitle) {
+      competencyFrameworkFormTitle.textContent =
+        'Cập nhật khung năng lực';
+    }
+
+    if (competencyFrameworkSaveBtn) {
+      competencyFrameworkSaveBtn.textContent = 'Cập nhật';
+    }
+
+    hideCompetencyFrameworkError();
+    updateCompetencyTotalWeight();
+
+    if (competencyFrameworkCodeInput) {
+      competencyFrameworkCodeInput.focus();
+    }
+  }
+
+  if (competencyAddCriterionBtn) {
+    competencyAddCriterionBtn.addEventListener('click', () => {
+      addCompetencyCriterionRow();
+    });
+  }
+
+  if (competencyCriteriaContainer) {
+    competencyCriteriaContainer.addEventListener('input', event => {
+      if (event.target.matches('[data-criterion-weight]')) {
+        updateCompetencyTotalWeight();
+      }
+    });
+
+    competencyCriteriaContainer.addEventListener('click', event => {
+      const removeBtn = event.target.closest('[data-remove-criterion]');
+      if (!removeBtn) return;
+
+      const row = removeBtn.closest('.competency-criterion-row');
+      if (row) row.remove();
+
+      if (competencyCriteriaContainer.children.length === 0) {
+        addCompetencyCriterionRow();
+      }
+
+      updateCompetencyTotalWeight();
+    });
+  }
+
+  if (competencyFrameworkList) {
+    competencyFrameworkList.addEventListener('click', event => {
+      const button = event.target.closest('[data-competency-edit]');
+      if (!button) return;
+
+      editCompetencyFramework(button.dataset.competencyEdit);
+    });
+  }
+
+  if (competencyFrameworkResetBtn) {
+    competencyFrameworkResetBtn.addEventListener(
+      'click',
+      resetCompetencyFrameworkForm
+    );
+  }
+
+  if (competencyFrameworkForm) {
+    competencyFrameworkForm.addEventListener(
+      'submit',
+      async event => {
+        event.preventDefault();
+
+        const token = sessionStorage.getItem('ats_token');
+        if (!token) return;
+
+        hideCompetencyFrameworkError();
+
+        const frameworkId = competencyFrameworkIdInput
+          ? competencyFrameworkIdInput.value.trim()
+          : '';
+
+        const criteria = competencyCriteriaContainer
+          ? Array.from(
+              competencyCriteriaContainer.querySelectorAll(
+                '.competency-criterion-row'
+              )
+            ).map(row => ({
+              id: row.dataset.criterionId || null,
+              name:
+                row.querySelector('[data-criterion-name]')?.value.trim() || '',
+              weight: Number(
+                row.querySelector('[data-criterion-weight]')?.value
+              ) || 0
+            }))
+          : [];
+
+        const payload = {
+          code: competencyFrameworkCodeInput
+            ? competencyFrameworkCodeInput.value.trim()
+            : '',
+          name: competencyFrameworkNameInput
+            ? competencyFrameworkNameInput.value.trim()
+            : '',
+          description: competencyFrameworkDescriptionInput
+            ? competencyFrameworkDescriptionInput.value.trim()
+            : '',
+          criteria
+        };
+
+        if (!payload.code || !payload.name) {
+          showCompetencyFrameworkError(
+            'Vui lòng nhập mã và tên khung năng lực.'
+          );
+          return;
+        }
+
+        if (
+          criteria.length === 0 ||
+          criteria.some(
+            criterion =>
+              !criterion.name ||
+              !Number.isInteger(criterion.weight) ||
+              criterion.weight <= 0 ||
+              criterion.weight > 100
+          )
+        ) {
+          showCompetencyFrameworkError(
+            'Mỗi tiêu chí phải có tên và trọng số từ 1 đến 100%.'
+          );
+          return;
+        }
+
+        const totalWeight = criteria.reduce(
+          (sum, criterion) => sum + criterion.weight,
+          0
+        );
+
+        if (totalWeight !== 100) {
+          showCompetencyFrameworkError(
+            `Tổng trọng số phải bằng 100%. Hiện tại là ${totalWeight}%.`
+          );
+          return;
+        }
+
+        if (competencyFrameworkSaveBtn) {
+          competencyFrameworkSaveBtn.disabled = true;
+        }
+
+        try {
+          const res = frameworkId
+            ? await window.ATS_API.updateCompetencyFrameworkApi(
+                token,
+                frameworkId,
+                payload
+              )
+            : await window.ATS_API.createCompetencyFrameworkApi(
+                token,
+                payload
+              );
+
+          if (res.ok && res.data?.success) {
+            showToast(
+              'success',
+              'Thành công',
+              frameworkId
+                ? 'Đã cập nhật khung năng lực.'
+                : 'Đã tạo khung năng lực.'
+            );
+
+            resetCompetencyFrameworkForm();
+            await loadCompetencies();
+          } else {
+            showCompetencyFrameworkError(
+              res.data?.message ||
+              'Không thể lưu khung năng lực.'
+            );
+          }
+        } catch (error) {
+          showCompetencyFrameworkError(error.message);
+        } finally {
+          if (competencyFrameworkSaveBtn) {
+            competencyFrameworkSaveBtn.disabled = false;
+          }
+        }
+      }
+    );
+  }
+
+  function hideJobTitleError() {
+    if (jobTitleFormAlert) {
+      jobTitleFormAlert.classList.add('hidden');
+    }
+
+    if (jobTitleFormAlertMsg) {
+      jobTitleFormAlertMsg.textContent = '';
+    }
+  }
+
+  function showJobTitleError(message) {
+    if (jobTitleFormAlertMsg) {
+      jobTitleFormAlertMsg.textContent =
+        message || 'Không thể lưu chức danh.';
+    }
+
+    if (jobTitleFormAlert) {
+      jobTitleFormAlert.classList.remove('hidden');
+    }
+  }
+
+  function resetJobTitleForm() {
+    if (jobTitleForm) {
+      jobTitleForm.reset();
+    }
+
+    if (jobTitleIdInput) {
+      jobTitleIdInput.value = '';
+    }
+
+    if (jobTitleFormTitle) {
+      jobTitleFormTitle.textContent = 'Thêm chức danh';
+    }
+
+    if (jobTitleSaveBtn) {
+      jobTitleSaveBtn.textContent = 'Lưu chức danh';
+      jobTitleSaveBtn.disabled = !canViewJobTitleSalary;
+    }
+
+    hideJobTitleError();
+    populateJobTitleFrameworkOptions();
+  }
+
+  function editJobTitle(jobTitleId) {
+    const jobTitle = currentJobTitles.find(
+      item => item.id === jobTitleId
+    );
+
+    if (!jobTitle) return;
+
+    if (jobTitleIdInput) {
+      jobTitleIdInput.value = jobTitle.id;
+    }
+
+    if (jobTitleCodeInput) {
+      jobTitleCodeInput.value = jobTitle.code || '';
+    }
+
+    if (jobTitleNameInput) {
+      jobTitleNameInput.value = jobTitle.name || '';
+    }
+    if (jobTitleLevelInput) jobTitleLevelInput.value = jobTitle.level || '';
+    if (jobTitleMinSalaryInput) jobTitleMinSalaryInput.value = canViewJobTitleSalary ? jobTitle.minSalary ?? '' : '';
+    if (jobTitleMaxSalaryInput) jobTitleMaxSalaryInput.value = canViewJobTitleSalary ? jobTitle.maxSalary ?? '' : '';
+
+    if (jobTitleFrameworkSelect) {
+      jobTitleFrameworkSelect.value =
+        jobTitle.framework?.id || '';
+    }
+
+    if (jobTitleFormTitle) {
+      jobTitleFormTitle.textContent = 'Cập nhật chức danh';
+    }
+
+    if (jobTitleSaveBtn) {
+      jobTitleSaveBtn.textContent = 'Cập nhật';
+      jobTitleSaveBtn.disabled = false;
+    }
+
+    hideJobTitleError();
+
+    if (jobTitleCodeInput) {
+      jobTitleCodeInput.focus();
+    }
+  }
+
+  if (jobTitleList) {
+    jobTitleList.addEventListener('click', event => {
+      const button = event.target.closest('[data-job-title-edit]');
+      if (!button) return;
+
+      editJobTitle(button.dataset.jobTitleEdit);
+    });
+  }
+
+  if (jobTitleResetBtn) {
+    jobTitleResetBtn.addEventListener(
+      'click',
+      resetJobTitleForm
+    );
+  }
+
+  if (jobTitleForm) {
+    jobTitleForm.addEventListener(
+      'submit',
+      async event => {
+        event.preventDefault();
+
+        const token = sessionStorage.getItem('ats_token');
+        if (!token) return;
+
+        hideJobTitleError();
+
+        const jobTitleId = jobTitleIdInput
+          ? jobTitleIdInput.value.trim()
+          : '';
+
+        const payload = {
+          code: jobTitleCodeInput
+            ? jobTitleCodeInput.value.trim()
+            : '',
+          name: jobTitleNameInput
+            ? jobTitleNameInput.value.trim()
+            : '',
+          level: jobTitleLevelInput ? jobTitleLevelInput.value.trim() : '',
+          frameworkId: jobTitleFrameworkSelect
+            ? jobTitleFrameworkSelect.value
+            : ''
+        };
+
+        if (
+          !payload.code ||
+          !payload.name ||
+          !payload.level
+        ) {
+          showJobTitleError(
+            'Vui lòng nhập mã, tên và cấp bậc chức danh.'
+          );
+          return;
+        }
+
+        const framework = currentCompetencyFrameworks.find(
+          item => item.id === payload.frameworkId
+        );
+
+        if (payload.frameworkId && !framework) {
+          showJobTitleError(
+            'Khung năng lực được chọn không tồn tại.'
+          );
+          return;
+        }
+
+        if (framework && Number(framework.totalWeight) !== 100) {
+          showJobTitleError(
+            'Khung năng lực phải có tổng trọng số bằng 100%.'
+          );
+          return;
+        }
+
+        if (canViewJobTitleSalary) {
+          const minimum = jobTitleMinSalaryInput?.value.trim();
+          const maximum = jobTitleMaxSalaryInput?.value.trim();
+          if (!minimum || !maximum || !Number.isSafeInteger(Number(minimum)) || !Number.isSafeInteger(Number(maximum)) || Number(minimum) < 0 || Number(minimum) > Number(maximum)) {
+            showJobTitleError('Dải lương phải gồm hai số nguyên không âm; tối thiểu không vượt tối đa.');
+            return;
+          }
+          payload.minSalary = Number(minimum);
+          payload.maxSalary = Number(maximum);
+        }
+        if (jobTitleSaveBtn) jobTitleSaveBtn.disabled = true;
+
+        try {
+          const res = jobTitleId
+            ? await window.ATS_API.updateJobTitleApi(
+                token,
+                jobTitleId,
+                payload
+              )
+            : await window.ATS_API.createJobTitleApi(
+                token,
+                payload
+              );
+
+          if (res.ok && res.data?.success) {
+            showToast(
+              'success',
+              'Thành công',
+              jobTitleId
+                ? 'Đã cập nhật chức danh.'
+                : 'Đã tạo chức danh.'
+            );
+
+            resetJobTitleForm();
+            await loadCompetencies();
+          } else {
+            showJobTitleError(
+              res.data?.message ||
+              'Không thể lưu chức danh.'
+            );
+          }
+        } catch (error) {
+          showJobTitleError(error.message);
+        } finally {
+          if (jobTitleSaveBtn) {
+            jobTitleSaveBtn.disabled = !canViewJobTitleSalary && !jobTitleIdInput?.value;
+          }
+        }
+      }
+    );
+  }
 
   const usersSearchInput = document.getElementById('users-search-input');
   const usersRoleFilter = document.getElementById('users-role-filter');
@@ -1962,6 +5156,35 @@ document.addEventListener('DOMContentLoaded', () => {
   // 15. USER PROFILE VIEW
   // ==============================================================================
 
+  function renderUserAvatar(element, userId, fallbackText, cacheBust = '') {
+    if (!element) return;
+
+    const initial = String(fallbackText || 'U').charAt(0).toUpperCase();
+    element.textContent = initial;
+
+    if (!userId) return;
+
+    const image = document.createElement('img');
+    const version = cacheBust ? `?v=${cacheBust}` : '';
+
+    image.src = `/public/avatars/avatar-${encodeURIComponent(userId)}-thumb.png${version}`;
+    image.alt = 'Ảnh đại diện';
+    image.style.width = '100%';
+    image.style.height = '100%';
+    image.style.objectFit = 'cover';
+    image.style.borderRadius = 'inherit';
+    image.style.display = 'block';
+
+    image.addEventListener('load', () => {
+      element.textContent = '';
+      element.style.overflow = 'hidden';
+      element.appendChild(image);
+    }, { once: true });
+
+    image.addEventListener('error', () => {
+      element.textContent = initial;
+    }, { once: true });
+  }
   async function loadUserProfile() {
     if (!currentAuthenticatedUser) return;
     const token = sessionStorage.getItem('ats_token');
@@ -1990,7 +5213,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const phone = document.getElementById('profile-card-phone');
     const rolesContainer = document.getElementById('profile-card-roles');
 
-    if (avatar) avatar.textContent = (u.fullName || u.email).charAt(0).toUpperCase();
+    renderUserAvatar(avatar, u.id, u.fullName || u.email);
     if (name) name.textContent = u.fullName || 'Người dùng';
     if (email) email.textContent = u.email;
     if (title) title.textContent = u.jobTitle || 'Chưa cập nhật';
@@ -2009,6 +5232,109 @@ document.addEventListener('DOMContentLoaded', () => {
     profileOpenChangePwdBtn.addEventListener('click', openChangePwdModal);
   }
 
+  const profileAvatarUploadBtn = document.getElementById('profile-avatar-upload-btn');
+  const profileAvatarInput = document.getElementById('profile-avatar-input');
+
+  if (profileAvatarUploadBtn && profileAvatarInput) {
+    profileAvatarUploadBtn.addEventListener('click', () => {
+      profileAvatarInput.click();
+    });
+
+    profileAvatarInput.addEventListener('change', async () => {
+      const file = profileAvatarInput.files && profileAvatarInput.files[0];
+
+      if (!file) return;
+
+      const allowedTypes = ['image/jpeg', 'image/png'];
+      const maxFileSize = 2 * 1024 * 1024;
+
+      if (!allowedTypes.includes(file.type)) {
+        showToast(
+          'warning',
+          'Ảnh không hợp lệ',
+          'Chỉ chấp nhận ảnh JPG hoặc PNG.'
+        );
+        profileAvatarInput.value = '';
+        return;
+      }
+
+      if (file.size > maxFileSize) {
+        showToast(
+          'warning',
+          'Ảnh quá lớn',
+          'Ảnh đại diện không được vượt quá 2MB.'
+        );
+        profileAvatarInput.value = '';
+        return;
+      }
+
+      const token = sessionStorage.getItem('ats_token');
+
+      if (!token || !currentAuthenticatedUser) {
+        profileAvatarInput.value = '';
+        return;
+      }
+
+      const originalButtonText = profileAvatarUploadBtn.textContent;
+      profileAvatarUploadBtn.disabled = true;
+      profileAvatarUploadBtn.textContent = 'Đang tải...';
+
+      try {
+        const res = await window.ATS_API.uploadAvatarApi(token, file);
+
+        if (res.ok && res.data && res.data.success) {
+          const cacheBust = Date.now();
+          const fallbackText =
+            currentAuthenticatedUser.fullName ||
+            currentAuthenticatedUser.email ||
+            'U';
+
+          renderUserAvatar(
+            document.getElementById('profile-card-avatar'),
+            currentAuthenticatedUser.id,
+            fallbackText,
+            cacheBust
+          );
+
+          renderUserAvatar(
+            topbarUserAvatar,
+            currentAuthenticatedUser.id,
+            fallbackText,
+            cacheBust
+          );
+
+          renderUserAvatar(
+            sidebarUserAvatar,
+            currentAuthenticatedUser.id,
+            fallbackText,
+            cacheBust
+          );
+
+          showToast(
+            'success',
+            'Đã cập nhật ảnh đại diện',
+            'Ảnh đại diện đã được tải lên thành công.'
+          );
+        } else {
+          showToast(
+            'error',
+            'Không thể cập nhật ảnh',
+            (res.data && res.data.message) || 'Không thể tải ảnh đại diện.'
+          );
+        }
+      } catch (err) {
+        showToast(
+          'error',
+          'Lỗi tải ảnh',
+          err.message || 'Không thể tải ảnh đại diện.'
+        );
+      } finally {
+        profileAvatarUploadBtn.disabled = false;
+        profileAvatarUploadBtn.textContent = originalButtonText;
+        profileAvatarInput.value = '';
+      }
+    });
+  }
   // Edit Profile Modal Wiring
   const profileEditBtn = document.getElementById('profile-edit-btn');
   const editProfileModal = document.getElementById('edit-profile-modal');
@@ -2042,7 +5368,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const fullName = editProfileNameInput.value.trim();
       const jobTitle = editProfileTitleInput.value.trim();
-      const phoneNumber = editProfilePhoneInput.value.trim();
+      const phoneNumber = editProfilePhoneInput.value
+        .trim()
+        .replace(/[\s.-]/g, '');
+
+      const vietnamPhoneRegex =
+        /^(?:0|\+84)(?:3[2-9]|5[25689]|7[06-9]|8[1-9]|9[0-9])\d{7}$/;
+
+      if (phoneNumber && !vietnamPhoneRegex.test(phoneNumber)) {
+        if (editProfileAlert && editProfileAlertMsg) {
+          editProfileAlertMsg.textContent =
+            'Số điện thoại Việt Nam không đúng định dạng.';
+          editProfileAlert.classList.remove('hidden');
+        }
+        return;
+      }
 
       try {
         const res = await window.ATS_API.updateProfileApi(token, { fullName, jobTitle, phoneNumber });
@@ -2125,7 +5465,10 @@ document.addEventListener('DOMContentLoaded', () => {
           jobTitle,
           department,
           phone,
-          initialRole
+          initialRole,
+          departmentName: department,
+          phoneNumber: phone,
+          roleCode: initialRole
         });
 
         if (res.ok && res.data && res.data.success) {
@@ -2153,6 +5496,434 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Modal: Bulk Import Users from Excel
+  const openBulkImportModalBtn = document.getElementById('open-bulk-import-modal-btn');
+  const bulkImportUserModal = document.getElementById('bulk-import-user-modal');
+  const closeBulkImportUserModal = document.getElementById('close-bulk-import-user-modal');
+  const cancelBulkImportBtn = document.getElementById('cancel-bulk-import-btn');
+  const downloadBulkTemplateBtn = document.getElementById('download-bulk-template-btn');
+  const bulkImportAlert = document.getElementById('bulk-import-alert');
+  const bulkImportAlertMsg = document.getElementById('bulk-import-alert-msg');
+  const bulkImportFileInput = document.getElementById('bulk-import-file-input');
+  const previewBulkImportBtn = document.getElementById('preview-bulk-import-btn');
+  const confirmBulkImportBtn = document.getElementById('confirm-bulk-import-btn');
+  const bulkImportSelectedFile = document.getElementById('bulk-import-selected-file');
+  const bulkImportPreviewSummary = document.getElementById('bulk-import-preview-summary');
+  const bulkImportPreviewContainer = document.getElementById('bulk-import-preview-container');
+  const bulkImportPreviewBody = document.getElementById('bulk-import-preview-body');
+  const bulkImportTotalRows = document.getElementById('bulk-import-total-rows');
+  const bulkImportValidRows = document.getElementById('bulk-import-valid-rows');
+  const bulkImportInvalidRows = document.getElementById('bulk-import-invalid-rows');
+  const bulkImportReport = document.getElementById('bulk-import-report');
+  const bulkImportReportTotal = document.getElementById('bulk-import-report-total');
+  const bulkImportReportImported = document.getElementById('bulk-import-report-imported');
+  const bulkImportReportSkipped = document.getElementById('bulk-import-report-skipped');
+  const bulkImportReportMessage = document.getElementById('bulk-import-report-message');
+
+  if (openBulkImportModalBtn) {
+    openBulkImportModalBtn.addEventListener('click', () => {
+      if (bulkImportUserModal) {
+        bulkImportUserModal.classList.remove('hidden');
+      }
+    });
+  }
+
+  if (closeBulkImportUserModal) {
+    closeBulkImportUserModal.addEventListener('click', () => {
+      if (bulkImportUserModal) {
+        bulkImportUserModal.classList.add('hidden');
+      }
+    });
+  }
+
+  if (cancelBulkImportBtn) {
+    cancelBulkImportBtn.addEventListener('click', () => {
+      if (bulkImportUserModal) {
+        bulkImportUserModal.classList.add('hidden');
+      }
+    });
+  }
+  if (bulkImportFileInput) {
+    bulkImportFileInput.addEventListener('change', () => {
+      const file = bulkImportFileInput.files
+        ? bulkImportFileInput.files[0]
+        : null;
+
+      if (confirmBulkImportBtn) {
+        confirmBulkImportBtn.disabled = true;
+      }
+
+      if (bulkImportPreviewSummary) {
+        bulkImportPreviewSummary.classList.add('hidden');
+      }
+
+      if (bulkImportPreviewContainer) {
+        bulkImportPreviewContainer.classList.add('hidden');
+      }
+
+      if (bulkImportPreviewBody) {
+        bulkImportPreviewBody.textContent = '';
+      }
+
+      if (bulkImportReport) {
+        bulkImportReport.classList.add('hidden');
+      }
+
+      if (!file) {
+        if (previewBulkImportBtn) {
+          previewBulkImportBtn.disabled = true;
+        }
+
+        if (bulkImportSelectedFile) {
+          bulkImportSelectedFile.textContent = '';
+          bulkImportSelectedFile.classList.add('hidden');
+        }
+
+        return;
+      }
+
+      if (previewBulkImportBtn) {
+        previewBulkImportBtn.disabled = false;
+      }
+
+      if (bulkImportSelectedFile) {
+        bulkImportSelectedFile.textContent =
+          `Đã chọn: ${file.name}`;
+        bulkImportSelectedFile.classList.remove('hidden');
+      }
+
+      if (bulkImportAlert) {
+        bulkImportAlert.classList.add('hidden');
+      }
+    });
+  }
+  if (previewBulkImportBtn) {
+    previewBulkImportBtn.addEventListener('click', async () => {
+      const token = sessionStorage.getItem('ats_token');
+      const file = bulkImportFileInput && bulkImportFileInput.files
+        ? bulkImportFileInput.files[0]
+        : null;
+
+      if (!token) {
+        if (bulkImportAlert && bulkImportAlertMsg) {
+          bulkImportAlertMsg.textContent = 'Phiên đăng nhập không hợp lệ.';
+          bulkImportAlert.classList.remove('hidden');
+        }
+        return;
+      }
+
+      if (!file) {
+        if (bulkImportAlert && bulkImportAlertMsg) {
+          bulkImportAlertMsg.textContent = 'Vui lòng chọn tệp Excel trước khi xem trước.';
+          bulkImportAlert.classList.remove('hidden');
+        }
+        return;
+      }
+
+      previewBulkImportBtn.disabled = true;
+
+      if (confirmBulkImportBtn) {
+        confirmBulkImportBtn.disabled = true;
+      }
+
+      if (bulkImportAlert) {
+        bulkImportAlert.classList.add('hidden');
+      }
+
+      if (bulkImportPreviewSummary) {
+        bulkImportPreviewSummary.classList.add('hidden');
+      }
+
+      if (bulkImportPreviewContainer) {
+        bulkImportPreviewContainer.classList.add('hidden');
+      }
+
+      if (bulkImportReport) {
+        bulkImportReport.classList.add('hidden');
+      }
+
+      if (bulkImportPreviewBody) {
+        bulkImportPreviewBody.textContent = '';
+      }
+
+      try {
+        const res = await window.ATS_API.previewBulkUserImportApi(
+          token,
+          file
+        );
+
+        if (!(res.ok && res.data && res.data.success)) {
+          if (bulkImportAlert && bulkImportAlertMsg) {
+            bulkImportAlertMsg.textContent =
+              res.data?.message || 'Không thể xem trước dữ liệu Excel.';
+            bulkImportAlert.classList.remove('hidden');
+          }
+
+          return;
+        }
+
+        const data = res.data.data || {};
+        const summary = data.summary || {};
+        const rows = Array.isArray(data.rows)
+          ? data.rows
+          : [];
+
+        if (bulkImportTotalRows) {
+          bulkImportTotalRows.textContent =
+            String(summary.totalRows || 0);
+        }
+
+        if (bulkImportValidRows) {
+          bulkImportValidRows.textContent =
+            String(summary.validRows || 0);
+        }
+
+        if (bulkImportInvalidRows) {
+          bulkImportInvalidRows.textContent =
+            String(summary.invalidRows || 0);
+        }
+
+        if (bulkImportPreviewBody) {
+          rows.forEach(row => {
+            const tr = document.createElement('tr');
+
+            const values = [
+              row.rowNumber ?? '',
+              row.fullName || '',
+              row.email || '',
+              row.jobTitle || '',
+              row.departmentName || '',
+              row.roleCode || ''
+            ];
+
+            values.forEach(value => {
+              const td = document.createElement('td');
+              td.textContent = String(value);
+              tr.appendChild(td);
+            });
+
+            const resultCell = document.createElement('td');
+
+            if (row.valid) {
+              const status = document.createElement('span');
+              status.className = 'badge';
+              status.textContent = 'Hợp lệ';
+              resultCell.appendChild(status);
+            } else {
+              const errors = Array.isArray(row.errors)
+                ? row.errors
+                : [];
+
+              if (errors.length === 0) {
+                resultCell.textContent = 'Dữ liệu không hợp lệ.';
+              } else {
+                errors.forEach((error, index) => {
+                  const line = document.createElement('div');
+
+                  line.textContent =
+                    error.message ||
+                    error.code ||
+                    'Dữ liệu không hợp lệ.';
+
+                  if (index > 0) {
+                    line.style.marginTop = '4px';
+                  }
+
+                  resultCell.appendChild(line);
+                });
+              }
+            }
+
+            tr.appendChild(resultCell);
+            bulkImportPreviewBody.appendChild(tr);
+          });
+        }
+
+        if (bulkImportPreviewSummary) {
+          bulkImportPreviewSummary.classList.remove('hidden');
+        }
+
+        if (bulkImportPreviewContainer) {
+          bulkImportPreviewContainer.classList.remove('hidden');
+        }
+
+        if (confirmBulkImportBtn) {
+          confirmBulkImportBtn.disabled =
+            Number(summary.validRows || 0) <= 0;
+        }
+
+        showToast(
+          'success',
+          'Đã kiểm tra tệp Excel',
+          `${summary.validRows || 0} dòng hợp lệ, ${summary.invalidRows || 0} dòng có lỗi.`
+        );
+      } catch (err) {
+        if (bulkImportAlert && bulkImportAlertMsg) {
+          bulkImportAlertMsg.textContent =
+            err.message || 'Không thể xem trước dữ liệu Excel.';
+          bulkImportAlert.classList.remove('hidden');
+        }
+      } finally {
+        previewBulkImportBtn.disabled = false;
+      }
+    });
+  }
+  if (confirmBulkImportBtn) {
+    confirmBulkImportBtn.addEventListener('click', async () => {
+      const token = sessionStorage.getItem('ats_token');
+      const file = bulkImportFileInput && bulkImportFileInput.files
+        ? bulkImportFileInput.files[0]
+        : null;
+
+      if (!token) {
+        if (bulkImportAlert && bulkImportAlertMsg) {
+          bulkImportAlertMsg.textContent = 'Phiên đăng nhập không hợp lệ.';
+          bulkImportAlert.classList.remove('hidden');
+        }
+        return;
+      }
+
+      if (!file) {
+        if (bulkImportAlert && bulkImportAlertMsg) {
+          bulkImportAlertMsg.textContent =
+            'Vui lòng chọn và xem trước tệp Excel trước khi nhập.';
+          bulkImportAlert.classList.remove('hidden');
+        }
+        return;
+      }
+
+      confirmBulkImportBtn.disabled = true;
+
+      if (previewBulkImportBtn) {
+        previewBulkImportBtn.disabled = true;
+      }
+
+      if (bulkImportAlert) {
+        bulkImportAlert.classList.add('hidden');
+      }
+
+      try {
+        const res = await window.ATS_API.importBulkUsersApi(
+          token,
+          file
+        );
+
+        if (!(res.ok && res.data && res.data.success)) {
+          if (bulkImportAlert && bulkImportAlertMsg) {
+            bulkImportAlertMsg.textContent =
+              res.data?.message || 'Không thể nhập danh sách nhân sự.';
+            bulkImportAlert.classList.remove('hidden');
+          }
+
+          return;
+        }
+
+        const data = res.data.data || {};
+        const summary = data.summary || {};
+
+        if (bulkImportReportTotal) {
+          bulkImportReportTotal.textContent =
+            String(summary.totalRows || 0);
+        }
+
+        if (bulkImportReportImported) {
+          bulkImportReportImported.textContent =
+            String(summary.importedRows || 0);
+        }
+
+        if (bulkImportReportSkipped) {
+          bulkImportReportSkipped.textContent =
+            String(summary.skippedRows || 0);
+        }
+
+        if (bulkImportReportMessage) {
+          bulkImportReportMessage.textContent =
+            res.data.message || 'Hoàn tất nhập danh sách nhân sự.';
+        }
+
+        if (bulkImportReport) {
+          bulkImportReport.classList.remove('hidden');
+        }
+
+        showToast(
+          'success',
+          'Hoàn tất nhập nhân sự',
+          `${summary.importedRows || 0} dòng đã nhập, ${summary.skippedRows || 0} dòng bị bỏ qua.`
+        );
+
+        usersCurrentPage = 1;
+        loadUsers();
+        loadDashboardData();
+      } catch (err) {
+        if (bulkImportAlert && bulkImportAlertMsg) {
+          bulkImportAlertMsg.textContent =
+            err.message || 'Không thể nhập danh sách nhân sự.';
+          bulkImportAlert.classList.remove('hidden');
+        }
+      } finally {
+        if (previewBulkImportBtn) {
+          previewBulkImportBtn.disabled = false;
+        }
+      }
+    });
+  }
+  if (downloadBulkTemplateBtn) {
+    downloadBulkTemplateBtn.addEventListener('click', async () => {
+      const token = sessionStorage.getItem('ats_token');
+
+      if (!token) {
+        if (bulkImportAlert && bulkImportAlertMsg) {
+          bulkImportAlertMsg.textContent = 'Phiên đăng nhập không hợp lệ.';
+          bulkImportAlert.classList.remove('hidden');
+        }
+        return;
+      }
+
+      downloadBulkTemplateBtn.disabled = true;
+
+      try {
+        const res = await window.ATS_API.downloadBulkUserTemplateApi(token);
+
+        if (res.ok && res.data && res.data.blob) {
+          const url = URL.createObjectURL(res.data.blob);
+          const link = document.createElement('a');
+
+          link.href = url;
+          link.download = res.data.filename || 'mau_nhap_nhan_su.xlsx';
+
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+
+          URL.revokeObjectURL(url);
+
+          if (bulkImportAlert) {
+            bulkImportAlert.classList.add('hidden');
+          }
+
+          showToast(
+            'success',
+            'Tải tệp mẫu thành công',
+            'Tệp mẫu Excel nhập nhân sự đã được tải xuống.'
+          );
+        } else {
+          if (bulkImportAlert && bulkImportAlertMsg) {
+            bulkImportAlertMsg.textContent =
+              res.data?.message || 'Không thể tải tệp mẫu Excel.';
+            bulkImportAlert.classList.remove('hidden');
+          }
+        }
+      } catch (err) {
+        if (bulkImportAlert && bulkImportAlertMsg) {
+          bulkImportAlertMsg.textContent =
+            err.message || 'Không thể tải tệp mẫu Excel.';
+          bulkImportAlert.classList.remove('hidden');
+        }
+      } finally {
+        downloadBulkTemplateBtn.disabled = false;
+      }
+    });
+  }
   // Modal: Edit User
   const editUserModal = document.getElementById('edit-user-modal');
   const closeEditUserModal = document.getElementById('close-edit-user-modal');
@@ -2414,17 +6185,138 @@ document.addEventListener('DOMContentLoaded', () => {
   const createReqAlert = document.getElementById('create-req-alert');
   const createReqAlertMsg = document.getElementById('create-req-alert-msg');
   const createReqRecruiterSelect = document.getElementById('create-req-recruiter-select');
+  const createReqDepartmentSelect = document.getElementById('create-req-dept-input');
+  const createReqWorkLocationSelect = document.getElementById('create-req-work-location-select');
+  const createReqWorkModeSelect = document.getElementById('create-req-work-mode-select');
+  const createReqJobTitleSelect = document.getElementById('create-req-job-title-input');
+  const saveCreateReqDraftBtn = document.getElementById('save-create-req-draft-btn');
+  let requisitionJobTitles = [];
+  let editingS210Requisition = null;
+  let requisitionSalaryCheck = { key: null, status: null, message: '' };
+  let requisitionSalaryCheckRevision = 0;
+  let requisitionOptionsRevision = 0;
 
-  async function openCreateReqModal() {
+  function requisitionSalaryCheckKey() {
+    return JSON.stringify([createReqJobTitleSelect?.value || '',
+      document.getElementById('create-req-salary-min-input').value,
+      document.getElementById('create-req-salary-max-input').value]);
+  }
+
+  function requisitionBusinessDate(now = new Date()) {
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
+    const part = type => parts.find(item => item.type === type).value;
+    return `${part('year')}-${part('month')}-${part('day')}`;
+  }
+
+  function clearRequisitionSalaryState() {
+    requisitionJobTitles = [];
+    editingS210Requisition = null;
+    requisitionSalaryCheck = { key: null, status: null, message: '' };
+    requisitionSalaryCheckRevision++;
+    requisitionOptionsRevision++;
+    for (const id of ['create-req-salary-min-input', 'create-req-salary-max-input', 'create-req-justification-input']) {
+      const node = document.getElementById(id); if (node) node.value = '';
+    }
+    for (const id of ['create-req-standard-salary', 'create-req-salary-warning']) {
+      const node = document.getElementById(id); if (node) node.textContent = '';
+    }
+    if (createReqModal) createReqModal.classList.add('hidden');
+  }
+
+  function updateRequisitionSalaryHint() {
+    const job = requisitionJobTitles.find(item => item.id === createReqJobTitleSelect?.value);
+    const min = document.getElementById('create-req-salary-min-input').value;
+    const max = document.getElementById('create-req-salary-max-input').value;
+    const known = job && job.minSalary !== null && job.maxSalary !== null && job.minSalary !== undefined && job.maxSalary !== undefined;
+    const checked = requisitionSalaryCheck.key === requisitionSalaryCheckKey() ? requisitionSalaryCheck : null;
+    const outside = checked?.status ? checked.status === 'OUTSIDE_STANDARD_RANGE'
+      : known && ((min !== '' && Number(min) < job.minSalary) || (max !== '' && Number(max) > job.maxSalary));
+    document.getElementById('create-req-standard-salary').textContent = known
+      ? `Dải lương chuẩn: ${Number(job.minSalary).toLocaleString('vi-VN')} – ${Number(job.maxSalary).toLocaleString('vi-VN')} VND`
+      : checked?.status === 'WITHIN_STANDARD_RANGE' ? 'Dải lương đề xuất nằm trong chuẩn chức danh.'
+        : checked?.status === 'OUTSIDE_STANDARD_RANGE' ? 'Dải lương đề xuất nằm ngoài chuẩn chức danh.'
+          : 'Dải lương sẽ được kiểm tra ở máy chủ khi lưu.';
+    document.getElementById('create-req-salary-warning').textContent = outside ? 'Dải lương đề xuất ngoài chuẩn. Bắt buộc nhập giải trình, kể cả khi lưu nháp.' : checked?.message || '';
+    document.getElementById('create-req-justification-input').required = Boolean(outside);
+    return outside;
+  }
+
+  async function refreshRequisitionSalaryCheck() {
+    const revision = ++requisitionSalaryCheckRevision;
+    const token = sessionStorage.getItem('ats_token');
+    const key = requisitionSalaryCheckKey();
+    const jobTitleId = createReqJobTitleSelect?.value || '';
+    const min = document.getElementById('create-req-salary-min-input').value;
+    const max = document.getElementById('create-req-salary-max-input').value;
+    requisitionSalaryCheck = { key: null, status: null, message: '' };
+    updateRequisitionSalaryHint();
+    if (!token || !jobTitleId || min === '' || max === '' || !Number.isFinite(Number(min)) || !Number.isFinite(Number(max)) || Number(min) < 0 || Number(max) < Number(min)) return null;
+    try {
+      const result = await window.ATS_API.getRequisitionOptionsApi(token, { jobTitleId, proposedSalaryMin: min, proposedSalaryMax: max });
+      // Ignore responses from an older input or a previous session/modal.
+      if (revision !== requisitionSalaryCheckRevision || key !== requisitionSalaryCheckKey() || token !== sessionStorage.getItem('ats_token')) return null;
+      const status = result.ok && ['WITHIN_STANDARD_RANGE', 'OUTSIDE_STANDARD_RANGE'].includes(result.data?.salaryRangeStatus) ? result.data.salaryRangeStatus : null;
+      requisitionSalaryCheck = { key, status, message: !result.ok ? result.data?.message || 'Chưa kiểm tra được dải lương. Máy chủ sẽ kiểm tra khi lưu.' : '' };
+      updateRequisitionSalaryHint();
+      return status;
+    } catch {
+      return null; // Save still goes through authoritative backend validation.
+    }
+  }
+  for (const id of ['create-req-job-title-input', 'create-req-salary-min-input', 'create-req-salary-max-input']) {
+    const node = document.getElementById(id); if (node) node.addEventListener('input', refreshRequisitionSalaryCheck);
+  }
+
+  async function openCreateReqModal(request = null) {
     if (!createReqModal) return;
+    const optionsRevision = ++requisitionOptionsRevision;
+    editingS210Requisition = request?.formVersion === 'S2-10' ? request : null;
+    requisitionJobTitles = [];
+    requisitionSalaryCheck = { key: null, status: null, message: '' };
+    requisitionSalaryCheckRevision++;
     if (createReqForm) createReqForm.reset();
+    document.getElementById('create-req-needed-date-input').min = requisitionBusinessDate();
+    document.getElementById('create-req-state').textContent = editingS210Requisition ? `${editingS210Requisition.code} — ${editingS210Requisition.status === 'DRAFT' ? 'Nháp' : editingS210Requisition.status}` : 'Yêu cầu mới';
     if (createReqAlert) createReqAlert.classList.add('hidden');
 
     // Populate Recruiters list
     const token = sessionStorage.getItem('ats_token');
+    const isCurrentSession = () => optionsRevision === requisitionOptionsRevision && token === sessionStorage.getItem('ats_token');
+    if (token && createReqDepartmentSelect) {
+      try {
+        const departmentsRes = await window.ATS_API.getRequisitionOptionsApi(token);
+        if (!isCurrentSession()) return;
+
+        if (departmentsRes.ok && departmentsRes.data && departmentsRes.data.success) {
+          const tree = departmentsRes.data.tree || [];
+          requisitionJobTitles = departmentsRes.data.jobTitles || [];
+          if (createReqJobTitleSelect) createReqJobTitleSelect.innerHTML = '<option value="">-- Chọn chức danh --</option>' + requisitionJobTitles.map(job => `<option value="${escapeDepartmentHtml(job.id)}">${escapeDepartmentHtml(job.code)} — ${escapeDepartmentHtml(job.name)}${job.level ? ' (' + escapeDepartmentHtml(job.level) + ')' : ''}</option>`).join('');
+
+          const renderDepartmentOptions = (nodes, depth = 0) =>
+            nodes.map(department => {
+              const prefix = depth > 0 ? '— '.repeat(depth) : '';
+              const option = department.status === 'ACTIVE'
+                ? `<option value="${escapeDepartmentHtml(department.id)}">${prefix}${escapeDepartmentHtml(department.name)}</option>`
+                : '';
+
+              return option +
+                renderDepartmentOptions(department.children || [], depth + 1);
+            }).join('');
+
+          createReqDepartmentSelect.innerHTML =
+            `<option value="">-- Chọn phòng ban --</option>` +
+            renderDepartmentOptions(departmentsRes.data.s210Departments || tree);
+        }
+      } catch {
+        if (!isCurrentSession()) return;
+        createReqDepartmentSelect.innerHTML =
+          `<option value="">-- Không tải được phòng ban --</option>`;
+      }
+    }
     if (token && createReqRecruiterSelect) {
       try {
         const usersRes = await window.ATS_API.getUsersApi(token, { role: 'RECRUITER', status: 'ACTIVE' });
+        if (!isCurrentSession()) return;
         if (usersRes.ok && usersRes.data && usersRes.data.success) {
           const recruiters = usersRes.data.data.users || [];
           createReqRecruiterSelect.innerHTML = `<option value="">-- Chưa chỉ định --</option>` +
@@ -2435,35 +6327,143 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
+    if (token && createReqWorkLocationSelect && createReqWorkModeSelect) {
+      try {
+        const [locationRes, modeRes] = await Promise.all([
+          window.ATS_API.getRecruitmentCatalogsApi(token, {
+            type: 'WORK_LOCATION',
+            status: 'ACTIVE'
+          }),
+          window.ATS_API.getRecruitmentCatalogsApi(token, {
+            type: 'WORK_MODE',
+            status: 'ACTIVE'
+          })
+        ]);
+        if (!isCurrentSession()) return;
+
+        const locations =
+          locationRes.ok && locationRes.data && locationRes.data.success
+            ? locationRes.data.items || []
+            : [];
+
+        const modes =
+          modeRes.ok && modeRes.data && modeRes.data.success
+            ? modeRes.data.items || []
+            : [];
+
+        createReqWorkLocationSelect.innerHTML =
+          '<option value="">-- Chưa xác định --</option>' +
+          locations.map(item =>
+            `<option value="${item.id}">${escapeRecruitmentCatalogHtml(item.name)}</option>`
+          ).join('');
+
+        createReqWorkModeSelect.innerHTML =
+          '<option value="">-- Chưa xác định --</option>' +
+          modes.map(item =>
+            `<option value="${item.id}">${escapeRecruitmentCatalogHtml(item.name)}</option>`
+          ).join('');
+      } catch {
+        if (!isCurrentSession()) return;
+        createReqWorkLocationSelect.innerHTML =
+          '<option value="">-- Không tải được địa điểm --</option>';
+
+        createReqWorkModeSelect.innerHTML =
+          '<option value="">-- Không tải được hình thức --</option>';
+      }
+    }
+
+    if (editingS210Requisition) {
+      const req = editingS210Requisition;
+      const mapping = { 'create-req-title-input': 'title', 'create-req-job-title-input': 'jobTitleId', 'create-req-dept-input': 'departmentId',
+        'create-req-headcount-input': 'headcount', 'create-req-reason-input': 'recruitmentReason', 'create-req-needed-date-input': 'neededDate',
+        'create-req-salary-min-input': 'proposedSalaryMin', 'create-req-salary-max-input': 'proposedSalaryMax', 'create-req-justification-input': 'salaryJustification',
+        'create-req-description-input': 'jobDescription', 'create-req-requirements-input': 'candidateRequirements',
+        'create-req-work-location-select': 'workLocationId', 'create-req-work-mode-select': 'workModeId', 'create-req-recruiter-select': 'recruiterId' };
+      const savedLabels = { jobTitleId: 'Chức danh đã lưu', departmentId: req.departmentName,
+        recruiterId: req.recruiterName || 'Nhân sự đã lưu', workLocationId: 'Địa điểm đã lưu', workModeId: 'Hình thức đã lưu' };
+      for (const [id, key] of Object.entries(mapping)) {
+        const node = document.getElementById(id);
+        const value = req[key] ?? '';
+        // A read-only or inactive reference may be absent from the current choices.
+        // Keep the stored selection rather than silently clearing it on a draft save.
+        if (node.tagName === 'SELECT' && value && Object.hasOwn(savedLabels, key) && !Array.from(node.options).some(option => option.value === value)) {
+          node.innerHTML += `<option value="${escapeDepartmentHtml(value)}">${escapeDepartmentHtml(savedLabels[key] || value)}</option>`;
+        }
+        node.value = value;
+      }
+    }
+    let editable = !editingS210Requisition;
+    if (editingS210Requisition?.status === 'DRAFT') {
+      const permissions = await window.ATS_API.getPermissionsApi(token);
+      if (!isCurrentSession()) return;
+      editable = permissions.ok && (permissions.data?.permissions || []).includes('requisition.draft.edit');
+    }
+    if (!isCurrentSession()) return;
+    createReqForm.querySelectorAll('input, select, textarea').forEach(node => { node.disabled = !editable; });
+    document.getElementById('create-req-legacy-dept-input').disabled = true;
+    if (saveCreateReqDraftBtn) saveCreateReqDraftBtn.classList.toggle('hidden', !editable);
+    document.getElementById('submit-create-req-btn').classList.toggle('hidden', !editable);
+    updateRequisitionSalaryHint();
     createReqModal.classList.remove('hidden');
+    await refreshRequisitionSalaryCheck();
   }
 
   if (openCreateReqModalBtn) openCreateReqModalBtn.addEventListener('click', openCreateReqModal);
   if (closeCreateReqModal) closeCreateReqModal.addEventListener('click', () => createReqModal.classList.add('hidden'));
   if (cancelCreateReqBtn) cancelCreateReqBtn.addEventListener('click', () => createReqModal.classList.add('hidden'));
 
-  if (createReqForm) {
-    createReqForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
+  async function saveRequisitionForm(status) {
       const token = sessionStorage.getItem('ats_token');
       if (!token) return;
 
       const title = document.getElementById('create-req-title-input').value.trim();
-      const department = document.getElementById('create-req-dept-input').value.trim();
-      const headcount = parseInt(document.getElementById('create-req-headcount-input').value, 10) || 1;
+      const departmentId = createReqDepartmentSelect
+        ? createReqDepartmentSelect.value
+        : '';
+      const headcountInput = document.getElementById('create-req-headcount-input').value;
+      const headcount = headcountInput === '' ? null : Number(headcountInput);
       const recruiterId = createReqRecruiterSelect ? createReqRecruiterSelect.value : null;
+      const workLocationId = createReqWorkLocationSelect
+        ? createReqWorkLocationSelect.value
+        : null;
+      const workModeId = createReqWorkModeSelect
+        ? createReqWorkModeSelect.value
+        : null;
 
       try {
-        const res = await window.ATS_API.createRequisition(token, {
+        const read = id => document.getElementById(id).value;
+        const min = read('create-req-salary-min-input'), max = read('create-req-salary-max-input');
+        const payload = {
+          formVersion: 'S2-10', status,
           title,
-          department,
+          departmentId,
+          jobTitleId: createReqJobTitleSelect?.value || null,
           headcount,
-          assignedRecruiterId: recruiterId || null
-        });
+          recruitmentReason: read('create-req-reason-input') || null,
+          proposedSalaryMin: min === '' ? null : Number(min), proposedSalaryMax: max === '' ? null : Number(max),
+          neededDate: read('create-req-needed-date-input') || null,
+          jobDescription: read('create-req-description-input'), candidateRequirements: read('create-req-requirements-input'),
+          salaryJustification: read('create-req-justification-input'),
+          recruiterId: recruiterId || null,
+          workLocationId: workLocationId || null,
+          workModeId: workModeId || null
+        };
+        if (headcount !== null && (!Number.isSafeInteger(headcount) || headcount <= 0)) throw new Error('Số lượng cần tuyển phải là số nguyên lớn hơn 0.');
+        for (const salary of [payload.proposedSalaryMin, payload.proposedSalaryMax]) {
+          if (salary !== null && (!Number.isFinite(salary) || salary < 0)) throw new Error('Lương đề xuất phải là số hợp lệ, không âm.');
+        }
+        if (min !== '' && max !== '' && payload.proposedSalaryMin > payload.proposedSalaryMax) throw new Error('Lương tối thiểu không được lớn hơn lương tối đa.');
+        if (payload.neededDate && payload.neededDate < requisitionBusinessDate()) throw new Error('Ngày cần người không được ở quá khứ.');
+        await refreshRequisitionSalaryCheck();
+        if (updateRequisitionSalaryHint() && !payload.salaryJustification.trim()) throw new Error('Dải lương ngoài chuẩn bắt buộc nhập giải trình.');
+        if (status !== 'DRAFT' && ['jobTitleId', 'departmentId', 'headcount', 'recruitmentReason', 'proposedSalaryMin', 'proposedSalaryMax', 'neededDate', 'jobDescription', 'candidateRequirements'].some(key => payload[key] === null || payload[key] === '' || (typeof payload[key] === 'string' && !payload[key].trim()))) throw new Error('Vui lòng nhập đầy đủ thông tin bắt buộc trước khi hoàn tất.');
+        const res = editingS210Requisition
+          ? await window.ATS_API.updateRequisitionApi(token, editingS210Requisition.id, payload)
+          : await window.ATS_API.createRequisition(token, payload);
 
         if (res.ok && res.data && res.data.success) {
           createReqModal.classList.add('hidden');
-          showToast('success', 'Khởi tạo thành công', `Vị trí "${title}" đã được mở tuyển dụng.`);
+          showToast('success', status === 'DRAFT' ? 'Đã lưu nháp' : 'Đã hoàn tất', status === 'DRAFT' ? 'Có thể mở nháp từ danh sách để tiếp tục chỉnh sửa.' : 'Yêu cầu đã chuyển sang trạng thái mở tuyển dụng.');
           loadRequisitions();
           loadDashboardData();
         } else {
@@ -2478,8 +6478,11 @@ document.addEventListener('DOMContentLoaded', () => {
           createReqAlert.classList.remove('hidden');
         }
       }
-    });
   }
+  if (createReqForm) {
+    createReqForm.addEventListener('submit', e => { e.preventDefault(); return saveRequisitionForm('OPEN'); });
+  }
+  if (saveCreateReqDraftBtn) saveCreateReqDraftBtn.addEventListener('click', () => saveRequisitionForm('DRAFT'));
 
   // Modal: Reassign Handover
   const reassignHandoverModal = document.getElementById('reassign-handover-modal');
@@ -3029,9 +7032,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const createCandidateForm = document.getElementById('create-candidate-form');
   const createCandidateAlert = document.getElementById('create-candidate-alert');
   const createCandidateAlertMsg = document.getElementById('create-candidate-alert-msg');
+  const createCandidateSourceSelect = document.getElementById('create-cand-source-select');
 
   if (openCreateCandidateModalBtn) {
-    openCreateCandidateModalBtn.addEventListener('click', () => {
+    openCreateCandidateModalBtn.addEventListener('click', async () => {
       if (createCandidateModal) createCandidateModal.classList.remove('hidden');
       if (createCandidateForm) createCandidateForm.reset();
       if (createCandidateAlert) createCandidateAlert.classList.add('hidden');
@@ -3040,6 +7044,31 @@ document.addEventListener('DOMContentLoaded', () => {
       if (reqSelect) {
         reqSelect.innerHTML = `<option value="">-- Chọn vị trí tuyển dụng --</option>` +
           currentRequisitionsList.map(r => `<option value="${r.id}">${r.code} - ${r.title}</option>`).join('');
+      }
+
+      const token = sessionStorage.getItem('ats_token');
+
+      if (token && createCandidateSourceSelect) {
+        try {
+          const sourceRes = await window.ATS_API.getRecruitmentCatalogsApi(token, {
+            type: 'CANDIDATE_SOURCE',
+            status: 'ACTIVE'
+          });
+
+          const sources =
+            sourceRes.ok && sourceRes.data && sourceRes.data.success
+              ? sourceRes.data.items || []
+              : [];
+
+          createCandidateSourceSelect.innerHTML =
+            '<option value="">-- Chưa xác định --</option>' +
+            sources.map(item =>
+              `<option value="${item.id}">${escapeRecruitmentCatalogHtml(item.name)}</option>`
+            ).join('');
+        } catch {
+          createCandidateSourceSelect.innerHTML =
+            '<option value="">-- Không tải được nguồn ứng viên --</option>';
+        }
       }
     });
   }
@@ -3065,10 +7094,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const experienceYears = parseInt(document.getElementById('create-cand-exp').value, 10) || 0;
       const expectedSalary = document.getElementById('create-cand-salary').value.trim();
       const notes = document.getElementById('create-cand-notes').value.trim();
+      const sourceId = createCandidateSourceSelect ? createCandidateSourceSelect.value : null;
 
       try {
         const res = await window.ATS_API.createCandidateApi(token, {
-          fullName, email, phoneNumber, requisitionId, stage, rating, experienceYears, expectedSalary, notes
+          fullName, email, phoneNumber, requisitionId, stage, rating, experienceYears, expectedSalary, notes, sourceId: sourceId || null
         });
 
         if (res.ok && res.data && res.data.success) {
@@ -3097,8 +7127,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const candDetailSaveStageBtn = document.getElementById('cand-detail-save-stage-btn');
   const candDetailScheduleBtn = document.getElementById('cand-detail-schedule-btn');
   const candDetailOfferBtn = document.getElementById('cand-detail-offer-btn');
+  const candDetailSource = document.getElementById('cand-detail-source');
+  const candDetailRejectionReasonGroup = document.getElementById('cand-detail-rejection-reason-group');
+  const candDetailRejectionReasonSelect = document.getElementById('cand-detail-rejection-reason-select');
+  let canEditCandidateRejectionReason = false;
 
-  function openCandidateDetails(id) {
+  async function openCandidateDetails(id) {
     let c = currentCandidatesList.find(x => x.id === id);
     if (!c) {
       showToast('warning', 'Hồ sơ', `Đang tải chi tiết hồ sơ ứng viên...`);
@@ -3123,6 +7157,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (reqTitleEl) reqTitleEl.textContent = (c.requisition && c.requisition.title) ? c.requisition.title : (c.requisition_title || 'Chưa gắn vị trí');
     if (emailEl) emailEl.textContent = c.email || '—';
     if (phoneEl) phoneEl.textContent = c.phoneNumber || c.phone || 'Chưa cập nhật';
+    if (candDetailSource) {
+      candDetailSource.textContent =
+        c.sourceName || c.source_name || 'Chưa xác định';
+    }
     if (stageBadge) {
       stageBadge.className = `badge ${STAGE_BADGES[c.stage] || 'badge-neutral'}`;
       stageBadge.textContent = STAGE_LABELS[c.stage] || c.stage;
@@ -3131,9 +7169,88 @@ document.addEventListener('DOMContentLoaded', () => {
     if (stageSelect) stageSelect.value = c.stage;
     if (ratingEl) ratingEl.textContent = '★'.repeat(c.rating || 4) + '☆'.repeat(5 - (c.rating || 4));
 
+    canEditCandidateRejectionReason = false;
+    if (candDetailRejectionReasonSelect) candDetailRejectionReasonSelect.disabled = true;
+    if (candDetailRejectionReasonGroup) {
+      candDetailRejectionReasonGroup.classList.toggle(
+        'hidden',
+        true
+      );
+    }
+
+    if (candDetailRejectionReasonSelect) {
+      const token = sessionStorage.getItem('ats_token');
+
+      candDetailRejectionReasonSelect.innerHTML =
+        '<option value="">-- Chưa xác định --</option>';
+
+      if (token) {
+        try {
+          const [permissionsRes, reasonRes] = await Promise.all([
+            window.ATS_API.getPermissionsApi(token),
+            window.ATS_API.getRecruitmentCatalogsApi(token, { type: 'REJECTION_REASON' })
+          ]);
+          canEditCandidateRejectionReason = permissionsRes.ok && Array.isArray(permissionsRes.data?.permissions) && permissionsRes.data.permissions.includes('candidate.update');
+          candDetailRejectionReasonSelect.disabled = !canEditCandidateRejectionReason;
+          if (candDetailRejectionReasonGroup) candDetailRejectionReasonGroup.classList.toggle('hidden', !canEditCandidateRejectionReason || c.stage !== 'REJECTED');
+
+          const reasons =
+            reasonRes.ok &&
+            reasonRes.data &&
+            reasonRes.data.success
+              ? reasonRes.data.items || []
+              : [];
+
+          candDetailRejectionReasonSelect.innerHTML =
+            '<option value="">-- Chưa xác định --</option>' +
+            reasons.map(item => {
+              const selected =
+                item.id === c.rejectionReasonId
+                  ? 'selected'
+                  : '';
+
+              const disabled =
+                item.status !== 'ACTIVE' &&
+                item.id !== c.rejectionReasonId
+                  ? 'disabled'
+                  : '';
+
+              const suffix =
+                item.status === 'ACTIVE'
+                  ? ''
+                  : ' (Ngừng áp dụng)';
+
+              return `<option value="${item.id}" ${selected} ${disabled}>${escapeRecruitmentCatalogHtml(item.name)}${suffix}</option>`;
+            }).join('');
+        } catch {
+          candDetailRejectionReasonSelect.innerHTML =
+            '<option value="">-- Không tải được lý do loại --</option>';
+        }
+      }
+    }
     if (candidateDetailModal) candidateDetailModal.classList.remove('hidden');
   }
 
+  const candDetailStageSelect =
+    document.getElementById('cand-detail-change-stage-select');
+
+  if (candDetailStageSelect) {
+    candDetailStageSelect.addEventListener('change', () => {
+      if (candDetailRejectionReasonGroup) {
+        candDetailRejectionReasonGroup.classList.toggle(
+          'hidden',
+          !canEditCandidateRejectionReason || candDetailStageSelect.value !== 'REJECTED'
+        );
+      }
+
+      if (
+        candDetailStageSelect.value !== 'REJECTED' &&
+        candDetailRejectionReasonSelect
+      ) {
+        candDetailRejectionReasonSelect.value = '';
+      }
+    });
+  }
   if (closeCandidateDetailModal) {
     closeCandidateDetailModal.addEventListener('click', () => {
       if (candidateDetailModal) candidateDetailModal.classList.add('hidden');
@@ -3145,10 +7262,20 @@ document.addEventListener('DOMContentLoaded', () => {
       const token = sessionStorage.getItem('ats_token');
       const id = document.getElementById('cand-detail-id').value;
       const stage = document.getElementById('cand-detail-change-stage-select').value;
+      const rejectionReasonId =
+        canEditCandidateRejectionReason && stage === 'REJECTED' && candDetailRejectionReasonSelect
+          ? candDetailRejectionReasonSelect.value || null
+          : null;
       if (!token || !id) return;
 
       try {
-        const res = await window.ATS_API.updateCandidateStageApi(token, id, stage);
+        const res = await window.ATS_API.updateCandidateStageApi(
+          token,
+          id,
+          stage,
+          undefined,
+          rejectionReasonId || undefined
+        );
         if (res.ok && res.data && res.data.success) {
           showToast('success', 'Chuyển vòng thành công', `Đã cập nhật trạng thái ứng viên sang "${STAGE_LABELS[stage] || stage}".`);
           if (candidateDetailModal) candidateDetailModal.classList.add('hidden');
@@ -3800,11 +7927,19 @@ document.addEventListener('DOMContentLoaded', () => {
   const reqDetailAlert = document.getElementById('req-detail-alert');
   const reqDetailAlertMsg = document.getElementById('req-detail-alert-msg');
   const reqDetailRecruiterSelect = document.getElementById('req-detail-recruiter-select');
+  const reqDetailWorkLocationSelect = document.getElementById('req-detail-work-location-select');
+  const reqDetailWorkModeSelect = document.getElementById('req-detail-work-mode-select');
 
   async function openRequisitionDetails(id) {
     if (!reqDetailModal) return;
     const req = currentRequisitionsList.find(r => r.id === id);
     if (!req) return;
+    if (req.formVersion === 'S2-10') {
+      const result = await window.ATS_API.getRequisitionByIdApi(sessionStorage.getItem('ats_token'), id);
+      if (result.ok && result.data?.success) await openCreateReqModal(result.data.data);
+      else showToast('error', 'Không thể đọc yêu cầu', result.data?.message || 'Không thể tải yêu cầu tuyển dụng.');
+      return;
+    }
 
     document.getElementById('req-detail-id').value = req.id;
     document.getElementById('req-detail-code').textContent = req.code;
@@ -3831,6 +7966,74 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch {}
     }
 
+    if (token && reqDetailWorkLocationSelect && reqDetailWorkModeSelect) {
+      try {
+        const [locationRes, modeRes] = await Promise.all([
+          window.ATS_API.getRecruitmentCatalogsApi(token, {
+            type: 'WORK_LOCATION'
+          }),
+          window.ATS_API.getRecruitmentCatalogsApi(token, {
+            type: 'WORK_MODE'
+          })
+        ]);
+
+        const locations =
+          locationRes.ok && locationRes.data && locationRes.data.success
+            ? locationRes.data.items || []
+            : [];
+
+        const modes =
+          modeRes.ok && modeRes.data && modeRes.data.success
+            ? modeRes.data.items || []
+            : [];
+
+        reqDetailWorkLocationSelect.innerHTML =
+          '<option value="">-- Chưa xác định --</option>' +
+          locations.map(item => {
+            const selected =
+              item.id === req.workLocationId ? 'selected' : '';
+
+            const disabled =
+              item.status !== 'ACTIVE' &&
+              item.id !== req.workLocationId
+                ? 'disabled'
+                : '';
+
+            const suffix =
+              item.status === 'ACTIVE'
+                ? ''
+                : ' (Ngừng áp dụng)';
+
+            return `<option value="${item.id}" ${selected} ${disabled}>${escapeRecruitmentCatalogHtml(item.name)}${suffix}</option>`;
+          }).join('');
+
+        reqDetailWorkModeSelect.innerHTML =
+          '<option value="">-- Chưa xác định --</option>' +
+          modes.map(item => {
+            const selected =
+              item.id === req.workModeId ? 'selected' : '';
+
+            const disabled =
+              item.status !== 'ACTIVE' &&
+              item.id !== req.workModeId
+                ? 'disabled'
+                : '';
+
+            const suffix =
+              item.status === 'ACTIVE'
+                ? ''
+                : ' (Ngừng áp dụng)';
+
+            return `<option value="${item.id}" ${selected} ${disabled}>${escapeRecruitmentCatalogHtml(item.name)}${suffix}</option>`;
+          }).join('');
+      } catch {
+        reqDetailWorkLocationSelect.innerHTML =
+          '<option value="">-- Không tải được địa điểm --</option>';
+
+        reqDetailWorkModeSelect.innerHTML =
+          '<option value="">-- Không tải được hình thức --</option>';
+      }
+    }
     if (reqDetailAlert) reqDetailAlert.classList.add('hidden');
     reqDetailModal.classList.remove('hidden');
   }
@@ -3850,9 +8053,23 @@ document.addEventListener('DOMContentLoaded', () => {
       const headcount = parseInt(document.getElementById('req-detail-headcount-input').value, 10);
       const status = document.getElementById('req-detail-status-select').value;
       const recruiterId = reqDetailRecruiterSelect ? reqDetailRecruiterSelect.value : null;
+      const workLocationId = reqDetailWorkLocationSelect
+        ? reqDetailWorkLocationSelect.value
+        : null;
+      const workModeId = reqDetailWorkModeSelect
+        ? reqDetailWorkModeSelect.value
+        : null;
 
       try {
-        const res = await window.ATS_API.updateRequisitionApi(token, id, { title, departmentName, headcount, status, recruiterId });
+        const res = await window.ATS_API.updateRequisitionApi(token, id, {
+          title,
+          departmentName,
+          headcount,
+          status,
+          recruiterId,
+          workLocationId: workLocationId || null,
+          workModeId: workModeId || null
+        });
         if (res.ok && res.data && res.data.success) {
           reqDetailModal.classList.add('hidden');
           showToast('success', 'Cập nhật thành công', `Vị trí "${title}" đã được lưu.`);
@@ -3946,6 +8163,31 @@ document.addEventListener('DOMContentLoaded', () => {
     showErrorView
   };
 
+  async function loadPublicCareerPage() {
+    const container = document.getElementById('public-career-page-content');
+    if (!container) return;
+
+    try {
+      const res = await window.ATS_API.getPublicCareerPageApi();
+
+      if (!res.ok || !res.data || !res.data.success) {
+        container.innerHTML = '';
+        return;
+      }
+
+      const data = res.data.data || {};
+
+      renderCareerPagePublicContent(container, {
+        introduction: data.introduction || '',
+        logoUrl: data.logoUrl || null,
+        heroImageUrl: data.heroImageUrl || null
+      });
+    } catch {
+      container.innerHTML = '';
+    }
+  }
+
+  loadPublicCareerPage();
   checkExistingSession();
 });
 

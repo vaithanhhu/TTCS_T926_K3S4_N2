@@ -210,6 +210,128 @@ class UserController {
       res.end(JSON.stringify({ success: false, statusCode: 500, message: 'Lỗi máy chủ nội bộ khi mở khóa tài khoản.', code: 'INTERNAL_ERROR' }));
     }
   }
+  /**
+   * POST /api/v1/admin/users/import
+   * Nhập danh sách nhân sự hàng loạt từ file Excel.
+   * Dòng lỗi bị bỏ qua, dòng hợp lệ vẫn được tạo tài khoản.
+   * Yêu cầu quyền: user.create
+   */
+  async handleImportBulkUsers(req, res, fileBuffer) {
+    try {
+      const authorizedUser = this.rbacMiddleware.authorize(
+        req,
+        res,
+        this.authService,
+        'user.create'
+      );
+
+      if (!authorizedUser) return;
+
+      const result = await this.userService.importBulkUsers(
+        fileBuffer,
+        authorizedUser.id || 'ADMIN'
+      );
+
+      res.writeHead(result.statusCode || 200, {
+        'Content-Type': 'application/json; charset=utf-8'
+      });
+
+      res.end(JSON.stringify(result));
+    } catch (err) {
+      console.error('[UserController handleImportBulkUsers Error]', err);
+
+      res.writeHead(500, {
+        'Content-Type': 'application/json; charset=utf-8'
+      });
+
+      res.end(JSON.stringify({
+        success: false,
+        statusCode: 500,
+        message: 'Không thể nhập danh sách nhân sự từ tệp Excel.',
+        code: 'BULK_IMPORT_ERROR'
+      }));
+    }
+  }
+  /**
+   * POST /api/v1/admin/users/import/preview
+   * Kiểm tra trước dữ liệu Excel và trả lỗi theo từng dòng.
+   * Không tạo tài khoản ở bước preview.
+   * Yêu cầu quyền: user.create
+   */
+  async handlePreviewBulkUserImport(req, res, fileBuffer) {
+    try {
+      const authorizedUser = this.rbacMiddleware.authorize(
+        req,
+        res,
+        this.authService,
+        'user.create'
+      );
+
+      if (!authorizedUser) return;
+
+      const result = await this.userService.previewBulkUserImport(fileBuffer);
+
+      res.writeHead(result.statusCode || 200, {
+        'Content-Type': 'application/json; charset=utf-8'
+      });
+
+      res.end(JSON.stringify(result));
+    } catch (err) {
+      console.error('[UserController handlePreviewBulkUserImport Error]', err);
+
+      res.writeHead(500, {
+        'Content-Type': 'application/json; charset=utf-8'
+      });
+
+      res.end(JSON.stringify({
+        success: false,
+        statusCode: 500,
+        message: 'Không thể kiểm tra tệp Excel nhập nhân sự.',
+        code: 'BULK_IMPORT_PREVIEW_ERROR'
+      }));
+    }
+  }
+  /**
+   * GET /api/v1/admin/users/import/template
+   * Tải file Excel mẫu nhập danh sách nhân sự hàng loạt.
+   * Yêu cầu quyền: user.create
+   */
+  async handleDownloadBulkUserTemplate(req, res) {
+    try {
+      const authorizedUser = this.rbacMiddleware.authorize(
+        req,
+        res,
+        this.authService,
+        'user.create'
+      );
+
+      if (!authorizedUser) return;
+
+      const buffer = await this.userService.buildBulkUserImportTemplate();
+
+      res.writeHead(200, {
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': 'attachment; filename="mau_nhap_nhan_su.xlsx"',
+        'Content-Length': buffer.length,
+        'Cache-Control': 'no-store'
+      });
+
+      res.end(buffer);
+    } catch (err) {
+      console.error('[UserController handleDownloadBulkUserTemplate Error]', err);
+
+      res.writeHead(500, {
+        'Content-Type': 'application/json; charset=utf-8'
+      });
+
+      res.end(JSON.stringify({
+        success: false,
+        statusCode: 500,
+        message: 'Không thể tạo file Excel mẫu nhập nhân sự.',
+        code: 'BULK_IMPORT_TEMPLATE_ERROR'
+      }));
+    }
+  }
 }
 
 module.exports = UserController;

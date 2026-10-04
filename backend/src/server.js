@@ -3,12 +3,18 @@ const fs = require('node:fs');
 const path = require('node:path');
 const config = require('./config/config');
 const { getDatabase } = require('./db/database');
-const { seedDatabase } = require('./db/seed');
+const { seedDatabase, ensureDepartmentFeature, ensureCompetencyFeature, ensureQuestionBankFeature, ensureRecruitmentCatalogFeature, ensureCareerPageFeature, ensureRequisitionDraftFeature } = require('./db/seed');
 const AuthController = require('./controllers/authController');
 const RbacMiddleware = require('./middlewares/rbacMiddleware');
 const UserService = require('./services/userService');
 const UserController = require('./controllers/userController');
 const RequisitionService = require('./services/requisitionService');
+const AvatarService = require('./services/avatarService');
+const DepartmentService = require('./services/departmentService');
+const CompetencyService = require('./services/competencyService');
+const QuestionBankService = require('./services/questionBankService');
+const RecruitmentCatalogService = require('./services/recruitmentCatalogService');
+const CareerPageService = require('./services/careerPageService');
 
 // Ensure DB is initialized and seeded
 const db = getDatabase();
@@ -16,6 +22,13 @@ const isTestEnv = process.env.NODE_ENV === 'test' || (process.argv[1] && (proces
 const userCount = db.prepare('SELECT COUNT(*) AS c FROM users').get().c;
 if (isTestEnv || userCount === 0) {
   seedDatabase(db);
+} else {
+  ensureDepartmentFeature(db);
+  ensureCompetencyFeature(db);
+  ensureQuestionBankFeature(db);
+  ensureRecruitmentCatalogFeature(db);
+  ensureCareerPageFeature(db);
+  ensureRequisitionDraftFeature(db);
 }
 
 const authController = new AuthController();
@@ -23,6 +36,21 @@ const rbacMiddleware = new RbacMiddleware(db);
 const userService = new UserService(db);
 const userController = new UserController(userService, rbacMiddleware, authController.authService);
 const requisitionService = new RequisitionService(db);
+const avatarService = new AvatarService();
+const departmentService = new DepartmentService(db);
+const competencyService = new CompetencyService(db);
+const questionBankService = new QuestionBankService(db);
+const recruitmentCatalogService = new RecruitmentCatalogService(db);
+const careerPageService = new CareerPageService(db);
+
+function canReadJobTitleSalary(user) {
+  return user.roles.includes('HR_MANAGER') && rbacMiddleware.hasPermission(user.id, 'salary_range.read');
+}
+
+function denyJobTitleSalary(res) {
+  res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+  res.end(JSON.stringify({ success: false, statusCode: 403, code: 'FORBIDDEN_PERMISSION_DENIED', message: 'Chỉ Trưởng phòng Nhân sự được khai báo và xem dải lương.' }));
+}
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -57,6 +85,104 @@ function parseBody(req) {
   });
 }
 
+function parseBinaryBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let totalBytes = 0;
+    let rejected = false;
+    const maxBytes = 5 * 1024 * 1024; // 5MB
+
+    req.on('data', chunk => {
+      if (rejected) return;
+      totalBytes += chunk.length;
+
+      if (totalBytes > maxBytes) {
+        rejected = true;
+        chunks.length = 0;
+        reject(new Error('Payload too large'));
+        return;
+      }
+
+      chunks.push(chunk);
+    });
+
+    req.on('end', () => {
+      if (!rejected) resolve(Buffer.concat(chunks));
+    });
+
+    req.on('error', reject);
+  });
+}
+function parseCareerImageBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let totalBytes = 0;
+    let rejected = false;
+    const maxBytes = 2 * 1024 * 1024;
+
+    req.on('data', chunk => {
+      if (rejected) return;
+
+      totalBytes += chunk.length;
+
+      if (totalBytes > maxBytes) {
+        rejected = true;
+        chunks.length = 0;
+        reject(new Error('Career image too large'));
+        return;
+      }
+
+      chunks.push(chunk);
+    });
+
+    req.on('end', () => {
+      if (!rejected) {
+        resolve(Buffer.concat(chunks));
+      }
+    });
+
+    req.on('error', err => {
+      if (!rejected) {
+        reject(err);
+      }
+    });
+  });
+}
+function parseAvatarBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let totalBytes = 0;
+    let rejected = false;
+    const maxBytes = 2 * 1024 * 1024; // 2MB
+
+    req.on('data', chunk => {
+      if (rejected) return;
+
+      totalBytes += chunk.length;
+
+      if (totalBytes > maxBytes) {
+        rejected = true;
+        chunks.length = 0;
+        reject(new Error('Avatar too large'));
+        return;
+      }
+
+      chunks.push(chunk);
+    });
+
+    req.on('end', () => {
+      if (!rejected) {
+        resolve(Buffer.concat(chunks));
+      }
+    });
+
+    req.on('error', err => {
+      if (!rejected) {
+        reject(err);
+      }
+    });
+  });
+}
 const server = http.createServer(async (req, res) => {
   // CORS Headers
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -240,7 +366,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   // 9.2 API: Update Current User Profile
-  if (req.method === 'PUT' && (pathname === '/api/v1/profile' || pathname === '/profile')) {
+  if (req.method === 'PUT' && ['/api/v1/profile', '/profile', '/api/v1/profile/personal', '/profile/personal'].includes(pathname)) {
     const authHeader = req.headers['authorization'];
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -256,11 +382,11 @@ const server = http.createServer(async (req, res) => {
     }
     try {
       const body = await parseBody(req);
-      const updateResult = userService.updateUser(sessionResult.user.id, {
+      const updateResult = userService.updateProfile(sessionResult.user.id, {
         fullName: body.fullName,
         jobTitle: body.jobTitle,
         phoneNumber: body.phoneNumber
-      }, sessionResult.user.id);
+      }, { validatePhone: pathname.endsWith('/personal') });
       res.writeHead(updateResult.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(updateResult));
     } catch (err) {
@@ -270,6 +396,71 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // S2: Upload current user's avatar
+  if (req.method === 'POST' && (
+      pathname === '/api/v1/profile/avatar' ||
+      pathname === '/profile/avatar'
+    )) {
+    const authHeader = req.headers['authorization'];
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({
+        success: false,
+        statusCode: 401,
+        message: 'Yêu cầu thiếu token xác thực.',
+        code: 'UNAUTHORIZED'
+      }));
+      return;
+    }
+
+    const token = authHeader.substring(7).trim();
+    const sessionResult = authController.authService.validateSession(token, true);
+
+    if (!sessionResult.valid) {
+      res.writeHead(sessionResult.statusCode || 401, {
+        'Content-Type': 'application/json; charset=utf-8'
+      });
+      res.end(JSON.stringify({
+        success: false,
+        statusCode: sessionResult.statusCode || 401,
+        message: sessionResult.message,
+        code: sessionResult.code
+      }));
+      return;
+    }
+
+    try {
+      const imageBuffer = await parseAvatarBody(req);
+
+      const result = await avatarService.saveAvatar(
+        sessionResult.user.id,
+        imageBuffer,
+        req.headers['content-type']
+      );
+
+      res.writeHead(result.statusCode || 200, {
+        'Content-Type': 'application/json; charset=utf-8'
+      });
+      res.end(JSON.stringify(result));
+    } catch (err) {
+      const tooLarge = err.message === 'Avatar too large';
+
+      res.writeHead(tooLarge ? 413 : 400, {
+        'Content-Type': 'application/json; charset=utf-8'
+      });
+      res.end(JSON.stringify({
+        success: false,
+        statusCode: tooLarge ? 413 : 400,
+        code: tooLarge ? 'AVATAR_TOO_LARGE' : 'INVALID_AVATAR_UPLOAD',
+        message: tooLarge
+          ? 'Ảnh đại diện vượt quá giới hạn 2MB.'
+          : 'Không thể đọc dữ liệu ảnh đại diện.'
+      }));
+    }
+
+    return;
+  }
   // 10. API: S1-05 Get Full RBAC Matrix (AC-01)
   if (req.method === 'GET' && (pathname === '/api/v1/rbac/matrix' || pathname === '/rbac/matrix' || pathname === '/api/v1/admin/roles-matrix' || pathname === '/admin/roles-matrix')) {
     const rawMatrix = rbacMiddleware.getRbacMatrix();
@@ -320,6 +511,79 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // S2: Import valid users from Excel and skip invalid rows
+  if (req.method === 'POST' && (
+      pathname === '/api/v1/admin/users/import' ||
+      pathname === '/admin/users/import'
+    )) {
+    if (!rbacMiddleware.authorize(req, res, authController.authService, 'user.create')) return;
+    try {
+      const fileBuffer = await parseBinaryBody(req);
+
+      await userController.handleImportBulkUsers(
+        req,
+        res,
+        fileBuffer
+      );
+    } catch (err) {
+      res.writeHead(err.message === 'Payload too large' ? 413 : 400, {
+        'Content-Type': 'application/json; charset=utf-8'
+      });
+
+      res.end(JSON.stringify({
+        success: false,
+        statusCode: err.message === 'Payload too large' ? 413 : 400,
+        message: err.message === 'Payload too large'
+          ? 'Tệp Excel vượt quá giới hạn 5MB.'
+          : 'Không thể đọc dữ liệu tệp Excel.',
+        code: err.message === 'Payload too large'
+          ? 'EXCEL_FILE_TOO_LARGE'
+          : 'INVALID_EXCEL_UPLOAD'
+      }));
+    }
+
+    return;
+  }
+  // S2: Preview Excel file before bulk user import
+  if (req.method === 'POST' && (
+      pathname === '/api/v1/admin/users/import/preview' ||
+      pathname === '/admin/users/import/preview'
+    )) {
+    if (!rbacMiddleware.authorize(req, res, authController.authService, 'user.create')) return;
+    try {
+      const fileBuffer = await parseBinaryBody(req);
+      await userController.handlePreviewBulkUserImport(
+        req,
+        res,
+        fileBuffer
+      );
+    } catch (err) {
+      res.writeHead(err.message === 'Payload too large' ? 413 : 400, {
+        'Content-Type': 'application/json; charset=utf-8'
+      });
+
+      res.end(JSON.stringify({
+        success: false,
+        statusCode: err.message === 'Payload too large' ? 413 : 400,
+        message: err.message === 'Payload too large'
+          ? 'Tệp Excel vượt quá giới hạn 5MB.'
+          : 'Không thể đọc dữ liệu tệp Excel.',
+        code: err.message === 'Payload too large'
+          ? 'EXCEL_FILE_TOO_LARGE'
+          : 'INVALID_EXCEL_UPLOAD'
+      }));
+    }
+
+    return;
+  }
+  // S2: Download Excel template for bulk user import
+  if (req.method === 'GET' && (
+      pathname === '/api/v1/admin/users/import/template' ||
+      pathname === '/admin/users/import/template'
+    )) {
+    await userController.handleDownloadBulkUserTemplate(req, res);
+    return;
+  }
   // 11.3 S1-08: Create User with Temporary Password & Duplicate Email Check (AC-01 & AC-02)
   if (req.method === 'POST' && (pathname === '/api/v1/admin/users' || pathname === '/admin/users')) {
     try {
@@ -474,6 +738,780 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // S2: Recruitment Shared Catalog
+  if (req.method === 'GET' && (
+    pathname === '/api/v1/recruitment-catalogs' ||
+    pathname === '/recruitment-catalogs'
+  )) {
+    const user = rbacMiddleware.authorize(
+      req,
+      res,
+      authController.authService,
+      'recruitment_catalog.read'
+    );
+    if (!user) return;
+
+    const type = parsedUrl.searchParams.get('type');
+    const status = parsedUrl.searchParams.get('status');
+
+    const result = recruitmentCatalogService.getItems(type, { status });
+    res.writeHead(result.statusCode || 200, {
+      'Content-Type': 'application/json; charset=utf-8'
+    });
+    res.end(JSON.stringify(result));
+    return;
+  }
+
+  if (req.method === 'POST' && (
+    pathname === '/api/v1/recruitment-catalogs' ||
+    pathname === '/recruitment-catalogs'
+  )) {
+    const user = rbacMiddleware.authorize(
+      req,
+      res,
+      authController.authService,
+      'recruitment_catalog.manage'
+    );
+    if (!user) return;
+
+    try {
+      const body = await parseBody(req);
+      const result = recruitmentCatalogService.createItem(body);
+
+      res.writeHead(result.statusCode || 201, {
+        'Content-Type': 'application/json; charset=utf-8'
+      });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(400, {
+        'Content-Type': 'application/json; charset=utf-8'
+      });
+      res.end(JSON.stringify({
+        success: false,
+        statusCode: 400,
+        code: 'BAD_REQUEST',
+        message: 'Dữ liệu không hợp lệ.'
+      }));
+    }
+    return;
+  }
+
+  if (req.method === 'PUT' && (
+    pathname.startsWith('/api/v1/recruitment-catalogs/') ||
+    pathname.startsWith('/recruitment-catalogs/')
+  )) {
+    const user = rbacMiddleware.authorize(
+      req,
+      res,
+      authController.authService,
+      'recruitment_catalog.manage'
+    );
+    if (!user) return;
+
+    const itemId = pathname
+      .replace(/^\/api\/v1\/recruitment-catalogs\//, '')
+      .replace(/^\/recruitment-catalogs\//, '');
+
+    if (itemId === 'reorder') {
+      res.writeHead(405, {
+        'Content-Type': 'application/json; charset=utf-8'
+      });
+      res.end(JSON.stringify({
+        success: false,
+        statusCode: 405,
+        code: 'METHOD_NOT_ALLOWED',
+        message: 'Phương thức không được hỗ trợ.'
+      }));
+      return;
+    }
+
+    try {
+      const body = await parseBody(req);
+      const result = recruitmentCatalogService.updateItem(itemId, body);
+
+      res.writeHead(result.statusCode || 200, {
+        'Content-Type': 'application/json; charset=utf-8'
+      });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(400, {
+        'Content-Type': 'application/json; charset=utf-8'
+      });
+      res.end(JSON.stringify({
+        success: false,
+        statusCode: 400,
+        code: 'BAD_REQUEST',
+        message: 'Dữ liệu không hợp lệ.'
+      }));
+    }
+    return;
+  }
+
+  if (req.method === 'PATCH' && (
+    pathname === '/api/v1/recruitment-catalogs/reorder' ||
+    pathname === '/recruitment-catalogs/reorder'
+  )) {
+    const user = rbacMiddleware.authorize(
+      req,
+      res,
+      authController.authService,
+      'recruitment_catalog.manage'
+    );
+    if (!user) return;
+
+    try {
+      const body = await parseBody(req);
+      const result = recruitmentCatalogService.reorderItems(
+        body.type,
+        body.orderedIds
+      );
+
+      res.writeHead(result.statusCode || 200, {
+        'Content-Type': 'application/json; charset=utf-8'
+      });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(400, {
+        'Content-Type': 'application/json; charset=utf-8'
+      });
+      res.end(JSON.stringify({
+        success: false,
+        statusCode: 400,
+        code: 'BAD_REQUEST',
+        message: 'Dữ liệu không hợp lệ.'
+      }));
+    }
+    return;
+  }
+
+  if (req.method === 'DELETE' && (
+    pathname.startsWith('/api/v1/recruitment-catalogs/') ||
+    pathname.startsWith('/recruitment-catalogs/')
+  )) {
+    const user = rbacMiddleware.authorize(
+      req,
+      res,
+      authController.authService,
+      'recruitment_catalog.manage'
+    );
+    if (!user) return;
+
+    const itemId = pathname
+      .replace(/^\/api\/v1\/recruitment-catalogs\//, '')
+      .replace(/^\/recruitment-catalogs\//, '');
+
+    const result = recruitmentCatalogService.deleteItem(itemId);
+
+    res.writeHead(result.statusCode || 200, {
+      'Content-Type': 'application/json; charset=utf-8'
+    });
+    res.end(JSON.stringify(result));
+    return;
+  }
+  // S2: CAREER PAGE CONFIGURATION
+
+  // Public Career Page configuration
+  if (req.method === 'GET' && (
+    pathname === '/api/v1/public/career-page' ||
+    pathname === '/public/career-page'
+  )) {
+    const result = careerPageService.getSettings();
+
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8'
+    });
+    res.end(JSON.stringify(result));
+    return;
+  }
+
+  // HR/Admin: Get Career Page configuration
+  if (req.method === 'GET' && (
+    pathname === '/api/v1/career-page' ||
+    pathname === '/career-page'
+  )) {
+    const user = rbacMiddleware.authorize(
+      req,
+      res,
+      authController.authService,
+      'career_page.read'
+    );
+    if (!user) return;
+
+    const result = careerPageService.getSettings();
+
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8'
+    });
+    res.end(JSON.stringify(result));
+    return;
+  }
+
+  // HR/Admin: Save Career Page configuration
+  if (req.method === 'PUT' && (
+    pathname === '/api/v1/career-page' ||
+    pathname === '/career-page'
+  )) {
+    const user = rbacMiddleware.authorize(
+      req,
+      res,
+      authController.authService,
+      'career_page.manage'
+    );
+    if (!user) return;
+
+    try {
+      const body = await parseBody(req);
+      const result = careerPageService.saveSettings(body);
+
+      res.writeHead(result.statusCode || 200, {
+        'Content-Type': 'application/json; charset=utf-8'
+      });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(400, {
+        'Content-Type': 'application/json; charset=utf-8'
+      });
+      res.end(JSON.stringify({
+        success: false,
+        statusCode: 400,
+        code: 'BAD_REQUEST',
+        message: 'Dữ liệu cấu hình trang tuyển dụng không hợp lệ.'
+      }));
+    }
+
+    return;
+  }
+
+  // HR/Admin: Upload Career Page logo / hero image
+  if (req.method === 'POST' && (
+    pathname === '/api/v1/career-page/media' ||
+    pathname === '/career-page/media'
+  )) {
+    const user = rbacMiddleware.authorize(
+      req,
+      res,
+      authController.authService,
+      'career_page.manage'
+    );
+    if (!user) return;
+
+    try {
+      const kind = parsedUrl.searchParams.get('kind');
+      const imageBuffer = await parseCareerImageBody(req);
+
+      const result = await careerPageService.saveMedia(
+        kind,
+        imageBuffer,
+        req.headers['content-type']
+      );
+
+      res.writeHead(result.statusCode || 200, {
+        'Content-Type': 'application/json; charset=utf-8'
+      });
+      res.end(JSON.stringify(result));
+    } catch (err) {
+      const tooLarge = err.message === 'Career image too large';
+
+      res.writeHead(tooLarge ? 413 : 400, {
+        'Content-Type': 'application/json; charset=utf-8'
+      });
+      res.end(JSON.stringify({
+        success: false,
+        statusCode: tooLarge ? 413 : 400,
+        code: tooLarge
+          ? 'CAREER_IMAGE_TOO_LARGE'
+          : 'INVALID_CAREER_IMAGE_UPLOAD',
+        message: tooLarge
+          ? 'Ảnh không được vượt quá 2MB.'
+          : 'Không thể đọc dữ liệu ảnh trang tuyển dụng.'
+      }));
+    }
+
+    return;
+  }
+  // Minimal read-only choices for the existing requisition.create permission.
+  // This grants no access to the department administration API or manager details.
+  if (req.method === 'GET' && pathname === '/api/v1/requisitions/options') {
+    const user = rbacMiddleware.authorize(req, res, authController.authService, 'requisition.create');
+    if (!user) return;
+    if (['jobTitleId', 'proposedSalaryMin', 'proposedSalaryMax'].some(key => parsedUrl.searchParams.has(key))) {
+      const result = requisitionService.checkS210SalaryRange({
+        jobTitleId: parsedUrl.searchParams.get('jobTitleId'),
+        proposedSalaryMin: parsedUrl.searchParams.get('proposedSalaryMin'),
+        proposedSalaryMax: parsedUrl.searchParams.get('proposedSalaryMax')
+      });
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+      return;
+    }
+    const departments = db.prepare("SELECT id, name, parent_id AS parentId, status FROM departments WHERE status = 'ACTIVE' ORDER BY name").all();
+    const s210Departments = db.prepare(`SELECT id, name, parent_id AS parentId, status FROM departments
+      WHERE status='ACTIVE' AND (?=1 OR manager_id=?) ORDER BY name`).all(user.roles.includes('HR_MANAGER') ? 1 : 0, user.id);
+    const salaryColumns = canReadJobTitleSalary(user) ? ', min_salary AS minSalary, max_salary AS maxSalary' : '';
+    const jobTitles = db.prepare(`SELECT id, code, name, level${salaryColumns} FROM job_titles WHERE status='ACTIVE' ORDER BY name`).all();
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ success: true, tree: departmentService.buildTree(departments), s210Departments, jobTitles }));
+    return;
+  }
+
+  // S2: Department & Organization Management
+  if (req.method === 'GET' && (pathname === '/api/v1/departments' || pathname === '/departments')) {
+    const user = rbacMiddleware.authorize(req, res, authController.authService, 'department.read');
+    if (!user) return;
+
+    const result = departmentService.getDepartments();
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(result));
+    return;
+  }
+
+  if (req.method === 'POST' && (pathname === '/api/v1/departments' || pathname === '/departments')) {
+    const user = rbacMiddleware.authorize(req, res, authController.authService, 'department.manage');
+    if (!user) return;
+
+    try {
+      const body = await parseBody(req);
+      const result = departmentService.createDepartment(body);
+      res.writeHead(result.statusCode || 201, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({
+        success: false,
+        statusCode: 400,
+        code: 'BAD_REQUEST',
+        message: 'Dữ liệu không hợp lệ.'
+      }));
+    }
+    return;
+  }
+
+  if (req.method === 'PUT' && (
+    pathname.startsWith('/api/v1/departments/') ||
+    pathname.startsWith('/departments/')
+  )) {
+    const user = rbacMiddleware.authorize(req, res, authController.authService, 'department.manage');
+    if (!user) return;
+
+    const departmentId = pathname
+      .replace(/^\/api\/v1\/departments\//, '')
+      .replace(/^\/departments\//, '');
+
+    try {
+      const body = await parseBody(req);
+      const result = departmentService.updateDepartment(departmentId, body);
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({
+        success: false,
+        statusCode: 400,
+        code: 'BAD_REQUEST',
+        message: 'Dữ liệu không hợp lệ.'
+      }));
+    }
+    return;
+  }
+
+  if (req.method === 'PATCH' && (
+    pathname.endsWith('/deactivate') &&
+    (pathname.startsWith('/api/v1/departments/') || pathname.startsWith('/departments/'))
+  )) {
+    const user = rbacMiddleware.authorize(req, res, authController.authService, 'department.manage');
+    if (!user) return;
+
+    const departmentId = pathname
+      .replace(/^\/api\/v1\/departments\//, '')
+      .replace(/^\/departments\//, '')
+      .replace(/\/deactivate$/, '');
+
+    const result = departmentService.deactivateDepartment(departmentId);
+    res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(result));
+    return;
+  }
+
+  if (req.method === 'DELETE' && (
+    pathname.startsWith('/api/v1/departments/') ||
+    pathname.startsWith('/departments/')
+  )) {
+    const user = rbacMiddleware.authorize(req, res, authController.authService, 'department.manage');
+    if (!user) return;
+
+    const departmentId = pathname
+      .replace(/^\/api\/v1\/departments\//, '')
+      .replace(/^\/departments\//, '');
+
+    const result = departmentService.deleteDepartment(departmentId);
+    res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(result));
+    return;
+  }
+  // S2: Competency Framework & Job Title Management
+  if (req.method === 'GET' && (
+    pathname === '/api/v1/competency-frameworks' ||
+    pathname === '/competency-frameworks'
+  )) {
+    const user = rbacMiddleware.authorize(
+      req,
+      res,
+      authController.authService,
+      'competency.read'
+    );
+    if (!user) return;
+
+    const result = competencyService.getFrameworks();
+
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8'
+    });
+    res.end(JSON.stringify(result));
+    return;
+  }
+
+  if (req.method === 'POST' && (
+    pathname === '/api/v1/competency-frameworks' ||
+    pathname === '/competency-frameworks'
+  )) {
+    const user = rbacMiddleware.authorize(
+      req,
+      res,
+      authController.authService,
+      'competency.manage'
+    );
+    if (!user) return;
+
+    try {
+      const body = await parseBody(req);
+      const result = competencyService.createFramework(body);
+
+      res.writeHead(result.statusCode || 201, {
+        'Content-Type': 'application/json; charset=utf-8'
+      });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(400, {
+        'Content-Type': 'application/json; charset=utf-8'
+      });
+      res.end(JSON.stringify({
+        success: false,
+        statusCode: 400,
+        code: 'BAD_REQUEST',
+        message: 'Dữ liệu khung năng lực không hợp lệ.'
+      }));
+    }
+
+    return;
+  }
+
+  if (req.method === 'PUT' && (
+    pathname.startsWith('/api/v1/competency-frameworks/') ||
+    pathname.startsWith('/competency-frameworks/')
+  )) {
+    const user = rbacMiddleware.authorize(
+      req,
+      res,
+      authController.authService,
+      'competency.manage'
+    );
+    if (!user) return;
+
+    const frameworkId = pathname
+      .replace(/^\/api\/v1\/competency-frameworks\//, '')
+      .replace(/^\/competency-frameworks\//, '');
+
+    try {
+      const body = await parseBody(req);
+      const result = competencyService.updateFramework(
+        frameworkId,
+        body
+      );
+
+      res.writeHead(result.statusCode || 200, {
+        'Content-Type': 'application/json; charset=utf-8'
+      });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(400, {
+        'Content-Type': 'application/json; charset=utf-8'
+      });
+      res.end(JSON.stringify({
+        success: false,
+        statusCode: 400,
+        code: 'BAD_REQUEST',
+        message: 'Dữ liệu khung năng lực không hợp lệ.'
+      }));
+    }
+
+    return;
+  }
+
+  if (req.method === 'GET' && (
+    pathname === '/api/v1/job-titles' ||
+    pathname === '/job-titles'
+  )) {
+    const user = rbacMiddleware.authorize(
+      req,
+      res,
+      authController.authService,
+      'competency.read'
+    );
+    if (!user) return;
+
+    const result = competencyService.getJobTitles({ includeSalary: canReadJobTitleSalary(user) });
+
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8'
+    });
+    res.end(JSON.stringify(result));
+    return;
+  }
+
+  if (req.method === 'POST' && (
+    pathname === '/api/v1/job-titles' ||
+    pathname === '/job-titles'
+  )) {
+    const user = rbacMiddleware.authorize(
+      req,
+      res,
+      authController.authService,
+      'competency.manage'
+    );
+    if (!user) return;
+
+    try {
+      const body = await parseBody(req);
+      if (!canReadJobTitleSalary(user)) { denyJobTitleSalary(res); return; }
+      const result = competencyService.createJobTitle(body, { includeSalary: true });
+
+      res.writeHead(result.statusCode || 201, {
+        'Content-Type': 'application/json; charset=utf-8'
+      });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(400, {
+        'Content-Type': 'application/json; charset=utf-8'
+      });
+      res.end(JSON.stringify({
+        success: false,
+        statusCode: 400,
+        code: 'BAD_REQUEST',
+        message: 'Dữ liệu chức danh không hợp lệ.'
+      }));
+    }
+
+    return;
+  }
+
+  if (req.method === 'PUT' && (
+    pathname.startsWith('/api/v1/job-titles/') ||
+    pathname.startsWith('/job-titles/')
+  )) {
+    const user = rbacMiddleware.authorize(
+      req,
+      res,
+      authController.authService,
+      'competency.manage'
+    );
+    if (!user) return;
+
+    const jobTitleId = pathname
+      .replace(/^\/api\/v1\/job-titles\//, '')
+      .replace(/^\/job-titles\//, '');
+
+    try {
+      const body = await parseBody(req);
+      if ((Object.hasOwn(body, 'minSalary') || Object.hasOwn(body, 'maxSalary')) && !canReadJobTitleSalary(user)) {
+        denyJobTitleSalary(res); return;
+      }
+      const result = competencyService.updateJobTitle(
+        jobTitleId,
+        body,
+        { includeSalary: canReadJobTitleSalary(user) }
+      );
+
+      res.writeHead(result.statusCode || 200, {
+        'Content-Type': 'application/json; charset=utf-8'
+      });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(400, {
+        'Content-Type': 'application/json; charset=utf-8'
+      });
+      res.end(JSON.stringify({
+        success: false,
+        statusCode: 400,
+        code: 'BAD_REQUEST',
+        message: 'Dữ liệu chức danh không hợp lệ.'
+      }));
+    }
+
+    return;
+  }
+
+  if (req.method === 'GET' && (
+    (
+      pathname.startsWith('/api/v1/job-titles/') &&
+      pathname.endsWith('/framework')
+    ) ||
+    (
+      pathname.startsWith('/job-titles/') &&
+      pathname.endsWith('/framework')
+    )
+  )) {
+    const user = rbacMiddleware.authorize(
+      req,
+      res,
+      authController.authService,
+      'competency.read'
+    );
+    if (!user) return;
+
+    const jobTitleId = pathname
+      .replace(/^\/api\/v1\/job-titles\//, '')
+      .replace(/^\/job-titles\//, '')
+      .replace(/\/framework$/, '');
+
+    const result =
+      competencyService.getFrameworkForJobTitle(jobTitleId);
+
+    res.writeHead(result.statusCode || 200, {
+      'Content-Type': 'application/json; charset=utf-8'
+    });
+    res.end(JSON.stringify(result));
+    return;
+  }
+  // S2: Interview Question Bank Filter Options
+  if (req.method === 'GET' && (
+    pathname === '/api/v1/interview-question-filters' ||
+    pathname === '/interview-question-filters'
+  )) {
+    const user = rbacMiddleware.authorize(
+      req,
+      res,
+      authController.authService,
+      'question_bank.read'
+    );
+    if (!user) return;
+
+    const result = questionBankService.getFilterOptions();
+
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8'
+    });
+    res.end(JSON.stringify(result));
+    return;
+  }
+
+  // S2: Interview Question Bank
+  if (req.method === 'GET' && (
+    pathname === '/api/v1/interview-questions' ||
+    pathname === '/interview-questions'
+  )) {
+    const user = rbacMiddleware.authorize(
+      req,
+      res,
+      authController.authService,
+      'question_bank.read'
+    );
+    if (!user) return;
+
+    const options = {
+      search: parsedUrl.searchParams.get('search') || '',
+      jobTitleId: parsedUrl.searchParams.get('jobTitleId') || '',
+      criterionId: parsedUrl.searchParams.get('criterionId') || '',
+      difficulty: parsedUrl.searchParams.get('difficulty') || 'ALL',
+      status: parsedUrl.searchParams.get('status') || 'ALL'
+    };
+
+    const result = questionBankService.getQuestions(options);
+
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8'
+    });
+    res.end(JSON.stringify(result));
+    return;
+  }
+
+  if (req.method === 'POST' && (
+    pathname === '/api/v1/interview-questions' ||
+    pathname === '/interview-questions'
+  )) {
+    const user = rbacMiddleware.authorize(
+      req,
+      res,
+      authController.authService,
+      'question_bank.manage'
+    );
+    if (!user) return;
+
+    try {
+      const body = await parseBody(req);
+      const result = questionBankService.createQuestion(body);
+
+      res.writeHead(result.statusCode || 201, {
+        'Content-Type': 'application/json; charset=utf-8'
+      });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(400, {
+        'Content-Type': 'application/json; charset=utf-8'
+      });
+      res.end(JSON.stringify({
+        success: false,
+        statusCode: 400,
+        code: 'BAD_REQUEST',
+        message: 'Dữ liệu câu hỏi phỏng vấn không hợp lệ.'
+      }));
+    }
+
+    return;
+  }
+
+  if (req.method === 'PUT' && (
+    pathname.startsWith('/api/v1/interview-questions/') ||
+    pathname.startsWith('/interview-questions/')
+  )) {
+    const user = rbacMiddleware.authorize(
+      req,
+      res,
+      authController.authService,
+      'question_bank.manage'
+    );
+    if (!user) return;
+
+    const questionId = pathname
+      .replace(/^\/api\/v1\/interview-questions\//, '')
+      .replace(/^\/interview-questions\//, '');
+
+    try {
+      const body = await parseBody(req);
+
+      const result = questionBankService.updateQuestion(
+        questionId,
+        body
+      );
+
+      res.writeHead(result.statusCode || 200, {
+        'Content-Type': 'application/json; charset=utf-8'
+      });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(400, {
+        'Content-Type': 'application/json; charset=utf-8'
+      });
+      res.end(JSON.stringify({
+        success: false,
+        statusCode: 400,
+        code: 'BAD_REQUEST',
+        message: 'Dữ liệu câu hỏi phỏng vấn không hợp lệ.'
+      }));
+    }
+
+    return;
+  }
+
   // 13.2 API: Real Recruitment Requisitions List
   if (req.method === 'GET' && (pathname === '/api/v1/requisitions' || pathname === '/requisitions')) {
     const authHeader = req.headers['authorization'] || '';
@@ -503,7 +1541,9 @@ const server = http.createServer(async (req, res) => {
     const options = {
       search: parsedUrl.searchParams.get('search') || '',
       status: parsedUrl.searchParams.get('status') || '',
-      handoverOnly: parsedUrl.searchParams.get('handoverOnly') === 'true'
+      handoverOnly: parsedUrl.searchParams.get('handoverOnly') === 'true',
+      viewerId: sessionResult.user.id,
+      canReadS210: rbacMiddleware.hasPermission(sessionResult.user.id, 'requisition.read')
     };
     const result = requisitionService.getRequisitions(options);
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -517,7 +1557,7 @@ const server = http.createServer(async (req, res) => {
     if (!user) return;
     try {
       const body = await parseBody(req);
-      const result = requisitionService.createRequisition(body);
+      const result = requisitionService.createRequisition(body, user);
       res.writeHead(result.statusCode || 201, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
@@ -555,6 +1595,11 @@ const server = http.createServer(async (req, res) => {
       res.end(JSON.stringify({ success: false, statusCode: 404, message: 'Không tìm thấy vị trí tuyển dụng.' }));
       return;
     }
+    if (item.formVersion === 'S2-10' && item.status === 'DRAFT' && item.createdBy !== user.id) {
+      res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, code: 'REQUISITION_DRAFT_FORBIDDEN', message: 'Bạn chỉ được đọc nháp do mình tạo.' }));
+      return;
+    }
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({ success: true, data: item }));
     return;
@@ -562,12 +1607,19 @@ const server = http.createServer(async (req, res) => {
 
   // 13.4.2 API: Update Requisition Details
   if (req.method === 'PUT' && (pathname.startsWith('/api/v1/requisitions/') || pathname.startsWith('/requisitions/')) && !pathname.endsWith('/handover')) {
-    const user = rbacMiddleware.authorize(req, res, authController.authService, 'requisition.edit');
+    const reqId = pathname.replace(/^\/api\/v1\/requisitions\//, '').replace(/^\/requisitions\//, '');
+    const current = requisitionService.getRequisitionById(reqId);
+    const isS210Draft = current?.formVersion === 'S2-10' && current.status === 'DRAFT';
+    const user = rbacMiddleware.authorize(req, res, authController.authService, isS210Draft ? 'requisition.draft.edit' : 'requisition.edit');
     if (!user) return;
+    if (isS210Draft && current.createdBy !== user.id) {
+      res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, code: 'REQUISITION_DRAFT_FORBIDDEN', message: 'Bạn chỉ được sửa nháp do mình tạo.' }));
+      return;
+    }
     try {
-      const reqId = pathname.replace(/^\/api\/v1\/requisitions\//, '').replace(/^\/requisitions\//, '');
       const body = await parseBody(req);
-      const result = requisitionService.updateRequisition(reqId, body);
+      const result = requisitionService.updateRequisition(reqId, body, user);
       res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
@@ -731,7 +1783,9 @@ const server = http.createServer(async (req, res) => {
     try {
       const candId = pathname.replace(/^\/api\/v1\/candidates\//, '').replace(/^\/candidates\//, '').replace(/\/stage$/, '');
       const body = await parseBody(req);
-      const result = requisitionService.updateCandidateStage(candId, body.stage);
+      const isCatalogUpdate = Object.hasOwn(body, 'rejectionReasonId');
+      if (isCatalogUpdate && !rbacMiddleware.authorize(req, res, authController.authService, 'candidate.update')) return;
+      const result = requisitionService.updateCandidateStage(candId, body.stage, isCatalogUpdate ? body.notes : undefined, isCatalogUpdate ? body.rejectionReasonId : undefined);
       res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
@@ -893,12 +1947,17 @@ const server = http.createServer(async (req, res) => {
     // All possible ATS menu items with required permissions
     const ALL_NAVIGATION_ITEMS = [
       { id: 'nav-dashboard', label: 'Bảng điều khiển', path: '/dashboard', icon: '📊', requiredPermission: null, internalOnly: true },
+      { id: 'nav-departments', label: 'Phòng ban & Sơ đồ tổ chức', path: '/admin/departments', icon: '🏢', requiredPermission: 'department.read', internalOnly: true },
+      { id: 'nav-recruitment-catalogs', label: 'Danh mục tuyển dụng', path: '/admin/recruitment-catalogs', icon: '📋', requiredPermission: 'recruitment_catalog.manage', internalOnly: true },
+      { id: 'nav-career-page', label: 'Trang giới thiệu công ty', path: '/admin/career-page', icon: '🏢', requiredPermission: 'career_page.manage', internalOnly: true },
+      { id: 'nav-competencies', label: 'Khung năng lực & Chức danh', path: '/admin/competencies', icon: '🎯', requiredPermission: 'competency.read', internalOnly: true },
       { id: 'nav-users', label: 'Quản trị Người dùng', path: '/admin/users', icon: '👥', requiredPermission: 'user.read', internalOnly: true },
       { id: 'nav-roles', label: 'Phân quyền & Vai trò', path: '/admin/roles', icon: '🛡️', requiredPermission: 'role.read', internalOnly: true },
       { id: 'nav-audit', label: 'Nhật ký Hệ thống', path: '/admin/audit', icon: '📜', requiredPermission: 'audit.read', internalOnly: true },
       { id: 'nav-requisitions', label: 'Yêu cầu Tuyển dụng', path: '/requisitions', icon: '📝', requiredPermission: 'requisition.read', internalOnly: true },
       { id: 'nav-candidates', label: 'Hồ sơ Ứng viên', path: '/candidates', icon: '💼', requiredPermission: 'candidate.read', internalOnly: true },
       { id: 'nav-interviews', label: 'Lịch Phỏng vấn', path: '/interviews', icon: '🗓️', requiredPermission: 'interview.read', internalOnly: true },
+      { id: 'nav-question-bank', label: 'Ngân hàng câu hỏi phỏng vấn', path: '/question-bank', icon: '📚', requiredPermission: 'question_bank.read', internalOnly: true },
       { id: 'nav-offers', label: 'Quản lý Offer', path: '/offers', icon: '✉️', requiredPermission: 'offer.read', internalOnly: true },
       { id: 'nav-approvals', label: 'Cần phê duyệt', path: '/approvals', icon: '✅', requiredPermission: 'requisition.approve', internalOnly: true },
       { id: 'nav-candidate-portal', label: 'Hồ sơ của tôi', path: '/candidate', icon: '👤', requiredPermission: 'candidate.create', candidateOnly: true }

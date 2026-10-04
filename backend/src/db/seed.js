@@ -46,6 +46,24 @@ function seedDatabase(db, options = {}) {
     { id: 'perm-req-create', code: 'requisition.create', name: 'Tạo yêu cầu tuyển dụng', module: 'REQUISITIONS', description: 'Khởi tạo phiếu yêu cầu tuyển dụng nhân sự mới' },
     { id: 'perm-req-approve', code: 'requisition.approve', name: 'Phê duyệt yêu cầu tuyển dụng', module: 'REQUISITIONS', description: 'Ký duyệt hoặc từ chối phiếu yêu cầu tuyển dụng' },
 
+    // Department & Organization Management
+    { id: 'perm-dept-read', code: 'department.read', name: 'Xem phòng ban', module: 'DEPARTMENTS', description: 'Xem cây phòng ban và sơ đồ tổ chức' },
+    { id: 'perm-dept-manage', code: 'department.manage', name: 'Quản lý phòng ban', module: 'DEPARTMENTS', description: 'Tạo, sửa, ngừng áp dụng và quản lý cấu trúc phòng ban' },
+
+    // Competency Framework Management
+    { id: 'perm-competency-read', code: 'competency.read', name: 'Xem khung năng lực', module: 'COMPETENCIES', description: 'Xem khung năng lực, tiêu chí đánh giá và chức danh áp dụng' },
+    { id: 'perm-competency-manage', code: 'competency.manage', name: 'Quản lý khung năng lực', module: 'COMPETENCIES', description: 'Tạo, sửa và gán khung năng lực cho chức danh' },
+
+    // Recruitment Shared Catalog
+    { id: 'perm-recruitment-catalog-read', code: 'recruitment_catalog.read', name: 'Xem danh mục tuyển dụng', module: 'RECRUITMENT_CATALOG', description: 'Xem các danh mục dùng chung trong tuyển dụng' },
+    { id: 'perm-recruitment-catalog-manage', code: 'recruitment_catalog.manage', name: 'Quản lý danh mục tuyển dụng', module: 'RECRUITMENT_CATALOG', description: 'Tạo, sửa, sắp xếp và xóa các danh mục dùng chung trong tuyển dụng' },
+
+    // Company Career Page
+    { id: 'perm-career-page-read', code: 'career_page.read', name: 'Xem cấu hình trang tuyển dụng', module: 'CAREER_PAGE', description: 'Xem nội dung cấu hình trang giới thiệu công ty trên cổng tuyển dụng' },
+    { id: 'perm-career-page-manage', code: 'career_page.manage', name: 'Quản lý trang tuyển dụng', module: 'CAREER_PAGE', description: 'Soạn nội dung, tải logo và ảnh cho trang giới thiệu công ty' },
+    // Interview Question Bank
+    { id: 'perm-question-bank-read', code: 'question_bank.read', name: 'Xem ngân hàng câu hỏi', module: 'QUESTION_BANK', description: 'Xem và tìm kiếm câu hỏi phỏng vấn theo chức danh và tiêu chí năng lực' },
+    { id: 'perm-question-bank-manage', code: 'question_bank.manage', name: 'Quản lý ngân hàng câu hỏi', module: 'QUESTION_BANK', description: 'Tạo và cập nhật câu hỏi phỏng vấn theo tiêu chí năng lực' },
     // Candidate Pipeline Management
     { id: 'perm-cand-read', code: 'candidate.read', name: 'Xem hồ sơ ứng viên', module: 'CANDIDATES', description: 'Xem danh sách hồ sơ ứng viên và CV trong pipeline tuyển dụng' },
     { id: 'perm-cand-create', code: 'candidate.create', name: 'Tạo/nộp hồ sơ ứng viên', module: 'CANDIDATES', description: 'Thêm mới hoặc ứng viên nộp hồ sơ ứng tuyển' },
@@ -59,6 +77,7 @@ function seedDatabase(db, options = {}) {
     { id: 'perm-off-read', code: 'offer.read', name: 'Xem thông tin offer', module: 'OFFERS', description: 'Xem thư mời nhận việc và chế độ đãi ngộ' },
     { id: 'perm-off-create', code: 'offer.create', name: 'Soạn thảo offer', module: 'OFFERS', description: 'Lập phiếu đề xuất offer lương và chế độ đãi ngộ' },
     { id: 'perm-off-approve', code: 'offer.approve', name: 'Phê duyệt offer', module: 'OFFERS', description: 'Phê duyệt phiếu offer theo hạn mức ngân sách' },
+    { id: 'perm-salary-range-read', code: 'salary_range.read', name: 'Xem dải lương', module: 'OFFERS', description: 'Xem dải lương tối thiểu và tối đa của chức danh' },
 
     // System Security Audit
     { id: 'perm-audit-read', code: 'audit.read', name: 'Xem nhật ký bảo mật', module: 'AUDIT', description: 'Xem nhật ký đăng nhập, đăng xuất, khóa tài khoản và kiểm toán' }
@@ -84,6 +103,11 @@ function seedDatabase(db, options = {}) {
       'role.read', 'role.assign',
       'account.lock', 'account.unlock',
       'requisition.read',
+      'department.read', 'department.manage',
+      'competency.read', 'competency.manage',
+      'question_bank.read', 'question_bank.manage',
+      'recruitment_catalog.read', 'recruitment_catalog.manage',
+      'career_page.read', 'career_page.manage',
       'candidate.read', 'candidate.create', 'candidate.update',
       'interview.read',
       'offer.read',
@@ -93,23 +117,31 @@ function seedDatabase(db, options = {}) {
       'user.read',
       'role.read',
       'requisition.read', 'requisition.create', 'requisition.approve',
+      'department.read', 'department.manage',
+      'competency.read', 'competency.manage',
+      'question_bank.read', 'question_bank.manage',
+      'recruitment_catalog.read', 'recruitment_catalog.manage',
+      'career_page.read', 'career_page.manage',
       'candidate.read', 'candidate.update',
       'interview.read',
-      'offer.read', 'offer.create', 'offer.approve'
+      'offer.read', 'offer.create', 'offer.approve', 'salary_range.read'
     ],
     RECRUITER: [
       'requisition.read',
+      'recruitment_catalog.read',
       'candidate.read', 'candidate.create', 'candidate.update',
       'interview.read',
       'offer.read', 'offer.create'
     ],
     HIRING_MGR: [
       'requisition.read', 'requisition.create',
+      'recruitment_catalog.read',
       'candidate.read',
       'interview.read', 'interview.evaluate'
     ],
     INTERVIEWER: [
-      'interview.read', 'interview.evaluate'
+      'interview.read', 'interview.evaluate',
+      'question_bank.read'
     ],
     APPROVER: [
       'requisition.read', 'requisition.approve',
@@ -586,13 +618,296 @@ function seedDatabase(db, options = {}) {
     insertOff.run(o.id, o.candId, o.reqId, o.salary, o.startDate, o.status, o.approverId);
   }
 
+  ensureDepartmentFeature(database);
+  ensureCompetencyFeature(database);
+  ensureRequisitionDraftFeature(database);
+
   console.log(`[Seed] Seeded ${roles.length} roles, ${permissions.length} permissions, ${totalRolePerms} role-permissions mappings, ${users.length} users, ${requisitions.length} requisitions, ${candidates.length} candidates, ${interviews.length} interviews, and ${offers.length} offers successfully with secure password hashing.`);
 }
 
+function ensureRequisitionDraftFeature(db) {
+  const database = db || getDatabase();
+  database.exec(`
+    INSERT OR IGNORE INTO permissions (id, code, name, module, description)
+    VALUES ('perm-req-draft-edit', 'requisition.draft.edit', 'Sửa nháp yêu cầu tuyển dụng của mình', 'REQUISITIONS', 'Cập nhật và hoàn tất yêu cầu S2-10 ở trạng thái nháp do mình tạo');
+    INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
+    SELECT r.id, p.id FROM roles r, permissions p
+    WHERE r.code IN ('HIRING_MGR', 'HR_MANAGER') AND p.code = 'requisition.draft.edit';
+  `);
+}
+
+function ensureDepartmentFeature(db) {
+  const database = db || getDatabase();
+
+  const permissions = [
+    ['perm-dept-read', 'department.read', 'Xem phòng ban', 'Xem cây phòng ban và sơ đồ tổ chức'],
+    ['perm-dept-manage', 'department.manage', 'Quản lý phòng ban', 'Tạo, sửa, ngừng áp dụng và quản lý cấu trúc phòng ban']
+  ];
+
+  const upsertPermission = database.prepare(`
+    INSERT INTO permissions (id, code, name, module, description)
+    VALUES (?, ?, ?, 'DEPARTMENTS', ?)
+    ON CONFLICT(code) DO UPDATE SET
+      name = excluded.name,
+      module = excluded.module,
+      description = excluded.description
+  `);
+
+  for (const permission of permissions) {
+    upsertPermission.run(...permission);
+  }
+
+  const assignPermission = database.prepare(`
+    INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
+    SELECT r.id, p.id
+    FROM roles r, permissions p
+    WHERE r.code = ? AND p.code = ?
+  `);
+
+  for (const roleCode of ['ADMIN', 'HR_MANAGER']) {
+    assignPermission.run(roleCode, 'department.read');
+    assignPermission.run(roleCode, 'department.manage');
+  }
+
+  const departments = [
+    ['dept-1', 'EXEC', 'Ban Giám Đốc', null, 'usr-approver'],
+    ['dept-2', 'HR', 'Phòng Nhân Sự', 'dept-1', 'usr-hr-mgr'],
+    ['dept-3', 'TECH', 'Khối Công Nghệ & Kỹ Thuật', 'dept-1', 'usr-hiring-mgr'],
+    ['dept-4', 'FIN', 'Phòng Tài Chính - Kế Toán', 'dept-1', 'usr-finance-01'],
+    ['dept-7', 'MKT', 'Phòng Marketing & Truyền Thông', 'dept-1', 'usr-mkt-01'],
+    ['dept-8', 'PRODUCT', 'Khối Quản Trị Sản Phẩm', 'dept-1', 'usr-product-01'],
+    ['dept-9', 'LEGAL', 'Ban Pháp Chế', 'dept-1', 'usr-legal-01'],
+    ['dept-5', 'DEV', 'Phòng Phát Triển Phần Mềm', 'dept-3', 'usr-interviewer'],
+    ['dept-6', 'QA', 'Phòng Đảm Bảo Chất Lượng (QA/QC)', 'dept-3', 'usr-dual-role']
+  ];
+
+  const insertDepartment = database.prepare(`
+    INSERT OR IGNORE INTO departments (
+      id, code, name, parent_id, manager_id, status, created_at, updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, 'ACTIVE', datetime('now'), datetime('now'))
+  `);
+
+  for (const department of departments) {
+    const managerExists = database.prepare(
+      'SELECT id FROM users WHERE id = ?'
+    ).get(department[4]);
+
+    if (managerExists) {
+      insertDepartment.run(...department);
+    }
+  }
+
+  database.exec(`
+    UPDATE requisitions
+    SET department_id = (
+      SELECT d.id
+      FROM departments d
+      WHERE d.name = requisitions.department_name
+      LIMIT 1
+    )
+    WHERE department_id IS NULL;
+  `);
+}
+function ensureCompetencyFeature(db) {
+  const database = db || getDatabase();
+
+  database.prepare(`
+    INSERT OR IGNORE INTO permissions (id, code, name, module, description)
+    VALUES ('perm-salary-range-read', 'salary_range.read', 'Xem dải lương', 'OFFERS', 'Xem dải lương tối thiểu và tối đa của chức danh')
+  `).run();
+  database.prepare(`
+    INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
+    SELECT r.id, p.id FROM roles r, permissions p
+    WHERE r.code = 'HR_MANAGER' AND p.code = 'salary_range.read'
+  `).run();
+
+  const permissions = [
+    [
+      'perm-competency-read',
+      'competency.read',
+      'Xem khung năng lực',
+      'Xem khung năng lực, tiêu chí đánh giá và chức danh áp dụng'
+    ],
+    [
+      'perm-competency-manage',
+      'competency.manage',
+      'Quản lý khung năng lực',
+      'Tạo, sửa và gán khung năng lực cho chức danh'
+    ]
+  ];
+
+  const upsertPermission = database.prepare(`
+    INSERT INTO permissions (id, code, name, module, description)
+    VALUES (?, ?, ?, 'COMPETENCIES', ?)
+    ON CONFLICT(code) DO UPDATE SET
+      name = excluded.name,
+      module = excluded.module,
+      description = excluded.description
+  `);
+
+  for (const permission of permissions) {
+    upsertPermission.run(...permission);
+  }
+
+  const assignPermission = database.prepare(`
+    INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
+    SELECT r.id, p.id
+    FROM roles r, permissions p
+    WHERE r.code = ? AND p.code = ?
+  `);
+
+  for (const roleCode of ['ADMIN', 'HR_MANAGER']) {
+    assignPermission.run(roleCode, 'competency.read');
+    assignPermission.run(roleCode, 'competency.manage');
+  }
+}
+function ensureQuestionBankFeature(db) {
+  const database = db || getDatabase();
+
+  const permissions = [
+    [
+      'perm-question-bank-read',
+      'question_bank.read',
+      'Xem ngân hàng câu hỏi',
+      'Xem và tìm kiếm câu hỏi phỏng vấn theo chức danh và tiêu chí năng lực'
+    ],
+    [
+      'perm-question-bank-manage',
+      'question_bank.manage',
+      'Quản lý ngân hàng câu hỏi',
+      'Tạo và cập nhật câu hỏi phỏng vấn theo tiêu chí năng lực'
+    ]
+  ];
+
+  const upsertPermission = database.prepare(`
+    INSERT INTO permissions (id, code, name, module, description)
+    VALUES (?, ?, ?, 'QUESTION_BANK', ?)
+    ON CONFLICT(code) DO UPDATE SET
+      name = excluded.name,
+      module = excluded.module,
+      description = excluded.description
+  `);
+
+  for (const permission of permissions) {
+    upsertPermission.run(...permission);
+  }
+
+  const assignPermission = database.prepare(`
+    INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
+    SELECT r.id, p.id
+    FROM roles r, permissions p
+    WHERE r.code = ? AND p.code = ?
+  `);
+
+  for (const roleCode of ['ADMIN', 'HR_MANAGER', 'INTERVIEWER']) {
+    assignPermission.run(roleCode, 'question_bank.read');
+  }
+
+  for (const roleCode of ['ADMIN', 'HR_MANAGER']) {
+    assignPermission.run(roleCode, 'question_bank.manage');
+  }
+}
+
+function ensureRecruitmentCatalogFeature(db) {
+  const database = db || getDatabase();
+
+  const permissions = [
+    [
+      'perm-recruitment-catalog-read',
+      'recruitment_catalog.read',
+      'Xem danh mục tuyển dụng',
+      'Xem các danh mục dùng chung trong tuyển dụng'
+    ],
+    [
+      'perm-recruitment-catalog-manage',
+      'recruitment_catalog.manage',
+      'Quản lý danh mục tuyển dụng',
+      'Tạo, sửa, sắp xếp và xóa các danh mục dùng chung trong tuyển dụng'
+    ]
+  ];
+
+  const upsertPermission = database.prepare(`
+    INSERT INTO permissions (id, code, name, module, description)
+    VALUES (?, ?, ?, 'RECRUITMENT_CATALOG', ?)
+    ON CONFLICT(code) DO UPDATE SET
+      name = excluded.name,
+      module = excluded.module,
+      description = excluded.description
+  `);
+
+  for (const permission of permissions) {
+    upsertPermission.run(...permission);
+  }
+
+  const assignPermission = database.prepare(`
+    INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
+    SELECT r.id, p.id
+    FROM roles r, permissions p
+    WHERE r.code = ? AND p.code = ?
+  `);
+
+  for (const roleCode of ['ADMIN', 'HR_MANAGER']) {
+    assignPermission.run(roleCode, 'recruitment_catalog.read');
+    assignPermission.run(roleCode, 'recruitment_catalog.manage');
+  }
+
+  assignPermission.run('RECRUITER', 'recruitment_catalog.read');
+  assignPermission.run('HIRING_MGR', 'recruitment_catalog.read');
+}
+function ensureCareerPageFeature(db) {
+  const database = db || getDatabase();
+
+  const permissions = [
+    [
+      'perm-career-page-read',
+      'career_page.read',
+      'Xem cấu hình trang tuyển dụng',
+      'Xem nội dung cấu hình trang giới thiệu công ty trên cổng tuyển dụng'
+    ],
+    [
+      'perm-career-page-manage',
+      'career_page.manage',
+      'Quản lý trang tuyển dụng',
+      'Soạn nội dung, tải logo và ảnh cho trang giới thiệu công ty'
+    ]
+  ];
+
+  const upsertPermission = database.prepare(`
+    INSERT INTO permissions (id, code, name, module, description)
+    VALUES (?, ?, ?, 'CAREER_PAGE', ?)
+    ON CONFLICT(code) DO UPDATE SET
+      name = excluded.name,
+      module = excluded.module,
+      description = excluded.description
+  `);
+
+  for (const permission of permissions) {
+    upsertPermission.run(...permission);
+  }
+
+  const assignPermission = database.prepare(`
+    INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
+    SELECT r.id, p.id
+    FROM roles r, permissions p
+    WHERE r.code = ? AND p.code = ?
+  `);
+
+  for (const roleCode of ['ADMIN', 'HR_MANAGER']) {
+    assignPermission.run(roleCode, 'career_page.read');
+    assignPermission.run(roleCode, 'career_page.manage');
+  }
+}
 if (require.main === module) {
   seedDatabase();
 }
 
 module.exports = {
-  seedDatabase
+  seedDatabase,
+  ensureDepartmentFeature,
+  ensureCompetencyFeature,
+  ensureQuestionBankFeature,
+  ensureRecruitmentCatalogFeature,
+  ensureCareerPageFeature,
+  ensureRequisitionDraftFeature
 };

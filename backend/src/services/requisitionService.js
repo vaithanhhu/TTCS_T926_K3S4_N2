@@ -31,6 +31,11 @@ class RequisitionService {
     if (handoverOnly) {
       conditions.push('r.handover_required = 1');
     }
+    if (options.viewerId) {
+      conditions.push("(r.s210_version = 0 OR r.status <> 'DRAFT' OR r.created_by = ?)");
+      params.push(options.viewerId);
+    }
+    if (options.canReadS210 === false) conditions.push('r.s210_version = 0');
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
@@ -39,8 +44,15 @@ class RequisitionService {
         r.id,
         r.code,
         r.title,
+        r.job_title_id,
+        r.department_id,
         r.department_name,
+        r.work_location_id,
+        r.work_mode_id,
         r.headcount,
+        r.s210_version, r.created_by, r.recruitment_reason,
+        r.proposed_salary_min, r.proposed_salary_max, r.needed_date,
+        r.job_description, r.candidate_requirements, r.salary_justification,
         r.status,
         r.handover_required,
         r.handover_notes,
@@ -65,8 +77,13 @@ class RequisitionService {
       id: r.id,
       code: r.code,
       title: r.title,
+      jobTitleId: r.job_title_id || null,
+      departmentId: r.department_id || null,
       departmentName: r.department_name,
-      headcount: r.headcount,
+      workLocationId: r.work_location_id || null,
+      workModeId: r.work_mode_id || null,
+      headcount: r.s210_version && r.headcount === 0 ? null : r.headcount,
+      ...this.s210Fields(r),
       status: r.status,
       handoverRequired: Boolean(r.handover_required),
       handoverNotes: r.handover_notes || null,
@@ -97,19 +114,115 @@ class RequisitionService {
   /**
    * Create new recruitment requisition in SQLite
    */
-  createRequisition(data = {}) {
+  createRequisition(data = {}, actor = null) {
+    if (this.isS210Request(data)) return this.saveS210Requisition(null, data, actor);
     const title = typeof data.title === 'string' ? data.title.trim() : '';
-    const departmentName = typeof data.departmentName === 'string' ? data.departmentName.trim() : '';
-    const headcount = parseInt(data.headcount, 10) || 1;
-    const hiringManagerId = data.hiringManagerId || null;
-    const recruiterId = data.recruiterId || null;
+    const departmentId = typeof data.departmentId === 'string'
+      ? data.departmentId.trim()
+      : '';
 
-    if (!title) {
-      return { success: false, statusCode: 400, message: 'Tiêu đề vị trí tuyển dụng là bắt buộc.' };
+    const legacyDepartmentName = typeof data.departmentName === 'string'
+      ? data.departmentName.trim()
+      : (typeof data.department === 'string' ? data.department.trim() : '');
+
+    const headcount = parseInt(data.headcount, 10) || 1;
+    const recruiterId = data.recruiterId || data.assignedRecruiterId || null;
+    const workLocationId = data.workLocationId || null;
+    const workModeId = data.workModeId || null;
+
+    const workCatalogValidation = this.validateRequisitionCatalogs(
+      workLocationId,
+      workModeId
+    );
+
+    if (!workCatalogValidation.success) return workCatalogValidation;
+    const jobTitleId = typeof data.jobTitleId === 'string'
+      ? data.jobTitleId.trim()
+      : '';
+
+    if (jobTitleId) {
+      const jobTitle = this.db.prepare(`
+        SELECT id, status, framework_id
+        FROM job_titles
+        WHERE id = ?
+      `).get(jobTitleId);
+
+      if (!jobTitle) {
+        return {
+          success: false,
+          statusCode: 400,
+          code: 'INVALID_JOB_TITLE',
+          message: 'Chức danh tuyển dụng không tồn tại.'
+        };
+      }
+
+      if (jobTitle.status !== 'ACTIVE') {
+        return {
+          success: false,
+          statusCode: 400,
+          code: 'JOB_TITLE_INACTIVE',
+          message: 'Chức danh đã ngừng áp dụng.'
+        };
+      }
+
+      if (!jobTitle.framework_id) {
+        return {
+          success: false,
+          statusCode: 400,
+          code: 'JOB_TITLE_FRAMEWORK_REQUIRED',
+          message: 'Chức danh chưa được gắn khung năng lực.'
+        };
+      }
     }
 
-    if (!departmentName) {
+    if (!title) {
+      return {
+        success: false,
+        statusCode: 400,
+        message: 'Tiêu đề vị trí tuyển dụng là bắt buộc.'
+      };
+    }
+
+    let department = null;
+
+    if (departmentId) {
+      department = this.db.prepare(`
+        SELECT id, name, manager_id, status
+        FROM departments
+        WHERE id = ?
+      `).get(departmentId);
+    } else if (legacyDepartmentName) {
+      // Sprint 1 accepts free-text departments and the caller's Hiring Manager.
+      department = { id: null, name: legacyDepartmentName, manager_id: data.hiringManagerId || null, status: 'ACTIVE' };
+    } else {
       return { success: false, statusCode: 400, message: 'Phòng ban tuyển dụng là bắt buộc.' };
+    }
+
+    if (!department) {
+      return {
+        success: false,
+        statusCode: 400,
+        code: 'INVALID_DEPARTMENT',
+        message: 'Phòng ban tuyển dụng không tồn tại.'
+      };
+    }
+
+    if (department.status !== 'ACTIVE') {
+      return {
+        success: false,
+        statusCode: 400,
+        code: 'DEPARTMENT_INACTIVE',
+        message: 'Phòng ban đã ngừng áp dụng và không thể tạo yêu cầu tuyển dụng mới.'
+      };
+    }
+
+    if (departmentId && !department.manager_id) {
+      return {
+        success: false,
+        statusCode: 400,
+        code: 'DEPARTMENT_MANAGER_REQUIRED',
+        message: 'Phòng ban chưa có người phụ trách.'
+      };
     }
 
     const countStmt = this.db.prepare('SELECT COUNT(*) as count FROM requisitions');
@@ -119,13 +232,40 @@ class RequisitionService {
 
     const insertStmt = this.db.prepare(`
       INSERT INTO requisitions (
-        id, code, title, department_name, headcount, hiring_manager_id, recruiter_id, status, handover_required, created_at, updated_at
-      ) VALUES (
-        ?, ?, ?, ?, ?, ?, ?, 'OPEN', 0, datetime('now'), datetime('now')
+        id,
+        code,
+        title,
+        job_title_id,
+        department_id,
+        department_name,
+        work_location_id,
+        work_mode_id,
+        headcount,
+        hiring_manager_id,
+        recruiter_id,
+        status,
+        handover_required,
+        created_at,
+        updated_at
+      )
+      VALUES (
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', 0, datetime('now'), datetime('now')
       )
     `);
 
-    insertStmt.run(id, code, title, departmentName, headcount, hiringManagerId, recruiterId);
+    insertStmt.run(
+      id,
+      code,
+      title,
+      jobTitleId || null,
+      department.id,
+      department.name,
+      workLocationId,
+      workModeId,
+      headcount,
+      department.manager_id,
+      recruiterId
+    );
 
     return {
       success: true,
@@ -135,13 +275,13 @@ class RequisitionService {
         id,
         code,
         title,
-        departmentName,
+        departmentName: department.name,
+        ...(departmentId ? { departmentId: department.id, hiringManagerId: department.manager_id } : {}),
         headcount,
         status: 'OPEN'
       }
     };
   }
-
   /**
    * Reassign recruiter or resolve handover requirement (S1-10)
    */
@@ -175,8 +315,11 @@ class RequisitionService {
     if (!id) return null;
     const stmt = this.db.prepare(`
       SELECT 
-        r.id, r.code, r.title, r.department_name, r.headcount, r.status, r.handover_required, r.handover_notes,
+        r.id, r.code, r.title, r.job_title_id, r.department_id, r.department_name, r.work_location_id, r.work_mode_id, r.headcount, r.status, r.handover_required, r.handover_notes,
         r.created_at, r.updated_at,
+        r.s210_version, r.created_by, r.recruitment_reason,
+        r.proposed_salary_min, r.proposed_salary_max, r.needed_date,
+        r.job_description, r.candidate_requirements, r.salary_justification,
         r.recruiter_id, rec.full_name AS recruiter_name, rec.email AS recruiter_email,
         r.hiring_manager_id, hm.full_name AS hiring_manager_name, hm.email AS hiring_manager_email
       FROM requisitions r
@@ -190,8 +333,13 @@ class RequisitionService {
       id: r.id,
       code: r.code,
       title: r.title,
+      jobTitleId: r.job_title_id || null,
+      departmentId: r.department_id || null,
       departmentName: r.department_name,
-      headcount: r.headcount,
+      workLocationId: r.work_location_id || null,
+      workModeId: r.work_mode_id || null,
+      headcount: r.s210_version && r.headcount === 0 ? null : r.headcount,
+      ...this.s210Fields(r),
       status: r.status,
       handoverRequired: Boolean(r.handover_required),
       handoverNotes: r.handover_notes,
@@ -207,23 +355,188 @@ class RequisitionService {
   /**
    * Update requisition details and status
    */
-  updateRequisition(id, data = {}) {
-    if (!id) return { success: false, statusCode: 400, message: 'Thiếu mã vị trí cần cập nhật.' };
-    const current = this.getRequisitionById(id);
-    if (!current) return { success: false, statusCode: 404, message: 'Không tìm thấy vị trí tuyển dụng.' };
+  updateRequisition(id, data = {}, actor = null) {
+    if (!id) {
+      return {
+        success: false,
+        statusCode: 400,
+        message: 'Thiếu mã vị trí cần cập nhật.'
+      };
+    }
 
-    const title = typeof data.title === 'string' && data.title.trim() ? data.title.trim() : current.title;
-    const departmentName = typeof data.departmentName === 'string' && data.departmentName.trim() ? data.departmentName.trim() : current.departmentName;
-    const headcount = data.headcount !== undefined ? (parseInt(data.headcount, 10) || current.headcount) : current.headcount;
-    const status = typeof data.status === 'string' && data.status.trim() ? data.status.trim().toUpperCase() : current.status;
-    const recruiterId = data.recruiterId !== undefined ? (data.recruiterId || null) : current.recruiterId;
+    const current = this.getRequisitionById(id);
+
+    if (!current) {
+      return {
+        success: false,
+        statusCode: 404,
+        message: 'Không tìm thấy vị trí tuyển dụng.'
+      };
+    }
+
+    if (current.formVersion === 'S2-10' || this.isS210Request(data)) {
+      return this.saveS210Requisition(current, data, actor);
+    }
+
+    const title = typeof data.title === 'string' && data.title.trim()
+      ? data.title.trim()
+      : current.title;
+
+    const headcount = data.headcount !== undefined
+      ? (parseInt(data.headcount, 10) || current.headcount)
+      : current.headcount;
+
+    const status = typeof data.status === 'string' && data.status.trim()
+      ? data.status.trim().toUpperCase()
+      : current.status;
+
+    const recruiterId = data.recruiterId !== undefined
+      ? (data.recruiterId || null)
+      : current.recruiterId;
+    let jobTitleId = current.jobTitleId || null;
+
+    const workLocationId = Object.prototype.hasOwnProperty.call(data, 'workLocationId')
+      ? (data.workLocationId || null)
+      : current.workLocationId;
+
+    const workModeId = Object.prototype.hasOwnProperty.call(data, 'workModeId')
+      ? (data.workModeId || null)
+      : current.workModeId;
+
+    const validateWorkLocationId =
+      Object.prototype.hasOwnProperty.call(data, 'workLocationId') &&
+      workLocationId !== current.workLocationId
+        ? workLocationId
+        : null;
+
+    const validateWorkModeId =
+      Object.prototype.hasOwnProperty.call(data, 'workModeId') &&
+      workModeId !== current.workModeId
+        ? workModeId
+        : null;
+
+    const workCatalogValidation = this.validateRequisitionCatalogs(
+      validateWorkLocationId,
+      validateWorkModeId
+    );
+    if (!workCatalogValidation.success) return workCatalogValidation;
+
+    const requestedJobTitleId = typeof data.jobTitleId === 'string'
+      ? data.jobTitleId.trim()
+      : '';
+
+    if (requestedJobTitleId) {
+      const jobTitle = this.db.prepare(`
+        SELECT id, status, framework_id
+        FROM job_titles
+        WHERE id = ?
+      `).get(requestedJobTitleId);
+
+      if (!jobTitle) {
+        return {
+          success: false,
+          statusCode: 400,
+          code: 'INVALID_JOB_TITLE',
+          message: 'Chức danh tuyển dụng không tồn tại.'
+        };
+      }
+
+      if (jobTitle.status !== 'ACTIVE') {
+        return {
+          success: false,
+          statusCode: 400,
+          code: 'JOB_TITLE_INACTIVE',
+          message: 'Chức danh đã ngừng áp dụng.'
+        };
+      }
+
+      if (!jobTitle.framework_id) {
+        return {
+          success: false,
+          statusCode: 400,
+          code: 'JOB_TITLE_FRAMEWORK_REQUIRED',
+          message: 'Chức danh chưa được gắn khung năng lực.'
+        };
+      }
+
+      jobTitleId = jobTitle.id;
+    }
+
+    let departmentId = current.departmentId || null;
+    let departmentName = current.departmentName;
+    let hiringManagerId = current.hiringManagerId || null;
+
+    const requestedDepartmentId = typeof data.departmentId === 'string'
+      ? data.departmentId.trim()
+      : '';
+
+    const requestedDepartmentName = typeof data.departmentName === 'string'
+      ? data.departmentName.trim()
+      : (typeof data.department === 'string' ? data.department.trim() : '');
+
+    if (requestedDepartmentId) {
+      const department = this.db.prepare(`
+            SELECT id, name, manager_id, status
+            FROM departments
+            WHERE id = ?
+          `).get(requestedDepartmentId);
+
+      if (!department) {
+        return {
+          success: false,
+          statusCode: 400,
+          code: 'INVALID_DEPARTMENT',
+          message: 'Phòng ban tuyển dụng không tồn tại.'
+        };
+      }
+
+      if (department.status !== 'ACTIVE') {
+        return {
+          success: false,
+          statusCode: 400,
+          code: 'DEPARTMENT_INACTIVE',
+          message: 'Phòng ban đã ngừng áp dụng.'
+        };
+      }
+
+      departmentId = department.id;
+      departmentName = department.name;
+      hiringManagerId = department.manager_id;
+    } else if (requestedDepartmentName) {
+      if (requestedDepartmentName !== current.departmentName) departmentId = null;
+      departmentName = requestedDepartmentName;
+    }
 
     const stmt = this.db.prepare(`
       UPDATE requisitions
-      SET title = ?, department_name = ?, headcount = ?, status = ?, recruiter_id = ?, updated_at = datetime('now')
+      SET
+                title = ?,
+        job_title_id = ?,
+        department_id = ?,
+        department_name = ?,
+        hiring_manager_id = ?,
+        work_location_id = ?,
+        work_mode_id = ?,
+        headcount = ?,
+        status = ?,
+        recruiter_id = ?,
+        updated_at = datetime('now')
       WHERE id = ?
     `);
-    stmt.run(title, departmentName, headcount, status, recruiterId, id);
+
+    stmt.run(
+            title,
+      jobTitleId,
+      departmentId,
+      departmentName,
+      hiringManagerId,
+      workLocationId,
+      workModeId,
+      headcount,
+      status,
+      recruiterId,
+      id
+    );
 
     return {
       success: true,
@@ -232,7 +545,190 @@ class RequisitionService {
       data: this.getRequisitionById(id)
     };
   }
+  isS210Request(data) {
+    return data && (data.formVersion === 'S2-10' || data.status === 'DRAFT' ||
+      ['recruitmentReason', 'proposedSalaryMin', 'proposedSalaryMax', 'neededDate',
+        'jobDescription', 'candidateRequirements', 'salaryJustification'].some(key => Object.hasOwn(data, key)));
+  }
 
+  s210Fields(row) {
+    if (!row.s210_version) return {};
+    return {
+      formVersion: 'S2-10', createdBy: row.created_by,
+      recruitmentReason: row.recruitment_reason,
+      proposedSalaryMin: row.proposed_salary_min, proposedSalaryMax: row.proposed_salary_max,
+      neededDate: row.needed_date, jobDescription: row.job_description,
+      candidateRequirements: row.candidate_requirements, salaryJustification: row.salary_justification
+    };
+  }
+
+  businessDate(now = new Date()) {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit'
+    }).formatToParts(now);
+    const part = type => parts.find(item => item.type === type).value;
+    return `${part('year')}-${part('month')}-${part('day')}`;
+  }
+
+  s210SalaryRangeStatus(jobTitle, min, max) {
+    if (!jobTitle || jobTitle.min_salary === null || jobTitle.max_salary === null) return null;
+    if ((min !== null && min < jobTitle.min_salary) || (max !== null && max > jobTitle.max_salary)) return 'OUTSIDE_STANDARD_RANGE';
+    if (min === null || max === null) return null;
+    return 'WITHIN_STANDARD_RANGE';
+  }
+
+  unavailableS210SalaryRange() {
+    return { success: false, statusCode: 409, code: 'JOB_TITLE_SALARY_RANGE_UNAVAILABLE', message: 'Chức danh chưa được cấu hình đầy đủ dải lương chuẩn. HR Manager cần thiết lập dải lương trước khi yêu cầu tuyển dụng có thể được hoàn tất. Có thể lưu nháp.' };
+  }
+
+  checkS210SalaryRange(data) {
+    // Read-only preview: the caller cannot disable justification on a write request.
+    const validation = this.validateS210({ status: 'DRAFT', jobTitleId: data.jobTitleId,
+      proposedSalaryMin: data.proposedSalaryMin, proposedSalaryMax: data.proposedSalaryMax }, null, null, { requireJustification: false });
+    if (!validation.success) return validation;
+    if (!validation.jobTitle || validation.values.proposedSalaryMin === null || validation.values.proposedSalaryMax === null) {
+      return { success: false, statusCode: 400, code: 'MISSING_SALARY_CHECK_FIELD', message: 'Chọn chức danh và nhập đủ dải lương đề xuất để kiểm tra.' };
+    }
+    if (validation.jobTitle.min_salary === null || validation.jobTitle.max_salary === null) return this.unavailableS210SalaryRange();
+    // Explicitly return only the classification, never the job title's standard values.
+    return { success: true, statusCode: 200, salaryRangeStatus: validation.salaryRangeStatus };
+  }
+
+  validateS210(data, current = null, actor = null, { requireJustification = true } = {}) {
+    const fail = (code, message) => ({ success: false, statusCode: 400, code, message });
+    const fields = ['title', 'jobTitleId', 'departmentId', 'headcount', 'recruitmentReason',
+      'proposedSalaryMin', 'proposedSalaryMax', 'neededDate', 'jobDescription',
+      'candidateRequirements', 'salaryJustification', 'recruiterId', 'workLocationId', 'workModeId'];
+    const values = {};
+    for (const key of fields) values[key] = Object.hasOwn(data, key) ? data[key] : current?.[key] ?? null;
+    const status = Object.hasOwn(data, 'status') ? data.status : current?.status || 'OPEN';
+    if (!['DRAFT', 'OPEN', 'IN_PROGRESS', 'CLOSED'].includes(status)) return fail('INVALID_REQUISITION_STATUS', 'Trạng thái yêu cầu tuyển dụng không hợp lệ.');
+    if ((!current || current.status === 'DRAFT') && !['DRAFT', 'OPEN'].includes(status)) return fail('INVALID_DRAFT_TRANSITION', 'Hoàn tất nháp bằng trạng thái OPEN hiện có.');
+    if (current && current.status !== 'DRAFT' && status === 'DRAFT') return fail('INVALID_DRAFT_TRANSITION', 'Yêu cầu đã hoàn tất không thể chuyển lại thành nháp.');
+    const draft = status === 'DRAFT';
+    for (const key of fields.filter(key => !['headcount', 'proposedSalaryMin', 'proposedSalaryMax'].includes(key))) {
+      if (values[key] === null || values[key] === undefined || values[key] === '') { values[key] = null; continue; }
+      if (typeof values[key] !== 'string') return fail('INVALID_REQUISITION_FIELD', `Trường ${key} phải là chuỗi.`);
+      // Preserve the complete authored JD/requirements, including line breaks and spacing.
+      if (!['jobDescription', 'candidateRequirements'].includes(key)) values[key] = values[key].trim() || null;
+    }
+    for (const key of ['headcount', 'proposedSalaryMin', 'proposedSalaryMax']) {
+      const value = values[key];
+      if (value === null || value === undefined || value === '') { values[key] = null; continue; }
+      if ((typeof value !== 'number' && typeof value !== 'string') || (typeof value === 'string' && !value.trim())) return fail('INVALID_REQUISITION_NUMBER', `Trường ${key} phải là số hợp lệ.`);
+      const number = Number(value);
+      if (!Number.isFinite(number) || Math.abs(number) > Number.MAX_SAFE_INTEGER || number < 0 ||
+        (key === 'headcount' && (!Number.isSafeInteger(number) || number <= 0))) {
+        return fail(key === 'headcount' ? 'INVALID_HEADCOUNT' : 'INVALID_PROPOSED_SALARY', key === 'headcount' ? 'Số lượng cần tuyển phải là số nguyên lớn hơn 0.' : 'Lương đề xuất phải là số hợp lệ, không âm.');
+      }
+      values[key] = number;
+    }
+    if (values.proposedSalaryMin !== null && values.proposedSalaryMax !== null && values.proposedSalaryMin > values.proposedSalaryMax) return fail('INVALID_PROPOSED_SALARY_RANGE', 'Lương tối thiểu không được lớn hơn lương tối đa.');
+    if (values.recruitmentReason && !['REPLACEMENT', 'NEW_HEADCOUNT'].includes(values.recruitmentReason)) return fail('INVALID_RECRUITMENT_REASON', 'Lý do tuyển chỉ gồm Thay thế hoặc Tăng mới.');
+    if (values.neededDate) {
+      const date = new Date(`${values.neededDate}T00:00:00Z`);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(values.neededDate) || !Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== values.neededDate) return fail('INVALID_NEEDED_DATE', 'Ngày cần người phải là ngày hợp lệ theo YYYY-MM-DD.');
+      if ((!current || current.status === 'DRAFT' || Object.hasOwn(data, 'neededDate')) && values.neededDate < this.businessDate()) return fail('NEEDED_DATE_IN_PAST', 'Ngày cần người không được ở quá khứ (múi giờ Việt Nam).');
+    }
+    const jobTitle = values.jobTitleId ? this.db.prepare('SELECT id, name, min_salary, max_salary, status FROM job_titles WHERE id = ?').get(values.jobTitleId) : null;
+    if (values.jobTitleId && (!jobTitle || jobTitle.status !== 'ACTIVE')) return fail('INVALID_JOB_TITLE', 'Chức danh không tồn tại hoặc đã ngừng áp dụng.');
+    const department = values.departmentId ? this.db.prepare('SELECT id, name, manager_id, status FROM departments WHERE id = ?').get(values.departmentId) : null;
+    if (values.departmentId && (!department || department.status !== 'ACTIVE')) return fail('INVALID_DEPARTMENT', 'Phòng ban không tồn tại hoặc đã ngừng áp dụng.');
+    if (department && actor && !actor.roles.includes('HR_MANAGER') && department.manager_id !== actor.id) return { success: false, statusCode: 403, code: 'REQUISITION_DEPARTMENT_FORBIDDEN', message: 'Bạn chỉ được tạo yêu cầu cho phòng ban mình phụ trách.' };
+    const catalogResult = this.validateRequisitionCatalogs(values.workLocationId, values.workModeId);
+    if (!catalogResult.success) return catalogResult;
+    if (values.recruiterId && !this.db.prepare('SELECT id FROM users WHERE id = ?').get(values.recruiterId)) return fail('INVALID_RECRUITER', 'Nhân sự phụ trách không tồn tại.');
+    if (!draft) {
+      for (const key of ['jobTitleId', 'departmentId', 'headcount', 'recruitmentReason', 'proposedSalaryMin', 'proposedSalaryMax', 'neededDate', 'jobDescription', 'candidateRequirements']) {
+        if (values[key] === null || (typeof values[key] === 'string' && !values[key].trim())) return fail('MISSING_REQUISITION_FIELD', `Vui lòng nhập đầy đủ ${key} trước khi hoàn tất yêu cầu.`);
+      }
+      // A missing standard range is allowed for drafts only, without invented defaults.
+      if (jobTitle.min_salary === null || jobTitle.max_salary === null) {
+        return this.unavailableS210SalaryRange();
+      }
+    }
+    const salaryRangeStatus = this.s210SalaryRangeStatus(jobTitle, values.proposedSalaryMin, values.proposedSalaryMax);
+    if (requireJustification && salaryRangeStatus === 'OUTSIDE_STANDARD_RANGE' && !values.salaryJustification) {
+      return { ...fail('SALARY_JUSTIFICATION_REQUIRED', 'Dải lương đề xuất nằm ngoài chuẩn chức danh; bắt buộc nhập giải trình.'), salaryRangeStatus };
+    }
+    return { success: true, values, status, jobTitle, department, salaryRangeStatus };
+  }
+
+  saveS210Requisition(current, data, actor) {
+    if (current?.status === 'DRAFT' && actor && current.createdBy !== actor.id) {
+      return { success: false, statusCode: 403, code: 'REQUISITION_DRAFT_FORBIDDEN', message: 'Bạn chỉ được sửa nháp do mình tạo.' };
+    }
+    const validation = this.validateS210(data, current, actor);
+    if (!validation.success) return validation;
+    const { values: v, status, jobTitle, department } = validation;
+    const title = v.title || jobTitle?.name || '';
+    const headcount = v.headcount ?? 0; // Existing NOT NULL column: zero denotes an unentered draft quantity only.
+    const id = current?.id || 'req-' + crypto.randomUUID();
+    const createdBy = current?.createdBy || actor?.id || null;
+    const manager = department?.manager_id || null;
+    if (current) {
+      this.db.prepare(`UPDATE requisitions SET title=?, job_title_id=?, department_id=?, department_name=?,
+        headcount=?, hiring_manager_id=?, recruiter_id=?, work_location_id=?, work_mode_id=?, status=?,
+        s210_version=1, created_by=?, recruitment_reason=?, proposed_salary_min=?, proposed_salary_max=?,
+        needed_date=?, job_description=?, candidate_requirements=?, salary_justification=?, updated_at=datetime('now') WHERE id=?`)
+        .run(title, v.jobTitleId, v.departmentId, department?.name || '', headcount, manager,
+          v.recruiterId, v.workLocationId, v.workModeId, status, createdBy, v.recruitmentReason,
+          v.proposedSalaryMin, v.proposedSalaryMax, v.neededDate, v.jobDescription, v.candidateRequirements, v.salaryJustification, id);
+    } else {
+      let number = this.db.prepare('SELECT COUNT(*) AS count FROM requisitions').get().count + 1;
+      let code;
+      do { code = `REQ-2026-${String(number++).padStart(3, '0')}`; } while (this.db.prepare('SELECT id FROM requisitions WHERE code=?').get(code));
+      this.db.prepare(`INSERT INTO requisitions (id,code,title,job_title_id,department_id,department_name,headcount,
+        hiring_manager_id,recruiter_id,work_location_id,work_mode_id,status,s210_version,created_by,recruitment_reason,
+        proposed_salary_min,proposed_salary_max,needed_date,job_description,candidate_requirements,salary_justification)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1,?,?,?,?,?,?,?,?)`)
+        .run(id, code, title, v.jobTitleId, v.departmentId, department?.name || '', headcount, manager,
+          v.recruiterId, v.workLocationId, v.workModeId, status, createdBy, v.recruitmentReason,
+          v.proposedSalaryMin, v.proposedSalaryMax, v.neededDate, v.jobDescription, v.candidateRequirements, v.salaryJustification);
+    }
+    return { success: true, statusCode: current ? 200 : 201, message: status === 'DRAFT' ? 'Đã lưu nháp yêu cầu tuyển dụng.' : 'Đã lưu yêu cầu tuyển dụng.',
+      ...(validation.salaryRangeStatus ? { salaryRangeStatus: validation.salaryRangeStatus } : {}), data: this.getRequisitionById(id) };
+  }
+
+  validateRequisitionCatalogs(workLocationId, workModeId) {
+    const checks = [
+      {
+        id: workLocationId,
+        type: 'WORK_LOCATION',
+        code: 'INVALID_WORK_LOCATION',
+        message: 'Địa điểm làm việc không hợp lệ hoặc đã ngừng áp dụng.'
+      },
+      {
+        id: workModeId,
+        type: 'WORK_MODE',
+        code: 'INVALID_WORK_MODE',
+        message: 'Hình thức làm việc không hợp lệ hoặc đã ngừng áp dụng.'
+      }
+    ];
+
+    for (const check of checks) {
+      if (!check.id) continue;
+
+      const item = this.db.prepare(`
+        SELECT id
+        FROM recruitment_catalog_items
+        WHERE id = ?
+          AND type = ?
+          AND status = 'ACTIVE'
+      `).get(check.id, check.type);
+
+      if (!item) {
+        return {
+          success: false,
+          statusCode: 400,
+          code: check.code,
+          message: check.message
+        };
+      }
+    }
+
+    return { success: true };
+  }
   /**
    * Get enterprise real-time dashboard statistics from SQLite
    */
@@ -439,6 +935,10 @@ class RequisitionService {
         c.current_company,
         c.expected_salary,
         c.notes,
+        c.source_id,
+        c.rejection_reason_id,
+        source.name AS source_name,
+        rejection_reason.name AS rejection_reason_name,
         c.created_at,
         r.id AS requisition_id,
         r.code AS requisition_code,
@@ -446,6 +946,10 @@ class RequisitionService {
         r.department_name
       FROM candidates c
       LEFT JOIN requisitions r ON c.requisition_id = r.id
+      LEFT JOIN recruitment_catalog_items source
+        ON c.source_id = source.id
+      LEFT JOIN recruitment_catalog_items rejection_reason
+        ON c.rejection_reason_id = rejection_reason.id
       ${whereClause}
       ORDER BY c.created_at DESC
     `);
@@ -464,6 +968,10 @@ class RequisitionService {
         currentCompany: r.current_company,
         expectedSalary: r.expected_salary,
         notes: r.notes,
+        sourceId: r.source_id || null,
+        sourceName: r.source_name || null,
+        rejectionReasonId: r.rejection_reason_id || null,
+        rejectionReasonName: r.rejection_reason_name || null,
         createdAt: r.created_at,
         requisition: r.requisition_id ? {
           id: r.requisition_id,
@@ -495,6 +1003,7 @@ class RequisitionService {
         c.phone_number AS candidate_phone,
         r.id AS requisition_id,
         r.title AS requisition_title,
+        r.department_id,
         r.department_name,
         u.id AS interviewer_id,
         u.full_name AS interviewer_name,
@@ -555,6 +1064,7 @@ class RequisitionService {
         c.email AS candidate_email,
         r.id AS requisition_id,
         r.title AS requisition_title,
+        r.department_id,
         r.department_name,
         u.id AS approver_id,
         u.full_name AS approver_name
@@ -615,6 +1125,32 @@ class RequisitionService {
     };
   }
 
+  validateCandidateCatalog(id, expectedType) {
+    if (!id) return { success: true };
+
+    const item = this.db.prepare(`
+      SELECT id
+      FROM recruitment_catalog_items
+      WHERE id = ?
+        AND type = ?
+        AND status = 'ACTIVE'
+    `).get(id, expectedType);
+
+    if (!item) {
+      return {
+        success: false,
+        statusCode: 400,
+        code: expectedType === 'CANDIDATE_SOURCE'
+          ? 'INVALID_CANDIDATE_SOURCE'
+          : 'INVALID_REJECTION_REASON',
+        message: expectedType === 'CANDIDATE_SOURCE'
+          ? 'Nguồn ứng viên không hợp lệ hoặc đã ngừng áp dụng.'
+          : 'Lý do loại hồ sơ không hợp lệ hoặc đã ngừng áp dụng.'
+      };
+    }
+
+    return { success: true };
+  }
   /**
    * Create candidate record
    */
@@ -623,6 +1159,14 @@ class RequisitionService {
     const email = typeof data.email === 'string' ? data.email.trim() : '';
     const phoneNumber = typeof data.phoneNumber === 'string' ? data.phoneNumber.trim() : '';
     const requisitionId = data.requisitionId || null;
+    const sourceId = data.sourceId || null;
+
+    const sourceValidation = this.validateCandidateCatalog(
+      sourceId,
+      'CANDIDATE_SOURCE'
+    );
+
+    if (!sourceValidation.success) return sourceValidation;
     const stage = data.stage || 'NEW';
     const experienceYears = parseInt(data.experienceYears, 10) || 1;
     const currentCompany = data.currentCompany || '';
@@ -638,10 +1182,10 @@ class RequisitionService {
 
     const id = 'cand-' + crypto.randomUUID();
     const insertStmt = this.db.prepare(`
-      INSERT INTO candidates (id, full_name, email, phone_number, requisition_id, stage, experience_years, current_company, expected_salary, notes, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      INSERT INTO candidates (id, full_name, email, phone_number, requisition_id, source_id, stage, experience_years, current_company, expected_salary, notes, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
     `);
-    insertStmt.run(id, fullName, email, phoneNumber, requisitionId, stage, experienceYears, currentCompany, expectedSalary, notes);
+    insertStmt.run(id, fullName, email, phoneNumber, requisitionId, sourceId, stage, experienceYears, currentCompany, expectedSalary, notes);
 
     return {
       success: true,
@@ -654,18 +1198,37 @@ class RequisitionService {
   /**
    * Update candidate stage / pipeline status
    */
-  updateCandidateStage(id, stage, notes) {
+  updateCandidateStage(id, stage, notes, rejectionReasonId) {
     if (!id) return { success: false, statusCode: 400, message: 'Thiếu mã ứng viên.' };
     const validStages = ['NEW', 'APPLIED', 'SCREENING', 'INTERVIEW', 'OFFER', 'HIRED', 'REJECTED'];
     if (!validStages.includes(stage)) {
       return { success: false, statusCode: 400, message: 'Giai đoạn không hợp lệ.' };
     }
+    if (stage === 'REJECTED' && rejectionReasonId) {
+      const reasonValidation = this.validateCandidateCatalog(
+        rejectionReasonId,
+        'REJECTION_REASON'
+      );
+
+      if (!reasonValidation.success) return reasonValidation;
+    }
     const updateStmt = this.db.prepare(`
       UPDATE candidates 
-      SET stage = ?, notes = COALESCE(?, notes)
+      SET stage = ?, notes = COALESCE(?, notes),
+          rejection_reason_id = CASE WHEN ? THEN rejection_reason_id ELSE ? END
       WHERE id = ?
     `);
-    const res = updateStmt.run(stage, notes || null, id);
+    const rejectionReasonValue = stage === 'REJECTED'
+      ? (rejectionReasonId || null)
+      : null;
+
+    const res = updateStmt.run(
+      stage,
+      notes || null,
+      stage === 'REJECTED' && rejectionReasonId === undefined ? 1 : 0,
+      rejectionReasonValue,
+      id
+    );
     if (res.changes === 0) {
       return { success: false, statusCode: 404, message: 'Không tìm thấy hồ sơ ứng viên.' };
     }

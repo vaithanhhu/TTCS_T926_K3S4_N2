@@ -18,6 +18,8 @@
     "test:s1-09": "node backend/tests/test_s1_09_integration.js",
     "test:s1-10": "node backend/tests/test_s1_10_integration.js",
     "test:otp": "node backend/tests/test_email_otp_flow.js",
+    "test:sprint2": "node backend/tests/test_s2_integration.js",
+    "test:s2-10": "node backend/tests/test_s2_10_integration.js",
     "test:sprint1": "node backend/tests/test_s1_01_integration.js && node backend/tests/test_s1_02_integration.js && node backend/tests/test_s1_03_integration.js && node backend/tests/test_s1_04_integration.js && node backend/tests/test_s1_05_integration.js && node backend/tests/test_s1_06_integration.js && node backend/tests/test_s1_07_integration.js && node backend/tests/test_s1_08_integration.js && node backend/tests/test_s1_09_integration.js && node backend/tests/test_s1_10_integration.js"
   },
   "keywords": [
@@ -30,6 +32,8 @@
     "node": ">=22.0.0"
   },
   "dependencies": {
-    "nodemailer": "^10.0.12"
+    "exceljs": "^4.4.0",
+    "nodemailer": "^10.0.12",
+    "sharp": "^0.35.5"
   }
 }

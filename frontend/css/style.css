@@ -221,6 +221,34 @@ button, input, select, textarea {
   margin-bottom: var(--space-6);
 }
 
+/* Public Company Career Page */
+.login-page-wrapper {
+  gap: var(--space-8);
+}
+
+.public-career-page-section {
+  width: min(680px, 55vw);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+
+#public-career-page-content {
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .login-page-wrapper {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .public-career-page-section {
+    width: 100%;
+    max-width: 680px;
+    max-height: none;
+    overflow-y: visible;
+  }
+}
 /* Form Controls */
 .form-group {
   margin-bottom: var(--space-4);
@@ -1370,6 +1398,15 @@ button, input, select, textarea {
 /* ==============================================================================
    RESPONSIVE DESIGN (BREAKPOINTS: 1024px, 768px, 480px)
    ============================================================================== */
+.s210-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+@media (max-width: 480px) {
+  .s210-form-grid { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 1024px) {
   .dashboard-grid-2col {
     grid-template-columns: 1fr;

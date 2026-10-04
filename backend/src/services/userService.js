@@ -1,4 +1,5 @@
 const crypto = require('node:crypto');
+const ExcelJS = require('exceljs');
 const { getDatabase } = require('../db/database');
 const { hashPassword } = require('../utils/password');
 const { getEmailService } = require('./emailService');
@@ -32,6 +33,427 @@ class UserService {
     return pwd;
   }
 
+    /**
+   * Tạo file Excel mẫu phục vụ nhập danh sách nhân sự hàng loạt.
+   * Không ghi dữ liệu vào database.
+   * @returns {Promise<Buffer>}
+   */
+  async buildBulkUserImportTemplate() {
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Internal ATS';
+    workbook.created = new Date();
+
+    const worksheet = workbook.addWorksheet('NhanSu');
+
+    worksheet.columns = [
+      { header: 'Họ và tên *', key: 'fullName', width: 28 },
+      { header: 'Email *', key: 'email', width: 32 },
+      { header: 'Chức danh', key: 'jobTitle', width: 28 },
+      { header: 'Phòng ban', key: 'departmentName', width: 30 },
+      { header: 'Số điện thoại', key: 'phoneNumber', width: 18 },
+      { header: 'Mã vai trò', key: 'roleCode', width: 22 }
+    ];
+
+    const headerRow = worksheet.getRow(1);
+    headerRow.font = { bold: true };
+    headerRow.alignment = {
+      vertical: 'middle',
+      horizontal: 'center'
+    };
+
+    worksheet.views = [
+      {
+        state: 'frozen',
+        ySplit: 1
+      }
+    ];
+
+    worksheet.autoFilter = {
+      from: 'A1',
+      to: 'F1'
+    };
+
+    const roles = this.getRolesList().map(role => role.code);
+    const roleListFormula = `"${roles.join(',')}"`;
+
+    for (let rowNumber = 2; rowNumber <= 501; rowNumber++) {
+      worksheet.getCell(`F${rowNumber}`).dataValidation = {
+        type: 'list',
+        allowBlank: true,
+        formulae: [roleListFormula],
+        showErrorMessage: true,
+        errorTitle: 'Vai trò không hợp lệ',
+        error: 'Vui lòng chọn một mã vai trò trong danh sách.'
+      };
+    }
+
+    const guideSheet = workbook.addWorksheet('HuongDan');
+
+    guideSheet.columns = [
+      { header: 'Trường', key: 'field', width: 24 },
+      { header: 'Hướng dẫn', key: 'description', width: 80 }
+    ];
+
+    guideSheet.getRow(1).font = { bold: true };
+
+    guideSheet.addRows([
+      {
+        field: 'Họ và tên *',
+        description: 'Bắt buộc nhập.'
+      },
+      {
+        field: 'Email *',
+        description: 'Bắt buộc, phải đúng định dạng email và chưa tồn tại trong hệ thống.'
+      },
+      {
+        field: 'Chức danh',
+        description: 'Không bắt buộc.'
+      },
+      {
+        field: 'Phòng ban',
+        description: 'Không bắt buộc.'
+      },
+      {
+        field: 'Số điện thoại',
+        description: 'Không bắt buộc.'
+      },
+      {
+        field: 'Mã vai trò',
+        description: `Không bắt buộc. Nếu để trống hệ thống sẽ sử dụng INTERVIEWER. Các mã hợp lệ: ${roles.join(', ')}.`
+      }
+    ]);
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buffer);
+  }
+
+  /**
+   * Đọc và kiểm tra trước dữ liệu nhân sự từ file Excel.
+   * Chỉ preview, tuyệt đối không ghi dữ liệu vào database.
+   * @param {Buffer} fileBuffer
+   * @returns {Promise<object>}
+   */
+  async previewBulkUserImport(fileBuffer) {
+    if (!Buffer.isBuffer(fileBuffer) || fileBuffer.length === 0) {
+      return {
+        success: false,
+        statusCode: 400,
+        code: 'EMPTY_EXCEL_FILE',
+        message: 'Tệp Excel không hợp lệ hoặc không có dữ liệu.'
+      };
+    }
+
+    const workbook = new ExcelJS.Workbook();
+
+    try {
+      await workbook.xlsx.load(fileBuffer);
+    } catch (err) {
+      return {
+        success: false,
+        statusCode: 400,
+        code: 'INVALID_EXCEL_FILE',
+        message: 'Không thể đọc tệp Excel. Vui lòng sử dụng tệp .xlsx hợp lệ.'
+      };
+    }
+
+    const worksheet = workbook.getWorksheet('NhanSu') || workbook.worksheets[0];
+
+    if (!worksheet) {
+      return {
+        success: false,
+        statusCode: 400,
+        code: 'EMPTY_WORKBOOK',
+        message: 'Tệp Excel không chứa sheet dữ liệu nhân sự.'
+      };
+    }
+
+    const expectedHeaders = [
+      'Họ và tên *',
+      'Email *',
+      'Chức danh',
+      'Phòng ban',
+      'Số điện thoại',
+      'Mã vai trò'
+    ];
+
+    const actualHeaders = expectedHeaders.map((_, index) =>
+      worksheet.getCell(1, index + 1).text.trim()
+    );
+
+    const invalidHeader = expectedHeaders.some(
+      (header, index) => actualHeaders[index] !== header
+    );
+
+    if (invalidHeader) {
+      return {
+        success: false,
+        statusCode: 400,
+        code: 'INVALID_EXCEL_TEMPLATE',
+        message: 'Cấu trúc tệp Excel không đúng mẫu nhập nhân sự.',
+        data: {
+          expectedHeaders,
+          actualHeaders
+        }
+      };
+    }
+
+    const rawRows = [];
+
+    for (let rowNumber = 2; rowNumber <= worksheet.rowCount; rowNumber++) {
+      const row = worksheet.getRow(rowNumber);
+
+      const fullName = row.getCell(1).text.trim();
+      const email = row.getCell(2).text.trim().toLowerCase();
+      const jobTitle = row.getCell(3).text.trim();
+      const departmentName = row.getCell(4).text.trim();
+      const phoneNumber = row.getCell(5).text.trim();
+      const roleCode = row.getCell(6).text.trim().toUpperCase();
+
+      const isEmpty = [
+        fullName,
+        email,
+        jobTitle,
+        departmentName,
+        phoneNumber,
+        roleCode
+      ].every(value => !value);
+
+      if (isEmpty) continue;
+
+      rawRows.push({
+        rowNumber,
+        fullName,
+        email,
+        jobTitle,
+        departmentName,
+        phoneNumber,
+        roleCode: roleCode || 'INTERVIEWER'
+      });
+    }
+
+    if (rawRows.length === 0) {
+      return {
+        success: false,
+        statusCode: 400,
+        code: 'NO_IMPORT_ROWS',
+        message: 'Tệp Excel không có dòng nhân sự nào để nhập.'
+      };
+    }
+
+    const emailCounts = new Map();
+
+    for (const row of rawRows) {
+      if (!row.email) continue;
+      emailCounts.set(
+        row.email,
+        (emailCounts.get(row.email) || 0) + 1
+      );
+    }
+
+    const validRoleCodes = new Set(
+      this.getRolesList().map(role => role.code)
+    );
+
+    const existingEmailStmt = this.db.prepare(
+      'SELECT id FROM users WHERE email = ? COLLATE NOCASE LIMIT 1'
+    );
+
+    const rows = rawRows.map(row => {
+      const errors = [];
+
+      if (!row.fullName) {
+        errors.push({
+          field: 'fullName',
+          code: 'REQUIRED_FULL_NAME',
+          message: 'Họ và tên là trường bắt buộc.'
+        });
+      }
+
+      if (!row.email) {
+        errors.push({
+          field: 'email',
+          code: 'REQUIRED_EMAIL',
+          message: 'Email là trường bắt buộc.'
+        });
+      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) {
+        errors.push({
+          field: 'email',
+          code: 'INVALID_EMAIL',
+          message: 'Email không hợp lệ hoặc sai định dạng.'
+        });
+      } else {
+        if ((emailCounts.get(row.email) || 0) > 1) {
+          errors.push({
+            field: 'email',
+            code: 'DUPLICATE_EMAIL_IN_FILE',
+            message: 'Email bị trùng trong tệp Excel.'
+          });
+        }
+
+        if (existingEmailStmt.get(row.email)) {
+          errors.push({
+            field: 'email',
+            code: 'EMAIL_ALREADY_EXISTS',
+            message: 'Email đã tồn tại trong hệ thống.'
+          });
+        }
+      }
+
+      if (!validRoleCodes.has(row.roleCode)) {
+        errors.push({
+          field: 'roleCode',
+          code: 'INVALID_ROLE_CODE',
+          message: `Mã vai trò '${row.roleCode}' không tồn tại trong hệ thống.`
+        });
+      }
+
+      return {
+        ...row,
+        valid: errors.length === 0,
+        errors
+      };
+    });
+
+    const validRows = rows.filter(row => row.valid).length;
+    const invalidRows = rows.length - validRows;
+
+    return {
+      success: true,
+      statusCode: 200,
+      code: 'BULK_IMPORT_PREVIEW_READY',
+      message: 'Đã kiểm tra tệp Excel. Vui lòng xem kết quả từng dòng trước khi nhập.',
+      data: {
+        rows,
+        summary: {
+          totalRows: rows.length,
+          validRows,
+          invalidRows
+        }
+      }
+    };
+  }
+  /**
+   * Nhập hàng loạt tài khoản từ file Excel.
+   * Luôn kiểm tra lại file trước khi import.
+   * Dòng lỗi bị bỏ qua, dòng hợp lệ tiếp tục được xử lý.
+   * @param {Buffer} fileBuffer
+   * @param {string} createdByUserId
+   * @returns {Promise<object>}
+   */
+  async importBulkUsers(fileBuffer, createdByUserId = 'ADMIN') {
+    const previewResult = await this.previewBulkUserImport(fileBuffer);
+
+    if (!previewResult.success) {
+      return previewResult;
+    }
+
+    const previewRows = previewResult.data.rows || [];
+    const results = [];
+
+    let importedRows = 0;
+    let skippedRows = 0;
+
+    for (const row of previewRows) {
+      if (!row.valid) {
+        skippedRows++;
+
+        results.push({
+          rowNumber: row.rowNumber,
+          email: row.email,
+          fullName: row.fullName,
+          status: 'SKIPPED',
+          imported: false,
+          errors: row.errors
+        });
+
+        continue;
+      }
+
+      let rowTransactionOpen = false;
+      try {
+        this.db.exec('BEGIN IMMEDIATE');
+        rowTransactionOpen = true;
+        const createResult = this.createUser({
+          fullName: row.fullName,
+          email: row.email,
+          jobTitle: row.jobTitle,
+          departmentName: row.departmentName,
+          phoneNumber: row.phoneNumber,
+          roleCode: row.roleCode
+        }, createdByUserId);
+
+        if (createResult.success) {
+          this.db.exec('COMMIT');
+          rowTransactionOpen = false;
+          importedRows++;
+
+          results.push({
+            rowNumber: row.rowNumber,
+            email: row.email,
+            fullName: row.fullName,
+            status: 'IMPORTED',
+            imported: true,
+            userId: createResult.data?.user?.id || null,
+            errors: []
+          });
+        } else {
+          this.db.exec('ROLLBACK');
+          rowTransactionOpen = false;
+          skippedRows++;
+
+          results.push({
+            rowNumber: row.rowNumber,
+            email: row.email,
+            fullName: row.fullName,
+            status: 'SKIPPED',
+            imported: false,
+            errors: [
+              {
+                field: 'row',
+                code: createResult.code || 'USER_CREATE_FAILED',
+                message: createResult.message || 'Không thể tạo tài khoản.'
+              }
+            ]
+          });
+        }
+      } catch (err) {
+        if (rowTransactionOpen) this.db.exec('ROLLBACK');
+        skippedRows++;
+
+        results.push({
+          rowNumber: row.rowNumber,
+          email: row.email,
+          fullName: row.fullName,
+          status: 'SKIPPED',
+          imported: false,
+          errors: [
+            {
+              field: 'row',
+              code: 'USER_CREATE_ERROR',
+              message: 'Có lỗi khi tạo tài khoản cho dòng này.'
+            }
+          ]
+        });
+      }
+    }
+
+    return {
+      success: true,
+      statusCode: 200,
+      code: 'BULK_IMPORT_COMPLETED',
+      message: `Hoàn tất nhập nhân sự: ${importedRows} dòng thành công, ${skippedRows} dòng bị bỏ qua.`,
+      data: {
+        rows: results,
+        summary: {
+          totalRows: previewRows.length,
+          importedRows,
+          skippedRows,
+          previewValidRows: previewResult.data.summary.validRows,
+          previewInvalidRows: previewResult.data.summary.invalidRows
+        }
+      }
+    };
+  }
   /**
    * Danh sách người dùng có phân trang, tìm kiếm & bộ lọc (AC-03, AC-04)
    * Mặc định 20 dòng/trang (AC-04).
@@ -351,6 +773,101 @@ class UserService {
     };
   }
 
+  /**
+   * Cập nhật hồ sơ cá nhân của chính người dùng.
+   * Chỉ cho phép sửa họ tên, chức danh và số điện thoại.
+   * Email, phòng ban và vai trò luôn được giữ nguyên.
+   */
+  updateProfile(id, data = {}, { validatePhone = true } = {}) {
+    if (!id) {
+      return {
+        success: false,
+        statusCode: 400,
+        code: 'MISSING_ID',
+        message: 'Mã người dùng không hợp lệ.'
+      };
+    }
+
+    const existing = this.db.prepare(
+      'SELECT id FROM users WHERE id = ?'
+    ).get(id);
+
+    if (!existing) {
+      return {
+        success: false,
+        statusCode: 404,
+        code: 'USER_NOT_FOUND',
+        message: 'Không tìm thấy người dùng.'
+      };
+    }
+
+    const fullName =
+      typeof data.fullName === 'string'
+        ? data.fullName.trim()
+        : '';
+
+    const jobTitle =
+      typeof data.jobTitle === 'string'
+        ? data.jobTitle.trim()
+        : '';
+
+    const rawPhoneNumber =
+      typeof data.phoneNumber === 'string'
+        ? data.phoneNumber.trim()
+        : '';
+
+    if (!fullName) {
+      return {
+        success: false,
+        statusCode: 400,
+        code: 'VALIDATION_ERROR',
+        message: 'Họ và tên là trường bắt buộc.'
+      };
+    }
+
+    // Cho phép nhập: 0912345678, 0912 345 678,
+    // 0912-345-678 hoặc +84912345678.
+    const phoneNumber = validatePhone ? rawPhoneNumber.replace(/[\s.-]/g, '') : rawPhoneNumber;
+
+    // Định dạng số di động Việt Nam hiện hành.
+    const vietnamPhoneRegex =
+      /^(?:0|\+84)(?:3[2-9]|5[25689]|7[06-9]|8[1-9]|9[0-9])\d{7}$/;
+
+    if (validatePhone && phoneNumber && !vietnamPhoneRegex.test(phoneNumber)) {
+      return {
+        success: false,
+        statusCode: 400,
+        code: 'INVALID_PHONE_NUMBER',
+        message: 'Số điện thoại Việt Nam không đúng định dạng.'
+      };
+    }
+
+    const updateStmt = this.db.prepare(`
+      UPDATE users
+      SET full_name = ?,
+          job_title = ?,
+          phone_number = ?,
+          updated_at = datetime('now')
+      WHERE id = ?
+    `);
+
+    updateStmt.run(
+      fullName,
+      jobTitle || null,
+      phoneNumber || null,
+      id
+    );
+
+    const updatedUser = this.getUserById(id);
+
+    return {
+      success: true,
+      statusCode: 200,
+      code: 'USER_UPDATED',
+      message: 'Cập nhật thông tin người dùng thành công (AC-03).',
+      data: { user: updatedUser }
+    };
+  }
   /**
    * Lấy danh sách 7 vai trò để hiển thị trên Dropdown bộ lọc hoặc form tạo (AC-03)
    * @returns {Array<object>}
@@ -699,10 +1216,21 @@ class UserService {
       return { success: false, statusCode: 400, code: 'CANNOT_DELETE_SELF', message: 'Bạn không thể tự xóa tài khoản của chính mình.' };
     }
 
-    // Xóa session, user_roles và user
-    this.db.prepare('DELETE FROM sessions WHERE user_id = ?').run(targetUserId);
-    this.db.prepare('DELETE FROM user_roles WHERE user_id = ?').run(targetUserId);
-    this.db.prepare('DELETE FROM users WHERE id = ?').run(targetUserId);
+    // Department ownership introduced in Sprint 2 must never partially delete a user.
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      if (this.db.prepare('SELECT 1 FROM departments WHERE manager_id = ? LIMIT 1').get(targetUserId)) {
+        this.db.exec('ROLLBACK');
+        return { success: false, statusCode: 409, code: 'USER_IS_DEPARTMENT_MANAGER', message: 'Người dùng đang phụ trách phòng ban nên không thể xóa.' };
+      }
+      this.db.prepare('DELETE FROM sessions WHERE user_id = ?').run(targetUserId);
+      this.db.prepare('DELETE FROM user_roles WHERE user_id = ?').run(targetUserId);
+      this.db.prepare('DELETE FROM users WHERE id = ?').run(targetUserId);
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
 
     return {
       success: true,

@@ -311,6 +311,119 @@ async function createUserApi(token, userData) {
   }
 }
 
+async function downloadBulkUserTemplateApi(token) {
+  try {
+    const response = await fetch(`${API_BASE}/admin/users/import/template`, {
+      method: 'GET',
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : ''
+      }
+    });
+
+    if (!response.ok) {
+      let data;
+
+      try {
+        data = await response.json();
+      } catch {
+        data = {
+          success: false,
+          message: 'Không thể tải tệp mẫu Excel.'
+        };
+      }
+
+      return {
+        status: response.status,
+        ok: false,
+        data
+      };
+    }
+
+    const blob = await response.blob();
+    const disposition = response.headers.get('Content-Disposition') || '';
+    const filenameMatch = disposition.match(/filename="?([^"]+)"?/i);
+
+    return {
+      status: response.status,
+      ok: true,
+      data: {
+        blob,
+        filename: filenameMatch
+          ? filenameMatch[1]
+          : 'mau_nhap_nhan_su.xlsx'
+      }
+    };
+  } catch (error) {
+    return {
+      status: 0,
+      ok: false,
+      data: {
+        success: false,
+        message: 'Lỗi kết nối khi tải tệp mẫu Excel.'
+      }
+    };
+  }
+}
+
+async function previewBulkUserImportApi(token, file) {
+  try {
+    const response = await fetch(`${API_BASE}/admin/users/import/preview`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: file
+    });
+
+    const data = await response.json();
+
+    return {
+      status: response.status,
+      ok: response.ok,
+      data
+    };
+  } catch (error) {
+    return {
+      status: 0,
+      ok: false,
+      data: {
+        success: false,
+        message: 'Lỗi kết nối khi kiểm tra tệp Excel.'
+      }
+    };
+  }
+}
+
+async function importBulkUsersApi(token, file) {
+  try {
+    const response = await fetch(`${API_BASE}/admin/users/import`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: file
+    });
+
+    const data = await response.json();
+
+    return {
+      status: response.status,
+      ok: response.ok,
+      data
+    };
+  } catch (error) {
+    return {
+      status: 0,
+      ok: false,
+      data: {
+        success: false,
+        message: 'Lỗi kết nối khi nhập danh sách nhân sự.'
+      }
+    };
+  }
+}
 async function updateUserApi(token, id, userData) {
   try {
     const response = await fetch(`${API_BASE}/admin/users/${id}`, {
@@ -573,6 +686,133 @@ async function getRecruitmentReportsApi(token) {
   }
 }
 
+async function getRecruitmentCatalogsApi(token, params = {}) {
+  try {
+    const query = new URLSearchParams();
+
+    if (params.type) query.append('type', params.type);
+    if (params.status) query.append('status', params.status);
+
+    const qs = query.toString() ? `?${query.toString()}` : '';
+
+    const response = await fetch(`${API_BASE}/recruitment-catalogs${qs}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : ''
+      }
+    });
+
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return {
+      status: 0,
+      ok: false,
+      data: {
+        success: false,
+        message: 'Lỗi kết nối khi lấy danh mục tuyển dụng.'
+      }
+    };
+  }
+}
+
+async function createRecruitmentCatalogApi(token, catalogData) {
+  try {
+    const response = await fetch(`${API_BASE}/recruitment-catalogs`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify(catalogData)
+    });
+
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return {
+      status: 0,
+      ok: false,
+      data: {
+        success: false,
+        message: 'Lỗi kết nối khi tạo giá trị danh mục.'
+      }
+    };
+  }
+}
+
+async function updateRecruitmentCatalogApi(token, id, catalogData) {
+  try {
+    const response = await fetch(`${API_BASE}/recruitment-catalogs/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify(catalogData)
+    });
+
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return {
+      status: 0,
+      ok: false,
+      data: {
+        success: false,
+        message: 'Lỗi kết nối khi cập nhật giá trị danh mục.'
+      }
+    };
+  }
+}
+
+async function reorderRecruitmentCatalogsApi(token, type, orderedIds) {
+  try {
+    const response = await fetch(`${API_BASE}/recruitment-catalogs/reorder`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify({ type, orderedIds })
+    });
+
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return {
+      status: 0,
+      ok: false,
+      data: {
+        success: false,
+        message: 'Lỗi kết nối khi sắp xếp danh mục.'
+      }
+    };
+  }
+}
+
+async function deleteRecruitmentCatalogApi(token, id) {
+  try {
+    const response = await fetch(`${API_BASE}/recruitment-catalogs/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : ''
+      }
+    });
+
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return {
+      status: 0,
+      ok: false,
+      data: {
+        success: false,
+        message: 'Lỗi kết nối khi xóa giá trị danh mục.'
+      }
+    };
+  }
+}
 async function createCandidateApi(token, candidateData) {
   try {
     const response = await fetch(`${API_BASE}/candidates`, {
@@ -590,7 +830,7 @@ async function createCandidateApi(token, candidateData) {
   }
 }
 
-async function updateCandidateStageApi(token, id, stage) {
+async function updateCandidateStageApi(token, id, stage, notes, rejectionReasonId) {
   try {
     const response = await fetch(`${API_BASE}/candidates/${id}/stage`, {
       method: 'PUT',
@@ -598,7 +838,7 @@ async function updateCandidateStageApi(token, id, stage) {
         'Content-Type': 'application/json',
         'Authorization': token ? `Bearer ${token}` : ''
       },
-      body: JSON.stringify({ stage })
+      body: JSON.stringify({ stage, ...(notes !== undefined ? { notes } : {}), ...(rejectionReasonId !== undefined ? { rejectionReasonId } : {}) })
     });
     const data = await response.json();
     return { status: response.status, ok: response.ok, data };
@@ -746,7 +986,7 @@ async function getProfileApi(token) {
 
 async function updateProfileApi(token, profileData) {
   try {
-    const response = await fetch(`${API_BASE}/profile`, {
+    const response = await fetch(`${API_BASE}/profile/personal`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -758,6 +998,546 @@ async function updateProfileApi(token, profileData) {
     return { status: response.status, ok: response.ok, data };
   } catch (error) {
     return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi cập nhật hồ sơ.' } };
+  }
+}
+
+async function uploadAvatarApi(token, file) {
+  try {
+    const response = await fetch(`${API_BASE}/profile/avatar`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': file.type,
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: file
+    });
+
+    const data = await response.json();
+
+    return {
+      status: response.status,
+      ok: response.ok,
+      data
+    };
+  } catch (error) {
+    return {
+      status: 0,
+      ok: false,
+      data: {
+        success: false,
+        message: 'Lỗi kết nối khi tải ảnh đại diện.'
+      }
+    };
+  }
+}
+async function getPublicCareerPageApi() {
+  try {
+    const response = await fetch(`${API_BASE}/public/career-page`, {
+      method: 'GET'
+    });
+
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return {
+      status: 0,
+      ok: false,
+      data: {
+        success: false,
+        message: 'Lỗi kết nối khi tải trang giới thiệu công ty.'
+      }
+    };
+  }
+}
+
+async function getCareerPageApi(token) {
+  try {
+    const response = await fetch(`${API_BASE}/career-page`, {
+      method: 'GET',
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : ''
+      }
+    });
+
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return {
+      status: 0,
+      ok: false,
+      data: {
+        success: false,
+        message: 'Lỗi kết nối khi tải cấu hình trang tuyển dụng.'
+      }
+    };
+  }
+}
+
+async function updateCareerPageApi(token, pageData) {
+  try {
+    const response = await fetch(`${API_BASE}/career-page`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify(pageData)
+    });
+
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return {
+      status: 0,
+      ok: false,
+      data: {
+        success: false,
+        message: 'Lỗi kết nối khi lưu cấu hình trang tuyển dụng.'
+      }
+    };
+  }
+}
+
+async function uploadCareerPageMediaApi(token, kind, file) {
+  try {
+    const response = await fetch(
+      `${API_BASE}/career-page/media?kind=${encodeURIComponent(kind)}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': file.type,
+          'Authorization': token ? `Bearer ${token}` : ''
+        },
+        body: file
+      }
+    );
+
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return {
+      status: 0,
+      ok: false,
+      data: {
+        success: false,
+        message: 'Lỗi kết nối khi tải ảnh trang tuyển dụng.'
+      }
+    };
+  }
+}
+async function getRequisitionOptionsApi(token, salaryCheck = {}) {
+  try {
+    const query = new URLSearchParams();
+    for (const key of ['jobTitleId', 'proposedSalaryMin', 'proposedSalaryMax']) {
+      if (salaryCheck[key] !== undefined && salaryCheck[key] !== null) query.set(key, salaryCheck[key]);
+    }
+    const suffix = query.toString() ? '?' + query.toString() : '';
+    const response = await fetch(`${API_BASE}/requisitions/options${suffix}`, { headers: { 'Authorization': token ? `Bearer ${token}` : '' } });
+    return { status: response.status, ok: response.ok, data: await response.json() };
+  } catch {
+    return { status: 0, ok: false, data: { success: false, message: 'Không tải được phòng ban tuyển dụng.' } };
+  }
+}
+
+async function getDepartmentsApi(token) {
+  try {
+    const response = await fetch(`${API_BASE}/departments`, {
+      method: 'GET',
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : ''
+      }
+    });
+
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return {
+      status: 0,
+      ok: false,
+      data: { success: false, message: 'Lỗi kết nối khi lấy danh sách phòng ban.' }
+    };
+  }
+}
+
+async function createDepartmentApi(token, departmentData) {
+  try {
+    const response = await fetch(`${API_BASE}/departments`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify(departmentData)
+    });
+
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return {
+      status: 0,
+      ok: false,
+      data: { success: false, message: 'Lỗi kết nối khi tạo phòng ban.' }
+    };
+  }
+}
+
+async function updateDepartmentApi(token, id, departmentData) {
+  try {
+    const response = await fetch(`${API_BASE}/departments/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify(departmentData)
+    });
+
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return {
+      status: 0,
+      ok: false,
+      data: { success: false, message: 'Lỗi kết nối khi cập nhật phòng ban.' }
+    };
+  }
+}
+
+async function deactivateDepartmentApi(token, id) {
+  try {
+    const response = await fetch(`${API_BASE}/departments/${id}/deactivate`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : ''
+      }
+    });
+
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return {
+      status: 0,
+      ok: false,
+      data: { success: false, message: 'Lỗi kết nối khi ngừng áp dụng phòng ban.' }
+    };
+  }
+}
+
+async function deleteDepartmentApi(token, id) {
+  try {
+    const response = await fetch(`${API_BASE}/departments/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : ''
+      }
+    });
+
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return {
+      status: 0,
+      ok: false,
+      data: { success: false, message: 'Lỗi kết nối khi xóa phòng ban.' }
+    };
+  }
+}
+async function getCompetencyFrameworksApi(token) {
+  try {
+    const response = await fetch(`${API_BASE}/competency-frameworks`, {
+      method: 'GET',
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : ''
+      }
+    });
+
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return {
+      status: 0,
+      ok: false,
+      data: {
+        success: false,
+        message: 'Lỗi kết nối khi lấy danh sách khung năng lực.'
+      }
+    };
+  }
+}
+
+async function createCompetencyFrameworkApi(token, frameworkData) {
+  try {
+    const response = await fetch(`${API_BASE}/competency-frameworks`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify(frameworkData)
+    });
+
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return {
+      status: 0,
+      ok: false,
+      data: {
+        success: false,
+        message: 'Lỗi kết nối khi tạo khung năng lực.'
+      }
+    };
+  }
+}
+
+async function updateCompetencyFrameworkApi(token, id, frameworkData) {
+  try {
+    const response = await fetch(
+      `${API_BASE}/competency-frameworks/${id}`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : ''
+        },
+        body: JSON.stringify(frameworkData)
+      }
+    );
+
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return {
+      status: 0,
+      ok: false,
+      data: {
+        success: false,
+        message: 'Lỗi kết nối khi cập nhật khung năng lực.'
+      }
+    };
+  }
+}
+
+async function getJobTitlesApi(token) {
+  try {
+    const response = await fetch(`${API_BASE}/job-titles`, {
+      method: 'GET',
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : ''
+      }
+    });
+
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return {
+      status: 0,
+      ok: false,
+      data: {
+        success: false,
+        message: 'Lỗi kết nối khi lấy danh sách chức danh.'
+      }
+    };
+  }
+}
+
+async function createJobTitleApi(token, jobTitleData) {
+  try {
+    const response = await fetch(`${API_BASE}/job-titles`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify(jobTitleData)
+    });
+
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return {
+      status: 0,
+      ok: false,
+      data: {
+        success: false,
+        message: 'Lỗi kết nối khi tạo chức danh.'
+      }
+    };
+  }
+}
+
+async function updateJobTitleApi(token, id, jobTitleData) {
+  try {
+    const response = await fetch(
+      `${API_BASE}/job-titles/${id}`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : ''
+        },
+        body: JSON.stringify(jobTitleData)
+      }
+    );
+
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return {
+      status: 0,
+      ok: false,
+      data: {
+        success: false,
+        message: 'Lỗi kết nối khi cập nhật chức danh.'
+      }
+    };
+  }
+}
+
+async function getJobTitleFrameworkApi(token, jobTitleId) {
+  try {
+    const response = await fetch(
+      `${API_BASE}/job-titles/${jobTitleId}/framework`,
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : ''
+        }
+      }
+    );
+
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return {
+      status: 0,
+      ok: false,
+      data: {
+        success: false,
+        message: 'Lỗi kết nối khi lấy khung năng lực của chức danh.'
+      }
+    };
+  }
+}
+
+async function getInterviewQuestionFiltersApi(token) {
+  try {
+    const response = await fetch(
+      `${API_BASE}/interview-question-filters`,
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : ''
+        }
+      }
+    );
+
+    const data = await response.json();
+    return {
+      status: response.status,
+      ok: response.ok,
+      data
+    };
+  } catch (error) {
+    return {
+      status: 0,
+      ok: false,
+      data: {
+        success: false,
+        message: 'Lỗi kết nối khi lấy bộ lọc ngân hàng câu hỏi.'
+      }
+    };
+  }
+}
+
+async function getInterviewQuestionsApi(token, options = {}) {
+  try {
+    const params = new URLSearchParams();
+
+    if (options.search) params.set('search', options.search);
+    if (options.jobTitleId) params.set('jobTitleId', options.jobTitleId);
+    if (options.criterionId) params.set('criterionId', options.criterionId);
+    if (options.difficulty && options.difficulty !== 'ALL') {
+      params.set('difficulty', options.difficulty);
+    }
+    if (options.status && options.status !== 'ALL') {
+      params.set('status', options.status);
+    }
+
+    const query = params.toString();
+    const url = `${API_BASE}/interview-questions${query ? `?${query}` : ''}`;
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : ''
+      }
+    });
+
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return {
+      status: 0,
+      ok: false,
+      data: {
+        success: false,
+        message: 'Lỗi kết nối khi lấy ngân hàng câu hỏi phỏng vấn.'
+      }
+    };
+  }
+}
+
+async function createInterviewQuestionApi(token, questionData) {
+  try {
+    const response = await fetch(`${API_BASE}/interview-questions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify(questionData)
+    });
+
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return {
+      status: 0,
+      ok: false,
+      data: {
+        success: false,
+        message: 'Lỗi kết nối khi tạo câu hỏi phỏng vấn.'
+      }
+    };
+  }
+}
+
+async function updateInterviewQuestionApi(token, id, questionData) {
+  try {
+    const response = await fetch(
+      `${API_BASE}/interview-questions/${id}`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : ''
+        },
+        body: JSON.stringify(questionData)
+      }
+    );
+
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return {
+      status: 0,
+      ok: false,
+      data: {
+        success: false,
+        message: 'Lỗi kết nối khi cập nhật câu hỏi phỏng vấn.'
+      }
+    };
   }
 }
 
@@ -783,6 +1563,9 @@ window.ATS_API = {
   getUsersApi,
   getUserByIdApi,
   createUserApi,
+  downloadBulkUserTemplateApi,
+  previewBulkUserImportApi,
+  importBulkUsersApi,
   updateUserApi,
   resetUserPasswordApi,
   deleteUserApi,
@@ -793,7 +1576,20 @@ window.ATS_API = {
   unlockUserApi,
   getDashboardStatsApi,
   getDashboardStats: getDashboardStatsApi,
-  getRequisitionsApi,
+  getCompetencyFrameworksApi,
+  createCompetencyFrameworkApi,
+  updateCompetencyFrameworkApi,
+  getJobTitlesApi,
+  createJobTitleApi,
+  updateJobTitleApi,
+  getInterviewQuestionFiltersApi,
+  getInterviewQuestionsApi,
+  createInterviewQuestionApi,
+  updateInterviewQuestionApi,  getJobTitleFrameworkApi,  getDepartmentsApi, getRequisitionOptionsApi,
+  createDepartmentApi,
+  updateDepartmentApi,
+  deactivateDepartmentApi,
+  deleteDepartmentApi,  getRequisitionsApi,
   getRequisitions: getRequisitionsApi,
   getRequisitionByIdApi,
   updateRequisitionApi,
@@ -804,6 +1600,15 @@ window.ATS_API = {
   getEmailLogsApi,
   getAuditLogsApi,
   getAuditLogDetailApi,
+  getRecruitmentCatalogsApi,
+  createRecruitmentCatalogApi,
+  updateRecruitmentCatalogApi,
+  reorderRecruitmentCatalogsApi,
+  deleteRecruitmentCatalogApi,
+  getPublicCareerPageApi,
+  getCareerPageApi,
+  updateCareerPageApi,
+  uploadCareerPageMediaApi,
   getCandidatesApi,
   createCandidateApi,
   updateCandidateStageApi,
@@ -815,7 +1620,8 @@ window.ATS_API = {
   updateOfferStatusApi,
   getRecruitmentReportsApi,
   getProfileApi,
-  updateProfileApi
+  updateProfileApi,
+  uploadAvatarApi
 };
 
 

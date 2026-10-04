@@ -68,6 +68,86 @@ function initSchema(db) {
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS departments (
+      id TEXT PRIMARY KEY,
+      code TEXT UNIQUE NOT NULL,
+      name TEXT NOT NULL,
+      parent_id TEXT REFERENCES departments(id) ON DELETE RESTRICT,
+      manager_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+      status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'INACTIVE')),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS competency_frameworks (
+      id TEXT PRIMARY KEY,
+      code TEXT UNIQUE NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT,
+      status TEXT NOT NULL DEFAULT 'ACTIVE'
+        CHECK (status IN ('ACTIVE', 'INACTIVE')),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS competency_criteria (
+      id TEXT PRIMARY KEY,
+      framework_id TEXT NOT NULL
+        REFERENCES competency_frameworks(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      description TEXT,
+      weight INTEGER NOT NULL
+        CHECK (weight > 0 AND weight <= 100),
+      display_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS job_titles (
+      id TEXT PRIMARY KEY,
+      code TEXT UNIQUE NOT NULL,
+      name TEXT NOT NULL,
+      framework_id TEXT
+        REFERENCES competency_frameworks(id) ON DELETE RESTRICT,
+      level TEXT,
+      min_salary INTEGER CHECK (min_salary IS NULL OR min_salary >= 0),
+      max_salary INTEGER CHECK (max_salary IS NULL OR max_salary >= min_salary),
+      status TEXT NOT NULL DEFAULT 'ACTIVE'
+        CHECK (status IN ('ACTIVE', 'INACTIVE')),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_competency_criteria_framework
+      ON competency_criteria(framework_id);
+
+    CREATE INDEX IF NOT EXISTS idx_job_titles_framework
+      ON job_titles(framework_id);
+
+    CREATE INDEX IF NOT EXISTS idx_job_titles_status
+      ON job_titles(status);
+    CREATE TABLE IF NOT EXISTS interview_questions (
+      id TEXT PRIMARY KEY,
+      criterion_id TEXT NOT NULL
+        REFERENCES competency_criteria(id) ON DELETE RESTRICT,
+      question_text TEXT NOT NULL,
+      difficulty TEXT NOT NULL
+        CHECK (difficulty IN ('EASY', 'MEDIUM', 'HARD')),
+      good_answer_hint TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'ACTIVE'
+        CHECK (status IN ('ACTIVE', 'INACTIVE')),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_interview_questions_criterion
+      ON interview_questions(criterion_id);
+
+    CREATE INDEX IF NOT EXISTS idx_interview_questions_difficulty
+      ON interview_questions(difficulty);
+
+    CREATE INDEX IF NOT EXISTS idx_interview_questions_status
+      ON interview_questions(status);
     CREATE TABLE IF NOT EXISTS user_roles (
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       role_id TEXT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
@@ -114,10 +194,34 @@ function initSchema(db) {
     );
     CREATE INDEX IF NOT EXISTS idx_otps_email ON otps(email);
 
+    CREATE TABLE IF NOT EXISTS recruitment_catalog_items (
+      id TEXT PRIMARY KEY,
+      type TEXT NOT NULL
+        CHECK (type IN ('CANDIDATE_SOURCE', 'REJECTION_REASON', 'WORK_LOCATION', 'WORK_MODE')),
+      code TEXT NOT NULL,
+      name TEXT NOT NULL,
+      display_order INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'ACTIVE'
+        CHECK (status IN ('ACTIVE', 'INACTIVE')),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(type, code)
+    );
+    CREATE TABLE IF NOT EXISTS career_page_settings (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      introduction TEXT NOT NULL DEFAULT '',
+      logo_url TEXT,
+      hero_image_url TEXT,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
     CREATE TABLE IF NOT EXISTS requisitions (
       id TEXT PRIMARY KEY,
       code TEXT UNIQUE NOT NULL,
       title TEXT NOT NULL,
+      job_title_id TEXT REFERENCES job_titles(id) ON DELETE RESTRICT,
+      department_id TEXT REFERENCES departments(id) ON DELETE RESTRICT,
+      work_location_id TEXT REFERENCES recruitment_catalog_items(id) ON DELETE RESTRICT,
+      work_mode_id TEXT REFERENCES recruitment_catalog_items(id) ON DELETE RESTRICT,
       department_name TEXT NOT NULL,
       hiring_manager_id TEXT REFERENCES users(id) ON DELETE SET NULL,
       recruiter_id TEXT REFERENCES users(id) ON DELETE SET NULL,
@@ -196,6 +300,104 @@ function initSchema(db) {
     CREATE INDEX IF NOT EXISTS idx_interviews_candidate ON interviews(candidate_id);
     CREATE INDEX IF NOT EXISTS idx_interviews_interviewer ON interviews(interviewer_id);
     CREATE INDEX IF NOT EXISTS idx_offers_candidate ON offers(candidate_id);
+  `);
+
+  // Additive migration: existing job titles remain valid with unspecified salary.
+  const jobTitleColumns = db.prepare('PRAGMA table_info(job_titles)').all();
+  for (const [name, definition] of [
+    ['level', 'TEXT'],
+    ['min_salary', 'INTEGER CHECK (min_salary IS NULL OR min_salary >= 0)'],
+    ['max_salary', 'INTEGER CHECK (max_salary IS NULL OR max_salary >= min_salary)']
+  ]) {
+    if (!jobTitleColumns.some(column => column.name === name)) {
+      db.exec(`ALTER TABLE job_titles ADD COLUMN ${name} ${definition}`);
+    }
+  }
+
+  const requisitionColumns = db.prepare('PRAGMA table_info(requisitions)').all();
+  // S2-10: additive fields; legacy requisitions keep their existing behavior.
+  for (const [name, definition] of [
+    ['s210_version', 'INTEGER NOT NULL DEFAULT 0'],
+    ['created_by', 'TEXT REFERENCES users(id) ON DELETE SET NULL'],
+    ['recruitment_reason', "TEXT CHECK (recruitment_reason IS NULL OR recruitment_reason IN ('REPLACEMENT', 'NEW_HEADCOUNT'))"],
+    ['proposed_salary_min', 'REAL CHECK (proposed_salary_min IS NULL OR proposed_salary_min >= 0)'],
+    ['proposed_salary_max', 'REAL CHECK (proposed_salary_max IS NULL OR (proposed_salary_max >= 0 AND proposed_salary_max >= proposed_salary_min))'],
+    ['needed_date', 'TEXT'],
+    ['job_description', 'TEXT'],
+    ['candidate_requirements', 'TEXT'],
+    ['salary_justification', 'TEXT']
+  ]) {
+    if (!requisitionColumns.some(column => column.name === name)) {
+      db.exec(`ALTER TABLE requisitions ADD COLUMN ${name} ${definition}`);
+    }
+  }
+  const hasDepartmentId = requisitionColumns.some(column => column.name === 'department_id');
+  const hasJobTitleId = requisitionColumns.some(column => column.name === 'job_title_id');
+  const hasWorkLocationId = requisitionColumns.some(column => column.name === 'work_location_id');
+  const hasWorkModeId = requisitionColumns.some(column => column.name === 'work_mode_id');
+
+  const candidateColumns = db.prepare('PRAGMA table_info(candidates)').all();
+  const hasCandidateSourceId = candidateColumns.some(column => column.name === 'source_id');
+  const hasRejectionReasonId = candidateColumns.some(column => column.name === 'rejection_reason_id');
+
+  if (!hasDepartmentId) {
+    db.exec(`
+      ALTER TABLE requisitions
+      ADD COLUMN department_id TEXT REFERENCES departments(id) ON DELETE RESTRICT;
+    `);
+  }
+
+  if (!hasJobTitleId) {
+    db.exec(`
+      ALTER TABLE requisitions
+      ADD COLUMN job_title_id TEXT REFERENCES job_titles(id) ON DELETE RESTRICT;
+    `);
+  }
+
+  if (!hasWorkLocationId) {
+    db.exec(`
+      ALTER TABLE requisitions
+      ADD COLUMN work_location_id TEXT REFERENCES recruitment_catalog_items(id) ON DELETE RESTRICT;
+    `);
+  }
+
+  if (!hasWorkModeId) {
+    db.exec(`
+      ALTER TABLE requisitions
+      ADD COLUMN work_mode_id TEXT REFERENCES recruitment_catalog_items(id) ON DELETE RESTRICT;
+    `);
+  }
+
+  if (!hasCandidateSourceId) {
+    db.exec(`
+      ALTER TABLE candidates
+      ADD COLUMN source_id TEXT REFERENCES recruitment_catalog_items(id) ON DELETE RESTRICT;
+    `);
+  }
+
+  if (!hasRejectionReasonId) {
+    db.exec(`
+      ALTER TABLE candidates
+      ADD COLUMN rejection_reason_id TEXT REFERENCES recruitment_catalog_items(id) ON DELETE RESTRICT;
+    `);
+  }
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_departments_parent ON departments(parent_id);
+    CREATE INDEX IF NOT EXISTS idx_departments_manager ON departments(manager_id);
+    CREATE INDEX IF NOT EXISTS idx_departments_status ON departments(status);
+    CREATE INDEX IF NOT EXISTS idx_requisitions_department ON requisitions(department_id);
+    CREATE INDEX IF NOT EXISTS idx_requisitions_job_title ON requisitions(job_title_id);
+    CREATE INDEX IF NOT EXISTS idx_recruitment_catalog_type_order
+      ON recruitment_catalog_items(type, display_order);
+    CREATE INDEX IF NOT EXISTS idx_requisitions_work_location
+      ON requisitions(work_location_id);
+    CREATE INDEX IF NOT EXISTS idx_requisitions_work_mode
+      ON requisitions(work_mode_id);
+    CREATE INDEX IF NOT EXISTS idx_candidates_source
+      ON candidates(source_id);
+    CREATE INDEX IF NOT EXISTS idx_candidates_rejection_reason
+      ON candidates(rejection_reason_id);
   `);
 }
 
