@@ -1,0 +1,60 @@
+<div id="interviews-view" class="hidden">
+          <div class="view-header">
+            <div class="view-title-group">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h2>Lịch Phỏng vấn</h2>
+                <span id="interviews-total-badge" class="badge badge-primary font-mono">0 phiên</span>
+              </div>
+              <p>Theo dõi các buổi phỏng vấn, người phỏng vấn phụ trách và kết quả đánh giá năng lực</p>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button type="button" id="open-create-interview-modal-btn" class="btn btn-primary btn-sm">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                <span> Lên lịch Phỏng vấn</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Toolbar -->
+          <div class="filter-toolbar">
+            <div class="toolbar-filters">
+              <div style="min-width: 260px; flex: 1;">
+                <input type="text" id="interviews-search-input" class="form-input" placeholder="Tìm theo ứng viên, người phỏng vấn..." />
+              </div>
+              <div style="width: 180px;">
+                <select id="interviews-status-filter" class="form-input">
+                  <option value="ALL">Tất cả trạng thái</option>
+                  <option value="SCHEDULED">Đã lên lịch</option>
+                  <option value="COMPLETED">Đã hoàn thành</option>
+                  <option value="CANCELLED">Đã hủy</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <button type="button" id="interviews-refresh-btn" class="btn btn-outline btn-sm">
+                Lọc / Làm mới
+              </button>
+            </div>
+          </div>
+
+          <!-- Table -->
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Mã PV</th>
+                  <th>Ứng viên</th>
+                  <th>Vị trí</th>
+                  <th>Người phỏng vấn</th>
+                  <th>Thời gian</th>
+                  <th>Hình thức / Địa điểm</th>
+                  <th>Trạng thái</th>
+                  <th style="text-align: center;">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="interviews-table-body">
+                <!-- Injected by JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>

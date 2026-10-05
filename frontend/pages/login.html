@@ -1,0 +1,120 @@
+<div id="login-view" class="login-page-wrapper">
+    <img id="login-background" class="login-background hidden" alt="" aria-hidden="true" />
+    <div class="login-background-shade" aria-hidden="true"></div>
+    <section
+      id="public-career-page-section"
+      class="public-career-page-section"
+      aria-label="Giới thiệu công ty"
+    >
+      <div class="login-introduction">
+        <h1>HỆ THỐNG TUYỂN DỤNG <br /> NỘI BỘ</h1>
+        <p>Quản lý quy trình tuyển dụng tập trung,<br />nhanh chóng và hiệu quả.</p>
+        <p id="public-career-page-content" class="login-company-introduction hidden"></p>
+      </div>
+    </section>
+    <div class="login-container">
+      <section class="login-glass-form" aria-labelledby="form-heading">
+      <header class="login-brand-header">
+        <div class="login-brand-logo">
+          <img id="login-company-logo" class="hidden" alt="Logo công ty" />
+          <span id="login-logo-fallback" aria-label="ATS">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+            <circle cx="9" cy="7" r="4"></circle>
+            <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+          </svg>
+          </span>
+        </div>
+        <h2 id="form-heading" class="login-card-title">Đăng nhập</h2>
+      </header>
+        <p class="login-card-subtitle">Sử dụng tài khoản email nội bộ do công ty cấp</p>
+
+        <!-- Alert Notification Box -->
+        <div id="alert-box" class="alert-box hidden" role="alert">
+          <div class="alert-icon" id="alert-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+          </div>
+          <div class="alert-content">
+            <strong id="alert-title" class="alert-title">Thông báo</strong>
+            <p id="alert-message" style="margin: 0;">Email hoặc mật khẩu không chính xác.</p>
+          </div>
+        </div>
+
+        <form id="login-form" novalidate>
+          <div class="form-group">
+            <label for="email" class="form-label">Email / Tài khoản <span class="required">*</span></label>
+            <div class="input-container">
+              <span class="input-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect width="20" height="16" x="2" y="4" rx="2"></rect>
+                  <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path>
+                </svg>
+              </span>
+              <input
+                type="email"
+                id="email"
+                name="email"
+                class="form-input"
+                placeholder="name@company.com"
+                required
+                autocomplete="username"
+              />
+            </div>
+            <span id="email-error" class="field-error"></span>
+          </div>
+
+          <div class="form-group">
+            <div class="label-row">
+              <label for="password" class="form-label">Mật khẩu <span class="required">*</span></label>
+            </div>
+            <div class="input-container">
+              <span class="input-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+              </span>
+              <input
+                type="password"
+                id="password"
+                name="password"
+                class="form-input"
+                placeholder="••••••••"
+                required
+                autocomplete="current-password"
+              />
+              <button type="button" id="toggle-pwd-btn" class="toggle-password" aria-label="Hiện/ẩn mật khẩu">
+                <svg id="eye-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+              </button>
+            </div>
+            <span id="password-error" class="field-error"></span>
+          </div>
+
+          <div class="login-form-options">
+            <label class="login-remember">
+              <input type="checkbox" id="remember-me" />
+              <span>Ghi nhớ đăng nhập</span>
+            </label>
+            <button type="button" id="open-forgot-pwd-btn" class="link-btn">Quên mật khẩu?</button>
+          </div>
+
+          <button type="submit" id="submit-btn" class="btn btn-primary btn-block">
+            <span id="btn-text">Đăng nhập</span>
+            <span id="btn-spinner" class="spinner hidden"></span>
+          </button>
+        </form>
+
+        <div class="login-help">
+          Hệ thống dành riêng cho cán bộ nhân viên và hội đồng tuyển dụng nội bộ. Vui lòng liên hệ IT Helpdesk nếu cần trợ giúp truy cập.
+        </div>
+      </section>
+    </div>
+  </div>

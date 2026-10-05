@@ -15,6 +15,12 @@ const CompetencyService = require('./services/competencyService');
 const QuestionBankService = require('./services/questionBankService');
 const RecruitmentCatalogService = require('./services/recruitmentCatalogService');
 const CareerPageService = require('./services/careerPageService');
+const frontendRoutes = new Set(require('../../frontend/routes.json').routes.map(route => route.path));
+
+function serveFrontendEntry(res) {
+  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache', 'Vary': 'Accept' });
+  fs.createReadStream(path.join(config.STATIC_DIR, 'index.html')).pipe(res);
+}
 
 // Ensure DB is initialized and seeded
 const db = getDatabase();
@@ -31,12 +37,12 @@ if (isTestEnv || userCount === 0) {
   ensureRequisitionDraftFeature(db);
 }
 
-const authController = new AuthController();
+const avatarService = new AvatarService();
+const authController = new AuthController(undefined, avatarService);
 const rbacMiddleware = new RbacMiddleware(db);
 const userService = new UserService(db);
-const userController = new UserController(userService, rbacMiddleware, authController.authService);
+const userController = new UserController(userService, rbacMiddleware, authController.authService, avatarService);
 const requisitionService = new RequisitionService(db);
-const avatarService = new AvatarService();
 const departmentService = new DepartmentService(db);
 const competencyService = new CompetencyService(db);
 const questionBankService = new QuestionBankService(db);
@@ -118,7 +124,7 @@ function parseCareerImageBody(req) {
     const chunks = [];
     let totalBytes = 0;
     let rejected = false;
-    const maxBytes = 2 * 1024 * 1024;
+    const maxBytes = careerPageService.maxFileSize;
 
     req.on('data', chunk => {
       if (rejected) return;
@@ -197,6 +203,13 @@ const server = http.createServer(async (req, res) => {
 
   const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const pathname = parsedUrl.pathname;
+  const frontendPath = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
+  if (frontendRoutes.has(frontendPath)) res.setHeader('Vary', 'Accept');
+  // Preserve unprefixed REST aliases: only browser document requests opt into HTML.
+  if (req.method === 'GET' && frontendRoutes.has(frontendPath) && (req.headers.accept || '').includes('text/html')) {
+    serveFrontendEntry(res);
+    return;
+  }
 
   // 1. API: Health Check
   if (req.method === 'GET' && pathname === '/api/v1/health') {
@@ -361,7 +374,9 @@ const server = http.createServer(async (req, res) => {
     }
     const userProfile = userService.getUserById(sessionResult.user.id);
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify({ success: true, data: userProfile }));
+    res.end(JSON.stringify({ success: true, data: userProfile ? {
+      ...userProfile, ...avatarService.getAvatarUrls(userProfile.id)
+    } : userProfile }));
     return;
   }
 
@@ -1022,7 +1037,7 @@ const server = http.createServer(async (req, res) => {
           ? 'CAREER_IMAGE_TOO_LARGE'
           : 'INVALID_CAREER_IMAGE_UPLOAD',
         message: tooLarge
-          ? 'Ảnh không được vượt quá 2MB.'
+          ? 'Ảnh không được vượt quá 5 MB.'
           : 'Không thể đọc dữ liệu ảnh trang tuyển dụng.'
       }));
     }
@@ -1800,6 +1815,11 @@ const server = http.createServer(async (req, res) => {
     const user = rbacMiddleware.authorize(req, res, authController.authService, 'interview.read');
     if (!user) return;
     const result = requisitionService.getInterviews();
+    for (const interview of result.interviews) {
+      if (interview.interviewer) {
+        Object.assign(interview.interviewer, avatarService.getAvatarUrls(interview.interviewer.id));
+      }
+    }
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(result));
     return;
@@ -1994,20 +2014,21 @@ const server = http.createServer(async (req, res) => {
   }
 
   // 9. Static Files Serving (Frontend)
-  if (req.method === 'GET' && !pathname.startsWith('/api/')) {
-    let filePath = path.join(config.STATIC_DIR, pathname === '/' ? 'index.html' : pathname);
-    if (!filePath.startsWith(config.STATIC_DIR)) {
+  if (req.method === 'GET' && pathname !== '/api' && !pathname.startsWith('/api/')) {
+    if (frontendRoutes.has(frontendPath)) {
+      serveFrontendEntry(res);
+      return;
+    }
+    const filePath = path.resolve(config.STATIC_DIR, '.' + pathname);
+    const relativePath = path.relative(config.STATIC_DIR, filePath);
+    if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
       res.writeHead(403);
       res.end('Forbidden');
       return;
     }
 
-    // Default to index.html for SPA if file doesn't exist
-    if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
-      filePath = path.join(config.STATIC_DIR, 'index.html');
-    }
-
-    if (fs.existsSync(filePath)) {
+    // Missing assets and unknown paths remain real 404s, never a disguised HTML response.
+    if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
       const ext = path.extname(filePath).toLowerCase();
       const contentType = MIME_TYPES[ext] || 'application/octet-stream';
       res.writeHead(200, { 'Content-Type': contentType });

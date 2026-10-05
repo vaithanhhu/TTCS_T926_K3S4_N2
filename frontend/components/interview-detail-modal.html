@@ -1,0 +1,59 @@
+<div id="interview-detail-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="int-detail-title">
+    <div class="modal-card" style="max-width: 580px;">
+      <div class="modal-header">
+        <h3 id="int-detail-title" class="modal-title">Chi Tiết & Đánh Giá Buổi Phỏng Vấn</h3>
+        <button type="button" id="close-interview-detail-modal" class="modal-close" aria-label="Đóng">&times;</button>
+      </div>
+      <p class="modal-desc">Ghi nhận biên bản nhận xét, chấm điểm năng lực và cập nhật tiến độ phỏng vấn.</p>
+
+      <div class="modal-body">
+        <div style="background: var(--color-bg-page); border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 14px; font-size: 0.85rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>Mã PV: <code class="font-mono" id="int-detail-code" style="color: var(--color-primary); font-weight: 600;">PV001</code></div>
+            <span id="int-detail-status-badge" class="badge badge-warning">Sắp diễn ra</span>
+          </div>
+          <div style="margin-top: 6px; font-weight: 600; font-size: 0.95rem;" id="int-detail-cand-name">Nguyễn Văn An</div>
+          <div style="color: var(--color-text-secondary); margin-top: 2px;">Vị trí: <span id="int-detail-req-title">Senior Backend Engineer</span> | Vòng: <span id="int-detail-round">Vòng 1</span></div>
+          <div style="color: var(--color-text-muted); margin-top: 2px;">Thời gian: <span id="int-detail-time"></span> | Địa điểm: <span id="int-detail-location"></span></div>
+          <div style="color: var(--color-text-muted); margin-top: 2px;">Người phỏng vấn: <span id="int-detail-interviewer" style="font-weight: 600; color: var(--color-text);"></span></div>
+        </div>
+
+        <input type="hidden" id="int-detail-id" />
+
+        <form id="interview-eval-form">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="form-group">
+              <label for="int-eval-status" class="form-label">Trạng thái buổi phỏng vấn</label>
+              <select id="int-eval-status" class="form-input">
+                <option value="SCHEDULED">Đã lên lịch (SCHEDULED)</option>
+                <option value="COMPLETED">Đã hoàn thành (COMPLETED)</option>
+                <option value="CANCELLED">Đã hủy (CANCELLED)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="int-eval-score" class="form-label">Điểm đánh giá năng lực</label>
+              <select id="int-eval-score" class="form-input">
+                <option value="5">★★★★★ Xuất sắc (5 sao)</option>
+                <option value="4" selected>★★★★☆ Khá tốt (4 sao)</option>
+                <option value="3">★★★☆☆ Đạt yêu cầu (3 sao)</option>
+                <option value="2">★★☆☆☆ Cần cải thiện (2 sao)</option>
+                <option value="1">★☆☆☆☆ Không đạt (1 sao)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="int-eval-feedback" class="form-label">Biên bản nhận xét & Đánh giá năng lực chuyên môn</label>
+            <textarea id="int-eval-feedback" class="form-input" rows="3" placeholder="Nhập nhận xét về tư duy giải thuật, kỹ năng giao tiếp, sự phù hợp với văn hóa công ty..." style="height: auto;"></textarea>
+          </div>
+
+          <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 10px;">
+            <button type="button" id="cancel-interview-eval-btn" class="btn btn-outline btn-sm">Đóng</button>
+            <button type="submit" id="submit-interview-eval-btn" class="btn btn-primary btn-sm">
+              <span>Lưu biên bản đánh giá</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>

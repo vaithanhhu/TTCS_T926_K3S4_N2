@@ -1,13 +1,15 @@
 const UserService = require('../services/userService');
+const AvatarService = require('../services/avatarService');
 
 /**
  * UserController: Tiếp nhận và xử lý các yêu cầu HTTP quản trị người dùng (S1-08)
  */
 class UserController {
-  constructor(userService, rbacMiddleware, authService) {
+  constructor(userService, rbacMiddleware, authService, avatarService) {
     this.userService = userService || new UserService();
     this.rbacMiddleware = rbacMiddleware;
     this.authService = authService;
+    this.avatarService = avatarService || new AvatarService();
   }
 
   /**
@@ -26,6 +28,9 @@ class UserController {
       const status = parsedUrl.searchParams.get('status') || '';
 
       const result = this.userService.getUsers({ page, limit, search, role, status });
+      for (const user of result.data.items) {
+        Object.assign(user, this.avatarService.getAvatarUrls(user.id, true));
+      }
 
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));

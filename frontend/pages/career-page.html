@@ -1,0 +1,100 @@
+<div id="career-page-view" class="hidden">
+          <div class="view-header">
+            <div class="view-title-group">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h2>Trang giới thiệu công ty</h2>
+                <span class="badge badge-primary font-mono">Cổng tuyển dụng</span>
+              </div>
+              <p>Soạn nội dung giới thiệu, tải logo và ảnh hiển thị cho ứng viên</p>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: minmax(340px, 0.9fr) minmax(0, 1.1fr); gap: 16px; align-items: start;">
+            <div class="panel-card">
+              <div class="panel-header">
+                <div class="panel-title">
+                  <span>Cấu hình nội dung</span>
+                </div>
+              </div>
+
+              <div class="panel-body">
+                <div id="career-page-form-alert" class="alert-box hidden" role="alert">
+                  <div class="alert-content">
+                    <p id="career-page-form-alert-msg" style="margin: 0;"></p>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="career-page-introduction-input" class="form-label">
+                    Nội dung giới thiệu công ty
+                  </label>
+                  <textarea
+                    id="career-page-introduction-input"
+                    class="form-input"
+                    rows="10"
+                    placeholder="Nhập nội dung giới thiệu về công ty..."
+                    style="resize: vertical;"
+                  ></textarea>
+                </div>
+
+                <div class="form-group">
+                  <label for="career-page-logo-input" class="form-label">
+                    Logo công ty
+                  </label>
+                  <input
+                    type="file"
+                    id="career-page-logo-input"
+                    class="form-input"
+                    accept="image/jpeg,image/png"
+                  />
+                  <div id="career-page-logo-status" style="margin-top: 6px; font-size: 0.775rem; color: var(--color-text-muted);">
+                    JPG hoặc PNG, tối đa 5 MB.
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="career-page-hero-input" class="form-label">
+                    Ảnh giới thiệu
+                  </label>
+                  <input
+                    type="file"
+                    id="career-page-hero-input"
+                    class="form-input"
+                    accept="image/jpeg,image/png"
+                  />
+                  <div id="career-page-hero-status" style="margin-top: 6px; font-size: 0.775rem; color: var(--color-text-muted);">
+                    JPG hoặc PNG, tối đa 5 MB.
+                  </div>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px;">
+                  <button type="button" id="career-page-preview-btn" class="btn btn-outline">
+                    Xem trước
+                  </button>
+                  <button type="button" id="career-page-save-btn" class="btn btn-primary">
+                    Lưu cấu hình
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel-card">
+              <div class="panel-header">
+                <div class="panel-title">
+                  <span>Xem trước giao diện công khai</span>
+                </div>
+              </div>
+
+              <div class="panel-body">
+                <div
+                  id="career-page-preview-container"
+                  style="min-height: 360px;"
+                >
+                  <div style="text-align: center; padding: 48px 16px; color: var(--color-text-muted);">
+                    Bấm “Xem trước” để xem giao diện trước khi lưu.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>

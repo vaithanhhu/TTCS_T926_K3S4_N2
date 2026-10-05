@@ -213,7 +213,7 @@ async function main() {
       } });
       return node;
     };
-    const html = fs.readFileSync(path.join(root, 'frontend/index.html'), 'utf8'); for (const match of html.matchAll(/id="([^"]+)"/g)) nodes.set(match[1], makeNode());
+    const html = require('./helpers/frontendFixture').html(); for (const match of html.matchAll(/id="([^"]+)"/g)) nodes.set(match[1], makeNode());
     const fallback = async () => ({ ok: false, data: { success: false } });
     const apiMock = new Proxy({ getRequisitionOptionsApi: async (token, params = {}) => {
       const query = new URLSearchParams(params).toString();
@@ -226,7 +226,7 @@ async function main() {
     const context = { document, window: { ATS_API: apiMock, addEventListener() {}, location: { search: '', pathname: '/' } }, sessionStorage: {
       getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) },
       URL, URLSearchParams, console, setTimeout: () => 0, setInterval: () => 0, clearInterval() {}, clearTimeout() {}, navigator: {}, confirm: () => true };
-    const code = fs.readFileSync(path.join(root, 'frontend/js/app.js'), 'utf8').replace('  loadPublicCareerPage();', '  window.__S210_TEST__ = { openCreateReqModal, updateRequisitionSalaryHint, refreshRequisitionSalaryCheck, requisitionBusinessDate, performLogout };\n  loadPublicCareerPage();');
+    const code = require('./helpers/frontendFixture').source().replace('  loadPublicCareerPage();', '  window.__S210_TEST__ = { openCreateReqModal, updateRequisitionSalaryHint, refreshRequisitionSalaryCheck, requisitionBusinessDate, performLogout };\n  loadPublicCareerPage();');
     vm.runInNewContext(code, context); ready(); storage.set('ats_token', tokens.hiring);
     await context.window.__S210_TEST__.openCreateReqModal();
     const values = { 'create-req-job-title-input': job.id, 'create-req-dept-input': department.id, 'create-req-headcount-input': '2',

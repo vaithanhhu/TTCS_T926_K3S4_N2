@@ -1,0 +1,169 @@
+<div id="question-bank-modal"
+       class="modal-overlay hidden"
+       role="dialog"
+       aria-modal="true"
+       aria-labelledby="question-bank-modal-title">
+
+    <div class="modal-card" style="max-width: 620px;">
+      <div class="modal-header">
+        <h3 id="question-bank-modal-title" class="modal-title">
+          Thêm câu hỏi phỏng vấn
+        </h3>
+
+        <button
+          type="button"
+          id="question-bank-modal-close"
+          class="modal-close"
+          aria-label="Đóng"
+        >&times;</button>
+      </div>
+
+      <p class="modal-desc">
+        Khai báo câu hỏi theo tiêu chí trong khung năng lực,
+        mức độ khó và gợi ý câu trả lời tốt.
+      </p>
+
+      <div class="modal-body">
+        <div id="question-bank-form-alert"
+             class="alert-box hidden"
+             role="alert">
+          <div class="alert-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor"
+                 stroke-width="2"
+                 stroke-linecap="round"
+                 stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+          </div>
+
+          <div class="alert-content">
+            <p id="question-bank-form-alert-msg"
+               style="margin: 0;"></p>
+          </div>
+        </div>
+
+        <form id="question-bank-form">
+          <input
+            type="hidden"
+            id="question-bank-edit-id"
+          />
+
+          <div class="form-group">
+            <label
+              for="question-bank-form-criterion"
+              class="form-label"
+            >
+              Tiêu chí năng lực
+              <span class="required">*</span>
+            </label>
+
+            <select
+              id="question-bank-form-criterion"
+              class="form-input"
+              required
+            >
+              <option value="">
+                -- Chọn tiêu chí năng lực --
+              </option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label
+              for="question-bank-form-text"
+              class="form-label"
+            >
+              Câu hỏi phỏng vấn
+              <span class="required">*</span>
+            </label>
+
+            <textarea
+              id="question-bank-form-text"
+              class="form-input"
+              rows="4"
+              placeholder="Nhập nội dung câu hỏi phỏng vấn..."
+              required
+            ></textarea>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div class="form-group">
+              <label
+                for="question-bank-form-difficulty"
+                class="form-label"
+              >
+                Mức độ khó
+                <span class="required">*</span>
+              </label>
+
+              <select
+                id="question-bank-form-difficulty"
+                class="form-input"
+                required
+              >
+                <option value="EASY">Dễ</option>
+                <option value="MEDIUM" selected>Trung bình</option>
+                <option value="HARD">Khó</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label
+                for="question-bank-form-status"
+                class="form-label"
+              >
+                Trạng thái
+              </label>
+
+              <select
+                id="question-bank-form-status"
+                class="form-input"
+              >
+                <option value="ACTIVE">Đang áp dụng</option>
+                <option value="INACTIVE">Ngừng áp dụng</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label
+              for="question-bank-form-hint"
+              class="form-label"
+            >
+              Gợi ý câu trả lời tốt
+              <span class="required">*</span>
+            </label>
+
+            <textarea
+              id="question-bank-form-hint"
+              class="form-input"
+              rows="5"
+              placeholder="Nhập các ý chính của một câu trả lời tốt..."
+              required
+            ></textarea>
+          </div>
+
+          <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:10px;">
+            <button
+              type="button"
+              id="question-bank-form-cancel"
+              class="btn btn-outline btn-sm"
+            >
+              Hủy bỏ
+            </button>
+
+            <button
+              type="submit"
+              id="question-bank-form-save"
+              class="btn btn-primary btn-sm"
+            >
+              <span>Lưu câu hỏi</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>

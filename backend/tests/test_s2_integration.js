@@ -293,8 +293,8 @@ async function main() {
     for (let i = 0; i < 2; i++) { const res = spawnSync(process.execPath, ['-e', script], { cwd: root, env: process.env, encoding: 'utf8' }); assert.equal(res.status, 0, res.stderr); }
   });
   await test('Real create-user UI callback sends all fields using the backend contract', async () => {
-    const html = fs.readFileSync(path.join(root, 'frontend/index.html'), 'utf8');
-    const source = fs.readFileSync(path.join(root, 'frontend/js/app.js'), 'utf8');
+    const html = require('./helpers/frontendFixture').html();
+    const source = require('./helpers/frontendFixture').source();
     const nodes = new Map(), storage = new Map(); let ready;
     const makeNode = () => ({ value: '', innerHTML: '', textContent: '', style: {}, dataset: {}, children: [], files: [], disabled: false,
       listeners: {}, classList: { values: new Set(), add(value) { this.values.add(value); }, remove(value) { this.values.delete(value); }, toggle(value, force) { const present = force === undefined ? !this.values.has(value) : force; if (present) this.values.add(value); else this.values.delete(value); }, contains(value) { return this.values.has(value); } },
@@ -305,7 +305,11 @@ async function main() {
       addEventListener(name, fn) { if (name === 'DOMContentLoaded') ready = fn; }, body: makeNode(), documentElement: makeNode() };
     let captured;
     const fallback = async () => ({ ok: false, data: { success: false } });
-    const apiMock = new Proxy({ createUserApi: async (_, payload) => { captured = payload; return { ok: false, data: { success: false, message: 'Captured' } }; } }, { get: (object, key) => object[key] || fallback });
+    const apiMock = new Proxy({
+      getJobTitlesApi: async () => ({ ok: true, data: { success: true, jobTitles: [{ id: 'title-engineer', name: 'Engineer', status: 'ACTIVE' }] } }),
+      getDepartmentsApi: async () => ({ ok: true, data: { success: true, departments: [{ id: 'dept-ui', name: 'UI department', status: 'ACTIVE' }] } }),
+      createUserApi: async (_, payload) => { captured = payload; return { ok: false, data: { success: false, message: 'Captured' } }; }
+    }, { get: (object, key) => object[key] || fallback });
     const context = { document, window: { ATS_API: apiMock, addEventListener() {}, location: { search: '', pathname: '/' } },
       sessionStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) },
       URL, URLSearchParams, console, setTimeout: () => 0, setInterval: () => 0, clearInterval() {}, clearTimeout() {}, navigator: {}, confirm: () => true };
@@ -314,7 +318,8 @@ async function main() {
     vm.runInNewContext(instrumented, context); ready();
     uiHarness = { context, nodes, storage, apiMock, makeNode };
     storage.set('ats_token', tokens.admin);
-    for (const [id, value] of Object.entries({ 'create-user-fullname': 'UI User', 'create-user-email': 'ui@test.example', 'create-user-jobtitle': 'Engineer', 'create-user-department': 'UI department', 'create-user-phone': '0912345678', 'create-user-role': 'RECRUITER' })) nodes.get(id).value = value;
+    await nodes.get('open-create-user-modal-btn').listeners.click();
+    for (const [id, value] of Object.entries({ 'create-user-fullname': 'UI User', 'create-user-email': 'ui@test.example', 'create-user-jobtitle': 'title-engineer', 'create-user-department': 'dept-ui', 'create-user-phone': '0912345678', 'create-user-role': 'RECRUITER' })) nodes.get(id).value = value;
     await nodes.get('create-user-form').listeners.submit({ preventDefault() {} });
     assert.ok(captured, 'UI must reach the API rather than catch ReferenceError');
     assert.equal(captured.departmentName, 'UI department'); assert.equal(captured.phoneNumber, '0912345678'); assert.equal(captured.roleCode, 'RECRUITER');

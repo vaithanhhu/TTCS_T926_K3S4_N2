@@ -170,7 +170,7 @@ async function runTests() {
     console.log('\n[TEST 4] Kiểm tra cấu trúc layout và Error View trong frontend HTML & JS...');
 
     const htmlPath = path.join(__dirname, '../../frontend/index.html');
-    const htmlContent = fs.readFileSync(htmlPath, 'utf8');
+    const htmlContent = require('./helpers/frontendFixture').html();
 
     // Xác nhận container error-view nằm trong app-layout chuẩn
     assert.ok(htmlContent.includes('id="error-view"'), 'Frontend phải có #error-view container');
@@ -186,7 +186,7 @@ async function runTests() {
 
     // Xác nhận logic app.js hỗ trợ showErrorView và recovery
     const jsPath = path.join(__dirname, '../../frontend/js/app.js');
-    const jsContent = fs.readFileSync(jsPath, 'utf8');
+    const jsContent = require('./helpers/frontendFixture').source();
     assert.ok(jsContent.includes('function showErrorView'), 'app.js phải có hàm showErrorView');
     assert.ok(jsContent.includes('errorPrimaryBtn'), 'app.js phải có event listener cho errorPrimaryBtn');
     assert.ok(jsContent.includes('errorSecondaryBtn'), 'app.js phải có event listener cho errorSecondaryBtn');

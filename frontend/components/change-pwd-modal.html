@@ -1,0 +1,38 @@
+<div id="change-pwd-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="change-pwd-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="change-pwd-title" class="modal-title">Đổi mật khẩu tài khoản</h3>
+        <button type="button" id="close-change-pwd-modal" class="modal-close" aria-label="Đóng">&times;</button>
+      </div>
+      <p class="modal-desc">Yêu cầu xác nhận mật khẩu hiện tại. Mật khẩu mới cần tối thiểu 8 ký tự.</p>
+
+      <div class="modal-body">
+        <div id="change-pwd-alert" class="alert-box hidden" role="alert">
+          <div class="alert-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+          </div>
+          <div class="alert-content">
+            <p id="change-pwd-alert-msg" style="margin: 0;"></p>
+          </div>
+        </div>
+
+        <form id="change-pwd-form">
+          <div class="form-group">
+            <label for="change-current-pwd" class="form-label">Mật khẩu hiện tại <span class="required">*</span></label>
+            <input type="password" id="change-current-pwd" class="form-input" placeholder="Nhập mật khẩu hiện tại" required autocomplete="current-password" />
+          </div>
+          <div class="form-group">
+            <label for="change-new-pwd" class="form-label">Mật khẩu mới <span class="required">*</span></label>
+            <input type="password" id="change-new-pwd" class="form-input" placeholder="Tối thiểu 8 ký tự (chữ + số)" required autocomplete="new-password" />
+          </div>
+          <div class="form-group">
+            <label for="change-confirm-pwd" class="form-label">Xác nhận mật khẩu mới <span class="required">*</span></label>
+            <input type="password" id="change-confirm-pwd" class="form-input" placeholder="Nhập lại mật khẩu mới" required autocomplete="new-password" />
+          </div>
+          <button type="submit" id="change-pwd-submit-btn" class="btn btn-primary btn-block">
+            <span>Xác nhận đổi mật khẩu</span>
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>

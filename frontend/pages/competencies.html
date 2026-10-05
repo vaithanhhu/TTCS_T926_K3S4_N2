@@ -1,0 +1,228 @@
+<div id="competencies-view" class="hidden">
+          <div class="view-header">
+            <div class="view-title-group">
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <h2>Khung năng lực & Chức danh</h2>
+                <span id="competency-frameworks-total-badge" class="badge badge-primary font-mono">0 khung</span>
+                <span id="job-titles-total-badge" class="badge badge-primary font-mono">0 chức danh</span>
+              </div>
+              <p>Quản lý bộ tiêu chí đánh giá, trọng số và khung năng lực dùng chung cho nhiều chức danh</p>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: minmax(360px, 1fr) minmax(380px, 1fr); gap: var(--space-4); align-items: start;">
+            <div class="panel-card">
+              <div class="panel-header">
+                <div class="panel-title">
+                  <span>Danh sách khung năng lực</span>
+                </div>
+              </div>
+
+              <div id="competency-framework-list" style="padding: 16px;">
+                <div style="text-align: center; color: var(--color-text-muted); padding: 24px;">
+                  Đang tải khung năng lực...
+                </div>
+              </div>
+            </div>
+
+            <div class="panel-card">
+              <div class="panel-header">
+                <div class="panel-title">
+                  <span id="competency-framework-form-title">Thêm khung năng lực</span>
+                </div>
+              </div>
+
+              <form id="competency-framework-form" style="padding: 16px;">
+                <input type="hidden" id="competency-framework-id-input" />
+
+                <div class="form-group">
+                  <label for="competency-framework-code-input" class="form-label">
+                    Mã khung <span class="required">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="competency-framework-code-input"
+                    class="form-input"
+                    placeholder="Ví dụ: SOFTWARE-ENGINEER"
+                    required
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label for="competency-framework-name-input" class="form-label">
+                    Tên khung năng lực <span class="required">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="competency-framework-name-input"
+                    class="form-input"
+                    placeholder="Ví dụ: Khung năng lực Kỹ sư phần mềm"
+                    required
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label for="competency-framework-description-input" class="form-label">
+                    Mô tả
+                  </label>
+                  <textarea
+                    id="competency-framework-description-input"
+                    class="form-input"
+                    rows="3"
+                    placeholder="Mô tả mục đích hoặc phạm vi áp dụng"
+                  ></textarea>
+                </div>
+
+                <div class="form-group">
+                  <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px;">
+                    <label class="form-label" style="margin-bottom: 0;">
+                      Tiêu chí đánh giá <span class="required">*</span>
+                    </label>
+
+                    <button
+                      type="button"
+                      id="competency-add-criterion-btn"
+                      class="btn btn-outline btn-sm"
+                    >
+                       Thêm tiêu chí
+                    </button>
+                  </div>
+
+                  <div id="competency-criteria-container"></div>
+
+                  <div style="display: flex; justify-content: flex-end; margin-top: 10px;">
+                    <span class="badge badge-primary">
+                      Tổng trọng số:
+                      <strong id="competency-total-weight">0</strong>%
+                    </span>
+                  </div>
+                </div>
+
+                <div id="competency-framework-form-alert" class="alert alert-error hidden" style="margin-top: 12px;">
+                  <span id="competency-framework-form-alert-msg"></span>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
+                  <button
+                    type="button"
+                    id="competency-framework-reset-btn"
+                    class="btn btn-outline btn-sm"
+                  >
+                    Làm mới
+                  </button>
+
+                  <button
+                    type="submit"
+                    id="competency-framework-save-btn"
+                    class="btn btn-primary btn-sm"
+                  >
+                    Lưu khung năng lực
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: minmax(360px, 1fr) minmax(380px, 1fr); gap: var(--space-4); align-items: start; margin-top: var(--space-4);">
+            <div class="panel-card">
+              <div class="panel-header">
+                <div class="panel-title">
+                  <span>Danh sách chức danh</span>
+                </div>
+              </div>
+
+              <div id="job-title-list" style="padding: 16px;">
+                <div style="text-align: center; color: var(--color-text-muted); padding: 24px;">
+                  Đang tải chức danh...
+                </div>
+              </div>
+            </div>
+
+            <div class="panel-card">
+              <div class="panel-header">
+                <div class="panel-title">
+                  <span id="job-title-form-title">Thêm chức danh</span>
+                </div>
+              </div>
+
+              <form id="job-title-form" style="padding: 16px;">
+                <input type="hidden" id="job-title-id-input" />
+
+                <div class="form-group">
+                  <label for="job-title-code-input" class="form-label">
+                    Mã chức danh <span class="required">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="job-title-code-input"
+                    class="form-input"
+                    placeholder="Ví dụ: BACKEND-ENGINEER"
+                    required
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label for="job-title-name-input" class="form-label">
+                    Tên chức danh <span class="required">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="job-title-name-input"
+                    class="form-input"
+                    placeholder="Ví dụ: Backend Engineer"
+                    required
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label for="job-title-level-input" class="form-label">Cấp bậc <span class="required">*</span></label>
+                  <input type="text" id="job-title-level-input" class="form-input" placeholder="Ví dụ: Senior" required />
+                </div>
+                <fieldset id="job-title-salary-fields" class="hidden" disabled style="border:0;padding:0;">
+                  <div class="form-group">
+                    <label for="job-title-min-salary-input" class="form-label">Lương tối thiểu (VNĐ) <span class="required">*</span></label>
+                    <input type="number" id="job-title-min-salary-input" class="form-input" min="0" step="1" required />
+                  </div>
+                  <div class="form-group">
+                    <label for="job-title-max-salary-input" class="form-label">Lương tối đa (VNĐ) <span class="required">*</span></label>
+                    <input type="number" id="job-title-max-salary-input" class="form-input" min="0" step="1" required />
+                  </div>
+                </fieldset>
+                <p id="job-title-salary-access-note" class="text-muted">Trưởng phòng Nhân sự khai báo dải lương khi tạo chức danh. Bạn có thể sửa thông tin chức danh hiện có.</p>
+                <div class="form-group">
+                  <label for="job-title-framework-select" class="form-label">
+                    Khung năng lực
+                  </label>
+                  <select
+                    id="job-title-framework-select"
+                    class="form-input"
+                  >
+                    <option value="">-- Chọn khung năng lực --</option>
+                  </select>
+                </div>
+
+                <div id="job-title-form-alert" class="alert alert-error hidden" style="margin-top: 12px;">
+                  <span id="job-title-form-alert-msg"></span>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
+                  <button
+                    type="button"
+                    id="job-title-reset-btn"
+                    class="btn btn-outline btn-sm"
+                  >
+                    Làm mới
+                  </button>
+
+                  <button
+                    type="submit"
+                    id="job-title-save-btn"
+                    class="btn btn-primary btn-sm"
+                  >
+                    Lưu chức danh
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>

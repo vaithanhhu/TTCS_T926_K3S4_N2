@@ -7,7 +7,7 @@ const { getEmailService } = require('../src/services/emailService');
 const AuthController = require('../src/controllers/authController');
 
 console.log('================================================================');
-console.log('TEST SUITE: REAL EMAIL & OTP FORGOT PASSWORD FLOW (7 TEST CASES)');
+console.log('TEST SUITE: SIMULATED EMAIL & OTP FORGOT PASSWORD FLOW (8 TEST CASES; NO INTERNET DELIVERY)');
 console.log('================================================================\n');
 
 async function runTestSuite() {
@@ -73,9 +73,9 @@ async function runTestSuite() {
   const nonExistentEmail = 'ghost_user_does_not_exist@company.com';
 
   // -------------------------------------------------------------
-  // TEST 1: Nhập email thật đã tồn tại -> nhận được email
+  // TEST 1: Email tài khoản fixture -> email giả lập được ghi nhận
   // -------------------------------------------------------------
-  console.log('[TEST 1] Nhập email thật đã tồn tại...');
+  console.log('[TEST 1] Nhập email tài khoản fixture...');
   emailService.sentEmails = []; // Reset email cache
   const res1 = await post('/api/v1/auth/forgot-password', { email: existingEmail });
   
@@ -92,7 +92,7 @@ async function runTestSuite() {
   assert.ok(otpRow1, 'OTP must exist in database');
   assert.strictEqual(otpRow1.otp_code.length, 6, 'OTP must be 6 digits');
   assert.ok(/^\d{6}$/.test(otpRow1.otp_code), 'OTP must be numeric');
-  console.log('   ✓ PASS: Đã tạo và gửi OTP 6 chữ số qua email thật đến đúng hòm thư:', otpEmail.to);
+  console.log('   ✓ PASS: Đã tạo OTP 6 chữ số và ghi nhận email giả lập cho:', otpEmail.to);
 
   // -------------------------------------------------------------
   // TEST 2: Nhập email không tồn tại -> KHÔNG gửi email
@@ -146,7 +146,7 @@ async function runTestSuite() {
   const res5 = await post('/api/v1/auth/verify-otp', { email: existingEmail, otp: expiredOtpCode });
   assert.strictEqual(res5.status, 400, 'Expired OTP should return 400');
   assert.strictEqual(res5.body.code, 'OTP_EXPIRED', 'Code should be OTP_EXPIRED');
-  console.log('   ✓ PASS: Mã OTP hết hạn bị từ chối với thông báo "Mã OTP đã hết hạn (chỉ có hiệu lực trong vòng 10 phút)".');
+  console.log('   ✓ PASS: Mã OTP hết hạn bị từ chối với TTL 5 phút.');
 
   // -------------------------------------------------------------
   // TEST 6: Yêu cầu gửi lại OTP -> OTP mới được gửi đến email
@@ -214,7 +214,7 @@ async function runTestSuite() {
 
   server.close();
   console.log('\n================================================================');
-  console.log('TẤT CẢ 7/7 TEST CASES DO USER YÊU CẦU ĐỀU ĐÃ HOÀN TOÀN ĐẠT 100%!');
+  console.log('TẤT CẢ 8/8 TEST CASES PASS (EMAIL GIẢ LẬP; CHƯA XÁC MINH INBOX THẬT).');
   console.log('================================================================\n');
 }
 

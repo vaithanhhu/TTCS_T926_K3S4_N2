@@ -39,9 +39,18 @@ module.exports = {
   MAX_FAILED_ATTEMPTS: parseInt(process.env.MAX_FAILED_ATTEMPTS, 10) || 5,
   SESSION_TTL_MINUTES: parseInt(process.env.SESSION_TTL_MINUTES, 10) || 30,
   PASSWORD_RESET_TTL_MINUTES: parseInt(process.env.PASSWORD_RESET_TTL_MINUTES, 10) || 30,
+  PASSWORD_RESET_OTP_TTL_MINUTES: 5,
   STATIC_DIR: path.join(__dirname, '..', '..', '..', 'frontend'),
 
   // Real SMTP Configuration (Supports both MAIL_* and SMTP_* env standards)
+  // Tests never use SMTP. Development simulation must be explicitly enabled.
+  EMAIL_MODE: process.env.NODE_ENV !== 'production' &&
+    (isTestEnv || (process.env.NODE_ENV === 'development' && process.env.EMAIL_MODE === 'simulated'))
+    ? 'simulated' : 'smtp',
+  EMAIL_AUTH_MODE: (process.env.EMAIL_AUTH_MODE || '').trim().toLowerCase(),
+  GOOGLE_OAUTH_CLIENT_ID: process.env.GOOGLE_OAUTH_CLIENT_ID || '',
+  GOOGLE_OAUTH_CLIENT_SECRET: process.env.GOOGLE_OAUTH_CLIENT_SECRET || '',
+  GOOGLE_OAUTH_REFRESH_TOKEN: process.env.GOOGLE_OAUTH_REFRESH_TOKEN || '',
   SMTP_HOST: process.env.MAIL_HOST || process.env.SMTP_HOST || '',
   SMTP_PORT: parseInt(process.env.MAIL_PORT || process.env.SMTP_PORT, 10) || 587,
   SMTP_SECURE: process.env.SMTP_SECURE === 'true' || (process.env.MAIL_PORT === '465' || process.env.SMTP_PORT === '465'),

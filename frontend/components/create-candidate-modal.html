@@ -1,0 +1,97 @@
+<div id="create-candidate-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="create-cand-title">
+    <div class="modal-card" style="max-width: 600px;">
+      <div class="modal-header">
+        <h3 id="create-cand-title" class="modal-title">Thêm Hồ Sơ Ứng Viên Mới</h3>
+        <button type="button" id="close-create-candidate-modal" class="modal-close" aria-label="Đóng">&times;</button>
+      </div>
+      <p class="modal-desc">Nhập thông tin nhân sự ứng tuyển vào các vị trí đang tuyển của công ty.</p>
+
+      <div class="modal-body">
+        <div id="create-candidate-alert" class="alert-box hidden" role="alert">
+          <div class="alert-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+          </div>
+          <div class="alert-content">
+            <p id="create-candidate-alert-msg" style="margin: 0;"></p>
+          </div>
+        </div>
+
+        <form id="create-candidate-form">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="form-group">
+              <label for="create-cand-fullname" class="form-label">Họ và tên ứng viên <span class="required">*</span></label>
+              <input type="text" id="create-cand-fullname" class="form-input" placeholder="Ví dụ: Nguyễn Văn An" required />
+            </div>
+            <div class="form-group">
+              <label for="create-cand-email" class="form-label">Email ứng viên <span class="required">*</span></label>
+              <input type="email" id="create-cand-email" class="form-input" placeholder="nguyenvanan@email.com" required />
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="form-group">
+              <label for="create-cand-phone" class="form-label">Số điện thoại liên hệ</label>
+              <input type="tel" id="create-cand-phone" class="form-input" placeholder="0912 345 678" />
+            </div>
+            <div class="form-group">
+              <label for="create-cand-req-select" class="form-label">Vị trí ứng tuyển <span class="required">*</span></label>
+              <select id="create-cand-req-select" class="form-input" required>
+                <option value="">-- Chọn vị trí tuyển dụng --</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="create-cand-source-select" class="form-label">Nguồn ứng viên</label>
+            <select id="create-cand-source-select" class="form-input">
+              <option value="">-- Chưa xác định nguồn --</option>
+            </select>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="form-group">
+              <label for="create-cand-stage-select" class="form-label">Giai đoạn ban đầu</label>
+              <select id="create-cand-stage-select" class="form-input">
+                <option value="APPLIED">Ứng tuyển mới (APPLIED)</option>
+                <option value="SCREENING">Sơ loại CV (SCREENING)</option>
+                <option value="INTERVIEW">Phỏng vấn (INTERVIEW)</option>
+                <option value="OFFER">Đề nghị nhận việc (OFFER)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="create-cand-rating" class="form-label">Đánh giá tiềm năng</label>
+              <select id="create-cand-rating" class="form-input">
+                <option value="5">★★★★★ Xuất sắc (5 sao)</option>
+                <option value="4" selected>★★★★☆ Tốt (4 sao)</option>
+                <option value="3">★★★☆☆ Khá (3 sao)</option>
+                <option value="2">★★☆☆☆ Trung bình (2 sao)</option>
+                <option value="1">★☆☆☆☆ Không phù hợp (1 sao)</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="form-group">
+              <label for="create-cand-exp" class="form-label">Số năm kinh nghiệm</label>
+              <input type="number" id="create-cand-exp" class="form-input" min="0" max="40" value="2" />
+            </div>
+            <div class="form-group">
+              <label for="create-cand-salary" class="form-label">Mức lương kỳ vọng (VNĐ)</label>
+              <input type="text" id="create-cand-salary" class="form-input" placeholder="Ví dụ: 25.000.000" />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="create-cand-notes" class="form-label">Ghi chú chuyên môn & Kỹ năng nổi bật</label>
+            <textarea id="create-cand-notes" class="form-input" rows="2" placeholder="Ví dụ: Đã có kinh nghiệm NodeJS, React, có bằng IELTS 7.5..." style="height: auto;"></textarea>
+          </div>
+
+          <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 10px;">
+            <button type="button" id="cancel-create-candidate-btn" class="btn btn-outline btn-sm">Hủy bỏ</button>
+            <button type="submit" id="submit-create-candidate-btn" class="btn btn-primary btn-sm">
+              <span>Lưu hồ sơ ứng viên</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>

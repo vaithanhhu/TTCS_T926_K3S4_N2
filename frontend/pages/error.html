@@ -1,0 +1,30 @@
+<div id="error-view" class="card-wrapper hidden">
+          <section class="auth-card error-card">
+            <div class="card-inner" style="text-align: center; padding: 36px 24px;">
+              <div class="error-badge-row" style="display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 16px;">
+                <span class="error-code-badge font-mono" id="error-code-display" style="font-size: 3rem; font-weight: 800; color: var(--color-danger); line-height: 1;">403</span>
+                <span class="error-icon-big" id="error-icon-display" style="display: inline-flex; align-items: center; color: var(--color-danger);">
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>
+                </span>
+              </div>
+              <h2 class="error-heading" id="error-heading-display" style="font-size: 1.4rem; font-weight: 700; color: var(--color-text); margin-bottom: 10px;">Truy cập bị từ chối</h2>
+              <p class="error-message" id="error-message-display" style="font-size: 0.95rem; color: var(--color-text-secondary); max-width: 460px; margin: 0 auto 20px; line-height: 1.6;">
+                Bạn không có quyền truy cập vào chức năng hoặc tài nguyên này theo ma trận phân quyền hệ thống.
+              </p>
+
+              <div class="error-details-box" id="error-details-box" style="display: inline-block; padding: 8px 16px; background: var(--color-bg-subtle); border: 1px solid var(--color-border); border-radius: var(--radius-xs); margin-bottom: 24px;">
+                <span style="font-size: 0.75rem; color: var(--color-text-muted); margin-right: 6px;">Mã lỗi hệ thống:</span>
+                <code id="error-code-raw" class="font-mono" style="color: var(--color-text); font-size: 0.85rem;">FORBIDDEN_PERMISSION_DENIED</code>
+              </div>
+
+              <div class="error-actions-group" style="display: flex; flex-wrap: wrap; gap: 12px; justify-content: center;">
+                <button type="button" id="error-primary-btn" class="btn btn-primary">
+                  <span id="error-primary-btn-text">Về trang chủ của tôi</span>
+                </button>
+                <button type="button" id="error-secondary-btn" class="btn btn-outline">
+                  <span id="error-secondary-btn-text">Quay lại trang trước</span>
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
