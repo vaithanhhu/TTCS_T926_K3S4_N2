@@ -11,17 +11,30 @@ class AvatarService {
     this.avatarDir = path.join(config.STATIC_DIR, 'public', 'avatars');
   }
 
-  getAvatarUrls(userId) {
+  getAvatarUrls(userId, includeVersion = false) {
     const safeUserId = this.sanitizeUserId(userId);
 
     if (!safeUserId) {
       return null;
     }
 
-    return {
-      avatarUrl: `/public/avatars/avatar-${safeUserId}.png`,
-      thumbnailUrl: `/public/avatars/avatar-${safeUserId}-thumb.png`
+    let avatarVersion = 0;
+    const existingUrl = fileName => {
+      try {
+        const stat = fs.statSync(path.join(this.avatarDir, fileName));
+        if (!stat.isFile()) return null;
+        avatarVersion = Math.max(avatarVersion, stat.mtimeMs, stat.ctimeMs);
+        return `/public/avatars/${fileName}`;
+      } catch {
+        return null;
+      }
     };
+    const metadata = {
+      avatarUrl: existingUrl(`avatar-${safeUserId}.png`),
+      thumbnailUrl: existingUrl(`avatar-${safeUserId}-thumb.png`)
+    };
+    if (includeVersion) metadata.avatarVersion = avatarVersion || null;
+    return metadata;
   }
 
   async saveAvatar(userId, imageBuffer, contentType) {

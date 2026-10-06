@@ -7,32 +7,61 @@ class EmailService {
   constructor(db) {
     this.db = db || getDatabase();
     this.transporter = null;
-    this.sentEmails = []; // In-memory cache for inspection & test assertions
+    this.mode = config.EMAIL_MODE;
+    this.authMode = null;
+    this.configurationError = null;
+    this.sentEmails = []; // Delivery metadata; message bodies only in explicit simulation
     this.initTransporter();
   }
 
   initTransporter() {
-    if (config.SMTP_HOST && config.SMTP_USER && config.SMTP_PASSWORD) {
+    if (this.mode === 'simulated') {
+      console.log('[EmailService] Explicit simulated email mode (no SMTP delivery).');
+      return;
+    }
+    const hasOAuthConfig = Boolean(config.GOOGLE_OAUTH_CLIENT_ID ||
+      config.GOOGLE_OAUTH_CLIENT_SECRET || config.GOOGLE_OAUTH_REFRESH_TOKEN);
+    if (config.EMAIL_AUTH_MODE && !['oauth2', 'password'].includes(config.EMAIL_AUTH_MODE)) {
+      this.configurationError = 'SMTP_AUTH_MODE_INVALID';
+      console.error('[EmailService] SMTP_AUTH_MODE_INVALID');
+      return;
+    }
+    // Any OAuth setting selects OAuth2, so incomplete credentials cannot fall back
+    // to a password left in the local environment. Explicit selection also covers
+    // the case where all OAuth credentials are missing.
+    this.authMode = config.EMAIL_AUTH_MODE === 'oauth2' || hasOAuthConfig ? 'oauth2' : 'password';
+    const authConfigured = this.authMode === 'oauth2'
+      ? [config.SMTP_USER, config.GOOGLE_OAUTH_CLIENT_ID,
+        config.GOOGLE_OAUTH_CLIENT_SECRET, config.GOOGLE_OAUTH_REFRESH_TOKEN]
+        .every(value => typeof value === 'string' && value.trim().length > 0)
+      : Boolean(config.SMTP_USER && config.SMTP_PASSWORD);
+    if (config.SMTP_HOST && authConfigured) {
+      const auth = this.authMode === 'oauth2' ? {
+        type: 'OAuth2',
+        user: config.SMTP_USER,
+        clientId: config.GOOGLE_OAUTH_CLIENT_ID,
+        clientSecret: config.GOOGLE_OAUTH_CLIENT_SECRET,
+        refreshToken: config.GOOGLE_OAUTH_REFRESH_TOKEN
+      } : { user: config.SMTP_USER, pass: config.SMTP_PASSWORD };
       try {
         this.transporter = nodemailer.createTransport({
           host: config.SMTP_HOST,
           port: config.SMTP_PORT,
           secure: config.SMTP_SECURE,
-          auth: {
-            user: config.SMTP_USER,
-            pass: config.SMTP_PASSWORD
-          },
-          tls: {
-            rejectUnauthorized: false
-          }
+          auth,
+          logger: false,
+          debug: false
         });
-        console.log(`[EmailService] Real SMTP Transporter initialized: ${config.SMTP_HOST}:${config.SMTP_PORT}`);
+        console.log(`[EmailService] Real SMTP Transporter initialized: ${config.SMTP_HOST}:${config.SMTP_PORT} (${this.authMode})`);
       } catch (err) {
-        console.error('[EmailService] Failed to create SMTP transporter:', err.message);
+        this.configurationError = 'SMTP_INITIALIZATION_FAILED';
+        console.error('[EmailService] SMTP_INITIALIZATION_FAILED');
         this.transporter = null;
       }
     } else {
-      console.log('[EmailService] SMTP credentials not set in .env. Running in corporate dispatch mode with audit logging.');
+      this.configurationError = this.authMode === 'oauth2' && !authConfigured
+        ? 'SMTP_OAUTH_NOT_CONFIGURED' : 'SMTP_NOT_CONFIGURED';
+      console.error('[EmailService]', this.configurationError);
     }
   }
 
@@ -59,12 +88,13 @@ class EmailService {
       `);
       stmt.run(id, recipient, subject, templateName, status, errorMessage);
     } catch (err) {
-      console.error('[EmailService] Failed to log email into DB:', err.message);
+      console.error('[EmailService] EMAIL_AUDIT_FAILED');
     }
   }
 
   /**
-   * Send transactional email (real SMTP or mock fallback)
+   * Send using the configured mode. "delivered" means accepted by SMTP,
+   * not proof of arrival in an Internet inbox. Cache entries track outcomes.
    */
   async sendMail({ to, subject, html, text, templateName = 'GENERAL' }) {
     const mailOptions = {
@@ -80,27 +110,46 @@ class EmailService {
       subject,
       templateName,
       sentAt: new Date().toISOString(),
-      content: html
+      mode: this.mode,
+      authMode: this.authMode,
+      status: 'PENDING',
+      delivered: false,
+      simulated: this.mode === 'simulated'
     };
+    if (this.mode === 'simulated') record.content = html;
     this.sentEmails.push(record);
+
+    if (this.mode === 'simulated') {
+      record.status = 'SENT_LOCAL';
+      this.logEmail(to, subject, templateName, record.status);
+      return { success: true, delivered: false, simulated: true, mode: this.mode };
+    }
 
     if (this.transporter) {
       try {
         const info = await this.transporter.sendMail(mailOptions);
-        console.log(`[EmailService] Real SMTP email sent to ${to}: ${info.messageId}`);
+        const accepted = Array.isArray(info.accepted) && info.accepted.some(address =>
+          String(address).toLowerCase() === String(to).toLowerCase());
+        if (!accepted) throw new Error('SMTP_RECIPIENT_REJECTED');
+        record.status = 'DELIVERED';
+        record.delivered = true;
         this.logEmail(to, subject, templateName, 'DELIVERED');
-        return { success: true, messageId: info.messageId, delivered: true };
+        return { success: true, messageId: info.messageId, delivered: true, simulated: false, mode: this.mode };
       } catch (error) {
-        console.error(`[EmailService] Failed to deliver real SMTP email to ${to}:`, error.message);
-        this.logEmail(to, subject, templateName, 'FAILED', error.message);
-        return { success: false, error: error.message, delivered: false };
+        const code = error.message === 'SMTP_RECIPIENT_REJECTED' ? 'SMTP_RECIPIENT_REJECTED' : 'SMTP_SEND_FAILED';
+        record.status = 'FAILED';
+        record.error = code;
+        console.error('[EmailService]', code);
+        this.logEmail(to, subject, templateName, 'FAILED', code);
+        return { success: false, error: code, delivered: false, simulated: false, mode: this.mode };
       }
-    } else {
-      // Dispatch simulation & DB log (used when SMTP credentials are not yet added to .env)
-      console.log(`[EmailService:Simulated] Email dispatched to ${to} | Subject: "${subject}"`);
-      this.logEmail(to, subject, templateName, 'SENT_LOCAL');
-      return { success: true, delivered: false, simulated: true };
     }
+
+    const code = this.configurationError || 'SMTP_NOT_CONFIGURED';
+    record.status = 'FAILED';
+    record.error = code;
+    this.logEmail(to, subject, templateName, 'FAILED', code);
+    return { success: false, error: code, delivered: false, simulated: false, mode: this.mode };
   }
 
   /**
@@ -229,7 +278,7 @@ class EmailService {
    */
   async sendOtpEmail(recipientEmail, otpCode, fullName = '') {
     const greeting = fullName ? `Xin chào <strong>${fullName}</strong>,` : `Xin chào <strong>${recipientEmail}</strong>,`;
-    const subject = `🔐 [ATS] Mã xác thực OTP khôi phục mật khẩu: ${otpCode}`;
+    const subject = '🔐 [ATS] Mã xác thực OTP khôi phục mật khẩu';
 
     const html = `
       <!DOCTYPE html>
@@ -259,7 +308,7 @@ class EmailService {
           
           <div class="otp-container">
             <div class="otp-code">${otpCode}</div>
-            <div class="otp-hint">Hiệu lực trong vòng <strong>10 phút</strong> · Chỉ sử dụng 1 lần</div>
+            <div class="otp-hint">Hiệu lực trong vòng <strong>${config.PASSWORD_RESET_OTP_TTL_MINUTES} phút</strong> · Chỉ sử dụng 1 lần</div>
           </div>
 
           <div class="warning-box">
@@ -278,7 +327,7 @@ class EmailService {
       </html>
     `;
 
-    const text = `Xin chào,\n\nMã xác thực OTP của bạn là: ${otpCode}\nMã có hiệu lực trong vòng 10 phút. Tuyệt đối không chia sẻ mã này cho người khác.`;
+    const text = `Xin chào,\n\nMã xác thực OTP của bạn là: ${otpCode}\nMã có hiệu lực trong vòng ${config.PASSWORD_RESET_OTP_TTL_MINUTES} phút. Tuyệt đối không chia sẻ mã này cho người khác.`;
 
     return this.sendMail({
       to: recipientEmail,

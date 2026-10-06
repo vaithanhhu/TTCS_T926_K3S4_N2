@@ -1,0 +1,246 @@
+{
+  "routes": [
+    {
+      "path": "/",
+      "view": "login",
+      "auth": false
+    },
+    {
+      "path": "/login",
+      "view": "login",
+      "auth": false
+    },
+    {
+      "path": "/forgot-password",
+      "view": "forgot-password",
+      "auth": false
+    },
+    {
+      "path": "/reset-password",
+      "view": "reset-password",
+      "auth": false
+    },
+    {
+      "path": "/dashboard",
+      "view": "dashboard",
+      "auth": true,
+      "menu": true
+    },
+    {
+      "path": "/profile",
+      "view": "profile",
+      "auth": true
+    },
+    {
+      "path": "/requisitions",
+      "view": "requisitions",
+      "auth": true,
+      "permission": "requisition.read",
+      "menu": true
+    },
+    {
+      "path": "/candidates",
+      "view": "candidates",
+      "auth": true,
+      "permission": "candidate.read",
+      "menu": true
+    },
+    {
+      "path": "/interviews",
+      "view": "interviews",
+      "auth": true,
+      "permission": "interview.read",
+      "menu": true
+    },
+    {
+      "path": "/question-bank",
+      "view": "questionBank",
+      "auth": true,
+      "permission": "question_bank.read",
+      "menu": true
+    },
+    {
+      "path": "/offers",
+      "view": "offers",
+      "auth": true,
+      "permission": "offer.read",
+      "menu": true
+    },
+    {
+      "path": "/approvals",
+      "view": "approvals",
+      "auth": true,
+      "permission": "requisition.approve",
+      "menu": true
+    },
+    {
+      "path": "/reports",
+      "view": "reports",
+      "auth": true
+    },
+    {
+      "path": "/admin/departments",
+      "view": "departments",
+      "auth": true,
+      "permission": "department.read",
+      "menu": true
+    },
+    {
+      "path": "/admin/recruitment-catalogs",
+      "view": "recruitmentCatalogs",
+      "auth": true,
+      "permission": "recruitment_catalog.manage",
+      "menu": true
+    },
+    {
+      "path": "/admin/career-page",
+      "view": "careerPage",
+      "auth": true,
+      "permission": "career_page.manage",
+      "menu": true
+    },
+    {
+      "path": "/admin/competencies",
+      "view": "competencies",
+      "auth": true,
+      "permission": "competency.read",
+      "menu": true
+    },
+    {
+      "path": "/admin/users",
+      "view": "users",
+      "auth": true,
+      "permission": "user.read",
+      "menu": true
+    },
+    {
+      "path": "/admin/roles",
+      "view": "roles",
+      "auth": true,
+      "permission": "role.read",
+      "menu": true
+    },
+    {
+      "path": "/admin/audit",
+      "view": "audit",
+      "auth": true,
+      "permission": "audit.read",
+      "menu": true
+    },
+    {
+      "path": "/candidate",
+      "view": "candidatePortal",
+      "auth": true,
+      "permission": "candidate.create",
+      "menu": true
+    },
+    {
+      "path": "/admin",
+      "view": "users",
+      "auth": true,
+      "permission": "user.read",
+      "menu": true,
+      "menuPath": "/admin/users"
+    },
+    {
+      "path": "/recruitment",
+      "view": "requisitions",
+      "auth": true,
+      "permission": "requisition.read",
+      "menu": true,
+      "menuPath": "/requisitions"
+    },
+    {
+      "path": "/hiring",
+      "view": "requisitions",
+      "auth": true,
+      "permission": "requisition.read",
+      "menu": true,
+      "menuPath": "/requisitions"
+    }
+  ],
+  "scripts": [
+    "/js/shared/state.js",
+    "/js/shared/datetime.js",
+    "/js/components/action-menu.js",
+    "/js/components/mobile-navigation.js",
+    "/js/pages/login.js",
+    "/js/services/session.js",
+    "/js/components/navigation.js",
+    "/js/shared/export.js",
+    "/js/pages/dashboard.js",
+    "/js/pages/requisitions.js",
+    "/js/pages/candidates.js",
+    "/js/pages/interviews.js",
+    "/js/pages/question-bank.js",
+    "/js/pages/offers.js",
+    "/js/pages/reports.js",
+    "/js/pages/recruitment-catalogs.js",
+    "/js/pages/career-page.js",
+    "/js/pages/departments.js",
+    "/js/pages/competencies.js",
+    "/js/pages/users.js",
+    "/js/pages/roles.js",
+    "/js/pages/audit.js",
+    "/js/pages/profile.js",
+    "/js/components/user-dialogs.js",
+    "/js/components/requisition-form.js",
+    "/js/components/handover.js",
+    "/js/pages/forgot-password.js",
+    "/js/pages/reset-password.js",
+    "/js/components/change-password.js",
+    "/js/pages/error.js",
+    "/js/components/candidate-dialogs.js",
+    "/js/components/interview-dialogs.js",
+    "/js/components/offer-dialogs.js",
+    "/js/pages/approvals.js",
+    "/js/pages/candidate-portal.js",
+    "/js/components/requisition-detail.js",
+    "/js/shared/page-lifecycle.js",
+    "/js/shared/route-lifecycle.js"
+  ],
+  "fragments": [
+    "/pages/login.html",
+    "/pages/dashboard.html",
+    "/pages/requisitions.html",
+    "/pages/candidates.html",
+    "/pages/interviews.html",
+    "/pages/question-bank.html",
+    "/pages/offers.html",
+    "/pages/approvals.html",
+    "/pages/reports.html",
+    "/pages/recruitment-catalogs.html",
+    "/pages/career-page.html",
+    "/pages/departments.html",
+    "/pages/competencies.html",
+    "/pages/users.html",
+    "/pages/roles.html",
+    "/pages/audit.html",
+    "/pages/profile.html",
+    "/pages/candidate-portal.html",
+    "/pages/error.html",
+    "/components/create-user-modal.html",
+    "/components/action-menu.html",
+    "/components/bulk-import-user-modal.html",
+    "/components/edit-user-modal.html",
+    "/components/assign-roles-modal.html",
+    "/components/lock-user-modal.html",
+    "/components/handover-warning-modal.html",
+    "/components/create-req-modal.html",
+    "/components/reassign-handover-modal.html",
+    "/pages/forgot-password.html",
+    "/pages/reset-password.html",
+    "/components/change-pwd-modal.html",
+    "/components/create-candidate-modal.html",
+    "/components/candidate-detail-modal.html",
+    "/components/schedule-interview-modal.html",
+    "/components/question-bank-modal.html",
+    "/components/interview-detail-modal.html",
+    "/components/create-offer-modal.html",
+    "/components/offer-detail-modal.html",
+    "/components/requisition-detail-modal.html",
+    "/components/admin-reset-pwd-modal.html",
+    "/components/edit-profile-modal.html",
+    "/components/audit-detail-modal.html"
+  ]
+}

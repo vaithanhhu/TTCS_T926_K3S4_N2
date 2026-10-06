@@ -1,0 +1,67 @@
+<div id="schedule-interview-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="schedule-int-title">
+    <div class="modal-card" style="max-width: 580px;">
+      <div class="modal-header">
+        <h3 id="schedule-int-title" class="modal-title">Lên Lịch Phỏng Vấn</h3>
+        <button type="button" id="close-schedule-interview-modal" class="modal-close" aria-label="Đóng">&times;</button>
+      </div>
+      <p class="modal-desc">Thiết lập thời gian, người phỏng vấn và hình thức phỏng vấn cho ứng viên.</p>
+
+      <div class="modal-body">
+        <div id="schedule-interview-alert" class="alert-box hidden" role="alert">
+          <div class="alert-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+          </div>
+          <div class="alert-content">
+            <p id="schedule-interview-alert-msg" style="margin: 0;"></p>
+          </div>
+        </div>
+
+        <form id="schedule-interview-form">
+          <div class="form-group">
+            <label for="schedule-candidate-select" class="form-label">Chọn ứng viên phỏng vấn <span class="required">*</span></label>
+            <select id="schedule-candidate-select" class="form-input" required>
+              <option value="">-- Chọn ứng viên trong danh sách --</option>
+            </select>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="form-group">
+              <label for="schedule-req-select" class="form-label">Vị trí phỏng vấn</label>
+              <select id="schedule-req-select" class="form-input">
+                <option value="">-- Theo vị trí của ứng viên --</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="schedule-interviewer-select" class="form-label">Người phỏng vấn chính <span class="required">*</span></label>
+              <select id="schedule-interviewer-select" class="form-input" required>
+                <option value="">-- Chọn cán bộ phỏng vấn --</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="schedule-round-name" class="form-label">Vòng phỏng vấn</label>
+            <input type="text" id="schedule-round-name" class="form-input" value="Vòng 1 - Kỹ thuật chuyên môn" placeholder="Ví dụ: Vòng 1 - Kỹ thuật chuyên môn" required />
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="form-group">
+              <label for="schedule-time" class="form-label">Thời gian phỏng vấn <span class="required">*</span></label>
+              <input type="datetime-local" id="schedule-time" class="form-input" required />
+            </div>
+            <div class="form-group">
+              <label for="schedule-location" class="form-label">Địa điểm / Đường dẫn họp</label>
+              <input type="text" id="schedule-location" class="form-input" value="Online Google Meet (meet.google.com/ats-int)" placeholder="Google Meet / Phòng họp P302" required />
+            </div>
+          </div>
+
+          <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 10px;">
+            <button type="button" id="cancel-schedule-interview-btn" class="btn btn-outline btn-sm">Hủy bỏ</button>
+            <button type="submit" id="submit-schedule-interview-btn" class="btn btn-primary btn-sm">
+              <span>Xác nhận & Gửi lịch</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>

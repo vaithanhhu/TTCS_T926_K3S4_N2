@@ -1,0 +1,101 @@
+<div id="departments-view" class="hidden">
+          <div class="view-header">
+            <div class="view-title-group">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h2>Phòng ban & Sơ đồ tổ chức</h2>
+                <span id="departments-total-badge" class="badge badge-primary font-mono">0 phòng ban</span>
+              </div>
+              <p>Quản lý cấu trúc phòng ban nhiều cấp và người phụ trách từng đơn vị</p>
+            </div>
+
+            <button type="button" id="department-new-btn" class="btn btn-primary btn-sm">
+               Thêm phòng ban
+            </button>
+          </div>
+
+          <div class="department-workspace">
+            <div class="panel-card">
+              <div class="panel-header">
+                <div class="panel-title">
+                  <span>Sơ đồ tổ chức</span>
+                </div>
+              </div>
+
+              <div id="departments-tree-container" style="padding: 16px;">
+                <div style="text-align: center; color: var(--color-text-muted); padding: 24px;">
+                  Đang tải phòng ban...
+                </div>
+              </div>
+            </div>
+
+            <div class="panel-card">
+              <div class="panel-header">
+                <div class="panel-title">
+                  <span id="department-form-title">Thêm phòng ban</span>
+                </div>
+              </div>
+
+              <form id="department-form" style="padding: 16px;">
+                <input type="hidden" id="department-id-input" />
+
+                <div class="form-group">
+                  <label for="department-code-input" class="form-label">
+                    Mã phòng ban <span class="required">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="department-code-input"
+                    class="form-input"
+                    placeholder="Ví dụ: DEV"
+                    required
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label for="department-name-input" class="form-label">
+                    Tên phòng ban <span class="required">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="department-name-input"
+                    class="form-input"
+                    placeholder="Ví dụ: Phòng Phát Triển Phần Mềm"
+                    required
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label for="department-parent-select" class="form-label">
+                    Phòng ban cấp trên
+                  </label>
+                  <select id="department-parent-select" class="form-input">
+                    <option value="">-- Cấp cao nhất --</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label for="department-manager-select" class="form-label">
+                    Người phụ trách <span class="required">*</span>
+                  </label>
+                  <select id="department-manager-select" class="form-input" required>
+                    <option value="">-- Chọn người phụ trách --</option>
+                  </select>
+                </div>
+
+                <div id="department-form-alert" class="alert alert-error hidden" style="margin-top: 12px;">
+                  <span id="department-form-alert-msg"></span>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
+                  <button type="button" id="department-reset-btn" class="btn btn-outline btn-sm">
+                    Làm mới
+                  </button>
+
+                  <button type="submit" id="department-save-btn" class="btn btn-primary btn-sm">
+                    Lưu phòng ban
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>

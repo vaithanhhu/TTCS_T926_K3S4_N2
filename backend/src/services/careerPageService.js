@@ -8,7 +8,7 @@ const { getDatabase } = require('../db/database');
 class CareerPageService {
   constructor(db) {
     this.db = db || getDatabase();
-    this.maxFileSize = 2 * 1024 * 1024;
+    this.maxFileSize = 5 * 1024 * 1024;
     this.allowedContentTypes = ['image/jpeg', 'image/png'];
     this.allowedFormats = ['jpeg', 'png'];
     this.mediaDir = path.join(config.STATIC_DIR, 'public', 'company');
@@ -119,7 +119,7 @@ class CareerPageService {
         success: false,
         statusCode: 413,
         code: 'CAREER_IMAGE_TOO_LARGE',
-        message: 'Ảnh không được vượt quá 2MB.'
+        message: 'Ảnh không được vượt quá 5 MB.'
       };
     }
 

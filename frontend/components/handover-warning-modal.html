@@ -1,0 +1,23 @@
+<div id="handover-warning-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="handover-warning-title">
+    <div class="modal-card" style="max-width: 600px;">
+      <div class="modal-header">
+        <h3 id="handover-warning-title" class="modal-title" style="color: var(--color-warning);">Cảnh báo bàn giao vị trí tuyển dụng</h3>
+        <button type="button" id="close-handover-modal" class="modal-close" aria-label="Đóng">&times;</button>
+      </div>
+      <p class="modal-desc" style="color: var(--color-warning-text);">
+        Tài khoản đã được khóa thành công. Tuy nhiên, nhân sự này đang phụ trách các vị trí tuyển dụng dưới đây. Vui lòng phân công lại để đảm bảo tiến độ:
+      </p>
+
+      <div class="modal-body">
+        <div id="handover-requisitions-container" style="max-height: 260px; overflow-y: auto; margin-bottom: 14px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-bg-page);">
+          <!-- Injected by JS -->
+        </div>
+
+        <div style="display: flex; justify-content: flex-end;">
+          <button type="button" id="acknowledge-handover-btn" class="btn btn-primary btn-sm">
+            Đã ghi nhận bàn giao & Đóng
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>

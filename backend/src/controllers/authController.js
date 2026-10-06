@@ -1,8 +1,10 @@
 const AuthService = require('../services/authService');
+const AvatarService = require('../services/avatarService');
 
 class AuthController {
-  constructor(authService) {
+  constructor(authService, avatarService) {
     this.authService = authService || new AuthService();
+    this.avatarService = avatarService || new AvatarService();
   }
 
   /**
@@ -27,7 +29,10 @@ class AuthController {
       };
 
       if (result.data) {
-        responsePayload.data = result.data;
+        responsePayload.data = {
+          ...result.data,
+          user: { ...result.data.user, ...this.avatarService.getAvatarUrls(result.data.user.id) }
+        };
       }
       if (result.remainingMinutes) {
         responsePayload.remainingMinutes = result.remainingMinutes;
@@ -121,7 +126,7 @@ class AuthController {
         message: 'Phiên làm việc hợp lệ.',
         code: 'SESSION_VALID',
         data: {
-          user: result.user,
+          user: { ...result.user, ...this.avatarService.getAvatarUrls(result.user.id) },
           expiresAt: result.expiresAt
         }
       }));
@@ -147,9 +152,6 @@ class AuthController {
         message: result.message,
         code: result.code
       };
-      if (result.demoResetToken) {
-        payload.demoResetToken = result.demoResetToken;
-      }
       res.end(JSON.stringify(payload));
     } catch (err) {
       console.error('[Forgot Password Error]', err);

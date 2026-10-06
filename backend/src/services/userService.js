@@ -928,6 +928,9 @@ class UserService {
 
     // Chuẩn hóa và lọc danh sách vai trò
     const normalizedCodes = [...new Set(roleCodes.map(r => typeof r === 'string' ? r.trim().toUpperCase() : ''))].filter(Boolean);
+    if (normalizedCodes.length === 0) {
+      return { success: false, statusCode: 400, code: 'EMPTY_ROLES', message: 'Người dùng phải được gán ít nhất một vai trò hợp lệ.' };
+    }
 
     // AC-03: Không thể tự thu hồi vai trò quản trị (ADMIN) của chính mình
     const isSelfEdit = requestingUser && (requestingUser.id === targetUserId || requestingUser.email === targetUser.email);
@@ -962,13 +965,21 @@ class UserService {
     const deleteOldRoles = this.db.prepare('DELETE FROM user_roles WHERE user_id = ?');
     const insertNewRole = this.db.prepare('INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)');
 
-    deleteOldRoles.run(targetUserId);
-    for (const code of normalizedCodes) {
-      const roleId = validRoleMap.get(code);
-      insertNewRole.run(targetUserId, roleId);
+    let updatedUser;
+    this.db.exec('SAVEPOINT assign_user_roles');
+    try {
+      deleteOldRoles.run(targetUserId);
+      for (const code of normalizedCodes) {
+        const roleId = validRoleMap.get(code);
+        insertNewRole.run(targetUserId, roleId);
+      }
+      updatedUser = this.getUserById(targetUserId);
+      this.db.exec('RELEASE SAVEPOINT assign_user_roles');
+    } catch (error) {
+      this.db.exec('ROLLBACK TO SAVEPOINT assign_user_roles');
+      this.db.exec('RELEASE SAVEPOINT assign_user_roles');
+      throw error;
     }
-
-    const updatedUser = this.getUserById(targetUserId);
 
     return {
       success: true,

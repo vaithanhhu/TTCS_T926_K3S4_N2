@@ -1,0 +1,113 @@
+<div id="create-req-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="create-req-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="create-req-title" class="modal-title">Khởi tạo Vị trí Tuyển dụng Mới</h3>
+        <button type="button" id="close-create-req-modal" class="modal-close" aria-label="Đóng">&times;</button>
+      </div>
+      <p class="modal-desc">Khai báo nhu cầu tuyển dụng. Có thể lưu nháp và tiếp tục hoàn thiện sau.</p>
+
+      <div class="modal-body">
+        <div id="create-req-alert" class="alert-box hidden" role="alert">
+          <div class="alert-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+          </div>
+          <div class="alert-content">
+            <p id="create-req-alert-msg" style="margin: 0;"></p>
+          </div>
+        </div>
+
+        <form id="create-req-form" novalidate>
+          <p id="create-req-state" class="form-hint" aria-live="polite"></p>
+          <div class="form-group">
+            <label for="create-req-job-title-input" class="form-label">Chức danh <span class="required">*</span></label>
+            <select id="create-req-job-title-input" class="form-input"><option value="">-- Chọn chức danh --</option></select>
+            <p id="create-req-standard-salary" class="form-hint" aria-live="polite"></p>
+          </div>
+          <div class="form-group">
+            <label for="create-req-title-input" class="form-label">Tiêu đề vị trí tuyển dụng</label>
+            <input type="text" id="create-req-title-input" class="form-input" placeholder="Có thể để trống để dùng tên chức danh" />
+          </div>
+
+          <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 10px;">
+            <div class="form-group">
+              <label for="create-req-dept-input" class="form-label">Phòng ban phụ trách <span class="required">*</span></label>
+              <select id="create-req-dept-input" class="form-input">
+                <option value="">-- Chọn phòng ban --</option>
+              </select>
+              <label for="create-req-legacy-dept-input" class="form-label hidden">Hoặc nhập tên phòng ban</label>
+              <input type="text" id="create-req-legacy-dept-input" class="form-input hidden" placeholder="Tên phòng ban theo dữ liệu hiện có" disabled />
+            </div>
+            <div class="form-group">
+              <label for="create-req-headcount-input" class="form-label">Chỉ tiêu (người)</label>
+              <input type="number" id="create-req-headcount-input" class="form-input" min="1" step="1" value="1" />
+            </div>
+          </div>
+
+          <div class="s210-form-grid">
+            <div class="form-group">
+              <label for="create-req-reason-input" class="form-label">Lý do tuyển <span class="required">*</span></label>
+              <select id="create-req-reason-input" class="form-input">
+                <option value="">-- Chọn lý do --</option>
+                <option value="REPLACEMENT">Thay thế</option>
+                <option value="NEW_HEADCOUNT">Tăng mới</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="create-req-needed-date-input" class="form-label">Ngày cần người <span class="required">*</span></label>
+              <input type="date" id="create-req-needed-date-input" class="form-input" />
+            </div>
+            <div class="form-group">
+              <label for="create-req-salary-min-input" class="form-label">Lương đề xuất tối thiểu (VND) <span class="required">*</span></label>
+              <input type="number" id="create-req-salary-min-input" class="form-input" min="0" step="any" />
+            </div>
+            <div class="form-group">
+              <label for="create-req-salary-max-input" class="form-label">Lương đề xuất tối đa (VND) <span class="required">*</span></label>
+              <input type="number" id="create-req-salary-max-input" class="form-input" min="0" step="any" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="create-req-justification-input" class="form-label">Giải trình dải lương ngoài chuẩn</label>
+            <textarea id="create-req-justification-input" class="form-input" rows="3" style="height: auto;"></textarea>
+            <p id="create-req-salary-warning" class="form-hint" aria-live="polite"></p>
+          </div>
+          <div class="form-group">
+            <label for="create-req-description-input" class="form-label">Mô tả công việc <span class="required">*</span></label>
+            <textarea id="create-req-description-input" class="form-input" rows="5" style="height: auto;"></textarea>
+          </div>
+          <div class="form-group">
+            <label for="create-req-requirements-input" class="form-label">Yêu cầu ứng viên <span class="required">*</span></label>
+            <textarea id="create-req-requirements-input" class="form-input" rows="5" style="height: auto;"></textarea>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div class="form-group">
+              <label for="create-req-work-location-select" class="form-label">Địa điểm làm việc</label>
+              <select id="create-req-work-location-select" class="form-input">
+                <option value="">-- Chưa xác định --</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="create-req-work-mode-select" class="form-label">Hình thức làm việc</label>
+              <select id="create-req-work-mode-select" class="form-input">
+                <option value="">-- Chưa xác định --</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="create-req-recruiter-select" class="form-label">Chuyên viên tuyển dụng phụ trách</label>
+            <select id="create-req-recruiter-select" class="form-input">
+              <option value="">-- Chưa chỉ định --</option>
+            </select>
+          </div>
+
+          <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 10px;">
+            <button type="button" id="cancel-create-req-btn" class="btn btn-outline btn-sm">Hủy bỏ</button>
+            <button type="button" id="save-create-req-draft-btn" class="btn btn-outline btn-sm">Lưu nháp</button>
+            <button type="submit" id="submit-create-req-btn" class="btn btn-primary btn-sm">
+              <span>Lưu & Mở tuyển dụng</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>

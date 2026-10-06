@@ -1,0 +1,99 @@
+<div id="users-view" class="hidden">
+          <div class="view-header">
+            <div class="view-title-group">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h2>Quản lý Người dùng & Tài khoản</h2>
+                <span id="users-total-badge" class="badge badge-primary font-mono">0 tài khoản</span>
+              </div>
+              <p>Danh sách cán bộ nhân viên, vai trò truy cập và trạng thái tài khoản nội bộ</p>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button type="button" id="open-create-user-modal-btn" class="btn btn-primary btn-sm">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                <span> Thêm tài khoản mới</span>
+              </button>
+              <button type="button" id="open-bulk-import-modal-btn" class="btn btn-outline btn-sm">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="17 8 12 3 7 8"></polyline>
+                  <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                <span>Nhập từ Excel</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Toolbar -->
+          <div class="filter-toolbar">
+            <div class="toolbar-filters">
+              <div style="min-width: 260px; flex: 1;">
+                <input type="text" id="users-search-input" class="form-input" placeholder="Tìm theo họ tên, email, phòng ban..." />
+              </div>
+              <div style="width: 200px;">
+                <select id="users-role-filter" class="form-input">
+                  <option value="ALL">Tất cả vai trò</option>
+                  <option value="ADMIN">Quản trị viên (ADMIN)</option>
+                  <option value="HR_MANAGER">Trưởng phòng Nhân sự (HR_MANAGER)</option>
+                  <option value="RECRUITER">Chuyên viên Tuyển dụng (RECRUITER)</option>
+                  <option value="HIRING_MGR">Trưởng bộ phận (HIRING_MGR)</option>
+                  <option value="INTERVIEWER">Người phỏng vấn (INTERVIEWER)</option>
+                  <option value="APPROVER">Cấp phê duyệt (APPROVER)</option>
+                  <option value="CANDIDATE">Ứng viên (CANDIDATE)</option>
+                </select>
+              </div>
+              <div style="width: 170px;">
+                <select id="users-status-filter" class="form-input">
+                  <option value="ALL">Tất cả trạng thái</option>
+                  <option value="ACTIVE">Đang hoạt động</option>
+                  <option value="LOCKED">Đã khóa</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <button type="button" id="users-search-btn" class="btn btn-outline btn-sm">
+                Lọc / Làm mới
+              </button>
+            </div>
+          </div>
+
+          <!-- Table -->
+          <div class="table-wrapper" id="users-table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Nhân sự</th>
+                  <th>Email</th>
+                  <th>Chức danh / Đơn vị</th>
+                  <th>Vai trò</th>
+                  <th>Trạng thái</th>
+                  <th class="users-actions-cell">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="users-table-body">
+                <!-- Dynamically loaded -->
+              </tbody>
+            </table>
+
+            <!-- Pagination Bar -->
+            <div class="pagination-bar" id="users-pagination-bar">
+              <div id="users-page-info">
+                Hiển thị 0 - 0 trên 0 tài khoản
+              </div>
+              <div class="pagination-controls">
+                <span>Số dòng:</span>
+                <select id="users-limit-select" class="form-input" style="height: 32px; width: 68px; padding: 2px 6px; font-size: 12px;">
+                  <option value="10">10</option>
+                  <option value="20" selected>20</option>
+                  <option value="50">50</option>
+                </select>
+                <button type="button" id="users-prev-btn" class="btn btn-outline btn-xs" disabled>
+                  &larr; Trước
+                </button>
+                <span id="users-current-page-badge" class="badge badge-neutral font-mono">1 / 1</span>
+                <button type="button" id="users-next-btn" class="btn btn-outline btn-xs" disabled>
+                  Sau &rarr;
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>

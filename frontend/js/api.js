@@ -2,6 +2,11 @@
  * ATS API Client
  */
 const API_BASE = (function() {
+  // Node-served shell declares its same-origin API, including isolated test ports.
+  if (typeof document !== 'undefined') {
+    const base = document.querySelector('meta[name="ats-api-base"]');
+    if (base) return base.getAttribute('content');
+  }
   if (typeof window !== 'undefined' && window.location) {
     const proto = window.location.protocol;
     const host = window.location.hostname;

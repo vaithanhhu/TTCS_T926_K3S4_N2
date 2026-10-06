@@ -1,0 +1,82 @@
+<div id="requisition-detail-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="req-detail-title">
+    <div class="modal-card" style="max-width: 600px;">
+      <div class="modal-header">
+        <h3 id="req-detail-title" class="modal-title">Chi Tiết Vị Trí Tuyển Dụng</h3>
+        <button type="button" id="close-req-detail-modal" class="modal-close" aria-label="Đóng">&times;</button>
+      </div>
+      <p class="modal-desc">Xem xét và điều chỉnh thông tin vị trí, chỉ tiêu tuyển dụng và trạng thái mở đợt.</p>
+
+      <div class="modal-body">
+        <div id="req-detail-alert" class="alert alert-danger hidden" style="margin-bottom: 14px;">
+          <span id="req-detail-alert-msg"></span>
+        </div>
+
+        <div style="background: var(--color-bg-page); border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <div style="font-size: 0.775rem; color: var(--color-text-muted);">Mã vị trí tuyển dụng:</div>
+            <code class="font-mono" id="req-detail-code" style="color: var(--color-primary); font-weight: 700; font-size: 1rem;">REQ-2026-001</code>
+          </div>
+          <span id="req-detail-status-badge" class="badge badge-primary">Đang mở</span>
+        </div>
+
+        <form id="req-detail-form">
+          <input type="hidden" id="req-detail-id" />
+
+          <div class="form-group">
+            <label for="req-detail-title-input" class="form-label">Tiêu đề vị trí tuyển dụng <span class="required">*</span></label>
+            <input type="text" id="req-detail-title-input" class="form-input" required />
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 12px;">
+            <div class="form-group">
+              <label for="req-detail-dept-input" class="form-label">Phòng ban phụ trách <span class="required">*</span></label>
+              <input type="text" id="req-detail-dept-input" class="form-input" required />
+            </div>
+            <div class="form-group">
+              <label for="req-detail-headcount-input" class="form-label">Chỉ tiêu (Người) <span class="required">*</span></label>
+              <input type="number" id="req-detail-headcount-input" class="form-input" min="1" max="500" required />
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="form-group">
+              <label for="req-detail-work-location-select" class="form-label">Địa điểm làm việc</label>
+              <select id="req-detail-work-location-select" class="form-input">
+                <option value="">-- Chưa xác định --</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="req-detail-work-mode-select" class="form-label">Hình thức làm việc</label>
+              <select id="req-detail-work-mode-select" class="form-input">
+                <option value="">-- Chưa xác định --</option>
+              </select>
+            </div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="form-group">
+              <label for="req-detail-status-select" class="form-label">Trạng thái đợt tuyển</label>
+              <select id="req-detail-status-select" class="form-input">
+                <option value="OPEN">Đang mở tuyển (OPEN)</option>
+                <option value="IN_PROGRESS">Đang phỏng vấn (IN_PROGRESS)</option>
+                <option value="CLOSED">Đã đóng / Đủ chỉ tiêu (CLOSED)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="req-detail-recruiter-select" class="form-label">Chuyên viên phụ trách</label>
+              <select id="req-detail-recruiter-select" class="form-input">
+                <option value="">-- Chưa chỉ định --</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px;">
+            <button type="button" id="cancel-req-detail-btn" class="btn btn-outline btn-sm">Hủy bỏ</button>
+            <button type="submit" id="submit-req-detail-btn" class="btn btn-primary btn-sm">
+              <span>Lưu thay đổi</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>

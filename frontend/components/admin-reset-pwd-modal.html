@@ -1,0 +1,33 @@
+<div id="admin-reset-pwd-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="admin-reset-title">
+    <div class="modal-card" style="max-width: 480px;">
+      <div class="modal-header">
+        <h3 id="admin-reset-title" class="modal-title">Đặt Lại Mật Khẩu Tài Khoản</h3>
+        <button type="button" id="close-admin-reset-pwd-modal" class="modal-close" aria-label="Đóng">&times;</button>
+      </div>
+      <p class="modal-desc">Khởi tạo mật khẩu tạm mới cho nhân viên. Các phiên đăng nhập hiện tại sẽ bị hủy.</p>
+
+      <div class="modal-body">
+        <input type="hidden" id="admin-reset-user-id" />
+        <div style="background: var(--color-bg-page); border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 16px;">
+          <div>Nhân sự: <strong id="admin-reset-user-name">Đang tải...</strong></div>
+          <div style="color: var(--color-text-secondary); font-size: 0.85rem; margin-top: 2px;">Email: <span id="admin-reset-user-email"></span></div>
+        </div>
+
+        <div id="admin-reset-result-box" class="hidden" style="background: var(--color-success-bg); border: 1px solid var(--color-success-border); border-radius: var(--radius-sm); padding: 14px; margin-bottom: 16px;">
+          <div style="color: var(--color-success-text); font-weight: 600; font-size: 0.9rem;">Mật khẩu tạm mới đã tạo:</div>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 8px;">
+            <code class="font-mono" id="admin-reset-new-pwd-display" style="font-size: 1.15rem; font-weight: 700; color: var(--color-success);">Ats@Temp1234</code>
+            <button type="button" id="admin-reset-copy-pwd-btn" class="btn btn-outline btn-xs" style="background: #fff;">Sao chép</button>
+          </div>
+          <div style="font-size: 0.775rem; color: var(--color-text-muted); margin-top: 6px;">Thông tin đã được gửi qua email của nhân viên.</div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+          <button type="button" id="cancel-admin-reset-pwd-btn" class="btn btn-outline btn-sm">Đóng</button>
+          <button type="button" id="confirm-admin-reset-pwd-btn" class="btn btn-primary btn-sm" style="background: var(--color-warning); border-color: var(--color-warning); color: #000;">
+            <span>Xác nhận Đặt lại mật khẩu</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>

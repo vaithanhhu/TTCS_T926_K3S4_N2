@@ -397,7 +397,7 @@ class AuthService {
 
   /**
    * Request Password Reset Link & 6-digit OTP (S1-03 AC-01 & AC-03)
-   * Sends real email to the exact address provided if it exists in users table.
+   * Dispatches email to the registered account address using the configured mode.
    * @param {string} email
    * @param {string} ipAddress
    * @returns {object} Response
@@ -425,7 +425,7 @@ class AuthService {
       const tokenId = 'rst-' + crypto.randomUUID();
       const otpId = 'otp-' + crypto.randomUUID();
       resetExpiresAt = new Date(Date.now() + config.PASSWORD_RESET_TTL_MINUTES * 60 * 1000).toISOString();
-      const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 minutes expiry
+      const otpExpiresAt = new Date(Date.now() + config.PASSWORD_RESET_OTP_TTL_MINUTES * 60 * 1000).toISOString();
 
       // Invalidate previous unused reset tokens & OTPs for this user
       this.db.prepare('DELETE FROM password_reset_tokens WHERE user_id = ? AND used_at IS NULL').run(user.id);
@@ -441,25 +441,25 @@ class AuthService {
         VALUES (?, ?, ?, ?, datetime('now'))
       `).run(tokenId, user.id, resetToken, resetExpiresAt);
 
-      // Save 6-digit numeric OTP in DB (valid for 10 minutes)
+      // Save PASSWORD_RESET OTP using its own TTL, separate from reset tokens.
       try {
         this.db.prepare(`
           INSERT INTO otps (id, email, otp_code, purpose, expires_at, created_at)
           VALUES (?, ?, ?, 'PASSWORD_RESET', ?, datetime('now'))
         `).run(otpId, normalizedEmail, otpCode, otpExpiresAt);
       } catch (err) {
-        console.error('[AuthService] Could not insert OTP:', err.message);
+        console.error('[AuthService] Could not insert password reset OTP.');
       }
 
       this.logAudit(normalizedEmail, ipAddress, 'SUCCESS', 'Yêu cầu đặt lại mật khẩu. Đã tạo OTP 6 số và token 30 phút.');
 
       // Dispatch real transactional emails to the EXACT user email
       if (this.emailService) {
-        this.emailService.sendOtpEmail(normalizedEmail, otpCode, user.full_name).catch(err => {
-          console.error('[AuthService] Error dispatching OTP email:', err.message);
+        this.emailService.sendOtpEmail(user.email, otpCode, user.full_name).catch(() => {
+          console.error('[AuthService] Error dispatching OTP email.');
         });
-        this.emailService.sendPasswordResetEmail(normalizedEmail, resetToken, resetExpiresAt).catch(err => {
-          console.error('[AuthService] Error dispatching reset email:', err.message);
+        this.emailService.sendPasswordResetEmail(user.email, resetToken, resetExpiresAt).catch(() => {
+          console.error('[AuthService] Error dispatching reset email.');
         });
       }
     } else {
@@ -474,11 +474,6 @@ class AuthService {
       message: 'Nếu email tồn tại trong hệ thống, mã xác thực OTP và hướng dẫn đặt lại mật khẩu đã được gửi đến email của bạn.',
       code: 'RESET_LINK_SENT'
     };
-
-    // Keep token in response for test runner compatibility during integration tests
-    if (process.env.NODE_ENV === 'test' || (process.argv[1] && (process.argv[1].includes('tests') || process.argv[1].includes('test_s1_')))) {
-      response.demoResetToken = resetToken;
-    }
 
     return response;
   }
@@ -502,7 +497,7 @@ class AuthService {
     if (user && user.status === 'ACTIVE') {
       const otpCode = this.generateOtp();
       const otpId = 'otp-' + crypto.randomUUID();
-      const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+      const otpExpiresAt = new Date(Date.now() + config.PASSWORD_RESET_OTP_TTL_MINUTES * 60 * 1000).toISOString();
 
       // Invalidate previous OTPs
       try {
@@ -512,14 +507,14 @@ class AuthService {
           VALUES (?, ?, ?, 'PASSWORD_RESET', ?, datetime('now'))
         `).run(otpId, normalizedEmail, otpCode, otpExpiresAt);
       } catch (err) {
-        console.error('[AuthService] Could not resend OTP:', err.message);
+        console.error('[AuthService] Could not resend password reset OTP.');
       }
 
       this.logAudit(normalizedEmail, ipAddress, 'SUCCESS', 'Gửi lại mã OTP xác thực khôi phục mật khẩu.');
 
       if (this.emailService) {
-        this.emailService.sendOtpEmail(normalizedEmail, otpCode, user.full_name).catch(err => {
-          console.error('[AuthService] Error resending OTP email:', err.message);
+        this.emailService.sendOtpEmail(user.email, otpCode, user.full_name).catch(() => {
+          console.error('[AuthService] Error resending OTP email.');
         });
       }
     }
@@ -568,11 +563,11 @@ class AuthService {
       };
     }
 
-    if (new Date(otpRow.expires_at).getTime() < Date.now()) {
+    if (new Date(otpRow.expires_at).getTime() <= Date.now()) {
       return {
         valid: false,
         statusCode: 400,
-        message: 'Mã OTP đã hết hạn (chỉ có hiệu lực trong vòng 10 phút). Vui lòng yêu cầu mã mới.',
+        message: `Mã OTP đã hết hạn (chỉ có hiệu lực trong vòng ${config.PASSWORD_RESET_OTP_TTL_MINUTES} phút). Vui lòng yêu cầu mã mới.`,
         code: 'OTP_EXPIRED'
       };
     }
@@ -721,8 +716,8 @@ class AuthService {
 
     // Dispatch confirmation email
     if (this.emailService && targetEmail) {
-      this.emailService.sendPasswordChangedEmail(targetEmail).catch(err => {
-        console.error('[AuthService] Error dispatching password changed email:', err.message);
+      this.emailService.sendPasswordChangedEmail(targetEmail).catch(() => {
+        console.error('[AuthService] Error dispatching password changed email.');
       });
     }
 

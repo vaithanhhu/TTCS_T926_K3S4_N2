@@ -1,0 +1,81 @@
+<div id="question-bank-view" class="hidden">
+          <div class="view-header">
+            <div class="view-title-group">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h2>Ngân hàng câu hỏi phỏng vấn</h2>
+                <span id="question-bank-total-badge" class="badge badge-primary font-mono">0 câu hỏi</span>
+              </div>
+              <p>Quản lý và tra cứu câu hỏi phỏng vấn theo chức danh và tiêu chí trong khung năng lực</p>
+            </div>
+
+            <div style="display: flex; gap: 8px;">
+              <button
+                type="button"
+                id="question-bank-create-btn"
+                class="btn btn-primary btn-sm"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2.5"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                <span> Thêm câu hỏi</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="filter-toolbar">
+            <div class="toolbar-filters">
+              <div style="min-width: 240px; flex: 1;">
+                <input
+                  type="text"
+                  id="question-bank-search-input"
+                  class="form-input"
+                  placeholder="Tìm nội dung câu hỏi, gợi ý trả lời..."
+                />
+              </div>
+
+              <div style="width: 220px;">
+                <select id="question-bank-job-title-filter" class="form-input">
+                  <option value="">Tất cả chức danh</option>
+                </select>
+              </div>
+
+              <div style="width: 220px;">
+                <select id="question-bank-criterion-filter" class="form-input">
+                  <option value="">Tất cả tiêu chí</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <button
+                type="button"
+                id="question-bank-refresh-btn"
+                class="btn btn-outline btn-sm"
+              >
+                Lọc / Làm mới
+              </button>
+            </div>
+          </div>
+
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Câu hỏi</th>
+                  <th>Tiêu chí</th>
+                  <th>Khung năng lực</th>
+                  <th>Mức độ</th>
+                  <th>Gợi ý câu trả lời tốt</th>
+                  <th>Trạng thái</th>
+                  <th style="text-align: center;">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="question-bank-table-body">
+                <!-- Injected by JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>

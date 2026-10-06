@@ -1,0 +1,45 @@
+<div id="assign-roles-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="assign-roles-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="assign-roles-title" class="modal-title">Phân quyền & Gán vai trò</h3>
+        <button type="button" id="close-assign-roles-modal" class="modal-close" aria-label="Đóng">&times;</button>
+      </div>
+      <p class="modal-desc">Người dùng có thể giữ nhiều vai trò đồng thời. Quyền hạn mới sẽ có hiệu lực ngay lập tức.</p>
+
+      <div class="modal-body">
+        <div style="background: var(--color-bg-page); border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 14px; font-size: 0.85rem;">
+          <div>Tài khoản: <strong id="assign-roles-user-name" style="color: var(--color-primary);"></strong> (<span id="assign-roles-user-email" class="font-mono"></span>)</div>
+          <input type="hidden" id="assign-roles-user-id" />
+        </div>
+
+        <div id="assign-roles-alert" class="alert-box hidden" role="alert">
+          <div class="alert-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+          </div>
+          <div class="alert-content">
+            <p id="assign-roles-alert-msg" style="margin: 0;"></p>
+          </div>
+        </div>
+
+        <div id="assign-roles-self-warning" class="hidden" style="background: var(--color-warning-bg); border: 1px solid var(--color-warning-border); border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 14px; font-size: 0.825rem; color: var(--color-warning-text);">
+          <strong>Lưu ý:</strong> Bạn đang thao tác trên tài khoản của chính mình. Hệ thống bảo vệ sẽ chặn thao tác tự thu hồi quyền Quản trị viên (ADMIN).
+        </div>
+
+        <form id="assign-roles-form">
+          <div class="form-group">
+            <label class="form-label">Chọn các vai trò áp dụng:</label>
+            <div id="assign-roles-checkbox-container" style="display: flex; flex-direction: column; gap: 8px; max-height: 250px; overflow-y: auto; padding: 10px; background: var(--color-bg-page); border: 1px solid var(--color-border); border-radius: var(--radius-sm);">
+              <!-- Checkboxes injected by JS -->
+            </div>
+          </div>
+
+          <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 10px;">
+            <button type="button" id="cancel-assign-roles-btn" class="btn btn-outline btn-sm">Hủy bỏ</button>
+            <button type="submit" id="assign-roles-submit-btn" class="btn btn-primary btn-sm">
+              <span>Cập nhật phân quyền</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>

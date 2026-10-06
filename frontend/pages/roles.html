@@ -1,0 +1,26 @@
+<div id="roles-view" class="hidden">
+          <div class="view-header">
+            <div class="view-title-group">
+              <h2>Vai trò & Ma trận Phân quyền</h2>
+              <p>Mô hình phân quyền kiểm soát truy cập theo vai trò (RBAC) thực tế được thiết lập trong CSDL</p>
+            </div>
+          </div>
+
+          <!-- Role Cards Grid -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--space-4); margin-bottom: var(--space-6);" id="roles-cards-container">
+            <!-- Injected by JS -->
+          </div>
+
+          <!-- Matrix Table -->
+          <div class="panel-card">
+            <div class="panel-header">
+              <div class="panel-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                <span>Ma trận Phân quyền 7 Vai trò theo Phân hệ Chức năng</span>
+              </div>
+            </div>
+            <div class="table-wrapper" id="rbac-matrix-table-container">
+              <!-- Dynamically filled table -->
+            </div>
+          </div>
+        </div>

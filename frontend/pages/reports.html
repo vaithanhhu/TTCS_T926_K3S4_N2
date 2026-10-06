@@ -1,0 +1,88 @@
+<div id="reports-view" class="hidden">
+          <div class="view-header">
+            <div class="view-title-group">
+              <h2>Báo cáo & Phân tích Tuyển dụng</h2>
+              <p>Chỉ số hiệu quả tuyển dụng (Recruitment Metrics), thời gian tuyển dụng và tỷ lệ chuyển đổi</p>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button type="button" id="reports-export-btn" class="btn btn-outline btn-sm">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                <span>Xuất Báo Cáo (CSV)</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Reports KPI Grid -->
+          <div class="kpi-grid">
+            <div class="kpi-card">
+              <div class="kpi-card-header">
+                <span class="kpi-card-title">Thời gian tuyển dụng trung bình</span>
+                <span class="kpi-card-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                </span>
+              </div>
+              <div class="kpi-card-val" id="report-time-to-hire">21 ngày</div>
+              <div class="kpi-card-sub">Thời gian từ lúc mở tin đến khi chốt offer</div>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-card-header">
+                <span class="kpi-card-title">Tỷ lệ chấp thuận Offer</span>
+                <span class="kpi-card-icon success">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </span>
+              </div>
+              <div class="kpi-card-val" id="report-offer-acceptance">88.5%</div>
+              <div class="kpi-card-sub">Ứng viên đồng ý trên tổng số offer phát hành</div>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-card-header">
+                <span class="kpi-card-title">Chỉ tiêu hoàn thành</span>
+                <span class="kpi-card-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                </span>
+              </div>
+              <div class="kpi-card-val" id="report-fill-rate">76%</div>
+              <div class="kpi-card-sub">Số vị trí đã tuyển thành công trong quý</div>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-card-header">
+                <span class="kpi-card-title">Ứng viên mới trong tháng</span>
+                <span class="kpi-card-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
+                </span>
+              </div>
+              <div class="kpi-card-val" id="report-new-candidates">0</div>
+              <div class="kpi-card-sub">Thu hút từ các nguồn nội bộ và giới thiệu</div>
+            </div>
+          </div>
+
+          <!-- Report Details -->
+          <div class="panel-card">
+            <div class="panel-header">
+              <div class="panel-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+                <span>Bảng Thống kê Hiệu quả Tuyển dụng theo Phòng ban</span>
+              </div>
+            </div>
+            <div class="table-wrapper">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Khối / Phòng ban</th>
+                    <th style="text-align: center;">Vị trí cần tuyển</th>
+                    <th style="text-align: center;">Chỉ tiêu tuyển dụng</th>
+                    <th style="text-align: center;">Hồ sơ tiếp nhận</th>
+                    <th style="text-align: center;">Đã hoàn thành</th>
+                    <th style="text-align: center;">Tỷ lệ đạt</th>
+                  </tr>
+                </thead>
+                <tbody id="report-dept-table-body">
+                  <!-- Dynamically filled -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>

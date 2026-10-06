@@ -1,0 +1,45 @@
+<div id="edit-user-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="edit-user-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="edit-user-title" class="modal-title">Cập nhật hồ sơ tài khoản</h3>
+        <button type="button" id="close-edit-user-modal" class="modal-close" aria-label="Đóng">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="edit-user-alert" class="alert-box hidden" role="alert">
+          <div class="alert-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+          </div>
+          <div class="alert-content">
+            <p id="edit-user-alert-msg" style="margin: 0;"></p>
+          </div>
+        </div>
+
+        <form id="edit-user-form">
+          <input type="hidden" id="edit-user-id" />
+          <div class="form-group">
+            <label class="form-label">Email tài khoản (không thay đổi)</label>
+            <input type="text" id="edit-user-email" class="form-input" disabled style="background: var(--color-bg-subtle); cursor: not-allowed;" />
+          </div>
+          <div class="form-group">
+            <label for="edit-user-fullname" class="form-label">Họ và tên <span class="required">*</span></label>
+            <input type="text" id="edit-user-fullname" class="form-input" required />
+          </div>
+          <div class="form-group">
+            <label for="edit-user-jobtitle" class="form-label">Chức danh</label>
+            <input type="text" id="edit-user-jobtitle" class="form-input" />
+          </div>
+          <div class="form-group">
+            <label for="edit-user-department" class="form-label">Phòng ban</label>
+            <input type="text" id="edit-user-department" class="form-input" />
+          </div>
+          <div class="form-group">
+            <label for="edit-user-phone" class="form-label">Số điện thoại</label>
+            <input type="text" id="edit-user-phone" class="form-input" />
+          </div>
+          <button type="submit" id="edit-user-submit-btn" class="btn btn-primary btn-block">
+            <span>Lưu thay đổi</span>
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
