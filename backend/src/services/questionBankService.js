@@ -6,7 +6,7 @@ class QuestionBankService {
     this.db = db || getDatabase();
   }
 
-  getQuestions(options = {}) {
+  async getQuestions(options = {}) {
     const search =
       typeof options.search === 'string'
         ? options.search.trim()
@@ -90,7 +90,7 @@ class QuestionBankService {
         ? `WHERE ${conditions.join(' AND ')}`
         : '';
 
-    const rows = this.db.prepare(`
+    const rows = (await this.db.prepare(`
       SELECT
         iq.id,
         iq.criterion_id,
@@ -114,7 +114,7 @@ class QuestionBankService {
         cf.name ASC,
         cc.display_order ASC,
         iq.created_at DESC
-    `).all(...params);
+    `).all(...params));
 
     return {
       success: true,
@@ -125,8 +125,8 @@ class QuestionBankService {
     };
   }
 
-  getFilterOptions() {
-    const jobTitles = this.db.prepare(`
+  async getFilterOptions() {
+    const jobTitles = (await this.db.prepare(`
       SELECT
         jt.id,
         jt.code,
@@ -139,7 +139,7 @@ class QuestionBankService {
       WHERE jt.status = 'ACTIVE'
         AND cf.status = 'ACTIVE'
       ORDER BY jt.name COLLATE NOCASE ASC
-    `).all().map(row => ({
+    `).all()).map(row => ({
       id: row.id,
       code: row.code,
       name: row.name,
@@ -147,7 +147,7 @@ class QuestionBankService {
       frameworkName: row.framework_name
     }));
 
-    const criteria = this.db.prepare(`
+    const criteria = (await this.db.prepare(`
       SELECT
         cc.id,
         cc.name,
@@ -163,7 +163,7 @@ class QuestionBankService {
         cf.name COLLATE NOCASE ASC,
         cc.display_order ASC,
         cc.name COLLATE NOCASE ASC
-    `).all().map(row => ({
+    `).all()).map(row => ({
       id: row.id,
       name: row.name,
       frameworkId: row.framework_id,
@@ -178,10 +178,10 @@ class QuestionBankService {
     };
   }
 
-  getQuestionById(id) {
+  async getQuestionById(id) {
     if (!id) return null;
 
-    const row = this.db.prepare(`
+    const row = (await this.db.prepare(`
       SELECT
         iq.id,
         iq.criterion_id,
@@ -201,7 +201,7 @@ class QuestionBankService {
       JOIN competency_frameworks cf
         ON cc.framework_id = cf.id
       WHERE iq.id = ?
-    `).get(id);
+    `).get(id));
 
     return row
       ? this.mapQuestion(row)
@@ -229,10 +229,10 @@ class QuestionBankService {
     };
   }
 
-  getCriterion(criterionId) {
+  async getCriterion(criterionId) {
     if (!criterionId) return null;
 
-    return this.db.prepare(`
+    return (await this.db.prepare(`
       SELECT
         cc.id,
         cc.name,
@@ -242,7 +242,7 @@ class QuestionBankService {
       JOIN competency_frameworks cf
         ON cc.framework_id = cf.id
       WHERE cc.id = ?
-    `).get(criterionId);
+    `).get(criterionId));
   }
 
   validateDifficulty(value) {
@@ -270,7 +270,7 @@ class QuestionBankService {
     };
   }
 
-  createQuestion(data = {}) {
+  async createQuestion(data = {}) {
     const criterionId =
       typeof data.criterionId === 'string'
         ? data.criterionId.trim()
@@ -310,7 +310,7 @@ class QuestionBankService {
     }
 
     const criterion =
-      this.getCriterion(criterionId);
+      (await this.getCriterion(criterionId));
 
     if (!criterion) {
       return {
@@ -337,7 +337,7 @@ class QuestionBankService {
     const id =
       `iq-${crypto.randomUUID()}`;
 
-    this.db.prepare(`
+    (await this.db.prepare(`
       INSERT INTO interview_questions (
         id,
         criterion_id,
@@ -360,23 +360,23 @@ class QuestionBankService {
       questionText,
       difficultyValidation.difficulty,
       goodAnswerHint
-    );
+    ));
 
     return {
       success: true,
       statusCode: 201,
       message:
         'Tạo câu hỏi phỏng vấn thành công.',
-      data: this.getQuestionById(id)
+      data: (await this.getQuestionById(id))
     };
   }
 
-  updateQuestion(id, data = {}) {
+  async updateQuestion(id, data = {}) {
     if (['criterionId', 'questionText', 'goodAnswerHint'].some(key => Object.hasOwn(data, key) && (typeof data[key] !== 'string' || !data[key].trim()))) {
       return { success: false, statusCode: 400, code: 'INTERVIEW_QUESTION_REQUIRED', message: 'Tiêu chí, câu hỏi và gợi ý trả lời không hợp lệ.' };
     }
     const current =
-      this.getQuestionById(id);
+      (await this.getQuestionById(id));
 
     if (!current) {
       return {
@@ -416,7 +416,7 @@ class QuestionBankService {
     }
 
     const criterion =
-      this.getCriterion(criterionId);
+      (await this.getCriterion(criterionId));
 
     if (!criterion) {
       return {
@@ -449,7 +449,7 @@ class QuestionBankService {
       };
     }
 
-    this.db.prepare(`
+    (await this.db.prepare(`
       UPDATE interview_questions
       SET
         criterion_id = ?,
@@ -466,14 +466,14 @@ class QuestionBankService {
       goodAnswerHint,
       requestedStatus,
       id
-    );
+    ));
 
     return {
       success: true,
       statusCode: 200,
       message:
         'Cập nhật câu hỏi phỏng vấn thành công.',
-      data: this.getQuestionById(id)
+      data: (await this.getQuestionById(id))
     };
   }
 }

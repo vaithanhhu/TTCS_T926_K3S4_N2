@@ -47,7 +47,7 @@ async function runTests() {
   console.log('================================================================');
 
   const db = getDatabase();
-  seedDatabase(db);
+  (await seedDatabase(db));
 
   await startServer(TEST_PORT);
   console.log(`[Test S1-10] Server started on port ${TEST_PORT}\n`);
@@ -81,7 +81,7 @@ async function runTests() {
     assert.strictEqual(lockRes.body.data.user.lockReason, lockReason);
 
     // Kiểm tra trực tiếp bảng SQLite users
-    const dbUser = db.prepare('SELECT status, lock_reason FROM users WHERE id = ?').get('usr-dev-01');
+    const dbUser = (await db.prepare('SELECT status, lock_reason FROM users WHERE id = ?').get('usr-dev-01'));
     assert.strictEqual(dbUser.status, 'LOCKED');
     assert.strictEqual(dbUser.lock_reason, lockReason);
     console.log('   ✓ CSDL SQLite cập nhật chính xác status = LOCKED và lưu đúng lock_reason.');
@@ -144,7 +144,7 @@ async function runTests() {
     assert(postLockCheck.body.code === 'ACCOUNT_LOCKED' || postLockCheck.body.code === 'INVALID_SESSION');
 
     // Kiểm tra bảng sessions trong CSDL: token của usr-dev-02 không còn tồn tại
-    const sessionCount = db.prepare('SELECT COUNT(*) AS cnt FROM sessions WHERE user_id = ?').get('usr-dev-02').cnt;
+    const sessionCount = (await db.prepare('SELECT COUNT(*) AS cnt FROM sessions WHERE user_id = ?').get('usr-dev-02')).cnt;
     assert.strictEqual(sessionCount, 0, 'Toàn bộ phiên của người dùng bị khóa phải bị xóa khỏi bảng sessions');
     console.log('   ✓ Phiên đăng nhập đang mở bị thu hồi tức thời, request tiếp theo bị từ chối và xóa khỏi DB.');
     passedTests++;
@@ -211,11 +211,11 @@ async function runTests() {
     assert(reqCodes.includes('REQ-2026-003'));
 
     // Kiểm tra CSDL SQLite bảng requisitions xem handover_required đã được bật thành 1
-    const dbReqs = db.prepare(`
+    const dbReqs = (await db.prepare(`
       SELECT code, handover_required, handover_notes
       FROM requisitions
       WHERE recruiter_id = ?
-    `).all('usr-recruiter');
+    `).all('usr-recruiter'));
 
     assert.strictEqual(dbReqs.length, 2);
     for (const r of dbReqs) {
@@ -243,7 +243,7 @@ async function runTests() {
     assert.strictEqual(selfLockRes.status, 400);
     assert.strictEqual(selfLockRes.body.code, 'CANNOT_LOCK_OWN_ACCOUNT');
 
-    const adminStatus = db.prepare('SELECT status FROM users WHERE id = ?').get('usr-admin').status;
+    const adminStatus = (await db.prepare('SELECT status FROM users WHERE id = ?').get('usr-admin')).status;
     assert.strictEqual(adminStatus, 'ACTIVE', 'Admin phải luôn giữ trạng thái ACTIVE');
     console.log('   ✓ Hệ thống từ chối HTTP 400 CANNOT_LOCK_OWN_ACCOUNT khi Admin cố tự khóa chính mình.');
     passedTests++;
@@ -312,7 +312,7 @@ async function runTests() {
     console.log(`KẾT QUẢ TEST S1-10: TẤT CẢ ${passedTests}/8 TESTS ĐÃ PASS 100%!`);
     console.log('================================================================');
   } finally {
-    seedDatabase(db);
+    (await seedDatabase(db));
     server.close();
   }
 }

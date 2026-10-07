@@ -6,8 +6,8 @@ class DepartmentService {
     this.db = db || getDatabase();
   }
 
-  getDepartments() {
-    const rows = this.db.prepare(`
+  async getDepartments() {
+    const rows = (await this.db.prepare(`
       SELECT
         d.id,
         d.code,
@@ -31,7 +31,7 @@ class DepartmentService {
       FROM departments d
       LEFT JOIN users u ON d.manager_id = u.id
       ORDER BY d.name ASC
-    `).all();
+    `).all());
 
     const mapped = rows.map(row => ({
       id: row.id,
@@ -57,10 +57,10 @@ class DepartmentService {
     };
   }
 
-  getDepartmentById(id) {
+  async getDepartmentById(id) {
     if (!id) return null;
 
-    const row = this.db.prepare(`
+    const row = (await this.db.prepare(`
       SELECT
         d.id,
         d.code,
@@ -75,7 +75,7 @@ class DepartmentService {
       FROM departments d
       LEFT JOIN users u ON d.manager_id = u.id
       WHERE d.id = ?
-    `).get(id);
+    `).get(id));
 
     if (!row) return null;
 
@@ -95,26 +95,26 @@ class DepartmentService {
     };
   }
 
-  createDepartment(data = {}) {
+  async createDepartment(data = {}) {
     const code = typeof data.code === 'string' ? data.code.trim().toUpperCase() : '';
     const name = typeof data.name === 'string' ? data.name.trim() : '';
     const parentId = data.parentId || null;
     const managerId = data.managerId || null;
 
-    const validation = this.validateDepartmentInput({
+    const validation = (await this.validateDepartmentInput({
       code,
       name,
       parentId,
       managerId
-    });
+    }));
 
     if (!validation.success) return validation;
 
-    const duplicate = this.db.prepare(`
+    const duplicate = (await this.db.prepare(`
       SELECT id
       FROM departments
       WHERE code = ?
-    `).get(code);
+    `).get(code));
 
     if (duplicate) {
       return {
@@ -127,26 +127,26 @@ class DepartmentService {
 
     const id = `dept-${crypto.randomUUID()}`;
 
-    this.db.prepare(`
+    (await this.db.prepare(`
       INSERT INTO departments (
         id, code, name, parent_id, manager_id, status, created_at, updated_at
       )
       VALUES (?, ?, ?, ?, ?, 'ACTIVE', datetime('now'), datetime('now'))
-    `).run(id, code, name, parentId, managerId);
+    `).run(id, code, name, parentId, managerId));
 
     return {
       success: true,
       statusCode: 201,
       message: 'Tạo phòng ban thành công.',
-      data: this.getDepartmentById(id)
+      data: (await this.getDepartmentById(id))
     };
   }
 
-  updateDepartment(id, data = {}) {
+  async updateDepartment(id, data = {}) {
     if (['code', 'name'].some(key => Object.hasOwn(data, key) && (typeof data[key] !== 'string' || !data[key].trim()))) {
       return { success: false, statusCode: 400, code: 'INVALID_DEPARTMENT_INPUT', message: 'Mã và tên phòng ban không hợp lệ.' };
     }
-    const current = this.getDepartmentById(id);
+    const current = (await this.getDepartmentById(id));
 
     if (!current) {
       return {
@@ -180,7 +180,7 @@ class DepartmentService {
       };
     }
 
-    if (parentId && this.wouldCreateCycle(id, parentId)) {
+    if (parentId && (await this.wouldCreateCycle(id, parentId))) {
       return {
         success: false,
         statusCode: 400,
@@ -189,20 +189,20 @@ class DepartmentService {
       };
     }
 
-    const validation = this.validateDepartmentInput({
+    const validation = (await this.validateDepartmentInput({
       code,
       name,
       parentId,
       managerId
-    });
+    }));
 
     if (!validation.success) return validation;
 
-    const duplicate = this.db.prepare(`
+    const duplicate = (await this.db.prepare(`
       SELECT id
       FROM departments
       WHERE code = ? AND id <> ?
-    `).get(code, id);
+    `).get(code, id));
 
     if (duplicate) {
       return {
@@ -213,7 +213,7 @@ class DepartmentService {
       };
     }
 
-    this.db.prepare(`
+    (await this.db.prepare(`
       UPDATE departments
       SET
         code = ?,
@@ -222,18 +222,18 @@ class DepartmentService {
         manager_id = ?,
         updated_at = datetime('now')
       WHERE id = ?
-    `).run(code, name, parentId, managerId, id);
+    `).run(code, name, parentId, managerId, id));
 
     return {
       success: true,
       statusCode: 200,
       message: 'Cập nhật phòng ban thành công.',
-      data: this.getDepartmentById(id)
+      data: (await this.getDepartmentById(id))
     };
   }
 
-  deactivateDepartment(id) {
-    const department = this.getDepartmentById(id);
+  async deactivateDepartment(id) {
+    const department = (await this.getDepartmentById(id));
 
     if (!department) {
       return {
@@ -244,23 +244,23 @@ class DepartmentService {
       };
     }
 
-    this.db.prepare(`
+    (await this.db.prepare(`
       UPDATE departments
       SET status = 'INACTIVE', updated_at = datetime('now')
       WHERE id = ?
-    `).run(id);
+    `).run(id));
 
     return {
       success: true,
       statusCode: 200,
       code: 'DEPARTMENT_DEACTIVATED',
       message: 'Phòng ban đã được ngừng áp dụng.',
-      data: this.getDepartmentById(id)
+      data: (await this.getDepartmentById(id))
     };
   }
 
-  deleteDepartment(id) {
-    const department = this.getDepartmentById(id);
+  async deleteDepartment(id) {
+    const department = (await this.getDepartmentById(id));
 
     if (!department) {
       return {
@@ -271,7 +271,7 @@ class DepartmentService {
       };
     }
 
-    const openRequisitions = this.db.prepare(`
+    const openRequisitions = (await this.db.prepare(`
       SELECT COUNT(*) AS count
       FROM requisitions
       WHERE (
@@ -279,7 +279,7 @@ class DepartmentService {
         OR (department_id IS NULL AND department_name = ?)
       )
       AND status IN ('OPEN', 'IN_PROGRESS')
-    `).get(id, department.name);
+    `).get(id, department.name));
 
     if (Number(openRequisitions.count || 0) > 0) {
       return {
@@ -291,11 +291,11 @@ class DepartmentService {
       };
     }
 
-    const childCount = this.db.prepare(`
+    const childCount = (await this.db.prepare(`
       SELECT COUNT(*) AS count
       FROM departments
       WHERE parent_id = ?
-    `).get(id);
+    `).get(id));
 
     if (Number(childCount.count || 0) > 0) {
       return {
@@ -306,11 +306,11 @@ class DepartmentService {
       };
     }
 
-    const userCount = this.db.prepare(`
+    const userCount = (await this.db.prepare(`
       SELECT COUNT(*) AS count
       FROM users
       WHERE department_id = ?
-    `).get(id);
+    `).get(id));
 
     if (Number(userCount.count || 0) > 0) {
       return {
@@ -321,11 +321,11 @@ class DepartmentService {
       };
     }
 
-    const requisitionCount = this.db.prepare(`
+    const requisitionCount = (await this.db.prepare(`
       SELECT COUNT(*) AS count
       FROM requisitions
       WHERE department_id = ?
-    `).get(id);
+    `).get(id));
 
     if (Number(requisitionCount.count || 0) > 0) {
       return {
@@ -336,7 +336,7 @@ class DepartmentService {
       };
     }
 
-    this.db.prepare('DELETE FROM departments WHERE id = ?').run(id);
+    (await this.db.prepare('DELETE FROM departments WHERE id = ?').run(id));
 
     return {
       success: true,
@@ -345,7 +345,7 @@ class DepartmentService {
     };
   }
 
-  validateDepartmentInput({ code, name, parentId, managerId }) {
+  async validateDepartmentInput({ code, name, parentId, managerId }) {
     if (!code) {
       return {
         success: false,
@@ -373,11 +373,11 @@ class DepartmentService {
       };
     }
 
-    const manager = this.db.prepare(`
+    const manager = (await this.db.prepare(`
       SELECT id, status
       FROM users
       WHERE id = ?
-    `).get(managerId);
+    `).get(managerId));
 
     if (!manager || manager.status !== 'ACTIVE') {
       return {
@@ -389,11 +389,11 @@ class DepartmentService {
     }
 
     if (parentId) {
-      const parent = this.db.prepare(`
+      const parent = (await this.db.prepare(`
         SELECT id
         FROM departments
         WHERE id = ?
-      `).get(parentId);
+      `).get(parentId));
 
       if (!parent) {
         return {
@@ -408,7 +408,7 @@ class DepartmentService {
     return { success: true };
   }
 
-  wouldCreateCycle(departmentId, parentId) {
+  async wouldCreateCycle(departmentId, parentId) {
     let currentId = parentId;
     const visited = new Set();
 
@@ -418,11 +418,11 @@ class DepartmentService {
 
       visited.add(currentId);
 
-      const row = this.db.prepare(`
+      const row = (await this.db.prepare(`
         SELECT parent_id
         FROM departments
         WHERE id = ?
-      `).get(currentId);
+      `).get(currentId));
 
       currentId = row ? row.parent_id : null;
     }

@@ -57,9 +57,9 @@ async function main() {
     { id: 'clock-midnight', time: '2026-10-04 23:55:00' },
     { id: 'clock-oldest', time: '2026-10-03 08:00:00' }
   ];
-  for (const record of records) db.prepare("INSERT INTO login_audit_logs (id,email,status,attempted_at) VALUES (?,?,'SUCCESS',?)").run(record.id, 'clock-fixture@example.invalid', record.time);
-  await test('datetime', 'SQLite datetime(now) is UTC and has no timezone suffix', () => {
-    const raw = db.prepare("SELECT datetime('now') AS instant").get().instant;
+  for (const record of records) (await db.prepare("INSERT INTO login_audit_logs (id,email,status,attempted_at) VALUES (?,?,'SUCCESS',?)").run(record.id, 'clock-fixture@example.invalid', record.time));
+  await test('datetime', 'SQLite datetime(now) is UTC and has no timezone suffix', async () => {
+    const raw = (await db.prepare("SELECT datetime('now') AS instant").get()).instant;
     assert.match(raw, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
     assert.ok(Math.abs(parseUtcTimestamp(raw).getTime() - Date.now()) < 2000);
   });
@@ -190,7 +190,7 @@ async function main() {
     assert.equal(f.requests.some(req => req.path.includes('audit-logs')), false);
   });
   await test('dashboard', 'Login tracking, stored history, protected audit API and audit page remain', async () => {
-    assert.ok(db.prepare('SELECT COUNT(*) AS count FROM login_audit_logs').get().count >= records.length + 2);
+    assert.ok((await db.prepare('SELECT COUNT(*) AS count FROM login_audit_logs').get()).count >= records.length + 2);
     assert.equal((await api('/admin/audit-logs/clock-normal', admin.token)).data.log.attempted_at, '2026-10-05 14:15:00');
     const f = await runtime('/dashboard'); f.window.ATS_ROUTER.navigate('/admin/audit'); await f.settle();
     assert.equal(f.window.location.pathname, '/admin/audit'); assert.match(f.nodes.get('audit-table-body').innerHTML, /clock-normal/);

@@ -12,7 +12,7 @@ console.log('================================================================\n'
 
 async function runTestSuite() {
   const db = getDatabase(':memory:');
-  seedDatabase(db);
+  (await seedDatabase(db));
 
   const emailService = getEmailService(db);
   const authService = new AuthService(db);
@@ -36,19 +36,19 @@ async function runTestSuite() {
     }
 
     if (pathname === '/api/v1/auth/forgot-password' && req.method === 'POST') {
-      return authController.handleForgotPassword(req, res, body);
+      return (await authController.handleForgotPassword(req, res, body));
     }
     if (pathname === '/api/v1/auth/verify-otp' && req.method === 'POST') {
-      return authController.handleVerifyOtp(req, res, body);
+      return (await authController.handleVerifyOtp(req, res, body));
     }
     if (pathname === '/api/v1/auth/resend-otp' && req.method === 'POST') {
-      return authController.handleResendOtp(req, res, body);
+      return (await authController.handleResendOtp(req, res, body));
     }
     if (pathname === '/api/v1/auth/reset-password' && req.method === 'POST') {
-      return authController.handleResetPassword(req, res, body);
+      return (await authController.handleResetPassword(req, res, body));
     }
     if (pathname === '/api/v1/auth/login' && req.method === 'POST') {
-      return authController.handleLogin(req, res, body);
+      return (await authController.handleLogin(req, res, body));
     }
 
     res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -88,7 +88,7 @@ async function runTestSuite() {
   assert.strictEqual(otpEmail.to, existingEmail, 'Recipient email must match the exact entered email');
   
   // Verify OTP was stored in DB
-  const otpRow1 = db.prepare('SELECT * FROM otps WHERE email = ? AND used_at IS NULL ORDER BY created_at DESC LIMIT 1').get(existingEmail);
+  const otpRow1 = (await db.prepare('SELECT * FROM otps WHERE email = ? AND used_at IS NULL ORDER BY created_at DESC LIMIT 1').get(existingEmail));
   assert.ok(otpRow1, 'OTP must exist in database');
   assert.strictEqual(otpRow1.otp_code.length, 6, 'OTP must be 6 digits');
   assert.ok(/^\d{6}$/.test(otpRow1.otp_code), 'OTP must be numeric');
@@ -104,7 +104,7 @@ async function runTestSuite() {
   assert.strictEqual(res2.status, 200, 'Security: Returns 200 to prevent user enumeration');
   assert.strictEqual(emailService.sentEmails.length, 0, 'Must NOT send any email when user does not exist');
   
-  const ghostOtp = db.prepare('SELECT * FROM otps WHERE email = ?').get(nonExistentEmail);
+  const ghostOtp = (await db.prepare('SELECT * FROM otps WHERE email = ?').get(nonExistentEmail));
   assert.strictEqual(ghostOtp, undefined, 'No OTP must be generated for non-existent email');
   console.log('   ✓ PASS: Không tạo OTP và không gửi bất kỳ email nào khi email không tồn tại.');
 
@@ -138,10 +138,10 @@ async function runTestSuite() {
   // Force an expired OTP in database
   const expiredOtpCode = '888999';
   const pastDate = new Date(Date.now() - 15 * 60 * 1000).toISOString();
-  db.prepare(`
+  (await db.prepare(`
     INSERT INTO otps (id, email, otp_code, purpose, expires_at, created_at)
     VALUES ('otp-expired-test', ?, ?, 'PASSWORD_RESET', ?, datetime('now', '-20 minutes'))
-  `).run(existingEmail, expiredOtpCode, pastDate);
+  `).run(existingEmail, expiredOtpCode, pastDate));
 
   const res5 = await post('/api/v1/auth/verify-otp', { email: existingEmail, otp: expiredOtpCode });
   assert.strictEqual(res5.status, 400, 'Expired OTP should return 400');
@@ -161,7 +161,7 @@ async function runTestSuite() {
   const lastEmail6 = emailService.getLastSentEmail();
   assert.strictEqual(lastEmail6.to, existingEmail, 'Recipient email must match');
   
-  const newOtpRow = db.prepare('SELECT * FROM otps WHERE email = ? AND used_at IS NULL ORDER BY created_at DESC LIMIT 1').get(existingEmail);
+  const newOtpRow = (await db.prepare('SELECT * FROM otps WHERE email = ? AND used_at IS NULL ORDER BY created_at DESC LIMIT 1').get(existingEmail));
   assert.ok(newOtpRow, 'New OTP must be in DB');
   console.log('   ✓ PASS: Gửi lại mã OTP thành công, mã OTP mới đã được gửi tới email:', lastEmail6.to);
 

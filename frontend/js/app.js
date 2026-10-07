@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         return true;
       },
       home: getAuthenticatedHome,
+      requiredPath: () => currentAuthenticatedUser?.mustChangePassword ? '/change-password' : null,
       render: activateRoute,
       denied: (statusCode, route) => {
         leaveActivePage();

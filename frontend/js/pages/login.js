@@ -125,7 +125,9 @@
           showToast('success', 'Đăng nhập thành công', `Chào mừng ${authData.user.fullName || authData.user.email} vào hệ thống.`);
         } else {
           const status = res.status;
-          const msg = (res.data && res.data.message) ? res.data.message : 'Email hoặc mật khẩu không chính xác.';
+          const message = (res.data && res.data.message) ? res.data.message : 'Email hoặc mật khẩu không chính xác.';
+          const msg = Number.isInteger(res.data?.remainingAttempts) && status === 401
+            ? `${message} Bạn còn ${res.data.remainingAttempts} lần thử trước khi tài khoản bị khóa tạm thời.` : message;
 
           if (status === 423) {
             showAlert('warning', 'Tài khoản tạm thời bị khóa', msg);

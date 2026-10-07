@@ -77,23 +77,23 @@ async function main() {
     return {router,location,renders,errors,handlers,entries,login(){user=true;router.refresh();},deny(){access=false;},
       back(){if(index>0){set(entries[--index]);handlers.get('popstate')();}},forward(){if(index+1<entries.length){set(entries[++index]);handlers.get('popstate')();}}};
   }
-  await test('Guest protected deep link never renders protected page; login recovers destination', () => {
+  await test('Guest protected deep link never renders protected page; login recovers destination', async () => {
     const c=client('/admin/users');c.router.start();assert.equal(c.location.pathname,'/login');assert.deepEqual(c.renders,['login']);
-    c.login();assert.equal(c.location.pathname,'/admin/users');assert.equal(c.renders.at(-1),'users');
+    (await c.login());assert.equal(c.location.pathname,'/admin/users');assert.equal(c.renders.at(-1),'users');
   });
-  await test('Root resolves login or authenticated home', () => {
-    const c=client('/');c.router.start();assert.equal(c.location.pathname,'/login');c.login();assert.equal(c.location.pathname,'/dashboard');
+  await test('Root resolves login or authenticated home', async () => {
+    const c=client('/');c.router.start();assert.equal(c.location.pathname,'/login');(await c.login());assert.equal(c.location.pathname,'/dashboard');
   });
   await test('Reset-token legacy link resolves reset route', () => {
     const c=client('/');c.location.search='?reset_token=test-only';c.router.start();assert.equal(c.location.pathname,'/reset-password');assert.equal(c.location.search,'?reset_token=test-only');
   });
-  await test('Navigation changes URL without reload; Back/Forward restores page', () => {
-    const c=client();c.router.start();c.login();c.router.navigate('/admin/users');c.router.navigate('/requisitions');
+  await test('Navigation changes URL without reload; Back/Forward restores page', async () => {
+    const c=client();c.router.start();(await c.login());c.router.navigate('/admin/users');c.router.navigate('/requisitions');
     c.back();assert.equal(c.location.pathname,'/admin/users');assert.equal(c.renders.at(-1),'users');
     c.forward();assert.equal(c.location.pathname,'/requisitions');assert.equal(c.renders.at(-1),'requisitions');
   });
-  await test('Default-deny blocks page render', () => {
-    const c=client();c.router.start();c.login();c.deny();const count=c.renders.length;c.router.navigate('/admin/users');
+  await test('Default-deny blocks page render', async () => {
+    const c=client();c.router.start();(await c.login());c.deny();const count=c.renders.length;c.router.navigate('/admin/users');
     assert.equal(c.renders.length,count);assert.deepEqual(c.errors,[403]);
   });
   await test('Unknown route 404; external navigation rejected', () => {

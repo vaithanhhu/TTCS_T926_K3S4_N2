@@ -1,6 +1,11 @@
 {
   "routes": [
     {
+      "path": "/change-password",
+      "view": "change-password",
+      "auth": true
+    },
+    {
       "path": "/",
       "view": "login",
       "auth": false
@@ -200,6 +205,7 @@
     "/js/shared/route-lifecycle.js"
   ],
   "fragments": [
+    "/pages/change-password.html",
     "/pages/login.html",
     "/pages/dashboard.html",
     "/pages/requisitions.html",

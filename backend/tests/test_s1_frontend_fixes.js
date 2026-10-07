@@ -44,12 +44,12 @@ async function main() {
       await f.nodes.get('users-prev-btn').dispatch('click'); await f.settle(); pagination(f, 25);
     });
 
-    const hash = app.db.prepare("SELECT password_hash FROM users WHERE email='admin@company.com'").get().password_hash;
+    const hash = (await app.db.prepare("SELECT password_hash FROM users WHERE email='admin@company.com'").get()).password_hash;
     for (const total of [0, 1, 20, 21, 25]) {
       const prefix = `pagination-fixture-${total}-`;
       for (let i = 0; i < total; i++) {
-        app.db.prepare('INSERT INTO users (id,email,full_name,password_hash,status) VALUES (?,?,?,?,?)')
-          .run(prefix + i, prefix + i + '@test.example', prefix + i, hash, 'ACTIVE');
+        (await app.db.prepare('INSERT INTO users (id,email,full_name,password_hash,status) VALUES (?,?,?,?,?)')
+          .run(prefix + i, prefix + i + '@test.example', prefix + i, hash, 'ACTIVE'));
       }
       await test('S1-08', 'AC3/AC4', `${total} matching users: search resets page; exact first/last range`, async () => {
         f.nodes.get('users-search-input').value = prefix;
@@ -65,8 +65,8 @@ async function main() {
     }
 
     await test('S1-05', 'AC3', 'Real user.read denial ends loading, clears stale rows and renders exact Vietnamese message', async () => {
-      const grant = app.db.prepare("SELECT * FROM role_permissions WHERE role_id='role-admin' AND permission_id='perm-user-read'").get();
-      app.db.prepare('DELETE FROM role_permissions WHERE role_id=? AND permission_id=?').run(grant.role_id, grant.permission_id);
+      const grant = (await app.db.prepare("SELECT * FROM role_permissions WHERE role_id='role-admin' AND permission_id='perm-user-read'").get());
+      (await app.db.prepare('DELETE FROM role_permissions WHERE role_id=? AND permission_id=?').run(grant.role_id, grant.permission_id));
       try {
         await f.nodes.get('users-search-btn').dispatch('click'); await f.settle();
         const row = f.nodes.get('users-table-body').innerHTML;
@@ -76,7 +76,7 @@ async function main() {
         assert.equal(f.nodes.get('users-next-btn').disabled, true);
         assert.deepEqual(f.errors, []);
       } finally {
-        app.db.prepare('INSERT INTO role_permissions (role_id,permission_id) VALUES (?,?)').run(grant.role_id, grant.permission_id);
+        (await app.db.prepare('INSERT INTO role_permissions (role_id,permission_id) VALUES (?,?)').run(grant.role_id, grant.permission_id));
       }
     });
 
@@ -120,7 +120,7 @@ async function main() {
     });
 
     await test('S1-02/S1-05', 'session compatibility', 'Expired session during Users reload still cleans session and returns to login', async () => {
-      app.db.prepare('UPDATE sessions SET expires_at=? WHERE token=?').run(new Date(Date.now() - 1000).toISOString(), f.storage.get('ats_token'));
+      (await app.db.prepare('UPDATE sessions SET expires_at=? WHERE token=?').run(new Date(Date.now() - 1000).toISOString(), f.storage.get('ats_token')));
       await f.nodes.get('users-search-btn').dispatch('click'); await f.settle();
       assert.equal(f.storage.has('ats_token'), false);
       assert.equal(f.window.location.pathname, '/login');

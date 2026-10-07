@@ -191,6 +191,7 @@
           phone,
           initialRole,
           departmentName: department,
+          departmentId: departmentId || null,
           phoneNumber: phone,
           roleCode: initialRole
         });
@@ -666,6 +667,8 @@
     document.getElementById('edit-user-fullname').value = user.fullName || '';
     document.getElementById('edit-user-jobtitle').value = user.jobTitle || '';
     document.getElementById('edit-user-department').value = user.department || '';
+    document.getElementById('edit-user-department').dataset.departmentId = user.departmentId || '';
+    document.getElementById('edit-user-department').dataset.originalName = user.department || user.departmentName || '';
     document.getElementById('edit-user-phone').value = user.phone || '';
 
     if (editUserAlert) editUserAlert.classList.add('hidden');
@@ -691,7 +694,10 @@
       const phone = document.getElementById('edit-user-phone').value.trim();
 
       try {
-        const res = await window.ATS_API.updateUserApi(token, id, { fullName, jobTitle, department, phone });
+        const departmentInput = document.getElementById('edit-user-department');
+        const res = await window.ATS_API.updateUserApi(token, id, { fullName, jobTitle, department, phone,
+          departmentName: department, phoneNumber: phone,
+          ...(department === departmentInput.dataset.originalName && departmentInput.dataset.departmentId ? { departmentId: departmentInput.dataset.departmentId } : {}) });
         if (res.ok && res.data && res.data.success) {
           editUserModal.classList.add('hidden');
           showToast('success', 'Cập nhật thành công', `Hồ sơ ${fullName} đã được cập nhật.`);

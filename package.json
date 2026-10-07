@@ -4,6 +4,12 @@
   "description": "Hệ thống Tuyển dụng Nội bộ (ATS) - Sprint 1",
   "private": true,
   "scripts": {
+    "migrate:postgres": "node backend/src/db/migrate-postgres.js",
+    "seed:postgres": "node backend/src/db/migrate-postgres.js --seed",
+    "import:postgres": "node backend/src/db/import-sqlite.js",
+    "test:postgres": "node backend/tests/test_postgres_migration.js",
+    "test:postgres:live": "node backend/tests/test_postgres_live.js",
+    "test:review-updates": "node backend/tests/test_review_updates.js",
     "start": "node backend/src/server.js",
     "migrate": "node backend/src/db/migrate.js",
     "seed": "node backend/src/db/seed.js",
@@ -45,6 +51,10 @@
   "dependencies": {
     "exceljs": "^4.4.0",
     "nodemailer": "^10.0.12",
+    "pg": "^8.23.1",
     "sharp": "^0.35.5"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8"
   }
 }

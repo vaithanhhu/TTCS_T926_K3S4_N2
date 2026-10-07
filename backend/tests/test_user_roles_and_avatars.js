@@ -76,7 +76,7 @@ async function main() {
     const id = a.user.id, originalRole = ['INTERVIEWER'];
     const selected = ['RECRUITER', 'HIRING_MGR', 'INTERVIEWER'];
     const roleRoute = '/admin/users/' + id + '/roles';
-    const persisted = () => app.db.prepare('SELECT r.code FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE ur.user_id=? ORDER BY r.code').all(id).map(row => row.code);
+    const persisted = async () => (await app.db.prepare('SELECT r.code FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE ur.user_id=? ORDER BY r.code').all(id)).map(row => row.code);
     async function list() {
       const response = await app.api('GET', '/admin/users?search=' + encodeURIComponent(a.user.email), b.token);
       assert.equal(response.status, 200); return response.data.data.items.find(user => user.id === id);
@@ -103,7 +103,7 @@ async function main() {
       assert.deepEqual(calls, [{ roles: ['RECRUITER', 'HIRING_MGR', 'INTERVIEWER'] }]);
       const read = await app.api('GET', roleRoute, b.token); assert.equal(read.status, 200);
       assert.deepEqual(read.data.data.currentRoles.toSorted(), selected.toSorted());
-      assert.deepEqual(persisted(), selected.toSorted());
+      assert.deepEqual((await persisted()), selected.toSorted());
       assert.equal(f.nodes.get('assign-roles-modal').classList.contains('hidden'), true);
     });
     await test('S1-09', 'reopen', 'Reopen through action menu checks all three persisted roles', async () => {
@@ -112,8 +112,8 @@ async function main() {
     await test('S1-09', 'remove role', 'Unchecking one leaves exactly two roles after submit/readback', async () => {
       await controls.select(['RECRUITER', 'INTERVIEWER']);
       await f.nodes.get('assign-roles-form').dispatch('submit'); await f.settle();
-      assert.deepEqual(persisted(), ['INTERVIEWER', 'RECRUITER']);
-      assert.deepEqual((await app.api('GET', roleRoute, b.token)).data.data.currentRoles.toSorted(), persisted());
+      assert.deepEqual((await persisted()), ['INTERVIEWER', 'RECRUITER']);
+      assert.deepEqual((await app.api('GET', roleRoute, b.token)).data.data.currentRoles.toSorted(), (await persisted()));
     });
     await test('S1-09', 'reload', 'Fresh frontend bootstrap and reopen retain persisted two-role state', async () => {
       const fresh = await createFrontendRuntime(app.base, '/admin/users', [['ats_token', b.token], ['ats_user', JSON.stringify(b.user)]]);
@@ -123,23 +123,23 @@ async function main() {
     });
     await test('S1-09', 'effective union', 'Next request on existing session sees exact database permission union for three roles', async () => {
       assert.equal((await app.api('PUT', roleRoute, b.token, { roles: selected })).status, 200);
-      const expected = app.db.prepare('SELECT DISTINCT p.code FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id JOIN roles r ON r.id=rp.role_id WHERE r.code IN (?,?,?) ORDER BY p.code').all(...selected).map(row => row.code);
+      const expected = (await app.db.prepare('SELECT DISTINCT p.code FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id JOIN roles r ON r.id=rp.role_id WHERE r.code IN (?,?,?) ORDER BY p.code').all(...selected)).map(row => row.code);
       const read = await app.api('GET', '/auth/permissions', a.token); assert.equal(read.status, 200);
       assert.deepEqual(read.data.permissions.toSorted(), expected);
       assert.ok(expected.includes('requisition.create')); assert.ok(expected.includes('candidate.read'));
     });
     await test('S1-09', 'validation/security', 'Unknown/empty/unauthorized roles reject without changing mappings', async () => {
-      const before = persisted();
+      const before = (await persisted());
       const bad = await app.api('PUT', roleRoute, b.token, { roles: ['INTERVIEWER', 'UNKNOWN_ROLE'] });
-      assert.equal(bad.status, 400); assert.equal(bad.data.code, 'INVALID_ROLE_CODE'); assert.deepEqual(persisted(), before);
+      assert.equal(bad.status, 400); assert.equal(bad.data.code, 'INVALID_ROLE_CODE'); assert.deepEqual((await persisted()), before);
       for (const roles of [[], [' ', null]]) {
         const empty = await app.api('PUT', roleRoute, b.token, { roles }); assert.equal(empty.status, 400);
-        assert.equal(empty.data.code, 'EMPTY_ROLES'); assert.deepEqual(persisted(), before);
+        assert.equal(empty.data.code, 'EMPTY_ROLES'); assert.deepEqual((await persisted()), before);
       }
       const unprivileged = await app.login('hiringmgr@company.com');
       assert.equal((await app.api('PUT', roleRoute, unprivileged.token, { roles: ['ADMIN'] })).status, 403);
       assert.equal((await app.api('PUT', roleRoute, null, { roles: ['ADMIN'] })).status, 401);
-      assert.deepEqual(persisted(), before);
+      assert.deepEqual((await persisted()), before);
     });
     await test('S1-09', 'self Admin protection', 'Cannot revoke own ADMIN; persisted administrator survives', async () => {
       const response = await app.api('PUT', '/admin/users/' + b.user.id + '/roles', b.token, { roles: ['RECRUITER'] });
@@ -149,20 +149,20 @@ async function main() {
     await test('S1-09', 'atomic failure', 'Failure after first INSERT rolls back roles, permissions and keeps modal/retry', async () => {
       await app.api('PUT', roleRoute, b.token, { roles: originalRole }); await reload(); await controls.open(id);
       await controls.select(selected);
-      const sessions = app.db.prepare('SELECT * FROM sessions WHERE user_id=? ORDER BY id').all(id);
-      const failingRole = app.db.prepare('SELECT id FROM roles WHERE code=?').get('HIRING_MGR').id;
-      app.db.exec(`CREATE TEMP TRIGGER fail_role_insert BEFORE INSERT ON user_roles WHEN NEW.user_id='${id}' AND NEW.role_id='${failingRole}' BEGIN SELECT RAISE(ABORT,'isolated role insertion failure'); END`);
+      const sessions = (await app.db.prepare('SELECT * FROM sessions WHERE user_id=? ORDER BY id').all(id));
+      const failingRole = (await app.db.prepare('SELECT id FROM roles WHERE code=?').get('HIRING_MGR')).id;
+      (await app.db.exec(`CREATE TEMP TRIGGER fail_role_insert BEFORE INSERT ON user_roles WHEN NEW.user_id='${id}' AND NEW.role_id='${failingRole}' BEGIN SELECT RAISE(ABORT,'isolated role insertion failure'); END`));
       try {
         await f.nodes.get('assign-roles-form').dispatch('submit'); await f.settle();
-        assert.deepEqual(persisted(), originalRole);
-        assert.deepEqual(app.db.prepare('SELECT * FROM sessions WHERE user_id=? ORDER BY id').all(id), sessions);
+        assert.deepEqual((await persisted()), originalRole);
+        assert.deepEqual((await app.db.prepare('SELECT * FROM sessions WHERE user_id=? ORDER BY id').all(id)), sessions);
         assert.equal(f.nodes.get('assign-roles-modal').classList.contains('hidden'), false);
         assert.equal(f.nodes.get('assign-roles-submit-btn').disabled, false);
         assert.equal(f.nodes.get('assign-roles-alert').classList.contains('hidden'), false);
         assert.equal(f.nodes.get('assign-roles-alert-msg').textContent, 'Lỗi máy chủ nội bộ khi gán vai trò.');
-        app.db.exec('BEGIN'); app.db.exec('ROLLBACK');
-      } finally { app.db.exec('DROP TRIGGER fail_role_insert'); }
-      await f.nodes.get('assign-roles-form').dispatch('submit'); await f.settle(); assert.deepEqual(persisted(), selected.toSorted());
+        (await app.db.exec('BEGIN')); (await app.db.exec('ROLLBACK'));
+      } finally { (await app.db.exec('DROP TRIGGER fail_role_insert')); }
+      await f.nodes.get('assign-roles-form').dispatch('submit'); await f.settle(); assert.deepEqual((await persisted()), selected.toSorted());
     });
     await test('S1-09', 'lifecycle', 'Repeated open and refresh bind one submit handler; double submit sends one PUT', async () => {
       await reload(); await controls.open(id); await f.nodes.get('cancel-assign-roles-btn').dispatch('click');

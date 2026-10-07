@@ -17,24 +17,25 @@ const RecruitmentCatalogService = require('./services/recruitmentCatalogService'
 const CareerPageService = require('./services/careerPageService');
 const frontendRoutes = new Set(require('../../frontend/routes.json').routes.map(route => route.path));
 
-function serveFrontendEntry(res) {
-  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache', 'Vary': 'Accept' });
+function serveFrontendEntry(res, status = 200) {
+  res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache', 'Vary': 'Accept' });
   fs.createReadStream(path.join(config.STATIC_DIR, 'index.html')).pipe(res);
 }
 
 // Ensure DB is initialized and seeded
 const db = getDatabase();
 const isTestEnv = process.env.NODE_ENV === 'test' || (process.argv[1] && (process.argv[1].includes('tests') || process.argv[1].includes('test_s1_')));
-const userCount = db.prepare('SELECT COUNT(*) AS c FROM users').get().c;
-if (isTestEnv || userCount === 0) {
-  seedDatabase(db);
-} else {
-  ensureDepartmentFeature(db);
-  ensureCompetencyFeature(db);
-  ensureQuestionBankFeature(db);
-  ensureRecruitmentCatalogFeature(db);
-  ensureCareerPageFeature(db);
-  ensureRequisitionDraftFeature(db);
+let initialization;
+async function initializeApplication() {
+  if (db.provider === 'postgres') await require('./db/migrate-postgres').verifyMigration(db);
+  const userCount = (await db.prepare('SELECT COUNT(*) AS c FROM users').get()).c;
+  if (db.provider === 'sqlite' && (isTestEnv || userCount === 0)) {
+    await seedDatabase(db);
+  } else if (userCount > 0) {
+    await ensureDepartmentFeature(db); await ensureCompetencyFeature(db);
+    await ensureQuestionBankFeature(db); await ensureRecruitmentCatalogFeature(db);
+    await ensureCareerPageFeature(db); await ensureRequisitionDraftFeature(db);
+  }
 }
 
 const avatarService = new AvatarService();
@@ -49,8 +50,8 @@ const questionBankService = new QuestionBankService(db);
 const recruitmentCatalogService = new RecruitmentCatalogService(db);
 const careerPageService = new CareerPageService(db);
 
-function canReadJobTitleSalary(user) {
-  return user.roles.includes('HR_MANAGER') && rbacMiddleware.hasPermission(user.id, 'salary_range.read');
+async function canReadJobTitleSalary(user) {
+  return user.roles.includes('HR_MANAGER') && (await rbacMiddleware.hasPermission(user.id, 'salary_range.read'));
 }
 
 function denyJobTitleSalary(res) {
@@ -189,7 +190,7 @@ function parseAvatarBody(req) {
     });
   });
 }
-const server = http.createServer(async (req, res) => {
+async function handleRequest(req, res) {
   // CORS Headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -205,6 +206,27 @@ const server = http.createServer(async (req, res) => {
   const pathname = parsedUrl.pathname;
   const frontendPath = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
   if (frontendRoutes.has(frontendPath)) res.setHeader('Vary', 'Accept');
+  // A restricted session may only inspect itself, change its password or logout.
+  // Guard here as well as in validateSession so direct/legacy endpoints cannot bypass it.
+  const bearer = req.headers.authorization;
+  if (typeof bearer === 'string' && bearer.startsWith('Bearer ')) {
+    const token = bearer.substring(7).trim();
+    const restricted = (await db.prepare('SELECT u.must_change_password FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=?').get(token));
+    const session = restricted?.must_change_password ? (await authController.authService.validateSession(token, false, true)) : null;
+    const allowed = ['/api/v1/auth/me', '/auth/me', '/api/v1/auth/change-password', '/auth/change-password', '/api/v1/auth/logout', '/auth/logout'];
+    if (session && !session.valid) {
+      res.writeHead(session.statusCode || 401, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, code: session.code, message: session.message }));
+      return;
+    }
+    if (session?.valid && session.user.mustChangePassword && !allowed.includes(pathname)) {
+      res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 403, code: 'MUST_CHANGE_PASSWORD',
+        message: 'Bạn cần đổi mật khẩu tạm thời trước khi sử dụng hệ thống.',
+        recovery: { action: 'CHANGE_PASSWORD', suggestedPath: '/change-password', label: 'Đổi mật khẩu' } }));
+      return;
+    }
+  }
   // Preserve unprefixed REST aliases: only browser document requests opt into HTML.
   if (req.method === 'GET' && frontendRoutes.has(frontendPath) && (req.headers.accept || '').includes('text/html')) {
     serveFrontendEntry(res);
@@ -334,7 +356,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     const token = authHeader.substring(7).trim();
-    const sessionResult = authController.authService.validateSession(token, true);
+    const sessionResult = (await authController.authService.validateSession(token, true));
     if (!sessionResult.valid) {
       res.writeHead(sessionResult.statusCode || 401, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({
@@ -350,8 +372,8 @@ const server = http.createServer(async (req, res) => {
       }));
       return;
     }
-    const permissions = rbacMiddleware.getUserPermissions(sessionResult.user.id);
-    const details = rbacMiddleware.getUserPermissionDetails(sessionResult.user.id);
+    const permissions = (await rbacMiddleware.getUserPermissions(sessionResult.user.id));
+    const details = (await rbacMiddleware.getUserPermissionDetails(sessionResult.user.id));
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({ success: true, permissions, details, roles: sessionResult.user.roles }));
     return;
@@ -366,13 +388,13 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     const token = authHeader.substring(7).trim();
-    const sessionResult = authController.authService.validateSession(token, true);
+    const sessionResult = (await authController.authService.validateSession(token, true));
     if (!sessionResult.valid) {
       res.writeHead(sessionResult.statusCode || 401, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ success: false, statusCode: sessionResult.statusCode || 401, message: sessionResult.message, code: sessionResult.code }));
       return;
     }
-    const userProfile = userService.getUserById(sessionResult.user.id);
+    const userProfile = (await userService.getUserById(sessionResult.user.id));
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({ success: true, data: userProfile ? {
       ...userProfile, ...avatarService.getAvatarUrls(userProfile.id)
@@ -389,7 +411,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     const token = authHeader.substring(7).trim();
-    const sessionResult = authController.authService.validateSession(token, true);
+    const sessionResult = (await authController.authService.validateSession(token, true));
     if (!sessionResult.valid) {
       res.writeHead(sessionResult.statusCode || 401, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ success: false, statusCode: sessionResult.statusCode || 401, message: sessionResult.message, code: sessionResult.code }));
@@ -397,11 +419,11 @@ const server = http.createServer(async (req, res) => {
     }
     try {
       const body = await parseBody(req);
-      const updateResult = userService.updateProfile(sessionResult.user.id, {
+      const updateResult = (await userService.updateProfile(sessionResult.user.id, {
         fullName: body.fullName,
         jobTitle: body.jobTitle,
         phoneNumber: body.phoneNumber
-      }, { validatePhone: pathname.endsWith('/personal') });
+      }, { validatePhone: pathname.endsWith('/personal') }));
       res.writeHead(updateResult.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(updateResult));
     } catch (err) {
@@ -430,7 +452,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     const token = authHeader.substring(7).trim();
-    const sessionResult = authController.authService.validateSession(token, true);
+    const sessionResult = (await authController.authService.validateSession(token, true));
 
     if (!sessionResult.valid) {
       res.writeHead(sessionResult.statusCode || 401, {
@@ -478,9 +500,9 @@ const server = http.createServer(async (req, res) => {
   }
   // 10. API: S1-05 Get Full RBAC Matrix (AC-01)
   if (req.method === 'GET' && (pathname === '/api/v1/rbac/matrix' || pathname === '/rbac/matrix' || pathname === '/api/v1/admin/roles-matrix' || pathname === '/admin/roles-matrix')) {
-    const rawMatrix = rbacMiddleware.getRbacMatrix();
-    const roles = db.prepare('SELECT id, code AS name, name AS description FROM roles ORDER BY code ASC').all();
-    const permissions = db.prepare('SELECT id, code AS name, name AS description, module FROM permissions ORDER BY module, code ASC').all();
+    const rawMatrix = (await rbacMiddleware.getRbacMatrix());
+    const roles = (await db.prepare('SELECT id, code AS name, name AS description FROM roles ORDER BY code ASC').all());
+    const permissions = (await db.prepare('SELECT id, code AS name, name AS description, module FROM permissions ORDER BY module, code ASC').all());
     const simpleMatrix = {};
     for (const [code, info] of Object.entries(rawMatrix)) {
       simpleMatrix[code] = info.permissions;
@@ -502,7 +524,7 @@ const server = http.createServer(async (req, res) => {
 
   // 11. API: S1-05 Protected Action Demo 1 - User Create (requires user.create) (AC-02 & AC-03)
   if (req.method === 'POST' && (pathname === '/api/v1/admin/users/test-create' || pathname === '/admin/users/test-create')) {
-    const user = rbacMiddleware.authorize(req, res, authController.authService, 'user.create');
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'user.create'));
     if (!user) return; // Handled by authorize with 401 or 403
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({
@@ -531,7 +553,7 @@ const server = http.createServer(async (req, res) => {
       pathname === '/api/v1/admin/users/import' ||
       pathname === '/admin/users/import'
     )) {
-    if (!rbacMiddleware.authorize(req, res, authController.authService, 'user.create')) return;
+    if (!(await rbacMiddleware.authorize(req, res, authController.authService, 'user.create'))) return;
     try {
       const fileBuffer = await parseBinaryBody(req);
 
@@ -564,7 +586,7 @@ const server = http.createServer(async (req, res) => {
       pathname === '/api/v1/admin/users/import/preview' ||
       pathname === '/admin/users/import/preview'
     )) {
-    if (!rbacMiddleware.authorize(req, res, authController.authService, 'user.create')) return;
+    if (!(await rbacMiddleware.authorize(req, res, authController.authService, 'user.create'))) return;
     try {
       const fileBuffer = await parseBinaryBody(req);
       await userController.handlePreviewBulkUserImport(
@@ -673,10 +695,10 @@ const server = http.createServer(async (req, res) => {
 
   // 11.10 Reset User Password (Admin)
   if (req.method === 'POST' && ((pathname.startsWith('/api/v1/admin/users/') && pathname.endsWith('/reset-password')) || (pathname.startsWith('/admin/users/') && pathname.endsWith('/reset-password')))) {
-    const user = rbacMiddleware.authorize(req, res, authController.authService, 'user.create');
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'user.create'));
     if (!user) return;
     const userId = pathname.replace(/^\/api\/v1\/admin\/users\//, '').replace(/^\/admin\/users\//, '').replace(/\/reset-password$/, '');
-    const result = userService.resetUserPassword(userId, user);
+    const result = (await userService.resetUserPassword(userId, user));
     res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(result));
     return;
@@ -684,10 +706,10 @@ const server = http.createServer(async (req, res) => {
 
   // 11.11 Delete User Account (Admin)
   if (req.method === 'DELETE' && (pathname.startsWith('/api/v1/admin/users/') || pathname.startsWith('/admin/users/')) && !pathname.endsWith('/roles') && !pathname.endsWith('/lock') && !pathname.endsWith('/unlock') && !pathname.endsWith('/reset-password')) {
-    const user = rbacMiddleware.authorize(req, res, authController.authService, 'user.create');
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'user.create'));
     if (!user) return;
     const userId = pathname.replace(/^\/api\/v1\/admin\/users\//, '').replace(/^\/admin\/users\//, '');
-    const result = userService.deleteUser(userId, user);
+    const result = (await userService.deleteUser(userId, user));
     res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(result));
     return;
@@ -695,7 +717,7 @@ const server = http.createServer(async (req, res) => {
 
   // 12. API: S1-05 Protected Action Demo 2 - Candidate List (requires candidate.read) (AC-02 & AC-03)
   if (req.method === 'GET' && (pathname === '/api/v1/recruitment/candidates/test-list' || pathname === '/recruitment/candidates/test-list')) {
-    const user = rbacMiddleware.authorize(req, res, authController.authService, 'candidate.read');
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.read'));
     if (!user) return;
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({
@@ -709,7 +731,7 @@ const server = http.createServer(async (req, res) => {
 
   // 13. API: S1-05 Protected Action Demo 3 - Interview List (requires interview.read) (AC-02 & AC-03)
   if (req.method === 'GET' && (pathname === '/api/v1/interviews/test-list' || pathname === '/interviews/test-list')) {
-    const user = rbacMiddleware.authorize(req, res, authController.authService, 'interview.read');
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'interview.read'));
     if (!user) return;
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({
@@ -735,7 +757,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     const token = authHeader.substring(7).trim();
-    const sessionResult = authController.authService.validateSession(token, true);
+    const sessionResult = (await authController.authService.validateSession(token, true));
     if (!sessionResult.valid) {
       res.writeHead(sessionResult.statusCode || 401, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({
@@ -747,7 +769,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    const stats = requisitionService.getDashboardStats();
+    const stats = (await requisitionService.getDashboardStats());
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(stats));
     return;
@@ -758,18 +780,18 @@ const server = http.createServer(async (req, res) => {
     pathname === '/api/v1/recruitment-catalogs' ||
     pathname === '/recruitment-catalogs'
   )) {
-    const user = rbacMiddleware.authorize(
+    const user = (await rbacMiddleware.authorize(
       req,
       res,
       authController.authService,
       'recruitment_catalog.read'
-    );
+    ));
     if (!user) return;
 
     const type = parsedUrl.searchParams.get('type');
     const status = parsedUrl.searchParams.get('status');
 
-    const result = recruitmentCatalogService.getItems(type, { status });
+    const result = (await recruitmentCatalogService.getItems(type, { status }));
     res.writeHead(result.statusCode || 200, {
       'Content-Type': 'application/json; charset=utf-8'
     });
@@ -781,17 +803,17 @@ const server = http.createServer(async (req, res) => {
     pathname === '/api/v1/recruitment-catalogs' ||
     pathname === '/recruitment-catalogs'
   )) {
-    const user = rbacMiddleware.authorize(
+    const user = (await rbacMiddleware.authorize(
       req,
       res,
       authController.authService,
       'recruitment_catalog.manage'
-    );
+    ));
     if (!user) return;
 
     try {
       const body = await parseBody(req);
-      const result = recruitmentCatalogService.createItem(body);
+      const result = (await recruitmentCatalogService.createItem(body));
 
       res.writeHead(result.statusCode || 201, {
         'Content-Type': 'application/json; charset=utf-8'
@@ -815,12 +837,12 @@ const server = http.createServer(async (req, res) => {
     pathname.startsWith('/api/v1/recruitment-catalogs/') ||
     pathname.startsWith('/recruitment-catalogs/')
   )) {
-    const user = rbacMiddleware.authorize(
+    const user = (await rbacMiddleware.authorize(
       req,
       res,
       authController.authService,
       'recruitment_catalog.manage'
-    );
+    ));
     if (!user) return;
 
     const itemId = pathname
@@ -842,7 +864,7 @@ const server = http.createServer(async (req, res) => {
 
     try {
       const body = await parseBody(req);
-      const result = recruitmentCatalogService.updateItem(itemId, body);
+      const result = (await recruitmentCatalogService.updateItem(itemId, body));
 
       res.writeHead(result.statusCode || 200, {
         'Content-Type': 'application/json; charset=utf-8'
@@ -866,20 +888,20 @@ const server = http.createServer(async (req, res) => {
     pathname === '/api/v1/recruitment-catalogs/reorder' ||
     pathname === '/recruitment-catalogs/reorder'
   )) {
-    const user = rbacMiddleware.authorize(
+    const user = (await rbacMiddleware.authorize(
       req,
       res,
       authController.authService,
       'recruitment_catalog.manage'
-    );
+    ));
     if (!user) return;
 
     try {
       const body = await parseBody(req);
-      const result = recruitmentCatalogService.reorderItems(
+      const result = (await recruitmentCatalogService.reorderItems(
         body.type,
         body.orderedIds
-      );
+      ));
 
       res.writeHead(result.statusCode || 200, {
         'Content-Type': 'application/json; charset=utf-8'
@@ -903,19 +925,19 @@ const server = http.createServer(async (req, res) => {
     pathname.startsWith('/api/v1/recruitment-catalogs/') ||
     pathname.startsWith('/recruitment-catalogs/')
   )) {
-    const user = rbacMiddleware.authorize(
+    const user = (await rbacMiddleware.authorize(
       req,
       res,
       authController.authService,
       'recruitment_catalog.manage'
-    );
+    ));
     if (!user) return;
 
     const itemId = pathname
       .replace(/^\/api\/v1\/recruitment-catalogs\//, '')
       .replace(/^\/recruitment-catalogs\//, '');
 
-    const result = recruitmentCatalogService.deleteItem(itemId);
+    const result = (await recruitmentCatalogService.deleteItem(itemId));
 
     res.writeHead(result.statusCode || 200, {
       'Content-Type': 'application/json; charset=utf-8'
@@ -930,7 +952,7 @@ const server = http.createServer(async (req, res) => {
     pathname === '/api/v1/public/career-page' ||
     pathname === '/public/career-page'
   )) {
-    const result = careerPageService.getSettings();
+    const result = (await careerPageService.getSettings());
 
     res.writeHead(200, {
       'Content-Type': 'application/json; charset=utf-8'
@@ -944,15 +966,15 @@ const server = http.createServer(async (req, res) => {
     pathname === '/api/v1/career-page' ||
     pathname === '/career-page'
   )) {
-    const user = rbacMiddleware.authorize(
+    const user = (await rbacMiddleware.authorize(
       req,
       res,
       authController.authService,
       'career_page.read'
-    );
+    ));
     if (!user) return;
 
-    const result = careerPageService.getSettings();
+    const result = (await careerPageService.getSettings());
 
     res.writeHead(200, {
       'Content-Type': 'application/json; charset=utf-8'
@@ -966,17 +988,17 @@ const server = http.createServer(async (req, res) => {
     pathname === '/api/v1/career-page' ||
     pathname === '/career-page'
   )) {
-    const user = rbacMiddleware.authorize(
+    const user = (await rbacMiddleware.authorize(
       req,
       res,
       authController.authService,
       'career_page.manage'
-    );
+    ));
     if (!user) return;
 
     try {
       const body = await parseBody(req);
-      const result = careerPageService.saveSettings(body);
+      const result = (await careerPageService.saveSettings(body));
 
       res.writeHead(result.statusCode || 200, {
         'Content-Type': 'application/json; charset=utf-8'
@@ -1002,12 +1024,12 @@ const server = http.createServer(async (req, res) => {
     pathname === '/api/v1/career-page/media' ||
     pathname === '/career-page/media'
   )) {
-    const user = rbacMiddleware.authorize(
+    const user = (await rbacMiddleware.authorize(
       req,
       res,
       authController.authService,
       'career_page.manage'
-    );
+    ));
     if (!user) return;
 
     try {
@@ -1047,23 +1069,23 @@ const server = http.createServer(async (req, res) => {
   // Minimal read-only choices for the existing requisition.create permission.
   // This grants no access to the department administration API or manager details.
   if (req.method === 'GET' && pathname === '/api/v1/requisitions/options') {
-    const user = rbacMiddleware.authorize(req, res, authController.authService, 'requisition.create');
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'requisition.create'));
     if (!user) return;
     if (['jobTitleId', 'proposedSalaryMin', 'proposedSalaryMax'].some(key => parsedUrl.searchParams.has(key))) {
-      const result = requisitionService.checkS210SalaryRange({
+      const result = (await requisitionService.checkS210SalaryRange({
         jobTitleId: parsedUrl.searchParams.get('jobTitleId'),
         proposedSalaryMin: parsedUrl.searchParams.get('proposedSalaryMin'),
         proposedSalaryMax: parsedUrl.searchParams.get('proposedSalaryMax')
-      });
+      }));
       res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
       return;
     }
-    const departments = db.prepare("SELECT id, name, parent_id AS parentId, status FROM departments WHERE status = 'ACTIVE' ORDER BY name").all();
-    const s210Departments = db.prepare(`SELECT id, name, parent_id AS parentId, status FROM departments
-      WHERE status='ACTIVE' AND (?=1 OR manager_id=?) ORDER BY name`).all(user.roles.includes('HR_MANAGER') ? 1 : 0, user.id);
-    const salaryColumns = canReadJobTitleSalary(user) ? ', min_salary AS minSalary, max_salary AS maxSalary' : '';
-    const jobTitles = db.prepare(`SELECT id, code, name, level${salaryColumns} FROM job_titles WHERE status='ACTIVE' ORDER BY name`).all();
+    const departments = (await db.prepare("SELECT id, name, parent_id AS parentId, status FROM departments WHERE status = 'ACTIVE' ORDER BY name").all());
+    const s210Departments = (await db.prepare(`SELECT id, name, parent_id AS parentId, status FROM departments
+      WHERE status='ACTIVE' AND (?=1 OR manager_id=?) ORDER BY name`).all(user.roles.includes('HR_MANAGER') ? 1 : 0, user.id));
+    const salaryColumns = (await canReadJobTitleSalary(user)) ? ', min_salary AS minSalary, max_salary AS maxSalary' : '';
+    const jobTitles = (await db.prepare(`SELECT id, code, name, level${salaryColumns} FROM job_titles WHERE status='ACTIVE' ORDER BY name`).all());
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({ success: true, tree: departmentService.buildTree(departments), s210Departments, jobTitles }));
     return;
@@ -1071,22 +1093,22 @@ const server = http.createServer(async (req, res) => {
 
   // S2: Department & Organization Management
   if (req.method === 'GET' && (pathname === '/api/v1/departments' || pathname === '/departments')) {
-    const user = rbacMiddleware.authorize(req, res, authController.authService, 'department.read');
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'department.read'));
     if (!user) return;
 
-    const result = departmentService.getDepartments();
+    const result = (await departmentService.getDepartments());
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(result));
     return;
   }
 
   if (req.method === 'POST' && (pathname === '/api/v1/departments' || pathname === '/departments')) {
-    const user = rbacMiddleware.authorize(req, res, authController.authService, 'department.manage');
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'department.manage'));
     if (!user) return;
 
     try {
       const body = await parseBody(req);
-      const result = departmentService.createDepartment(body);
+      const result = (await departmentService.createDepartment(body));
       res.writeHead(result.statusCode || 201, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch {
@@ -1105,7 +1127,7 @@ const server = http.createServer(async (req, res) => {
     pathname.startsWith('/api/v1/departments/') ||
     pathname.startsWith('/departments/')
   )) {
-    const user = rbacMiddleware.authorize(req, res, authController.authService, 'department.manage');
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'department.manage'));
     if (!user) return;
 
     const departmentId = pathname
@@ -1114,7 +1136,7 @@ const server = http.createServer(async (req, res) => {
 
     try {
       const body = await parseBody(req);
-      const result = departmentService.updateDepartment(departmentId, body);
+      const result = (await departmentService.updateDepartment(departmentId, body));
       res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch {
@@ -1133,7 +1155,7 @@ const server = http.createServer(async (req, res) => {
     pathname.endsWith('/deactivate') &&
     (pathname.startsWith('/api/v1/departments/') || pathname.startsWith('/departments/'))
   )) {
-    const user = rbacMiddleware.authorize(req, res, authController.authService, 'department.manage');
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'department.manage'));
     if (!user) return;
 
     const departmentId = pathname
@@ -1141,7 +1163,7 @@ const server = http.createServer(async (req, res) => {
       .replace(/^\/departments\//, '')
       .replace(/\/deactivate$/, '');
 
-    const result = departmentService.deactivateDepartment(departmentId);
+    const result = (await departmentService.deactivateDepartment(departmentId));
     res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(result));
     return;
@@ -1151,14 +1173,14 @@ const server = http.createServer(async (req, res) => {
     pathname.startsWith('/api/v1/departments/') ||
     pathname.startsWith('/departments/')
   )) {
-    const user = rbacMiddleware.authorize(req, res, authController.authService, 'department.manage');
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'department.manage'));
     if (!user) return;
 
     const departmentId = pathname
       .replace(/^\/api\/v1\/departments\//, '')
       .replace(/^\/departments\//, '');
 
-    const result = departmentService.deleteDepartment(departmentId);
+    const result = (await departmentService.deleteDepartment(departmentId));
     res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(result));
     return;
@@ -1168,15 +1190,15 @@ const server = http.createServer(async (req, res) => {
     pathname === '/api/v1/competency-frameworks' ||
     pathname === '/competency-frameworks'
   )) {
-    const user = rbacMiddleware.authorize(
+    const user = (await rbacMiddleware.authorize(
       req,
       res,
       authController.authService,
       'competency.read'
-    );
+    ));
     if (!user) return;
 
-    const result = competencyService.getFrameworks();
+    const result = (await competencyService.getFrameworks());
 
     res.writeHead(200, {
       'Content-Type': 'application/json; charset=utf-8'
@@ -1189,17 +1211,17 @@ const server = http.createServer(async (req, res) => {
     pathname === '/api/v1/competency-frameworks' ||
     pathname === '/competency-frameworks'
   )) {
-    const user = rbacMiddleware.authorize(
+    const user = (await rbacMiddleware.authorize(
       req,
       res,
       authController.authService,
       'competency.manage'
-    );
+    ));
     if (!user) return;
 
     try {
       const body = await parseBody(req);
-      const result = competencyService.createFramework(body);
+      const result = (await competencyService.createFramework(body));
 
       res.writeHead(result.statusCode || 201, {
         'Content-Type': 'application/json; charset=utf-8'
@@ -1224,12 +1246,12 @@ const server = http.createServer(async (req, res) => {
     pathname.startsWith('/api/v1/competency-frameworks/') ||
     pathname.startsWith('/competency-frameworks/')
   )) {
-    const user = rbacMiddleware.authorize(
+    const user = (await rbacMiddleware.authorize(
       req,
       res,
       authController.authService,
       'competency.manage'
-    );
+    ));
     if (!user) return;
 
     const frameworkId = pathname
@@ -1238,10 +1260,10 @@ const server = http.createServer(async (req, res) => {
 
     try {
       const body = await parseBody(req);
-      const result = competencyService.updateFramework(
+      const result = (await competencyService.updateFramework(
         frameworkId,
         body
-      );
+      ));
 
       res.writeHead(result.statusCode || 200, {
         'Content-Type': 'application/json; charset=utf-8'
@@ -1266,15 +1288,15 @@ const server = http.createServer(async (req, res) => {
     pathname === '/api/v1/job-titles' ||
     pathname === '/job-titles'
   )) {
-    const user = rbacMiddleware.authorize(
+    const user = (await rbacMiddleware.authorize(
       req,
       res,
       authController.authService,
       'competency.read'
-    );
+    ));
     if (!user) return;
 
-    const result = competencyService.getJobTitles({ includeSalary: canReadJobTitleSalary(user) });
+    const result = (await competencyService.getJobTitles({ includeSalary: (await canReadJobTitleSalary(user)) }));
 
     res.writeHead(200, {
       'Content-Type': 'application/json; charset=utf-8'
@@ -1287,18 +1309,18 @@ const server = http.createServer(async (req, res) => {
     pathname === '/api/v1/job-titles' ||
     pathname === '/job-titles'
   )) {
-    const user = rbacMiddleware.authorize(
+    const user = (await rbacMiddleware.authorize(
       req,
       res,
       authController.authService,
       'competency.manage'
-    );
+    ));
     if (!user) return;
 
     try {
       const body = await parseBody(req);
-      if (!canReadJobTitleSalary(user)) { denyJobTitleSalary(res); return; }
-      const result = competencyService.createJobTitle(body, { includeSalary: true });
+      if (!(await canReadJobTitleSalary(user))) { denyJobTitleSalary(res); return; }
+      const result = (await competencyService.createJobTitle(body, { includeSalary: true }));
 
       res.writeHead(result.statusCode || 201, {
         'Content-Type': 'application/json; charset=utf-8'
@@ -1323,12 +1345,12 @@ const server = http.createServer(async (req, res) => {
     pathname.startsWith('/api/v1/job-titles/') ||
     pathname.startsWith('/job-titles/')
   )) {
-    const user = rbacMiddleware.authorize(
+    const user = (await rbacMiddleware.authorize(
       req,
       res,
       authController.authService,
       'competency.manage'
-    );
+    ));
     if (!user) return;
 
     const jobTitleId = pathname
@@ -1337,14 +1359,14 @@ const server = http.createServer(async (req, res) => {
 
     try {
       const body = await parseBody(req);
-      if ((Object.hasOwn(body, 'minSalary') || Object.hasOwn(body, 'maxSalary')) && !canReadJobTitleSalary(user)) {
+      if ((Object.hasOwn(body, 'minSalary') || Object.hasOwn(body, 'maxSalary')) && !(await canReadJobTitleSalary(user))) {
         denyJobTitleSalary(res); return;
       }
-      const result = competencyService.updateJobTitle(
+      const result = (await competencyService.updateJobTitle(
         jobTitleId,
         body,
-        { includeSalary: canReadJobTitleSalary(user) }
-      );
+        { includeSalary: (await canReadJobTitleSalary(user)) }
+      ));
 
       res.writeHead(result.statusCode || 200, {
         'Content-Type': 'application/json; charset=utf-8'
@@ -1375,12 +1397,12 @@ const server = http.createServer(async (req, res) => {
       pathname.endsWith('/framework')
     )
   )) {
-    const user = rbacMiddleware.authorize(
+    const user = (await rbacMiddleware.authorize(
       req,
       res,
       authController.authService,
       'competency.read'
-    );
+    ));
     if (!user) return;
 
     const jobTitleId = pathname
@@ -1389,7 +1411,7 @@ const server = http.createServer(async (req, res) => {
       .replace(/\/framework$/, '');
 
     const result =
-      competencyService.getFrameworkForJobTitle(jobTitleId);
+      (await competencyService.getFrameworkForJobTitle(jobTitleId));
 
     res.writeHead(result.statusCode || 200, {
       'Content-Type': 'application/json; charset=utf-8'
@@ -1402,15 +1424,15 @@ const server = http.createServer(async (req, res) => {
     pathname === '/api/v1/interview-question-filters' ||
     pathname === '/interview-question-filters'
   )) {
-    const user = rbacMiddleware.authorize(
+    const user = (await rbacMiddleware.authorize(
       req,
       res,
       authController.authService,
       'question_bank.read'
-    );
+    ));
     if (!user) return;
 
-    const result = questionBankService.getFilterOptions();
+    const result = (await questionBankService.getFilterOptions());
 
     res.writeHead(200, {
       'Content-Type': 'application/json; charset=utf-8'
@@ -1424,12 +1446,12 @@ const server = http.createServer(async (req, res) => {
     pathname === '/api/v1/interview-questions' ||
     pathname === '/interview-questions'
   )) {
-    const user = rbacMiddleware.authorize(
+    const user = (await rbacMiddleware.authorize(
       req,
       res,
       authController.authService,
       'question_bank.read'
-    );
+    ));
     if (!user) return;
 
     const options = {
@@ -1440,7 +1462,7 @@ const server = http.createServer(async (req, res) => {
       status: parsedUrl.searchParams.get('status') || 'ALL'
     };
 
-    const result = questionBankService.getQuestions(options);
+    const result = (await questionBankService.getQuestions(options));
 
     res.writeHead(200, {
       'Content-Type': 'application/json; charset=utf-8'
@@ -1453,17 +1475,17 @@ const server = http.createServer(async (req, res) => {
     pathname === '/api/v1/interview-questions' ||
     pathname === '/interview-questions'
   )) {
-    const user = rbacMiddleware.authorize(
+    const user = (await rbacMiddleware.authorize(
       req,
       res,
       authController.authService,
       'question_bank.manage'
-    );
+    ));
     if (!user) return;
 
     try {
       const body = await parseBody(req);
-      const result = questionBankService.createQuestion(body);
+      const result = (await questionBankService.createQuestion(body));
 
       res.writeHead(result.statusCode || 201, {
         'Content-Type': 'application/json; charset=utf-8'
@@ -1488,12 +1510,12 @@ const server = http.createServer(async (req, res) => {
     pathname.startsWith('/api/v1/interview-questions/') ||
     pathname.startsWith('/interview-questions/')
   )) {
-    const user = rbacMiddleware.authorize(
+    const user = (await rbacMiddleware.authorize(
       req,
       res,
       authController.authService,
       'question_bank.manage'
-    );
+    ));
     if (!user) return;
 
     const questionId = pathname
@@ -1503,10 +1525,10 @@ const server = http.createServer(async (req, res) => {
     try {
       const body = await parseBody(req);
 
-      const result = questionBankService.updateQuestion(
+      const result = (await questionBankService.updateQuestion(
         questionId,
         body
-      );
+      ));
 
       res.writeHead(result.statusCode || 200, {
         'Content-Type': 'application/json; charset=utf-8'
@@ -1541,7 +1563,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     const token = authHeader.substring(7).trim();
-    const sessionResult = authController.authService.validateSession(token, true);
+    const sessionResult = (await authController.authService.validateSession(token, true));
     if (!sessionResult.valid) {
       res.writeHead(sessionResult.statusCode || 401, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({
@@ -1558,9 +1580,9 @@ const server = http.createServer(async (req, res) => {
       status: parsedUrl.searchParams.get('status') || '',
       handoverOnly: parsedUrl.searchParams.get('handoverOnly') === 'true',
       viewerId: sessionResult.user.id,
-      canReadS210: rbacMiddleware.hasPermission(sessionResult.user.id, 'requisition.read')
+      canReadS210: (await rbacMiddleware.hasPermission(sessionResult.user.id, 'requisition.read'))
     };
-    const result = requisitionService.getRequisitions(options);
+    const result = (await requisitionService.getRequisitions(options));
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(result));
     return;
@@ -1568,11 +1590,11 @@ const server = http.createServer(async (req, res) => {
 
   // 13.3 API: Create Requisition
   if (req.method === 'POST' && (pathname === '/api/v1/requisitions' || pathname === '/requisitions')) {
-    const user = rbacMiddleware.authorize(req, res, authController.authService, 'requisition.create');
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'requisition.create'));
     if (!user) return;
     try {
       const body = await parseBody(req);
-      const result = requisitionService.createRequisition(body, user);
+      const result = (await requisitionService.createRequisition(body, user));
       res.writeHead(result.statusCode || 201, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
@@ -1584,12 +1606,12 @@ const server = http.createServer(async (req, res) => {
 
   // 13.4 API: Reassign Handover Requisition
   if (req.method === 'PUT' && ((pathname.startsWith('/api/v1/requisitions/') && pathname.endsWith('/handover')) || (pathname.startsWith('/requisitions/') && pathname.endsWith('/handover')))) {
-    const user = rbacMiddleware.authorize(req, res, authController.authService, 'requisition.edit');
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'requisition.edit'));
     if (!user) return;
     try {
       const reqId = pathname.replace(/^\/api\/v1\/requisitions\//, '').replace(/^\/requisitions\//, '').replace(/\/handover$/, '');
       const body = await parseBody(req);
-      const result = requisitionService.reassignHandover(reqId, body.newRecruiterId, body.notes);
+      const result = (await requisitionService.reassignHandover(reqId, body.newRecruiterId, body.notes));
       res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
@@ -1601,10 +1623,10 @@ const server = http.createServer(async (req, res) => {
 
   // 13.4.1 API: Get Single Requisition Details
   if (req.method === 'GET' && (pathname.startsWith('/api/v1/requisitions/') || pathname.startsWith('/requisitions/')) && !pathname.endsWith('/handover') && !pathname.endsWith('/dashboard-stats')) {
-    const user = rbacMiddleware.authorize(req, res, authController.authService, 'requisition.read');
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'requisition.read'));
     if (!user) return;
     const reqId = pathname.replace(/^\/api\/v1\/requisitions\//, '').replace(/^\/requisitions\//, '');
-    const item = requisitionService.getRequisitionById(reqId);
+    const item = (await requisitionService.getRequisitionById(reqId));
     if (!item) {
       res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ success: false, statusCode: 404, message: 'Không tìm thấy vị trí tuyển dụng.' }));
@@ -1623,9 +1645,9 @@ const server = http.createServer(async (req, res) => {
   // 13.4.2 API: Update Requisition Details
   if (req.method === 'PUT' && (pathname.startsWith('/api/v1/requisitions/') || pathname.startsWith('/requisitions/')) && !pathname.endsWith('/handover')) {
     const reqId = pathname.replace(/^\/api\/v1\/requisitions\//, '').replace(/^\/requisitions\//, '');
-    const current = requisitionService.getRequisitionById(reqId);
+    const current = (await requisitionService.getRequisitionById(reqId));
     const isS210Draft = current?.formVersion === 'S2-10' && current.status === 'DRAFT';
-    const user = rbacMiddleware.authorize(req, res, authController.authService, isS210Draft ? 'requisition.draft.edit' : 'requisition.edit');
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, isS210Draft ? 'requisition.draft.edit' : 'requisition.edit'));
     if (!user) return;
     if (isS210Draft && current.createdBy !== user.id) {
       res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -1634,7 +1656,7 @@ const server = http.createServer(async (req, res) => {
     }
     try {
       const body = await parseBody(req);
-      const result = requisitionService.updateRequisition(reqId, body, user);
+      const result = (await requisitionService.updateRequisition(reqId, body, user));
       res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
@@ -1646,9 +1668,9 @@ const server = http.createServer(async (req, res) => {
 
   // 13.5 API: Get Email Logs (Admin)
   if (req.method === 'GET' && (pathname === '/api/v1/admin/email-logs' || pathname === '/admin/email-logs')) {
-    const user = rbacMiddleware.authorize(req, res, authController.authService, 'audit.read');
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'audit.read'));
     if (!user) return;
-    const logs = db.prepare('SELECT * FROM email_logs ORDER BY created_at DESC LIMIT 50').all();
+    const logs = (await db.prepare('SELECT * FROM email_logs ORDER BY created_at DESC LIMIT 50').all());
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({ success: true, total: logs.length, logs }));
     return;
@@ -1656,7 +1678,7 @@ const server = http.createServer(async (req, res) => {
 
   // 13.6 API: Get Audit Logs (Admin)
   if (req.method === 'GET' && (pathname === '/api/v1/admin/audit-logs' || pathname === '/admin/audit-logs')) {
-    const user = rbacMiddleware.authorize(req, res, authController.authService, 'audit.read');
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'audit.read'));
     if (!user) return;
     const search = (parsedUrl.searchParams.get('search') || '').trim();
     const status = (parsedUrl.searchParams.get('status') || '').trim();
@@ -1681,7 +1703,7 @@ const server = http.createServer(async (req, res) => {
     query += ' ORDER BY attempted_at DESC LIMIT ?';
     params.push(limit);
 
-    const logs = db.prepare(query).all(...params);
+    const logs = (await db.prepare(query).all(...params));
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({ success: true, total: logs.length, logs, data: { logs } }));
     return;
@@ -1689,10 +1711,10 @@ const server = http.createServer(async (req, res) => {
 
   // 13.6.1 API: Get Single Audit Log Detail (Admin)
   if (req.method === 'GET' && (pathname.startsWith('/api/v1/admin/audit-logs/') || pathname.startsWith('/admin/audit-logs/'))) {
-    const user = rbacMiddleware.authorize(req, res, authController.authService, 'audit.read');
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'audit.read'));
     if (!user) return;
     const logId = pathname.split('/').pop();
-    const log = db.prepare('SELECT * FROM login_audit_logs WHERE id = ?').get(logId);
+    const log = (await db.prepare('SELECT * FROM login_audit_logs WHERE id = ?').get(logId));
     if (!log) {
       res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ success: false, statusCode: 404, message: 'Không tìm thấy bản ghi nhật ký.' }));
@@ -1700,15 +1722,15 @@ const server = http.createServer(async (req, res) => {
     }
 
     // Enrich with associated user details if available
-    const userInfo = db.prepare('SELECT id, full_name, email, department_name, status, failed_attempts, locked_until FROM users WHERE email = ?').get(log.email);
+    const userInfo = (await db.prepare('SELECT id, full_name, email, department_name, status, failed_attempts, locked_until FROM users WHERE email = ?').get(log.email));
     let roles = [];
     if (userInfo) {
-      roles = db.prepare(`
+      roles = (await db.prepare(`
         SELECT r.code, r.name 
         FROM user_roles ur
         JOIN roles r ON ur.role_id = r.id
         WHERE ur.user_id = ?
-      `).all(userInfo.id);
+      `).all(userInfo.id));
     }
 
     // Determine security risk and event classification
@@ -1762,14 +1784,14 @@ const server = http.createServer(async (req, res) => {
 
   // 13.7 API: Candidates List (Real SQLite Data)
   if (req.method === 'GET' && (pathname === '/api/v1/candidates' || pathname === '/candidates')) {
-    const user = rbacMiddleware.authorize(req, res, authController.authService, 'candidate.read');
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.read'));
     if (!user) return;
     const options = {
       search: parsedUrl.searchParams.get('search') || '',
       stage: parsedUrl.searchParams.get('stage') || 'ALL',
       requisitionId: parsedUrl.searchParams.get('requisitionId') || 'ALL'
     };
-    const result = requisitionService.getCandidates(options);
+    const result = (await requisitionService.getCandidates(options));
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(result));
     return;
@@ -1777,11 +1799,11 @@ const server = http.createServer(async (req, res) => {
 
   // 13.7.1 API: Create Candidate
   if (req.method === 'POST' && (pathname === '/api/v1/candidates' || pathname === '/candidates')) {
-    const user = rbacMiddleware.authorize(req, res, authController.authService, 'candidate.read');
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.read'));
     if (!user) return;
     try {
       const body = await parseBody(req);
-      const result = requisitionService.createCandidate(body);
+      const result = (await requisitionService.createCandidate(body));
       res.writeHead(result.statusCode || 201, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
@@ -1793,14 +1815,14 @@ const server = http.createServer(async (req, res) => {
 
   // 13.7.2 API: Update Candidate Stage
   if (req.method === 'PUT' && ((pathname.startsWith('/api/v1/candidates/') && pathname.endsWith('/stage')) || (pathname.startsWith('/candidates/') && pathname.endsWith('/stage')))) {
-    const user = rbacMiddleware.authorize(req, res, authController.authService, 'candidate.read');
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.read'));
     if (!user) return;
     try {
       const candId = pathname.replace(/^\/api\/v1\/candidates\//, '').replace(/^\/candidates\//, '').replace(/\/stage$/, '');
       const body = await parseBody(req);
       const isCatalogUpdate = Object.hasOwn(body, 'rejectionReasonId');
-      if (isCatalogUpdate && !rbacMiddleware.authorize(req, res, authController.authService, 'candidate.update')) return;
-      const result = requisitionService.updateCandidateStage(candId, body.stage, isCatalogUpdate ? body.notes : undefined, isCatalogUpdate ? body.rejectionReasonId : undefined);
+      if (isCatalogUpdate && !(await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.update'))) return;
+      const result = (await requisitionService.updateCandidateStage(candId, body.stage, isCatalogUpdate ? body.notes : undefined, isCatalogUpdate ? body.rejectionReasonId : undefined));
       res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
@@ -1812,9 +1834,9 @@ const server = http.createServer(async (req, res) => {
 
   // 13.8 API: Interviews List (Real SQLite Data)
   if (req.method === 'GET' && (pathname === '/api/v1/interviews' || pathname === '/interviews')) {
-    const user = rbacMiddleware.authorize(req, res, authController.authService, 'interview.read');
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'interview.read'));
     if (!user) return;
-    const result = requisitionService.getInterviews();
+    const result = (await requisitionService.getInterviews());
     for (const interview of result.interviews) {
       if (interview.interviewer) {
         Object.assign(interview.interviewer, avatarService.getAvatarUrls(interview.interviewer.id));
@@ -1827,11 +1849,11 @@ const server = http.createServer(async (req, res) => {
 
   // 13.8.1 API: Create Interview
   if (req.method === 'POST' && (pathname === '/api/v1/interviews' || pathname === '/interviews')) {
-    const user = rbacMiddleware.authorize(req, res, authController.authService, 'interview.read');
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'interview.read'));
     if (!user) return;
     try {
       const body = await parseBody(req);
-      const result = requisitionService.createInterview(body);
+      const result = (await requisitionService.createInterview(body));
       res.writeHead(result.statusCode || 201, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
@@ -1843,12 +1865,12 @@ const server = http.createServer(async (req, res) => {
 
   // 13.8.2 API: Update Interview Status / Feedback / Score
   if (req.method === 'PUT' && ((pathname.startsWith('/api/v1/interviews/') && pathname.endsWith('/status')) || (pathname.startsWith('/interviews/') && pathname.endsWith('/status')))) {
-    const user = rbacMiddleware.authorize(req, res, authController.authService, 'interview.read');
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'interview.read'));
     if (!user) return;
     try {
       const intId = pathname.replace(/^\/api\/v1\/interviews\//, '').replace(/^\/interviews\//, '').replace(/\/status$/, '');
       const body = await parseBody(req);
-      const result = requisitionService.updateInterviewStatus(intId, body.status, body.feedback, body.score);
+      const result = (await requisitionService.updateInterviewStatus(intId, body.status, body.feedback, body.score));
       res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
@@ -1860,9 +1882,9 @@ const server = http.createServer(async (req, res) => {
 
   // 13.9 API: Offers List (Real SQLite Data)
   if (req.method === 'GET' && (pathname === '/api/v1/offers' || pathname === '/offers')) {
-    const user = rbacMiddleware.authorize(req, res, authController.authService, 'offer.read');
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'offer.read'));
     if (!user) return;
-    const result = requisitionService.getOffers();
+    const result = (await requisitionService.getOffers());
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(result));
     return;
@@ -1870,11 +1892,11 @@ const server = http.createServer(async (req, res) => {
 
   // 13.9.1 API: Create Offer
   if (req.method === 'POST' && (pathname === '/api/v1/offers' || pathname === '/offers')) {
-    const user = rbacMiddleware.authorize(req, res, authController.authService, 'offer.read');
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'offer.read'));
     if (!user) return;
     try {
       const body = await parseBody(req);
-      const result = requisitionService.createOffer(body);
+      const result = (await requisitionService.createOffer(body));
       res.writeHead(result.statusCode || 201, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
@@ -1886,12 +1908,12 @@ const server = http.createServer(async (req, res) => {
 
   // 13.9.2 API: Update Offer Status
   if (req.method === 'PUT' && ((pathname.startsWith('/api/v1/offers/') && pathname.endsWith('/status')) || (pathname.startsWith('/offers/') && pathname.endsWith('/status')))) {
-    const user = rbacMiddleware.authorize(req, res, authController.authService, 'offer.read');
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'offer.read'));
     if (!user) return;
     try {
       const offId = pathname.replace(/^\/api\/v1\/offers\//, '').replace(/^\/offers\//, '').replace(/\/status$/, '');
       const body = await parseBody(req);
-      const result = requisitionService.updateOfferStatus(offId, body.status);
+      const result = (await requisitionService.updateOfferStatus(offId, body.status));
       res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
@@ -1910,13 +1932,13 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     const token = authHeader.substring(7).trim();
-    const sessionResult = authController.authService.validateSession(token, true);
+    const sessionResult = (await authController.authService.validateSession(token, true));
     if (!sessionResult.valid) {
       res.writeHead(sessionResult.statusCode || 401, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ success: false, statusCode: sessionResult.statusCode || 401, message: sessionResult.message, code: sessionResult.code }));
       return;
     }
-    const result = requisitionService.getReports();
+    const result = (await requisitionService.getReports());
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(result));
     return;
@@ -1943,7 +1965,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     const token = authHeader.substring(7).trim();
-    const sessionResult = authController.authService.validateSession(token, true);
+    const sessionResult = (await authController.authService.validateSession(token, true));
     if (!sessionResult.valid) {
       res.writeHead(sessionResult.statusCode || 401, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({
@@ -1961,7 +1983,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     const user = sessionResult.user;
-    const userPerms = rbacMiddleware.getUserPermissions(user.id);
+    const userPerms = (await rbacMiddleware.getUserPermissions(user.id));
     const isCandidate = user.roles.includes('CANDIDATE');
 
     // All possible ATS menu items with required permissions
@@ -2038,6 +2060,13 @@ const server = http.createServer(async (req, res) => {
   }
 
   // 15. Default 404 Handler (AC-01, AC-02, AC-03)
+  // Only an actual browser document navigation receives the existing error-page shell.
+  // API callers and missing assets retain their JSON 404 contract.
+  if (req.method === 'GET' && req.headers['sec-fetch-dest'] === 'document' &&
+      (req.headers.accept || '').includes('text/html') && pathname !== '/api' && !pathname.startsWith('/api/') && !path.extname(pathname)) {
+    serveFrontendEntry(res, 404);
+    return;
+  }
   res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify({
     success: false,
@@ -2051,9 +2080,21 @@ const server = http.createServer(async (req, res) => {
       label: 'Về trang chủ hệ thống'
     }
   }));
+}
+
+const server = http.createServer((req, res) => {
+  db.withConnection(async () => (await handleRequest(req, res))).catch(() => {
+    console.error('[ATS Server] INTERNAL_SERVER_ERROR');
+    if (res.headersSent) { res.end(); return; }
+    res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ success: false, statusCode: 500, code: 'INTERNAL_SERVER_ERROR',
+      message: 'Hệ thống đang gặp sự cố. Vui lòng thử lại sau.' }));
+  });
 });
 
-function startServer(port = config.PORT) {
+async function startServer(port = config.PORT) {
+  initialization ||= initializeApplication();
+  await initialization;
   return new Promise(resolve => {
     server.listen(port, () => {
       console.log(`[ATS Server] Server listening on http://localhost:${port}`);
@@ -2063,7 +2104,7 @@ function startServer(port = config.PORT) {
 }
 
 if (require.main === module) {
-  startServer();
+  startServer().catch(async error => { console.error('[ATS Startup]', error.code || 'DATABASE_STARTUP_FAILED'); await db.close(); process.exitCode = 1; });
 }
 
 module.exports = {

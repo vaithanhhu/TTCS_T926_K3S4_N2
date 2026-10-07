@@ -1,7 +1,7 @@
 const { getDatabase } = require('./database');
 const { hashPassword } = require('../utils/password');
 
-function seedDatabase(db, options = {}) {
+async function seedDatabase(db, options = {}) {
   const database = db || getDatabase();
   const preservePasswords = options.preservePasswords === true;
 
@@ -26,7 +26,7 @@ function seedDatabase(db, options = {}) {
   `);
 
   for (const r of roles) {
-    insertRole.run(r.id, r.code, r.name, r.description, r.defaultPath);
+    (await insertRole.run(r.id, r.code, r.name, r.description, r.defaultPath));
   }
 
   // 2. Seed Permissions (S1-05 RBAC Matrix)
@@ -93,7 +93,7 @@ function seedDatabase(db, options = {}) {
   `);
 
   for (const p of permissions) {
-    insertPerm.run(p.id, p.code, p.name, p.module, p.description);
+    (await insertPerm.run(p.id, p.code, p.name, p.module, p.description));
   }
 
   // 3. Seed Role_Permissions (AC-01 RBAC Matrix for 7 roles)
@@ -163,9 +163,9 @@ function seedDatabase(db, options = {}) {
 
   let totalRolePerms = 0;
   for (const [roleCode, permCodes] of Object.entries(rolePermissionsMatrix)) {
-    deleteRolePerms.run(roleCode);
+    (await deleteRolePerms.run(roleCode));
     for (const permCode of permCodes) {
-      insertRolePerm.run(roleCode, permCode);
+      (await insertRolePerm.run(roleCode, permCode));
       totalRolePerms++;
     }
   }
@@ -279,7 +279,7 @@ function seedDatabase(db, options = {}) {
       email: 'candidate@example.com',
       fullName: 'Nguyễn Ứng Viên',
       jobTitle: 'Ứng viên tự do',
-      departmentId: 'dept-ext',
+      departmentId: null,
       departmentName: 'Cổng Tuyển Dụng Công Khai',
       phoneNumber: '0978901234',
       status: 'ACTIVE',
@@ -476,7 +476,7 @@ function seedDatabase(db, options = {}) {
   `);
 
   for (const u of users) {
-    insertUser.run(
+    (await insertUser.run(
       u.id,
       u.email,
       defaultPasswordHash,
@@ -488,11 +488,11 @@ function seedDatabase(db, options = {}) {
       u.status,
       u.lockReason || null,
       preservePasswords ? 1 : 0
-    );
+    ));
 
-    deleteUserRoles.run(u.id);
+    (await deleteUserRoles.run(u.id));
     for (const rCode of u.roles) {
-      insertUserRole.run(u.id, rCode);
+      (await insertUserRole.run(u.id, rCode));
     }
   }
 
@@ -542,7 +542,7 @@ function seedDatabase(db, options = {}) {
 
   const insertReq = database.prepare(`
     INSERT INTO requisitions (id, code, title, department_name, hiring_manager_id, recruiter_id, status, headcount, handover_required, handover_notes, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, datetime('now'), datetime('now'))
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, FALSE, NULL, datetime('now'), datetime('now'))
     ON CONFLICT(code) DO UPDATE SET
       title = excluded.title,
       department_name = excluded.department_name,
@@ -550,12 +550,12 @@ function seedDatabase(db, options = {}) {
       recruiter_id = excluded.recruiter_id,
       status = excluded.status,
       headcount = excluded.headcount,
-      handover_required = 0,
+      handover_required = FALSE,
       handover_notes = NULL
   `);
 
   for (const r of requisitions) {
-    insertReq.run(r.id, r.code, r.title, r.departmentName, r.hiringManagerId, r.recruiterId, r.status, r.headcount);
+    (await insertReq.run(r.id, r.code, r.title, r.departmentName, r.hiringManagerId, r.recruiterId, r.status, r.headcount));
   }
 
   // 6. Seed Candidates
@@ -578,21 +578,21 @@ function seedDatabase(db, options = {}) {
   `);
 
   for (const c of candidates) {
-    insertCand.run(c.id, c.fullName, c.email, c.phone, c.reqId, c.stage, c.exp, c.company, c.salary, c.notes);
+    (await insertCand.run(c.id, c.fullName, c.email, c.phone, c.reqId, c.stage, c.exp, c.company, c.salary, c.notes));
   }
 
   // Clean up any test artifact names if present
-  database.prepare("UPDATE candidates SET full_name = 'Lê Hoàng Long', email = 'hoanglong.le@gmail.com' WHERE full_name LIKE '%Kiểm Thử%'").run();
-  database.prepare("UPDATE candidates SET full_name = 'Nguyễn Thị Phương Thảo', email = 'phuongthao.nguyen@gmail.com' WHERE full_name LIKE '%Test%'").run();
-  database.prepare("UPDATE requisitions SET title = 'Kỹ sư Trí tuệ Nhân tạo (AI Engineer)' WHERE id = 'req-29161419-e5a7-4fba-bda6-7bae6ea84d2f'").run();
-  database.prepare("UPDATE requisitions SET title = 'Chuyên viên Phân tích Dữ liệu (Data Analyst)' WHERE id = 'req-2ef45985-6d1b-4d0d-99b3-448eee28d9be'").run();
-  database.prepare("UPDATE requisitions SET title = 'Kỹ sư Giải pháp Đám mây (Cloud Architect)' WHERE id = 'req-0787270f-c4fe-4bf6-8c31-4110a6e96178'").run();
-  database.prepare("UPDATE requisitions SET title = 'Kỹ sư Kiểm thử Phần mềm (QA/QC Engineer)' WHERE id = 'req-d390af88-1d16-4cbc-afc2-2ece62a2bb12'").run();
-  database.prepare("UPDATE requisitions SET title = 'Trưởng nhóm Kỹ thuật (Engineering Manager)' WHERE id = 'req-d80ec776-4751-47a3-ba73-76e4c1158a0d'").run();
-  database.prepare("UPDATE requisitions SET title = 'Chuyên viên Tuyển dụng Cao cấp (Senior IT Recruiter)' WHERE id = 'req-9751ed0c-bb30-470b-9f39-3d05169a794a'").run();
-  database.prepare("UPDATE requisitions SET title = 'Thiết kế Sản phẩm (Product Designer UI/UX)' WHERE id = 'req-8d814b53-15c6-454f-b200-4b9f8abd6108'").run();
-  database.prepare("UPDATE requisitions SET title = 'Kỹ sư An toàn Thông tin (Security Engineer)' WHERE id = 'req-b947a1c0-1494-42b5-9b3f-c71d793e6cfa'").run();
-  database.prepare("UPDATE requisitions SET title = 'Chuyên viên Quản trị Hệ thống (System Admin)' WHERE id = 'req-3001d0f8-421c-42bd-8fc6-3b0133e34011'").run();
+  (await database.prepare("UPDATE candidates SET full_name = 'Lê Hoàng Long', email = 'hoanglong.le@gmail.com' WHERE full_name LIKE '%Kiểm Thử%'").run());
+  (await database.prepare("UPDATE candidates SET full_name = 'Nguyễn Thị Phương Thảo', email = 'phuongthao.nguyen@gmail.com' WHERE full_name LIKE '%Test%'").run());
+  (await database.prepare("UPDATE requisitions SET title = 'Kỹ sư Trí tuệ Nhân tạo (AI Engineer)' WHERE id = 'req-29161419-e5a7-4fba-bda6-7bae6ea84d2f'").run());
+  (await database.prepare("UPDATE requisitions SET title = 'Chuyên viên Phân tích Dữ liệu (Data Analyst)' WHERE id = 'req-2ef45985-6d1b-4d0d-99b3-448eee28d9be'").run());
+  (await database.prepare("UPDATE requisitions SET title = 'Kỹ sư Giải pháp Đám mây (Cloud Architect)' WHERE id = 'req-0787270f-c4fe-4bf6-8c31-4110a6e96178'").run());
+  (await database.prepare("UPDATE requisitions SET title = 'Kỹ sư Kiểm thử Phần mềm (QA/QC Engineer)' WHERE id = 'req-d390af88-1d16-4cbc-afc2-2ece62a2bb12'").run());
+  (await database.prepare("UPDATE requisitions SET title = 'Trưởng nhóm Kỹ thuật (Engineering Manager)' WHERE id = 'req-d80ec776-4751-47a3-ba73-76e4c1158a0d'").run());
+  (await database.prepare("UPDATE requisitions SET title = 'Chuyên viên Tuyển dụng Cao cấp (Senior IT Recruiter)' WHERE id = 'req-9751ed0c-bb30-470b-9f39-3d05169a794a'").run());
+  (await database.prepare("UPDATE requisitions SET title = 'Thiết kế Sản phẩm (Product Designer UI/UX)' WHERE id = 'req-8d814b53-15c6-454f-b200-4b9f8abd6108'").run());
+  (await database.prepare("UPDATE requisitions SET title = 'Kỹ sư An toàn Thông tin (Security Engineer)' WHERE id = 'req-b947a1c0-1494-42b5-9b3f-c71d793e6cfa'").run());
+  (await database.prepare("UPDATE requisitions SET title = 'Chuyên viên Quản trị Hệ thống (System Admin)' WHERE id = 'req-3001d0f8-421c-42bd-8fc6-3b0133e34011'").run());
 
   // 7. Seed Interviews
   const interviews = [
@@ -610,7 +610,7 @@ function seedDatabase(db, options = {}) {
   `);
 
   for (const i of interviews) {
-    insertInt.run(i.id, i.candId, i.reqId, i.interviewerId, i.round, i.time, i.location, i.status, i.feedback, i.score);
+    (await insertInt.run(i.id, i.candId, i.reqId, i.interviewerId, i.round, i.time, i.location, i.status, i.feedback, i.score));
   }
 
   // 8. Seed Offers
@@ -628,28 +628,28 @@ function seedDatabase(db, options = {}) {
   `);
 
   for (const o of offers) {
-    insertOff.run(o.id, o.candId, o.reqId, o.salary, o.startDate, o.status, o.approverId);
+    (await insertOff.run(o.id, o.candId, o.reqId, o.salary, o.startDate, o.status, o.approverId));
   }
 
-  ensureDepartmentFeature(database);
-  ensureCompetencyFeature(database);
-  ensureRequisitionDraftFeature(database);
+  (await ensureDepartmentFeature(database));
+  (await ensureCompetencyFeature(database));
+  (await ensureRequisitionDraftFeature(database));
 
   console.log(`[Seed] Seeded ${roles.length} roles, ${permissions.length} permissions, ${totalRolePerms} role-permissions mappings, ${users.length} users, ${requisitions.length} requisitions, ${candidates.length} candidates, ${interviews.length} interviews, and ${offers.length} offers successfully with secure password hashing.`);
 }
 
-function ensureRequisitionDraftFeature(db) {
+async function ensureRequisitionDraftFeature(db) {
   const database = db || getDatabase();
-  database.exec(`
+  (await database.exec(`
     INSERT OR IGNORE INTO permissions (id, code, name, module, description)
     VALUES ('perm-req-draft-edit', 'requisition.draft.edit', 'Sửa nháp yêu cầu tuyển dụng của mình', 'REQUISITIONS', 'Cập nhật và hoàn tất yêu cầu S2-10 ở trạng thái nháp do mình tạo');
     INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
     SELECT r.id, p.id FROM roles r, permissions p
     WHERE r.code IN ('HIRING_MGR', 'HR_MANAGER') AND p.code = 'requisition.draft.edit';
-  `);
+  `));
 }
 
-function ensureDepartmentFeature(db) {
+async function ensureDepartmentFeature(db) {
   const database = db || getDatabase();
 
   const permissions = [
@@ -667,7 +667,7 @@ function ensureDepartmentFeature(db) {
   `);
 
   for (const permission of permissions) {
-    upsertPermission.run(...permission);
+    (await upsertPermission.run(...permission));
   }
 
   const assignPermission = database.prepare(`
@@ -678,8 +678,8 @@ function ensureDepartmentFeature(db) {
   `);
 
   for (const roleCode of ['ADMIN', 'HR_MANAGER']) {
-    assignPermission.run(roleCode, 'department.read');
-    assignPermission.run(roleCode, 'department.manage');
+    (await assignPermission.run(roleCode, 'department.read'));
+    (await assignPermission.run(roleCode, 'department.manage'));
   }
 
   const departments = [
@@ -702,16 +702,16 @@ function ensureDepartmentFeature(db) {
   `);
 
   for (const department of departments) {
-    const managerExists = database.prepare(
+    const managerExists = (await database.prepare(
       'SELECT id FROM users WHERE id = ?'
-    ).get(department[4]);
+    ).get(department[4]));
 
     if (managerExists) {
-      insertDepartment.run(...department);
+      (await insertDepartment.run(...department));
     }
   }
 
-  database.exec(`
+  (await database.exec(`
     UPDATE requisitions
     SET department_id = (
       SELECT d.id
@@ -720,20 +720,20 @@ function ensureDepartmentFeature(db) {
       LIMIT 1
     )
     WHERE department_id IS NULL;
-  `);
+  `));
 }
-function ensureCompetencyFeature(db) {
+async function ensureCompetencyFeature(db) {
   const database = db || getDatabase();
 
-  database.prepare(`
+  (await database.prepare(`
     INSERT OR IGNORE INTO permissions (id, code, name, module, description)
     VALUES ('perm-salary-range-read', 'salary_range.read', 'Xem dải lương', 'OFFERS', 'Xem dải lương tối thiểu và tối đa của chức danh')
-  `).run();
-  database.prepare(`
+  `).run());
+  (await database.prepare(`
     INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
     SELECT r.id, p.id FROM roles r, permissions p
     WHERE r.code = 'HR_MANAGER' AND p.code = 'salary_range.read'
-  `).run();
+  `).run());
 
   const permissions = [
     [
@@ -760,7 +760,7 @@ function ensureCompetencyFeature(db) {
   `);
 
   for (const permission of permissions) {
-    upsertPermission.run(...permission);
+    (await upsertPermission.run(...permission));
   }
 
   const assignPermission = database.prepare(`
@@ -771,11 +771,11 @@ function ensureCompetencyFeature(db) {
   `);
 
   for (const roleCode of ['ADMIN', 'HR_MANAGER']) {
-    assignPermission.run(roleCode, 'competency.read');
-    assignPermission.run(roleCode, 'competency.manage');
+    (await assignPermission.run(roleCode, 'competency.read'));
+    (await assignPermission.run(roleCode, 'competency.manage'));
   }
 }
-function ensureQuestionBankFeature(db) {
+async function ensureQuestionBankFeature(db) {
   const database = db || getDatabase();
 
   const permissions = [
@@ -803,7 +803,7 @@ function ensureQuestionBankFeature(db) {
   `);
 
   for (const permission of permissions) {
-    upsertPermission.run(...permission);
+    (await upsertPermission.run(...permission));
   }
 
   const assignPermission = database.prepare(`
@@ -814,15 +814,15 @@ function ensureQuestionBankFeature(db) {
   `);
 
   for (const roleCode of ['ADMIN', 'HR_MANAGER', 'INTERVIEWER']) {
-    assignPermission.run(roleCode, 'question_bank.read');
+    (await assignPermission.run(roleCode, 'question_bank.read'));
   }
 
   for (const roleCode of ['ADMIN', 'HR_MANAGER']) {
-    assignPermission.run(roleCode, 'question_bank.manage');
+    (await assignPermission.run(roleCode, 'question_bank.manage'));
   }
 }
 
-function ensureRecruitmentCatalogFeature(db) {
+async function ensureRecruitmentCatalogFeature(db) {
   const database = db || getDatabase();
 
   const permissions = [
@@ -850,7 +850,7 @@ function ensureRecruitmentCatalogFeature(db) {
   `);
 
   for (const permission of permissions) {
-    upsertPermission.run(...permission);
+    (await upsertPermission.run(...permission));
   }
 
   const assignPermission = database.prepare(`
@@ -861,14 +861,14 @@ function ensureRecruitmentCatalogFeature(db) {
   `);
 
   for (const roleCode of ['ADMIN', 'HR_MANAGER']) {
-    assignPermission.run(roleCode, 'recruitment_catalog.read');
-    assignPermission.run(roleCode, 'recruitment_catalog.manage');
+    (await assignPermission.run(roleCode, 'recruitment_catalog.read'));
+    (await assignPermission.run(roleCode, 'recruitment_catalog.manage'));
   }
 
-  assignPermission.run('RECRUITER', 'recruitment_catalog.read');
-  assignPermission.run('HIRING_MGR', 'recruitment_catalog.read');
+  (await assignPermission.run('RECRUITER', 'recruitment_catalog.read'));
+  (await assignPermission.run('HIRING_MGR', 'recruitment_catalog.read'));
 }
-function ensureCareerPageFeature(db) {
+async function ensureCareerPageFeature(db) {
   const database = db || getDatabase();
 
   const permissions = [
@@ -896,7 +896,7 @@ function ensureCareerPageFeature(db) {
   `);
 
   for (const permission of permissions) {
-    upsertPermission.run(...permission);
+    (await upsertPermission.run(...permission));
   }
 
   const assignPermission = database.prepare(`
@@ -907,12 +907,13 @@ function ensureCareerPageFeature(db) {
   `);
 
   for (const roleCode of ['ADMIN', 'HR_MANAGER']) {
-    assignPermission.run(roleCode, 'career_page.read');
-    assignPermission.run(roleCode, 'career_page.manage');
+    (await assignPermission.run(roleCode, 'career_page.read'));
+    (await assignPermission.run(roleCode, 'career_page.manage'));
   }
 }
 if (require.main === module) {
-  seedDatabase();
+  const db = getDatabase();
+  db.transaction(() => seedDatabase(db)).catch(() => { console.error('[Seed] FAILED'); process.exitCode = 1; }).finally(() => db.close());
 }
 
 module.exports = {

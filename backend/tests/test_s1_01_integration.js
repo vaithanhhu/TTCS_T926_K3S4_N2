@@ -130,7 +130,7 @@ async function runTests() {
     const lockTargetEmail = 'recruiter2@company.com';
 
     // Reset target trước khi test
-    db.prepare('UPDATE users SET failed_attempts = 0, locked_until = NULL WHERE email = ?').run(lockTargetEmail);
+    (await db.prepare('UPDATE users SET failed_attempts = 0, locked_until = NULL WHERE email = ?').run(lockTargetEmail));
 
     // Lần 1 đến 4: Trả về 401
     for (let i = 1; i <= 4; i++) {
@@ -192,7 +192,7 @@ async function runTests() {
     // TEST 6: BẢO MẬT DATABASE - MẬT KHẨU LƯU DẠNG HASH SCRYPT
     // -------------------------------------------------------------
     totalTests++;
-    const dbRow = db.prepare('SELECT password_hash FROM users WHERE email = ?').get('admin@company.com');
+    const dbRow = (await db.prepare('SELECT password_hash FROM users WHERE email = ?').get('admin@company.com'));
     assert.ok(dbRow.password_hash.includes(':'), 'Hash trong DB phải có định dạng salt:derivedKey');
     assert.notStrictEqual(dbRow.password_hash, 'Ats@123456', 'Tuyệt đối không lưu plaintext password trong DB');
     recordPass('Bảo mật: Cơ sở dữ liệu SQLite lưu mật khẩu mã hóa scrypt + salt an toàn');
@@ -227,7 +227,7 @@ async function runTests() {
       headers: { 'Content-Type': 'application/json' }
     }, { email: resetTargetEmail, password: 'WrongPassword' });
 
-    let attemptsInDb = db.prepare('SELECT failed_attempts FROM users WHERE email = ?').get(resetTargetEmail).failed_attempts;
+    let attemptsInDb = (await db.prepare('SELECT failed_attempts FROM users WHERE email = ?').get(resetTargetEmail)).failed_attempts;
     assert.strictEqual(attemptsInDb, 1);
 
     // Đăng nhập đúng -> reset về 0
@@ -239,7 +239,7 @@ async function runTests() {
       headers: { 'Content-Type': 'application/json' }
     }, { email: resetTargetEmail, password: 'Ats@123456' });
 
-    attemptsInDb = db.prepare('SELECT failed_attempts FROM users WHERE email = ?').get(resetTargetEmail).failed_attempts;
+    attemptsInDb = (await db.prepare('SELECT failed_attempts FROM users WHERE email = ?').get(resetTargetEmail)).failed_attempts;
     assert.strictEqual(attemptsInDb, 0);
     recordPass('Logic nghiệp vụ: Đăng nhập đúng tự động reset bộ đếm failed_attempts về 0');
 

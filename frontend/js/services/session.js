@@ -5,6 +5,7 @@
   let currentAuthenticatedHome = null;
 
   function getAuthenticatedHome() {
+    if (currentAuthenticatedUser?.mustChangePassword) return '/change-password';
     if (window.ATS_ROUTER?.resolveInternal(currentAuthenticatedHome)?.auth) return currentAuthenticatedHome;
     return currentAuthenticatedUser?.roles?.includes('CANDIDATE') ? '/candidate' : '/dashboard';
   }
@@ -16,6 +17,12 @@
     currentAuthenticatedUser = user;
     currentAuthenticatedHome = window.ATS_ROUTER?.resolveInternal(defaultHome)?.auth ? defaultHome : null;
     window.ATS_MOBILE_NAVIGATION.updateActions();
+    if (user.mustChangePassword) {
+      currentAllowedPaths = new Set();
+      startSessionHeartbeat();
+      window.ATS_ROUTER.navigate('/change-password', { replace: true });
+      return;
+    }
 
     // Hide Login, Show App Shell
     if (loginView) loginView.classList.add('hidden');

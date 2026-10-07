@@ -188,7 +188,7 @@ async function main() {
       assert.equal(requests.filter(row => row.method === 'PUT' && row.path === '/api/v1/career-page').length, 1);
       const published = await app.api('GET', '/public/career-page'); assert.equal(published.status, 200);
       const data = published.data.data; assert.equal(data.introduction, 'Career Page 5 MB regression');
-      const row = app.db.prepare('SELECT * FROM career_page_settings WHERE id=1').get();
+      const row = (await app.db.prepare('SELECT * FROM career_page_settings WHERE id=1').get());
       assert.equal(row.logo_url, data.logoUrl); assert.equal(row.hero_image_url, data.heroImageUrl);
       assert.equal(row.introduction, data.introduction);
       for (const url of [data.logoUrl, data.heroImageUrl]) {

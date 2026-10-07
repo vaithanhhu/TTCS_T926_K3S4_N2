@@ -68,14 +68,14 @@ async function runTests() {
     assert.strictEqual(forgotRes.body.code, 'RESET_LINK_SENT');
 
     // Kiểm tra token được tạo trong bảng password_reset_tokens
-    const tokenRow = db.prepare(`
+    const tokenRow = (await db.prepare(`
       SELECT prt.token, prt.expires_at, prt.used_at, u.email
       FROM password_reset_tokens prt
       JOIN users u ON prt.user_id = u.id
       WHERE u.email = ? AND prt.used_at IS NULL
       ORDER BY prt.created_at DESC
       LIMIT 1
-    `).get(targetEmail);
+    `).get(targetEmail));
 
     assert.ok(tokenRow, 'Token đặt lại mật khẩu phải được lưu trong DB');
     assert.strictEqual(tokenRow.used_at, null);
@@ -108,7 +108,7 @@ async function runTests() {
     assert.strictEqual(resetFirstTimeRes.body.code, 'PASSWORD_RESET_SUCCESS');
 
     // Kiểm tra trong DB: Token đã được đánh dấu used_at
-    const usedTokenRow = db.prepare('SELECT used_at FROM password_reset_tokens WHERE token = ?').get(validToken);
+    const usedTokenRow = (await db.prepare('SELECT used_at FROM password_reset_tokens WHERE token = ?').get(validToken));
     assert.ok(usedTokenRow.used_at !== null, 'Token sau khi dùng phải có timestamp used_at');
 
     // Lần 2: Cố gắng dùng lại token cũ vừa sử dụng -> PHẢI BỊ TỪ CHỐI (AC-02)
@@ -151,11 +151,11 @@ async function runTests() {
     assert.strictEqual(nonExistentRes.body.code, forgotRes.body.code);
 
     // Đảm bảo không tạo token rác trong DB cho email không tồn tại
-    const ghostToken = db.prepare(`
+    const ghostToken = (await db.prepare(`
       SELECT prt.id FROM password_reset_tokens prt
       JOIN users u ON prt.user_id = u.id
       WHERE u.email = ?
-    `).get(nonExistentEmail);
+    `).get(nonExistentEmail));
     assert.strictEqual(ghostToken, undefined, 'Không được tạo token cho email không tồn tại');
     recordPass('AC-03: Email không tồn tại trả về thông điệp giống hệt email có thật (chống lộ email)');
 
@@ -165,10 +165,10 @@ async function runTests() {
     totalTests++;
     const expiredToken = 'ats_reset_expired_30m_' + Date.now();
     const pastTime = new Date(Date.now() - 31 * 60 * 1000).toISOString(); // Tạo 31 phút trước
-    db.prepare(`
+    (await db.prepare(`
       INSERT INTO password_reset_tokens (id, user_id, token, expires_at, created_at)
       VALUES (?, ?, ?, ?, datetime('now', '-31 minutes'))
-    `).run('rst-expired-test', 'usr-admin', expiredToken, pastTime);
+    `).run('rst-expired-test', 'usr-admin', expiredToken, pastTime));
 
     const expiredAttemptRes = await request({
       hostname: 'localhost',
@@ -209,7 +209,7 @@ async function runTests() {
 
     // Phục hồi lại mật khẩu mặc định Ats@123456 sau test
     const resetBackHash = hashPassword('Ats@123456');
-    db.prepare('UPDATE users SET password_hash = ? WHERE email = ?').run(resetBackHash, targetEmail);
+    (await db.prepare('UPDATE users SET password_hash = ? WHERE email = ?').run(resetBackHash, targetEmail));
     recordPass('Bảo mật: Mật khẩu mới cập nhật bằng mã hóa Scrypt, mật khẩu cũ bị vô hiệu hóa hoàn toàn');
 
     console.log('\n================================================================');

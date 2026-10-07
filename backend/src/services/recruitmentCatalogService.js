@@ -1,4 +1,4 @@
-﻿const crypto = require('node:crypto');
+const crypto = require('node:crypto');
 const { getDatabase } = require('../db/database');
 
 const VALID_TYPES = [
@@ -13,7 +13,7 @@ class RecruitmentCatalogService {
     this.db = db || getDatabase();
   }
 
-  getItems(type = null, options = {}) {
+  async getItems(type = null, options = {}) {
     if (type && !VALID_TYPES.includes(type)) {
       return {
         success: false,
@@ -40,7 +40,7 @@ class RecruitmentCatalogService {
       ? `WHERE ${conditions.join(' AND ')}`
       : '';
 
-    const rows = this.db.prepare(`
+    const rows = (await this.db.prepare(`
       SELECT
         id,
         type,
@@ -53,7 +53,7 @@ class RecruitmentCatalogService {
       FROM recruitment_catalog_items
       ${where}
       ORDER BY type ASC, display_order ASC, name ASC
-    `).all(...params);
+    `).all(...params));
 
     return {
       success: true,
@@ -62,10 +62,10 @@ class RecruitmentCatalogService {
     };
   }
 
-  getItemById(id) {
+  async getItemById(id) {
     if (!id) return null;
 
-    const row = this.db.prepare(`
+    const row = (await this.db.prepare(`
       SELECT
         id,
         type,
@@ -77,12 +77,12 @@ class RecruitmentCatalogService {
         updated_at
       FROM recruitment_catalog_items
       WHERE id = ?
-    `).get(id);
+    `).get(id));
 
     return row ? this.mapItem(row) : null;
   }
 
-  createItem(data = {}) {
+  async createItem(data = {}) {
     const type = typeof data.type === 'string'
       ? data.type.trim().toUpperCase()
       : '';
@@ -106,11 +106,11 @@ class RecruitmentCatalogService {
 
     if (!validation.success) return validation;
 
-    const duplicate = this.db.prepare(`
+    const duplicate = (await this.db.prepare(`
       SELECT id
       FROM recruitment_catalog_items
       WHERE type = ? AND code = ?
-    `).get(type, code);
+    `).get(type, code));
 
     if (duplicate) {
       return {
@@ -123,7 +123,7 @@ class RecruitmentCatalogService {
 
     const id = `catalog-${crypto.randomUUID()}`;
 
-    this.db.prepare(`
+    (await this.db.prepare(`
       INSERT INTO recruitment_catalog_items (
         id,
         type,
@@ -135,21 +135,21 @@ class RecruitmentCatalogService {
         updated_at
       )
       VALUES (?, ?, ?, ?, ?, 'ACTIVE', datetime('now'), datetime('now'))
-    `).run(id, type, code, name, displayOrder);
+    `).run(id, type, code, name, displayOrder));
 
     return {
       success: true,
       statusCode: 201,
       message: 'Tạo giá trị danh mục thành công.',
-      data: this.getItemById(id)
+      data: (await this.getItemById(id))
     };
   }
 
-  updateItem(id, data = {}) {
+  async updateItem(id, data = {}) {
     if (['code', 'name'].some(key => Object.hasOwn(data, key) && (typeof data[key] !== 'string' || !data[key].trim()))) {
       return { success: false, statusCode: 400, code: 'INVALID_CATALOG_INPUT', message: 'Mã và tên danh mục không hợp lệ.' };
     }
-    const current = this.getItemById(id);
+    const current = (await this.getItemById(id));
 
     if (!current) {
       return {
@@ -194,13 +194,13 @@ class RecruitmentCatalogService {
       };
     }
 
-    const duplicate = this.db.prepare(`
+    const duplicate = (await this.db.prepare(`
       SELECT id
       FROM recruitment_catalog_items
       WHERE type = ?
         AND code = ?
         AND id <> ?
-    `).get(current.type, code, id);
+    `).get(current.type, code, id));
 
     if (duplicate) {
       return {
@@ -211,7 +211,7 @@ class RecruitmentCatalogService {
       };
     }
 
-    this.db.prepare(`
+    (await this.db.prepare(`
       UPDATE recruitment_catalog_items
       SET
         code = ?,
@@ -220,17 +220,18 @@ class RecruitmentCatalogService {
         status = ?,
         updated_at = datetime('now')
       WHERE id = ?
-    `).run(code, name, displayOrder, status, id);
+    `).run(code, name, displayOrder, status, id));
 
     return {
       success: true,
       statusCode: 200,
       message: 'Cập nhật giá trị danh mục thành công.',
-      data: this.getItemById(id)
+      data: (await this.getItemById(id))
     };
   }
 
-  reorderItems(type, orderedIds = []) {
+  async reorderItems(type, orderedIds = []) {
+    return this.db.transaction(async () => {
     if (!VALID_TYPES.includes(type)) {
       return {
         success: false,
@@ -260,12 +261,12 @@ class RecruitmentCatalogService {
 
     const placeholders = orderedIds.map(() => '?').join(', ');
 
-    const rows = this.db.prepare(`
+    const rows = (await this.db.prepare(`
       SELECT id
       FROM recruitment_catalog_items
       WHERE type = ?
         AND id IN (${placeholders})
-    `).all(type, ...orderedIds);
+    `).all(type, ...orderedIds));
 
     if (rows.length !== orderedIds.length) {
       return {
@@ -282,16 +283,16 @@ class RecruitmentCatalogService {
       WHERE id = ? AND type = ?
     `);
 
-    this.db.exec('BEGIN');
+    (await this.db.exec('BEGIN'));
 
     try {
-      orderedIds.forEach((id, index) => {
-        update.run(index + 1, id, type);
-      });
+      (await Promise.all(orderedIds.map(async (id, index) => {
+        (await update.run(index + 1, id, type));
+      })));
 
-      this.db.exec('COMMIT');
+      (await this.db.exec('COMMIT'));
     } catch (error) {
-      this.db.exec('ROLLBACK');
+      (await this.db.exec('ROLLBACK'));
       throw error;
     }
 
@@ -299,12 +300,14 @@ class RecruitmentCatalogService {
       success: true,
       statusCode: 200,
       message: 'Sắp xếp thứ tự hiển thị thành công.',
-      items: this.getItems(type).items
+      items: (await this.getItems(type)).items
     };
+
+    });
   }
 
-  deleteItem(id) {
-    const item = this.getItemById(id);
+  async deleteItem(id) {
+    const item = (await this.getItemById(id));
 
     if (!item) {
       return {
@@ -315,7 +318,7 @@ class RecruitmentCatalogService {
       };
     }
 
-    const references = this.getReferenceCounts(id);
+    const references = (await this.getReferenceCounts(id));
 
     const totalReferences =
       references.candidateSource +
@@ -333,10 +336,10 @@ class RecruitmentCatalogService {
       };
     }
 
-    this.db.prepare(`
+    (await this.db.prepare(`
       DELETE FROM recruitment_catalog_items
       WHERE id = ?
-    `).run(id);
+    `).run(id));
 
     return {
       success: true,
@@ -345,8 +348,8 @@ class RecruitmentCatalogService {
     };
   }
 
-  getReferenceCounts(id) {
-    const row = this.db.prepare(`
+  async getReferenceCounts(id) {
+    const row = (await this.db.prepare(`
       SELECT
         (
           SELECT COUNT(*)
@@ -371,7 +374,7 @@ class RecruitmentCatalogService {
           FROM requisitions
           WHERE work_mode_id = ?
         ) AS work_mode_count
-    `).get(id, id, id, id);
+    `).get(id, id, id, id));
 
     return {
       candidateSource: Number(row.candidate_source_count || 0),

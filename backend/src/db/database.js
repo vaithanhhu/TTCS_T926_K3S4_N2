@@ -1,4 +1,3 @@
-const { DatabaseSync } = require('node:sqlite');
 const fs = require('node:fs');
 const path = require('node:path');
 const config = require('../config/config');
@@ -11,17 +10,23 @@ function getDatabase(customPath) {
   }
 
   const dbPath = customPath || config.DB_PATH;
+  if (!customPath && config.DB_PROVIDER === 'postgres') {
+    dbInstance = new (require('./postgres').PostgresDatabase)(config);
+    return dbInstance;
+  }
+  if (!customPath && config.DB_PROVIDER !== 'sqlite') throw new Error('UNSUPPORTED_DB_PROVIDER');
   const dir = path.dirname(dbPath);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
 
+  const { DatabaseSync } = require('node:sqlite');
   dbInstance = new DatabaseSync(dbPath);
   dbInstance.exec('PRAGMA foreign_keys = ON;');
   dbInstance.exec('PRAGMA journal_mode = WAL;');
 
   initSchema(dbInstance);
-  return dbInstance;
+  return require('./postgres').sqliteBoundary(dbInstance);
 }
 
 function initSchema(db) {
@@ -63,6 +68,7 @@ function initSchema(db) {
       status TEXT NOT NULL DEFAULT 'ACTIVE',
       lock_reason TEXT,
       failed_attempts INTEGER NOT NULL DEFAULT 0,
+      must_change_password INTEGER NOT NULL DEFAULT 0 CHECK (must_change_password IN (0, 1)),
       locked_until TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -335,6 +341,9 @@ function initSchema(db) {
   const hasJobTitleId = requisitionColumns.some(column => column.name === 'job_title_id');
   const hasWorkLocationId = requisitionColumns.some(column => column.name === 'work_location_id');
   const hasWorkModeId = requisitionColumns.some(column => column.name === 'work_mode_id');
+  if (!db.prepare('PRAGMA table_info(users)').all().some(column => column.name === 'must_change_password')) {
+    db.exec('ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0 CHECK (must_change_password IN (0, 1))');
+  }
 
   const candidateColumns = db.prepare('PRAGMA table_info(candidates)').all();
   const hasCandidateSourceId = candidateColumns.some(column => column.name === 'source_id');

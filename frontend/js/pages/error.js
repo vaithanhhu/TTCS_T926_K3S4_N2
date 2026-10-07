@@ -32,6 +32,11 @@
       requiredPermission,
       recovery = {}
     } = options;
+    const serverError = statusCode >= 500;
+    errorView.dataset.category = serverError ? 'SERVER_ERROR' : 'CLIENT_ERROR';
+    appShell.classList.remove('hidden');
+    appShell.classList.toggle('error-only-shell', !currentAuthenticatedUser);
+    loginView.classList.add('hidden');
 
     errorRecoveryState.previousView = currentActiveView || 'dashboard';
     errorRecoveryState.action = recovery.action || (statusCode === 401 ? 'LOGIN' : 'NAVIGATE_HOME');
@@ -43,7 +48,7 @@
     });
 
     if (errorCodeDisplay) errorCodeDisplay.textContent = statusCode;
-    if (errorCodeRaw) errorCodeRaw.textContent = code;
+    if (errorCodeRaw) errorCodeRaw.textContent = serverError ? 'INTERNAL_SERVER_ERROR' : code;
 
     if (statusCode === 401) {
       if (errorCodeDisplay) errorCodeDisplay.style.color = 'var(--color-warning)';
@@ -58,6 +63,14 @@
       if (requiredPermission) fullMsg += ` (Yêu cầu quyền: ${requiredPermission})`;
       if (errorMessageDisplay) errorMessageDisplay.textContent = fullMsg;
       if (errorPrimaryBtnText) errorPrimaryBtnText.textContent = recovery.label || 'Về không gian làm việc của tôi';
+      if (errorSecondaryBtnText) errorSecondaryBtnText.textContent = 'Quay lại trang trước';
+    } else if (statusCode === 400 || serverError) {
+      if (errorCodeDisplay) errorCodeDisplay.style.color = 'var(--color-danger)';
+      if (errorHeadingDisplay) errorHeadingDisplay.textContent = serverError ? `Lỗi máy chủ (${statusCode})` : 'Yêu cầu không hợp lệ (400)';
+      if (errorMessageDisplay) errorMessageDisplay.textContent = serverError
+        ? 'Hệ thống đang gặp sự cố. Vui lòng thử lại sau.'
+        : message || 'Dữ liệu yêu cầu chưa hợp lệ. Vui lòng kiểm tra và thử lại.';
+      if (errorPrimaryBtnText) errorPrimaryBtnText.textContent = 'Về trang chính';
       if (errorSecondaryBtnText) errorSecondaryBtnText.textContent = 'Quay lại trang trước';
     } else {
       if (errorCodeDisplay) errorCodeDisplay.style.color = 'var(--color-primary)';

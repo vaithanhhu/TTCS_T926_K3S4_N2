@@ -3,6 +3,35 @@ const crypto = require('node:crypto');
 const config = require('../config/config');
 const { getDatabase } = require('../db/database');
 
+function cleanEmailText(value) {
+  return String(value || '').replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, '').replace(/ {2,}/g, ' ').trim();
+}
+
+function escapeEmailHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
+}
+
+// Inline the small existing template styles: email clients often ignore head CSS.
+// No web fonts or external assets; preserve links, tokens, OTP and plain-text alternative.
+function prepareEmailHtml(html) {
+  html = cleanEmailText(html).replace(/<html>/g, '<html lang="vi">');
+  html = html.replace(/font-family:\s*[^;}]+/g, 'font-family: Arial, Helvetica, sans-serif')
+    .replace(/background-color: #0f172a/g, 'background-color: #f8fafc')
+    .replace(/background-color: #1e293b/g, 'background-color: #ffffff')
+    .replace(/color: #f8fafc/g, 'color: #0f172a').replace(/color: #cbd5e1/g, 'color: #334155')
+    .replace(/box-shadow:[^;}]+;?/g, '').replace(/2px dashed/g, '1px solid');
+  const styles = new Map();
+  for (const match of html.matchAll(/(body|\.[\w-]+)\s*\{([^}]+)\}/g)) styles.set(match[1], match[2].trim());
+  return html.replace(/<([a-z][a-z0-9]*)([^>]*)>/gi, (tag, name, attributes) => {
+    const classes = attributes.match(/\bclass="([^"]+)"/)?.[1].split(/\s+/) || [];
+    const css = [styles.get(name.toLowerCase()), ...classes.map(c => styles.get('.' + c))].filter(Boolean).join('; ');
+    if (!css) return tag;
+    const inline = attributes.match(/\bstyle="([^"]*)"/)?.[1] || '';
+    attributes = attributes.replace(/\sstyle="[^"]*"/, '');
+    return `<${name}${attributes} style="${css}; ${inline}">`;
+  });
+}
+
 class EmailService {
   constructor(db) {
     this.db = db || getDatabase();
@@ -68,25 +97,14 @@ class EmailService {
   /**
    * Log email event into SQLite database table email_logs
    */
-  logEmail(recipient, subject, templateName, status, errorMessage = null) {
+  async logEmail(recipient, subject, templateName, status, errorMessage = null) {
     try {
-      this.db.exec(`
-        CREATE TABLE IF NOT EXISTS email_logs (
-          id TEXT PRIMARY KEY,
-          recipient TEXT NOT NULL,
-          subject TEXT NOT NULL,
-          template_name TEXT NOT NULL,
-          status TEXT NOT NULL,
-          error_message TEXT,
-          sent_at TEXT NOT NULL DEFAULT (datetime('now'))
-        );
-      `);
       const id = 'eml-' + crypto.randomUUID();
       const stmt = this.db.prepare(`
         INSERT INTO email_logs (id, recipient, subject, template_name, status, error_message, sent_at)
         VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
       `);
-      stmt.run(id, recipient, subject, templateName, status, errorMessage);
+      (await stmt.run(id, recipient, subject, templateName, status, errorMessage));
     } catch (err) {
       console.error('[EmailService] EMAIL_AUDIT_FAILED');
     }
@@ -97,6 +115,9 @@ class EmailService {
    * not proof of arrival in an Internet inbox. Cache entries track outcomes.
    */
   async sendMail({ to, subject, html, text, templateName = 'GENERAL' }) {
+    subject = cleanEmailText(subject);
+    html = prepareEmailHtml(html);
+    text = cleanEmailText(text);
     const mailOptions = {
       from: config.MAIL_FROM,
       to,
@@ -121,7 +142,7 @@ class EmailService {
 
     if (this.mode === 'simulated') {
       record.status = 'SENT_LOCAL';
-      this.logEmail(to, subject, templateName, record.status);
+      (await this.logEmail(to, subject, templateName, record.status));
       return { success: true, delivered: false, simulated: true, mode: this.mode };
     }
 
@@ -133,14 +154,14 @@ class EmailService {
         if (!accepted) throw new Error('SMTP_RECIPIENT_REJECTED');
         record.status = 'DELIVERED';
         record.delivered = true;
-        this.logEmail(to, subject, templateName, 'DELIVERED');
+        (await this.logEmail(to, subject, templateName, 'DELIVERED'));
         return { success: true, messageId: info.messageId, delivered: true, simulated: false, mode: this.mode };
       } catch (error) {
         const code = error.message === 'SMTP_RECIPIENT_REJECTED' ? 'SMTP_RECIPIENT_REJECTED' : 'SMTP_SEND_FAILED';
         record.status = 'FAILED';
         record.error = code;
         console.error('[EmailService]', code);
-        this.logEmail(to, subject, templateName, 'FAILED', code);
+        (await this.logEmail(to, subject, templateName, 'FAILED', code));
         return { success: false, error: code, delivered: false, simulated: false, mode: this.mode };
       }
     }
@@ -148,7 +169,7 @@ class EmailService {
     const code = this.configurationError || 'SMTP_NOT_CONFIGURED';
     record.status = 'FAILED';
     record.error = code;
-    this.logEmail(to, subject, templateName, 'FAILED', code);
+    (await this.logEmail(to, subject, templateName, 'FAILED', code));
     return { success: false, error: code, delivered: false, simulated: false, mode: this.mode };
   }
 
@@ -180,7 +201,7 @@ class EmailService {
           <div class="header">
             <h2 class="title">HỆ THỐNG TUYỂN DỤNG NỘI BỘ (ATS)</h2>
           </div>
-          <p class="body-text">Xin chào <strong>${recipientEmail}</strong>,</p>
+          <p class="body-text">Xin chào <strong>${escapeEmailHtml(recipientEmail)}</strong>,</p>
           <p class="body-text">Hệ thống nhận được yêu cầu đặt lại mật khẩu cho tài khoản nhân sự của bạn. Liên kết dưới đây có hiệu lực trong <strong>30 phút</strong> và chỉ có thể sử dụng <strong>1 lần duy nhất</strong>:</p>
           <div style="text-align: center;">
             <a href="${resetUrl}" class="btn">👉 Đặt lại mật khẩu ngay</a>
@@ -198,13 +219,13 @@ class EmailService {
 
     const text = `Xin chào ${recipientEmail},\n\nHệ thống nhận được yêu cầu đặt lại mật khẩu của bạn. Vui lòng truy cập đường dẫn sau để đặt lại mật khẩu (hiệu lực trong 30 phút):\n${resetUrl}\n\nNếu bạn không yêu cầu, vui lòng bỏ qua email này.`;
 
-    return this.sendMail({
+    return (await this.sendMail({
       to: recipientEmail,
       subject,
       html,
       text,
       templateName: 'PASSWORD_RESET'
-    });
+    }));
   }
 
   /**
@@ -238,16 +259,16 @@ class EmailService {
           <div class="header">
             <h2 class="title">CHÀO MỪNG ĐẾN VỚI HỆ THỐNG TUYỂN DỤNG ATS</h2>
           </div>
-          <p class="body-text">Xin chào <strong>${fullName}</strong>,</p>
-          <p class="body-text">Tài khoản nhân sự của bạn đã được khởi tạo thành công trên Hệ thống Tuyển dụng Nội bộ với vai trò ban đầu: <strong>${roleName}</strong>.</p>
+          <p class="body-text">Xin chào <strong>${escapeEmailHtml(fullName)}</strong>,</p>
+          <p class="body-text">Tài khoản nhân sự của bạn đã được khởi tạo thành công trên Hệ thống Tuyển dụng Nội bộ với vai trò ban đầu: <strong>${escapeEmailHtml(roleName)}</strong>.</p>
           <div class="cred-box">
             <div class="cred-row">
               <div class="cred-label">Email đăng nhập:</div>
-              <div class="cred-val">${recipientEmail}</div>
+              <div class="cred-val">${escapeEmailHtml(recipientEmail)}</div>
             </div>
             <div class="cred-row" style="margin-bottom: 0;">
               <div class="cred-label">Mật khẩu tạm thời:</div>
-              <div class="cred-val" style="color: #4ade80;">${tempPassword}</div>
+              <div class="cred-val" style="color: #4ade80;">${escapeEmailHtml(tempPassword)}</div>
             </div>
           </div>
           <p class="body-text" style="color: #facc15; font-size: 13px;">⚠️ <strong>Bắt buộc đổi mật khẩu:</strong> Vì lý do an toàn thông tin, vui lòng đổi mật khẩu mới ngay trong phiên đăng nhập đầu tiên.</p>
@@ -264,20 +285,20 @@ class EmailService {
 
     const text = `Xin chào ${fullName},\n\nTài khoản của bạn đã được khởi tạo trên Hệ thống Tuyển dụng ATS với vai trò ${roleName}.\nEmail: ${recipientEmail}\nMật khẩu tạm: ${tempPassword}\n\nVui lòng đăng nhập tại ${loginUrl} và đổi mật khẩu mới ngay lần đầu đăng nhập.`;
 
-    return this.sendMail({
+    return (await this.sendMail({
       to: recipientEmail,
       subject,
       html,
       text,
       templateName: 'ACCOUNT_ACTIVATION'
-    });
+    }));
   }
 
   /**
    * Send 6-digit OTP Verification Email for Password Reset
    */
   async sendOtpEmail(recipientEmail, otpCode, fullName = '') {
-    const greeting = fullName ? `Xin chào <strong>${fullName}</strong>,` : `Xin chào <strong>${recipientEmail}</strong>,`;
+    const greeting = fullName ? `Xin chào <strong>${escapeEmailHtml(fullName)}</strong>,` : `Xin chào <strong>${escapeEmailHtml(recipientEmail)}</strong>,`;
     const subject = '🔐 [ATS] Mã xác thực OTP khôi phục mật khẩu';
 
     const html = `
@@ -329,20 +350,20 @@ class EmailService {
 
     const text = `Xin chào,\n\nMã xác thực OTP của bạn là: ${otpCode}\nMã có hiệu lực trong vòng ${config.PASSWORD_RESET_OTP_TTL_MINUTES} phút. Tuyệt đối không chia sẻ mã này cho người khác.`;
 
-    return this.sendMail({
+    return (await this.sendMail({
       to: recipientEmail,
       subject,
       html,
       text,
       templateName: 'OTP_VERIFICATION'
-    });
+    }));
   }
 
   /**
    * Send Password Changed Success Notification
    */
   async sendPasswordChangedEmail(recipientEmail, fullName = '') {
-    const greeting = fullName ? `Xin chào <strong>${fullName}</strong>,` : `Xin chào <strong>${recipientEmail}</strong>,`;
+    const greeting = fullName ? `Xin chào <strong>${escapeEmailHtml(fullName)}</strong>,` : `Xin chào <strong>${escapeEmailHtml(recipientEmail)}</strong>,`;
     const subject = '🔒 [ATS] Thông báo: Mật khẩu tài khoản của bạn đã được thay đổi thành công';
 
     const html = `
@@ -369,13 +390,13 @@ class EmailService {
       </html>
     `;
 
-    return this.sendMail({
+    return (await this.sendMail({
       to: recipientEmail,
       subject,
       html,
       text: 'Mật khẩu tài khoản của bạn đã được thay đổi thành công.',
       templateName: 'PASSWORD_CHANGED'
-    });
+    }));
   }
 
   getLastSentEmail() {

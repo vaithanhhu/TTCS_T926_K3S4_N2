@@ -1,5 +1,9 @@
 /** Navigation activates retained pages without rebinding their listeners. */
 function leaveActivePage() {
+  if (currentActiveView === 'change-password') {
+    document.body.appendChild(changePwdModal);
+    changePwdModal.classList.remove('password-page-form');
+  }
   window.ATS_MOBILE_NAVIGATION.close();
   window.ATS_ACTION_MENU.close();
   closeCreateUserResultDialog();
@@ -15,7 +19,15 @@ function activateRoute(route) {
   const publicPage = !route.auth;
   loginView.classList.toggle('hidden', !publicPage);
   appShell.classList.toggle('hidden', publicPage);
+  appShell.classList.remove('error-only-shell');
+  appShell.classList.remove('password-only-shell');
   window.ATS_MOBILE_NAVIGATION.updateActions();
+  if (route.view === 'change-password') {
+    currentActiveView = route.view;
+    appShell.classList.toggle('password-only-shell', Boolean(currentAuthenticatedUser?.mustChangePassword));
+    openChangePwdModal();
+    return;
+  }
   if (publicPage) {
     currentActiveView = route.view;
     if (route.view === 'forgot-password') {

@@ -31,7 +31,7 @@ const db = getDatabase();
 const users = new UserService(db), departments = new DepartmentService(db);
 const competency = new CompetencyService(db), questions = new QuestionBankService(db);
 const catalogs = new CatalogService(db), requisitions = new RequisitionService(db);
-function assertNoOpenTransaction() { db.exec('BEGIN'); db.exec('ROLLBACK'); }
+async function assertNoOpenTransaction() { (await db.exec('BEGIN')); (await db.exec('ROLLBACK')); }
 let origin, passed = 0, failed = 0;
 const tokens = {};
 let framework, jobTitle, department, question, source, reason, image, uiHarness;
@@ -73,13 +73,13 @@ async function main() {
     sheet.getRow(2).values = ['Import valid', 'bulk.valid@test.example', 'Engineer', 'Legacy dept', '0912345678', 'INTERVIEWER'];
     sheet.getRow(3).values = ['Invalid', 'invalid-email', '', '', '', 'UNKNOWN'];
     const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
-    const count = db.prepare('SELECT COUNT(*) AS count FROM users').get().count;
+    const count = (await db.prepare('SELECT COUNT(*) AS count FROM users').get()).count;
     const preview = await api('POST', '/admin/users/import/preview', tokens.admin, buffer, 'application/octet-stream');
     assert.equal(preview.status, 200); assert.equal(preview.data.data.summary.validRows, 1); assert.equal(preview.data.data.summary.invalidRows, 1);
-    assert.equal(db.prepare('SELECT COUNT(*) AS count FROM users').get().count, count);
+    assert.equal((await db.prepare('SELECT COUNT(*) AS count FROM users').get()).count, count);
     const imported = await api('POST', '/admin/users/import', tokens.admin, buffer, 'application/octet-stream');
     assert.equal(imported.status, 200); assert.equal(imported.data.data.summary.importedRows, 1); assert.equal(imported.data.data.summary.skippedRows, 1);
-    assert.equal(db.prepare('SELECT COUNT(*) AS count FROM users').get().count, count + 1);
+    assert.equal((await db.prepare('SELECT COUNT(*) AS count FROM users').get()).count, count + 1);
     assert.equal((await api('POST', '/admin/users/import', tokens.recruiter, buffer, 'application/octet-stream')).status, 403);
   });
   await test('Import rejects empty, malformed, wrong template and duplicate rows', async () => {
@@ -97,14 +97,14 @@ async function main() {
     const workbook = new ExcelJS.Workbook(); await workbook.xlsx.load(await users.buildBulkUserImportTemplate());
     workbook.getWorksheet('NhanSu').getRow(2).values = ['Fail', 'rollback@test.example'];
     workbook.getWorksheet('NhanSu').getRow(3).values = ['Success', 'after.rollback@test.example'];
-    db.exec(`CREATE TEMP TRIGGER reject_import_role BEFORE INSERT ON user_roles WHEN NEW.user_id IN (SELECT id FROM users WHERE email = 'rollback@test.example') BEGIN SELECT RAISE(ABORT, 'test failure'); END`);
+    (await db.exec(`CREATE TEMP TRIGGER reject_import_role BEFORE INSERT ON user_roles WHEN NEW.user_id IN (SELECT id FROM users WHERE email = 'rollback@test.example') BEGIN SELECT RAISE(ABORT, 'test failure'); END`));
     try {
       const res = await users.importBulkUsers(Buffer.from(await workbook.xlsx.writeBuffer()));
       assert.equal(res.data.summary.importedRows, 1); assert.equal(res.data.summary.skippedRows, 1);
-      assert.equal(db.prepare("SELECT id FROM users WHERE email = 'rollback@test.example'").get(), undefined);
-      assert.ok(db.prepare("SELECT id FROM users WHERE email = 'after.rollback@test.example'").get());
-      assertNoOpenTransaction();
-    } finally { db.exec('DROP TRIGGER reject_import_role'); }
+      assert.equal((await db.prepare("SELECT id FROM users WHERE email = 'rollback@test.example'").get()), undefined);
+      assert.ok((await db.prepare("SELECT id FROM users WHERE email = 'after.rollback@test.example'").get()));
+      (await assertNoOpenTransaction());
+    } finally { (await db.exec('DROP TRIGGER reject_import_role')); }
   });
   await test('Oversized Excel upload returns a structured error without connection reset', async () => {
     const res = await api('POST', '/admin/users/import/preview', tokens.admin, Buffer.alloc(5 * 1024 * 1024 + 1), 'application/octet-stream');
@@ -116,7 +116,7 @@ async function main() {
     assert.equal(res.data.data.user.phoneNumber, 'legacy extension 123');
   });
   await test('Sprint 2 profile validates VN phone and protects email, department and roles', async () => {
-    const before = users.getUserById('usr-hiring-mgr');
+    const before = (await users.getUserById('usr-hiring-mgr'));
     let res = await api('PUT', '/profile/personal', tokens.hiring, { fullName: 'Profile updated', jobTitle: 'Lead', phoneNumber: '+84 912 345 678', email: 'changed@test.example', departmentName: 'Changed', roles: ['ADMIN'] });
     assert.equal(res.status, 200); const user = res.data.data.user;
     assert.equal(user.email, before.email); assert.equal(user.departmentName, before.departmentName); assert.deepEqual(user.roles, before.roles); assert.equal(user.phoneNumber, '+84912345678');
@@ -142,13 +142,13 @@ async function main() {
   await test('Department creation, multi-level tree, cycle and required manager validation', async () => {
     let res = await api('POST', '/departments', tokens.hr, { code: 'TEST-DEPT', name: 'Test department', managerId: 'usr-hiring-mgr' });
     assert.equal(res.status, 201); department = res.data.data;
-    const child = departments.createDepartment({ code: 'TEST-CHILD', name: 'Child', parentId: department.id, managerId: 'usr-hr-mgr' }); assert.equal(child.success, true);
-    assert.equal(departments.updateDepartment(department.id, { parentId: child.data.id }).code, 'DEPARTMENT_TREE_CYCLE');
-    assert.equal(departments.updateDepartment(department.id, { managerId: null }).success, false);
-    assert.equal(departments.updateDepartment(department.id, { name: 123 }).success, false);
-    assert.equal(departments.createDepartment({ code: 'MISSING', name: 'Missing' }).success, false);
-    assert.equal(departments.createDepartment({ code: 'BAD', name: 'Bad', managerId: 'unknown' }).success, false);
-    assert.ok(departments.getDepartments().tree.find(row => row.id === department.id).children.length);
+    const child = (await departments.createDepartment({ code: 'TEST-CHILD', name: 'Child', parentId: department.id, managerId: 'usr-hr-mgr' })); assert.equal(child.success, true);
+    assert.equal((await departments.updateDepartment(department.id, { parentId: child.data.id })).code, 'DEPARTMENT_TREE_CYCLE');
+    assert.equal((await departments.updateDepartment(department.id, { managerId: null })).success, false);
+    assert.equal((await departments.updateDepartment(department.id, { name: 123 })).success, false);
+    assert.equal((await departments.createDepartment({ code: 'MISSING', name: 'Missing' })).success, false);
+    assert.equal((await departments.createDepartment({ code: 'BAD', name: 'Bad', managerId: 'unknown' })).success, false);
+    assert.ok((await departments.getDepartments()).tree.find(row => row.id === department.id).children.length);
   });
   await test('Hiring Manager reads minimal requisition choices without department administration rights', async () => {
     const options = await api('GET', '/requisitions/options', tokens.hiring); assert.equal(options.status, 200); assert.ok(options.data.tree.length);
@@ -160,10 +160,10 @@ async function main() {
   await test('Competency framework CRUD and weights total 100', async () => {
     const res = await api('POST', '/competency-frameworks', tokens.hr, { code: 'TEST-CF', name: 'Test framework', criteria: [{ name: 'Skill', weight: 60 }, { name: 'Communication', weight: 40 }] });
     assert.equal(res.status, 201); framework = res.data.data;
-    assert.equal(competency.createFramework({ code: 'BAD-CF', name: 'Bad', criteria: [{ name: 'Skill', weight: 10 }] }).success, false);
+    assert.equal((await competency.createFramework({ code: 'BAD-CF', name: 'Bad', criteria: [{ name: 'Skill', weight: 10 }] })).success, false);
     assert.equal(competency.validateCriteria([null]).success, false);
-    assert.equal(competency.updateFramework(framework.id, { criteria: {} }).success, false);
-    assert.equal(competency.updateFramework(framework.id, { code: '' }).success, false);
+    assert.equal((await competency.updateFramework(framework.id, { criteria: {} })).success, false);
+    assert.equal((await competency.updateFramework(framework.id, { code: '' })).success, false);
     assert.equal(competency.validateCriteria([{ id: 'same', name: 'A', weight: 50 }, { id: 'same', name: 'B', weight: 50 }]).success, false);
     assert.equal((await api('POST', '/competency-frameworks', tokens.interviewer, {})).status, 403);
   });
@@ -187,60 +187,60 @@ async function main() {
     assert.equal(admin.data.canViewSalary, false); assert.equal(JSON.stringify(admin.data).includes('minSalary'), false); assert.equal(hr.data.canViewSalary, true);
     assert.equal((await api('PUT', '/job-titles/' + jobTitle.id, tokens.admin, { minSalary: 1, maxSalary: 2 })).status, 403);
     const updated = await api('PUT', '/job-titles/' + jobTitle.id, tokens.admin, { name: 'Engineer renamed' }); assert.equal(updated.status, 200); assert.equal('minSalary' in updated.data.data, false);
-    assert.equal(db.prepare('SELECT min_salary FROM job_titles WHERE id = ?').get(jobTitle.id).min_salary, 20000000);
+    assert.equal((await db.prepare('SELECT min_salary FROM job_titles WHERE id = ?').get(jobTitle.id)).min_salary, 20000000);
     assert.equal((await api('GET', '/job-titles', tokens.interviewer)).status, 403);
     assert.equal((await api('POST', '/job-titles', tokens.admin, { code: 'NO', name: 'No', level: 'Senior', minSalary: 1, maxSalary: 2 })).status, 403);
     const result = await api('PUT', '/job-titles/' + jobTitle.id, tokens.hr, { level: 'Lead', minSalary: 25000000, maxSalary: 45000000 }); assert.equal(result.status, 200); assert.equal(result.data.data.level, 'Lead');
     assert.equal(JSON.stringify((await api('GET', '/job-titles/' + jobTitle.id + '/framework', tokens.admin)).data).includes('minSalary'), false);
-    db.prepare("UPDATE competency_frameworks SET status='INACTIVE' WHERE id=?").run(framework.id);
+    (await db.prepare("UPDATE competency_frameworks SET status='INACTIVE' WHERE id=?").run(framework.id));
     try { assert.equal((await api('PUT', '/job-titles/' + jobTitle.id, tokens.admin, { name: 'Historical title still editable' })).status, 200); }
-    finally { db.prepare("UPDATE competency_frameworks SET status='ACTIVE' WHERE id=?").run(framework.id); }
+    finally { (await db.prepare("UPDATE competency_frameworks SET status='ACTIVE' WHERE id=?").run(framework.id)); }
   });
   await test('Legacy job titles with unspecified level/salary remain readable and editable', async () => {
-    db.prepare("INSERT INTO job_titles (id,code,name,status) VALUES ('jt-legacy','LEGACY','Legacy job','ACTIVE')").run();
+    (await db.prepare("INSERT INTO job_titles (id,code,name,status) VALUES ('jt-legacy','LEGACY','Legacy job','ACTIVE')").run());
     const res = await api('PUT', '/job-titles/jt-legacy', tokens.admin, { name: 'Legacy renamed' }); assert.equal(res.status, 200);
-    const row = db.prepare("SELECT * FROM job_titles WHERE id = 'jt-legacy'").get(); assert.equal(row.min_salary, null); assert.equal(row.max_salary, null);
+    const row = (await db.prepare("SELECT * FROM job_titles WHERE id = 'jt-legacy'").get()); assert.equal(row.min_salary, null); assert.equal(row.max_salary, null);
   });
   await test('Question bank CRUD, filters and validation', async () => {
     const res = await api('POST', '/interview-questions', tokens.hr, { criterionId: framework.criteria[0].id, questionText: 'Explain your design', goodAnswerHint: 'Discuss tradeoffs', difficulty: 'MEDIUM' });
     assert.equal(res.status, 201); question = res.data.data;
     const filtered = await api('GET', '/interview-questions?jobTitleId=' + jobTitle.id + '&criterionId=' + framework.criteria[0].id, tokens.interviewer); assert.equal(filtered.status, 200); assert.ok(filtered.data.questions.some(item => item.id === question.id));
-    assert.equal(questions.updateQuestion(question.id, { questionText: '' }).success, false);
-    assert.equal(questions.updateQuestion(question.id, { questionText: 123 }).success, false);
-    assert.equal(questions.updateQuestion(question.id, { difficulty: 'UNKNOWN' }).success, false);
-    assert.equal(questions.createQuestion({ criterionId: 'unknown', questionText: 'Question', goodAnswerHint: 'Hint', difficulty: 'EASY' }).success, false);
+    assert.equal((await questions.updateQuestion(question.id, { questionText: '' })).success, false);
+    assert.equal((await questions.updateQuestion(question.id, { questionText: 123 })).success, false);
+    assert.equal((await questions.updateQuestion(question.id, { difficulty: 'UNKNOWN' })).success, false);
+    assert.equal((await questions.createQuestion({ criterionId: 'unknown', questionText: 'Question', goodAnswerHint: 'Hint', difficulty: 'EASY' })).success, false);
     assert.equal((await api('PUT', '/interview-questions/' + question.id, tokens.interviewer, { questionText: 'Changed' })).status, 403);
     assert.equal((await api('PUT', '/interview-questions/' + question.id, tokens.hr, { goodAnswerHint: 'Updated hint' })).status, 200);
   });
   await test('Framework refuses deleting referenced criteria and preserves all data', async () => {
-    const before = competency.getFrameworkById(framework.id);
-    const res = competency.updateFramework(framework.id, { name: 'Should not save', criteria: [{ name: 'Replacement', weight: 100 }] });
-    assert.equal(res.code, 'COMPETENCY_CRITERION_IN_USE'); assert.deepEqual(competency.getFrameworkById(framework.id), before);
-    assert.equal(competency.updateFramework(framework.id, { criteria: [{ id: 'foreign', name: 'Invalid', weight: 100 }] }).success, false);
-    const success = competency.updateFramework(framework.id, { criteria: before.criteria.map(item => ({ ...item, name: item.name + ' updated' })) }); assert.equal(success.success, true);
-    assert.equal(questions.getQuestionById(question.id).criterion.id, framework.criteria[0].id);
+    const before = (await competency.getFrameworkById(framework.id));
+    const res = (await competency.updateFramework(framework.id, { name: 'Should not save', criteria: [{ name: 'Replacement', weight: 100 }] }));
+    assert.equal(res.code, 'COMPETENCY_CRITERION_IN_USE'); assert.deepEqual((await competency.getFrameworkById(framework.id)), before);
+    assert.equal((await competency.updateFramework(framework.id, { criteria: [{ id: 'foreign', name: 'Invalid', weight: 100 }] })).success, false);
+    const success = (await competency.updateFramework(framework.id, { criteria: before.criteria.map(item => ({ ...item, name: item.name + ' updated' })) })); assert.equal(success.success, true);
+    assert.equal((await questions.getQuestionById(question.id)).criterion.id, framework.criteria[0].id);
   });
   await test('Recruitment catalogs CRUD/order/types and write permissions', async () => {
     const res = await api('POST', '/recruitment-catalogs', tokens.hr, { type: 'CANDIDATE_SOURCE', code: 'TEST-SOURCE', name: 'Test source', displayOrder: 1 }); assert.equal(res.status, 201); source = res.data.data;
-    reason = catalogs.createItem({ type: 'REJECTION_REASON', code: 'TEST-REASON', name: 'Test reason' }).data;
-    assert.equal(catalogs.createItem({ type: 'WORK_MODE', code: 'BAD', name: 'Bad', displayOrder: 'abc' }).success, false);
-    assert.equal(catalogs.createItem({ type: 'INVALID', code: 'BAD', name: 'Bad' }).success, false);
-    assert.equal(catalogs.updateItem(source.id, { name: '' }).success, false);
-    assert.equal(catalogs.updateItem(source.id, { name: false }).success, false);
-    assert.equal(catalogs.reorderItems('CANDIDATE_SOURCE', [source.id, source.id]).success, false);
-    assert.equal(catalogs.reorderItems('CANDIDATE_SOURCE', [reason.id]).success, false);
-    assert.equal(catalogs.reorderItems('CANDIDATE_SOURCE', [source.id]).success, true);
+    reason = (await catalogs.createItem({ type: 'REJECTION_REASON', code: 'TEST-REASON', name: 'Test reason' })).data;
+    assert.equal((await catalogs.createItem({ type: 'WORK_MODE', code: 'BAD', name: 'Bad', displayOrder: 'abc' })).success, false);
+    assert.equal((await catalogs.createItem({ type: 'INVALID', code: 'BAD', name: 'Bad' })).success, false);
+    assert.equal((await catalogs.updateItem(source.id, { name: '' })).success, false);
+    assert.equal((await catalogs.updateItem(source.id, { name: false })).success, false);
+    assert.equal((await catalogs.reorderItems('CANDIDATE_SOURCE', [source.id, source.id])).success, false);
+    assert.equal((await catalogs.reorderItems('CANDIDATE_SOURCE', [reason.id])).success, false);
+    assert.equal((await catalogs.reorderItems('CANDIDATE_SOURCE', [source.id])).success, true);
     assert.equal((await api('POST', '/recruitment-catalogs', tokens.recruiter, {})).status, 403);
   });
   await test('Catalog references block deletion and legacy stage calls preserve reasons/notes', async () => {
-    const created = requisitions.createCandidate({ fullName: 'Catalog candidate', email: 'candidate@test.example', sourceId: source.id }); assert.equal(created.success, true);
-    assert.equal(catalogs.deleteItem(source.id).code, 'CATALOG_ITEM_IN_USE');
+    const created = (await requisitions.createCandidate({ fullName: 'Catalog candidate', email: 'candidate@test.example', sourceId: source.id })); assert.equal(created.success, true);
+    assert.equal((await catalogs.deleteItem(source.id)).code, 'CATALOG_ITEM_IN_USE');
     let res = await api('PUT', '/candidates/' + created.data.id + '/stage', tokens.recruiter, { stage: 'REJECTED', notes: 'Reason note', rejectionReasonId: reason.id }); assert.equal(res.status, 200);
-    assert.equal(catalogs.deleteItem(reason.id).code, 'CATALOG_ITEM_IN_USE');
+    assert.equal((await catalogs.deleteItem(reason.id)).code, 'CATALOG_ITEM_IN_USE');
     res = await api('PUT', '/candidates/' + created.data.id + '/stage', tokens.hiring, { stage: 'REJECTED', notes: 'Legacy ignored note' }); assert.equal(res.status, 200);
-    const row = db.prepare('SELECT rejection_reason_id,notes FROM candidates WHERE id = ?').get(created.data.id); assert.equal(row.rejection_reason_id, reason.id); assert.equal(row.notes, 'Reason note');
+    const row = (await db.prepare('SELECT rejection_reason_id,notes FROM candidates WHERE id = ?').get(created.data.id)); assert.equal(row.rejection_reason_id, reason.id); assert.equal(row.notes, 'Reason note');
     assert.equal((await api('PUT', '/candidates/' + created.data.id + '/stage', tokens.hiring, { stage: 'REJECTED', rejectionReasonId: reason.id })).status, 403);
-    assert.equal(requisitions.createCandidate({ fullName: 'Bad', email: 'bad@test.example', sourceId: reason.id }).success, false);
+    assert.equal((await requisitions.createCandidate({ fullName: 'Bad', email: 'bad@test.example', sourceId: reason.id })).success, false);
   });
   await test('Career page uploads, saves, public output and invalid URL rejection', async () => {
     const media = await api('POST', '/career-page/media?kind=logo', tokens.hr, image, 'image/png'); assert.equal(media.status, 200);
@@ -255,34 +255,34 @@ async function main() {
   await test('Sprint 1 requisition payload/response and Hiring Manager are preserved', async () => {
     const res = await api('POST', '/requisitions', tokens.hiring, { title: 'Legacy position', departmentName: 'Unregistered legacy department', hiringManagerId: 'usr-hiring-mgr', recruiterId: 'usr-recruiter', headcount: 2 });
     assert.equal(res.status, 201); assert.deepEqual(Object.keys(res.data.data).sort(), ['id','code','title','departmentName','headcount','status'].sort());
-    let req = requisitions.getRequisitionById(res.data.data.id); assert.equal(req.hiringManagerId, 'usr-hiring-mgr');
-    const updated = requisitions.updateRequisition(req.id, { departmentName: 'Another legacy department' }); assert.equal(updated.success, true);
-    req = requisitions.getRequisitionById(req.id); assert.equal(req.hiringManagerId, 'usr-hiring-mgr'); assert.equal(req.departmentName, 'Another legacy department');
-    assert.equal(requisitions.reassignHandover(req.id, 'usr-recruiter-2', 'Legacy handover').success, true);
-    assert.equal(requisitions.getRequisitionById(req.id).recruiterId, 'usr-recruiter-2');
+    let req = (await requisitions.getRequisitionById(res.data.data.id)); assert.equal(req.hiringManagerId, 'usr-hiring-mgr');
+    const updated = (await requisitions.updateRequisition(req.id, { departmentName: 'Another legacy department' })); assert.equal(updated.success, true);
+    req = (await requisitions.getRequisitionById(req.id)); assert.equal(req.hiringManagerId, 'usr-hiring-mgr'); assert.equal(req.departmentName, 'Another legacy department');
+    assert.equal((await requisitions.reassignHandover(req.id, 'usr-recruiter-2', 'Legacy handover')).success, true);
+    assert.equal((await requisitions.getRequisitionById(req.id)).recruiterId, 'usr-recruiter-2');
   });
   await test('Sprint 2 requisition references coexist with old requests and block department deletion', async () => {
     const res = await api('POST', '/requisitions', tokens.hiring, { title: 'New references', departmentId: department.id, jobTitleId: jobTitle.id }); assert.equal(res.status, 201);
-    assert.equal(requisitions.getRequisitionById(res.data.data.id).jobTitleId, jobTitle.id);
-    assert.equal(departments.deleteDepartment(department.id).code, 'DEPARTMENT_HAS_OPEN_REQUISITIONS');
-    assert.equal(departments.deactivateDepartment(department.id).success, true);
+    assert.equal((await requisitions.getRequisitionById(res.data.data.id)).jobTitleId, jobTitle.id);
+    assert.equal((await departments.deleteDepartment(department.id)).code, 'DEPARTMENT_HAS_OPEN_REQUISITIONS');
+    assert.equal((await departments.deactivateDepartment(department.id)).success, true);
     assert.equal((await api('POST', '/requisitions', tokens.hiring, { title: 'Inactive', departmentId: department.id })).status, 400);
     assert.equal((await api('POST', '/requisitions', tokens.hiring, { title: 'Legacy still works', departmentName: department.name })).status, 201);
     assert.equal((await api('POST', '/requisitions', tokens.hiring, { title: 'Invalid', departmentId: 'unknown' })).status, 400);
   });
   await test('Deleting a department manager leaves user, roles and sessions intact', async () => {
-    const count = table => db.prepare('SELECT COUNT(*) AS count FROM ' + table + ' WHERE user_id = ?').get('usr-hiring-mgr').count;
-    const before = { roles: count('user_roles'), sessions: count('sessions'), user: users.getUserById('usr-hiring-mgr') };
-    const res = users.deleteUser('usr-hiring-mgr', { id: 'usr-admin' }); assert.equal(res.code, 'USER_IS_DEPARTMENT_MANAGER');
-    assert.equal(count('user_roles'), before.roles); assert.equal(count('sessions'), before.sessions); assert.deepEqual(users.getUserById('usr-hiring-mgr'), before.user); assertNoOpenTransaction();
+    const count = async table => (await db.prepare('SELECT COUNT(*) AS count FROM ' + table + ' WHERE user_id = ?').get('usr-hiring-mgr')).count;
+    const before = { roles: (await count('user_roles')), sessions: (await count('sessions')), user: (await users.getUserById('usr-hiring-mgr')) };
+    const res = (await users.deleteUser('usr-hiring-mgr', { id: 'usr-admin' })); assert.equal(res.code, 'USER_IS_DEPARTMENT_MANAGER');
+    assert.equal((await count('user_roles')), before.roles); assert.equal((await count('sessions')), before.sessions); assert.deepEqual((await users.getUserById('usr-hiring-mgr')), before.user); (await assertNoOpenTransaction());
     const apiRes = await api('DELETE', '/admin/users/usr-hiring-mgr', tokens.admin); assert.equal(apiRes.status, 409);
   });
   await test('Deletion rolls back on late FK/SQL failure and ordinary users remain deletable', async () => {
-    const created = users.createUser({ fullName: 'Delete test', email: 'delete@test.example' }).data.user;
-    db.exec(`CREATE TEMP TRIGGER fail_user_delete BEFORE DELETE ON users WHEN OLD.email = 'delete@test.example' BEGIN SELECT RAISE(ABORT, 'late failure'); END`);
-    try { assert.throws(() => users.deleteUser(created.id, { id: 'usr-admin' })); assert.ok(users.getUserById(created.id)); assert.equal(db.prepare('SELECT COUNT(*) AS count FROM user_roles WHERE user_id = ?').get(created.id).count, 1); }
-    finally { db.exec('DROP TRIGGER fail_user_delete'); }
-    assert.equal(users.deleteUser(created.id, { id: 'usr-admin' }).success, true);
+    const created = (await users.createUser({ fullName: 'Delete test', email: 'delete@test.example' })).data.user;
+    (await db.exec(`CREATE TEMP TRIGGER fail_user_delete BEFORE DELETE ON users WHEN OLD.email = 'delete@test.example' BEGIN SELECT RAISE(ABORT, 'late failure'); END`));
+    try { (await assert.rejects(async () => (await users.deleteUser(created.id, { id: 'usr-admin' })))); assert.ok((await users.getUserById(created.id))); assert.equal((await db.prepare('SELECT COUNT(*) AS count FROM user_roles WHERE user_id = ?').get(created.id)).count, 1); }
+    finally { (await db.exec('DROP TRIGGER fail_user_delete')); }
+    assert.equal((await users.deleteUser(created.id, { id: 'usr-admin' })).success, true);
   });
   await test('Old job title schema migrates additively and idempotently without inventing salaries', async () => {
     const legacyPath = path.join(root, 'backend/data/legacy_schema_test.db');
@@ -293,6 +293,8 @@ async function main() {
     for (let i = 0; i < 2; i++) { const res = spawnSync(process.execPath, ['-e', script], { cwd: root, env: process.env, encoding: 'utf8' }); assert.equal(res.status, 0, res.stderr); }
   });
   await test('Real create-user UI callback sends all fields using the backend contract', async () => {
+    // The selector now submits its canonical ID; its fixture must exist in the real isolated DB.
+    await db.prepare("INSERT INTO departments(id,code,name,manager_id) VALUES ('dept-ui','UI-DEPARTMENT','UI department','usr-hr-mgr')").run();
     const html = require('./helpers/frontendFixture').html();
     const source = require('./helpers/frontendFixture').source();
     const nodes = new Map(), storage = new Map(); let ready;
