@@ -182,7 +182,7 @@ async function run() {
   await test('Pending cache is not evidence of real delivery; accepted SMTP updates it', async () => {
     let finish;
     const service = smtpService(() => new Promise(resolve => { finish = resolve; }));
-    const pending = (await service.sendOtpEmail(email, '123456'));
+    const pending = service.sendOtpEmail(email, '123456');
     assert.equal(service.getLastSentEmail().status, 'PENDING');
     assert.equal(service.getLastSentEmail().delivered, false);
     assert.equal(service.getLastSentEmail().content, undefined);

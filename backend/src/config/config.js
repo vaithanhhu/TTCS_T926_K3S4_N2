@@ -34,6 +34,8 @@ module.exports = {
   DB_PROVIDER: process.env.DB_PROVIDER || (process.env.DATABASE_URL ? 'postgres' : 'sqlite'),
   DATABASE_URL: process.env.DATABASE_URL || '',
   PG_SSL_MODE: process.env.PG_SSL_MODE || 'url',
+  APPROVAL_CONFIGURATION_ENABLED: process.env.APPROVAL_CONFIGURATION_ENABLED === 'true',
+  REQUISITION_APPROVAL_ENABLED: process.env.REQUISITION_APPROVAL_ENABLED === 'true',
   DB_PATH: isTestEnv
     ? path.join(__dirname, '..', '..', 'data', 'ats_test.db')
     : (process.env.DB_PATH ? path.resolve(process.env.DB_PATH) : path.join(__dirname, '..', '..', 'data', 'ats.db')),

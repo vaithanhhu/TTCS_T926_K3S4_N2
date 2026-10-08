@@ -14,6 +14,10 @@
   const saveCreateReqDraftBtn = document.getElementById('save-create-req-draft-btn');
   let requisitionJobTitles = [];
   let editingS210Requisition = null;
+  let requisitionEditAccess = null;
+  let pendingOpenProposal=null;
+  const reapproveCreateReqBtn=document.getElementById('create-req-reapprove');
+  if(reapproveCreateReqBtn)reapproveCreateReqBtn.addEventListener('click',()=>{if(!pendingOpenProposal)return;createReqModal.classList.add('hidden');return window.ATS_REQUISITION_APPROVAL_UI.propose(editingS210Requisition.id,pendingOpenProposal,requisitionEditAccess?.editVersion);});
   let requisitionSalaryCheck = { key: null, status: null, message: '' };
   let requisitionSalaryCheckRevision = 0;
   let requisitionOptionsRevision = 0;
@@ -89,15 +93,17 @@
     const node = document.getElementById(id); if (node) node.addEventListener('input', refreshRequisitionSalaryCheck);
   }
 
-  async function openCreateReqModal(request = null) {
+  async function openCreateReqModal(request = null, access = null) {
     if (!createReqModal) return;
     const optionsRevision = ++requisitionOptionsRevision;
     editingS210Requisition = request?.formVersion === 'S2-10' ? request : null;
+    requisitionEditAccess = access;
     requisitionJobTitles = [];
     requisitionSalaryCheck = { key: null, status: null, message: '' };
     requisitionSalaryCheckRevision++;
     if (createReqForm) createReqForm.reset();
-    document.getElementById('create-req-needed-date-input').min = requisitionBusinessDate();
+    if(editingS210Requisition?.status==='OPEN')document.getElementById('create-req-needed-date-input').removeAttribute('min');
+    else document.getElementById('create-req-needed-date-input').min = requisitionBusinessDate();
     document.getElementById('create-req-state').textContent = editingS210Requisition ? `${editingS210Requisition.code} — ${editingS210Requisition.status === 'DRAFT' ? 'Nháp' : editingS210Requisition.status}` : 'Yêu cầu mới';
     if (createReqAlert) createReqAlert.classList.add('hidden');
 
@@ -112,6 +118,7 @@
         if (departmentsRes.ok && departmentsRes.data && departmentsRes.data.success) {
           const tree = departmentsRes.data.tree || [];
           requisitionJobTitles = departmentsRes.data.jobTitles || [];
+          if(createReqRecruiterSelect)createReqRecruiterSelect.innerHTML='<option value="">-- Chưa chỉ định --</option>'+(departmentsRes.data.recruiters||[]).map(user=>`<option value="${escapeDepartmentHtml(user.id)}">${escapeDepartmentHtml(user.fullName)}</option>`).join('');
           if (createReqJobTitleSelect) createReqJobTitleSelect.innerHTML = '<option value="">-- Chọn chức danh --</option>' + requisitionJobTitles.map(job => `<option value="${escapeDepartmentHtml(job.id)}">${escapeDepartmentHtml(job.code)} — ${escapeDepartmentHtml(job.name)}${job.level ? ' (' + escapeDepartmentHtml(job.level) + ')' : ''}</option>`).join('');
 
           const renderDepartmentOptions = (nodes, depth = 0) =>
@@ -135,7 +142,7 @@
           `<option value="">-- Không tải được phòng ban --</option>`;
       }
     }
-    if (token && createReqRecruiterSelect) {
+    if (token && createReqRecruiterSelect && currentAuthenticatedUser?.permissions?.includes('user.read')) {
       try {
         const usersRes = await window.ATS_API.getUsersApi(token, { role: 'RECRUITER', status: 'ACTIVE' });
         if (!isCurrentSession()) return;
@@ -215,7 +222,8 @@
       }
     }
     let editable = !editingS210Requisition;
-    if (editingS210Requisition?.status === 'DRAFT') {
+    if(editingS210Requisition && access)editable=access.canEdit===true;
+    else if (editingS210Requisition?.status === 'DRAFT') {
       const permissions = await window.ATS_API.getPermissionsApi(token);
       if (!isCurrentSession()) return;
       editable = permissions.ok && (permissions.data?.permissions || []).includes('requisition.draft.edit');
@@ -223,7 +231,16 @@
     if (!isCurrentSession()) return;
     createReqForm.querySelectorAll('input, select, textarea').forEach(node => { node.disabled = !editable; });
     document.getElementById('create-req-legacy-dept-input').disabled = true;
-    if (saveCreateReqDraftBtn) saveCreateReqDraftBtn.classList.toggle('hidden', !editable);
+    pendingOpenProposal=null;if(reapproveCreateReqBtn)reapproveCreateReqBtn.classList.add('hidden');
+    const editingOpen=editingS210Requisition?.status==='OPEN';
+    const operational=document.getElementById('create-req-operational-fields');if(operational)operational.classList.toggle('hidden',!editingOpen);
+    const notes=document.getElementById('create-req-handover-notes');if(notes){notes.value=editingS210Requisition?.handoverNotes||'';notes.disabled=!editable||!editingOpen;}
+    if(editingOpen){
+      const significant=editable&&access?.canChangeSignificant;
+      for(const id of ['create-req-title-input','create-req-job-title-input','create-req-dept-input','create-req-headcount-input','create-req-reason-input','create-req-salary-min-input','create-req-salary-max-input','create-req-needed-date-input','create-req-description-input','create-req-requirements-input','create-req-justification-input','create-req-work-location-select','create-req-work-mode-select'])document.getElementById(id).disabled=!significant;
+      if(createReqRecruiterSelect)createReqRecruiterSelect.disabled=!editable||!access?.operationalFields?.includes('recruiterId');
+    }
+    if (saveCreateReqDraftBtn) saveCreateReqDraftBtn.classList.toggle('hidden', !editable||editingOpen);
     document.getElementById('submit-create-req-btn').classList.toggle('hidden', !editable);
     updateRequisitionSalaryHint();
     createReqModal.classList.remove('hidden');
@@ -270,6 +287,16 @@
           workLocationId: workLocationId || null,
           workModeId: workModeId || null
         };
+        if(editingS210Requisition?.status==='OPEN'){
+          const editorId=editingS210Requisition.id,editorRevision=requisitionOptionsRevision;
+          payload.handoverNotes=document.getElementById('create-req-handover-notes').value;
+          const changes=Object.fromEntries(Object.entries(payload).filter(([key,value])=>!['status','formVersion'].includes(key)&&(value??'')!==(editingS210Requisition[key]??'')));
+          const result=await window.ATS_API.updateRequisitionApi(token,editorId,{...changes,expectedOperationVersion:requisitionEditAccess?.operationVersion});
+          if(token!==sessionStorage.getItem('ats_token')||editorRevision!==requisitionOptionsRevision||editorId!==editingS210Requisition?.id||createReqModal.classList.contains('hidden'))return;
+          if(result.ok&&result.data?.success){createReqModal.classList.add('hidden');showToast('success','Đã cập nhật','Thông tin vận hành đã được lưu.');loadRequisitions();}
+          else{createReqAlertMsg.textContent=requisitionFailureMessage(result,'Không thể cập nhật yêu cầu tuyển dụng.');createReqAlert.classList.remove('hidden');if(result.data?.code==='REQUISITION_REAPPROVAL_REQUIRED'&&result.data.approvalEnabled){pendingOpenProposal=Object.fromEntries(Object.entries(changes).filter(([key])=>requisitionEditAccess?.significantFields?.includes(key)));reapproveCreateReqBtn?.classList.remove('hidden');}}
+          return;
+        }
         if (headcount !== null && (!Number.isSafeInteger(headcount) || headcount <= 0)) throw new Error('Số lượng cần tuyển phải là số nguyên lớn hơn 0.');
         for (const salary of [payload.proposedSalaryMin, payload.proposedSalaryMax]) {
           if (salary !== null && (!Number.isFinite(salary) || salary < 0)) throw new Error('Lương đề xuất phải là số hợp lệ, không âm.');
@@ -290,7 +317,7 @@
           loadDashboardData();
         } else {
           if (createReqAlert && createReqAlertMsg) {
-            createReqAlertMsg.textContent = res.data.message || 'Không thể tạo vị trí tuyển dụng.';
+            createReqAlertMsg.textContent = editingS210Requisition ? requisitionFailureMessage(res, 'Không thể cập nhật yêu cầu tuyển dụng. Vui lòng thử lại.') : res.data?.message || 'Không thể tạo vị trí tuyển dụng.';
             createReqAlert.classList.remove('hidden');
           }
         }

@@ -60,7 +60,7 @@ async function main() {
       assert.equal(bad.status, 400); responses[400] = { status: bad.status, data: await bad.json() };
       responses[401] = await app.api('GET', '/admin/users', 'invalid-review-session');
       const hr = await app.login(known);
-      responses[403] = await app.api('GET', '/admin/audit-logs', hr.token);
+      responses[403] = await app.api('POST', '/admin/users/test-create', hr.token, {});
       const missing = await fetch(app.base + '/api/v1/not-a-real-api', { headers: { Accept: 'text/html', 'Sec-Fetch-Dest': 'document' } });
       assert.equal(missing.status, 404); assert.match(missing.headers.get('content-type'), /application\/json/);
       responses[404] = { status: missing.status, data: await missing.json() };

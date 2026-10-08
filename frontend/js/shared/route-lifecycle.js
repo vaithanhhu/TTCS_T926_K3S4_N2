@@ -1,5 +1,7 @@
 /** Navigation activates retained pages without rebinding their listeners. */
 function leaveActivePage() {
+  window.ATS_REQUISITION_APPROVAL_UI?.leave();
+  if (currentActiveView === 'approval-configurations') window.ATS_APPROVAL_CONFIGURATION_PAGE?.leave();
   if (currentActiveView === 'change-password') {
     document.body.appendChild(changePwdModal);
     changePwdModal.classList.remove('password-page-form');

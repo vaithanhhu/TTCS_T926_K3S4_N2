@@ -1,0 +1,42 @@
+<div id="s302-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="s302-title">
+ <div class="modal-card" style="max-width: 720px;">
+  <div class="modal-header"><h3 id="s302-title">Phê duyệt yêu cầu tuyển dụng</h3><button type="button" id="s302-close" class="modal-close" aria-label="Đóng">&times;</button></div>
+  <p class="modal-desc">Trạng thái phê duyệt áp dụng cho phiên bản hồ sơ đã gửi. Trạng thái tuyển dụng được giữ nguyên.</p>
+  <div id="s302-alert" class="alert alert-danger hidden" role="alert"><span id="s302-message"></span></div>
+  <div id="s302-status"></div>
+  <p id="s302-policy-notice" role="status"></p>
+  <label class="form-label" for="s302-view-revision">Phiên bản hồ sơ</label><select id="s302-view-revision" class="form-select"></select>
+  <div id="s302-document" style="white-space: pre-wrap;"></div>
+  <h4>Dữ liệu đang có hiệu lực / Thay đổi của phiên bản</h4>
+  <div id="s302-effective" style="white-space: pre-wrap;"></div>
+  <div id="s302-diff" style="white-space: pre-wrap;"></div>
+  <div id="s302-levels"></div>
+  <label id="s302-comment-label" class="form-label" for="s302-comment">Ý kiến (bắt buộc khi Từ chối hoặc Yêu cầu bổ sung)</label>
+  <textarea id="s302-comment" class="form-input" maxlength="4000"></textarea>
+  <div id="s302-actions" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px;">
+   <button type="button" id="s302-approve" class="btn btn-primary">Duyệt</button>
+   <button type="button" id="s302-reject" class="btn btn-outline">Từ chối</button>
+   <button type="button" id="s302-info" class="btn btn-outline">Yêu cầu bổ sung</button>
+  </div>
+  <form id="s302-revision-form" class="hidden" style="margin-top: 16px;">
+   <h4>Bổ sung phiên bản hồ sơ</h4>
+   <label class="form-label" for="s302-revision-title">Tiêu đề tuyển dụng</label><input id="s302-revision-title" class="form-input">
+   <label class="form-label" for="s302-delegation-reason">Lý do gửi thay (bắt buộc với HR Manager/Admin gửi thay)</label><textarea id="s302-delegation-reason" class="form-input" maxlength="4000"></textarea>
+   <p class="modal-desc">Gửi lại tạo phiên bản mới, chọn cấu hình hiện hành theo phòng ban và lương đề xuất, và duyệt lại từ cấp 1. Lịch sử các vòng trước được giữ nguyên.</p>
+   <label class="form-label" for="s302-department">Phòng ban</label><select id="s302-department" class="form-select" required></select>
+   <label class="form-label" for="s302-job">Chức danh</label><select id="s302-job" class="form-select" required></select>
+   <label class="form-label" for="s302-quantity">Số lượng</label><input id="s302-quantity" class="form-input" type="number" min="1" required>
+   <label class="form-label" for="s302-reason">Lý do</label><select id="s302-reason" class="form-select"><option value="REPLACEMENT">Thay thế</option><option value="NEW_HEADCOUNT">Tăng mới</option></select>
+   <label class="form-label" for="s302-min">Lương đề xuất tối thiểu</label><input id="s302-min" class="form-input" type="number" min="0" step="any" required>
+   <label class="form-label" for="s302-max">Lương đề xuất tối đa</label><input id="s302-max" class="form-input" type="number" min="0" step="any" required>
+   <label class="form-label" for="s302-needed">Ngày cần người</label><input id="s302-needed" class="form-input" type="date" required>
+   <label class="form-label" for="s302-description">Mô tả công việc</label><textarea id="s302-description" class="form-input" required></textarea>
+   <label class="form-label" for="s302-requirements">Yêu cầu ứng viên</label><textarea id="s302-requirements" class="form-input" required></textarea>
+   <label class="form-label" for="s302-justification">Giải trình lương ngoài chuẩn</label><textarea id="s302-justification" class="form-input"></textarea>
+   <label class="form-label" for="s302-location">Địa điểm làm việc</label><select id="s302-location" class="form-select"></select>
+   <label class="form-label" for="s302-mode">Hình thức làm việc</label><select id="s302-mode" class="form-select"></select>
+   <button type="submit" id="s302-resubmit" class="btn btn-primary" style="margin-top: 12px;">Gửi lại hồ sơ</button>
+  </form>
+  <h4>Lịch sử các vòng</h4><div id="s302-history"></div>
+ </div>
+</div>

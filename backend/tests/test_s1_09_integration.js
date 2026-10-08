@@ -148,10 +148,10 @@ async function runTests() {
     const initialReq = await request({
       hostname: 'localhost',
       port: TEST_PORT,
-      path: '/api/v1/recruitment/candidates/test-list',
-      method: 'GET',
-      headers: { 'Authorization': `Bearer ${devToken}` }
-    });
+      path: '/api/v1/candidates/cand-001/stage',
+      method: 'PUT',
+      headers: { 'Authorization': `Bearer ${devToken}`, 'Content-Type':'application/json' }
+    }, {stage:'SCREENING'});
     assert.strictEqual(initialReq.status, 403, 'Ban đầu phải bị từ chối 403');
     assert.strictEqual(initialReq.body.code, 'FORBIDDEN_PERMISSION_DENIED');
     console.log('   ✓ Thao tác ban đầu: Dev1 bị chặn HTTP 403 do chưa có vai trò RECRUITER.');
@@ -174,13 +174,15 @@ async function runTests() {
     const nextReq = await request({
       hostname: 'localhost',
       port: TEST_PORT,
-      path: '/api/v1/recruitment/candidates/test-list',
-      method: 'GET',
-      headers: { 'Authorization': `Bearer ${devToken}` }
-    });
+      path: '/api/v1/candidates/cand-001/stage',
+      method: 'PUT',
+      headers: { 'Authorization': `Bearer ${devToken}`, 'Content-Type':'application/json' }
+    }, {stage:'SCREENING'});
     assert.strictEqual(nextReq.status, 200, 'Thao tác kế tiếp phải thành công 200 ngay lập tức');
-    assert.strictEqual(nextReq.body.code, 'CANDIDATE_LIST_SUCCESS');
-    assert.strictEqual(nextReq.body.authorizedUser, 'dev1@company.com');
+    assert.strictEqual(nextReq.body.success, true);
+    const currentSession=await request({hostname:'localhost',port:TEST_PORT,path:'/api/v1/auth/me',method:'GET',headers:{Authorization:`Bearer ${devToken}`}});
+    assert.strictEqual(currentSession.body.data.user.email,'dev1@company.com');
+    assert.ok(currentSession.body.data.user.roles.includes('RECRUITER'));
     console.log('   ✓ Thao tác kế tiếp: Dev1 lập tức được phép truy cập HTTP 200 mà KHÔNG CẦN đăng nhập lại hay khởi động lại server.');
     passedTests++;
 

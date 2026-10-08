@@ -129,6 +129,8 @@ async function main() {
     assert.equal(style('.topbar-breadcrumbs', 360).display, 'none'); assert.equal(style('.app-main', 360)['padding-bottom'], 'calc(88px + env(safe-area-inset-bottom))');
   });
   await startServer(0); base = 'http://127.0.0.1:' + server.address().port;
+  await require('../src/db/migrate-approval-configurations').migrate(require('../src/db/database').getDatabase());
+  require('../src/config/config').APPROVAL_CONFIGURATION_ENABLED = true;
   const sessions = {};
   for (const [key, email] of [['hr', 'hrmanager@company.com'], ['admin', 'admin@company.com'], ['candidate', 'candidate@example.com']]) {
     const response = await fetch(base + '/api/v1/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password: 'Ats@123456' }) }); assert.equal(response.status, 200); sessions[key] = (await response.json()).data;

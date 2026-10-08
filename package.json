@@ -4,6 +4,15 @@
   "description": "Hệ thống Tuyển dụng Nội bộ (ATS) - Sprint 1",
   "private": true,
   "scripts": {
+    "test:final-rbac-open": "node backend/tests/test_final_rbac_open.js",
+    "test:requisition-access": "node backend/tests/test_requisition_access.js",
+    "test:ats-e2e": "node backend/tests/test_ats_e2e.js",
+    "sync:permissions": "node backend/src/db/sync-permissions.js",
+    "test:rbac": "node backend/tests/test_rbac_admin.js",
+    "migrate:s3-02": "node backend/src/db/migrate-requisition-approvals.js",
+    "test:s3-02": "node backend/tests/test_s3_02_integration.js",
+    "migrate:s3-01": "node backend/src/db/migrate-approval-configurations.js",
+    "test:s3-01": "node backend/tests/test_s3_01_integration.js",
     "migrate:postgres": "node backend/src/db/migrate-postgres.js",
     "seed:postgres": "node backend/src/db/migrate-postgres.js --seed",
     "import:postgres": "node backend/src/db/import-sqlite.js",
@@ -37,7 +46,8 @@
     "test:coverage:sprint2": "node backend/tests/test_s2_coverage.js",
     "test:career-upload": "node backend/tests/test_career_page_upload_limits.js",
     "test:user-roles-avatar": "node backend/tests/test_user_roles_and_avatars.js",
-    "test:sprint1": "node backend/tests/test_s1_01_integration.js && node backend/tests/test_s1_02_integration.js && node backend/tests/test_s1_03_integration.js && node backend/tests/test_s1_04_integration.js && node backend/tests/test_s1_05_integration.js && node backend/tests/test_s1_06_integration.js && node backend/tests/test_s1_07_integration.js && node backend/tests/test_s1_08_integration.js && node backend/tests/test_s1_09_integration.js && node backend/tests/test_s1_10_integration.js"
+    "test:sprint1": "node backend/tests/test_s1_01_integration.js && node backend/tests/test_s1_02_integration.js && node backend/tests/test_s1_03_integration.js && node backend/tests/test_s1_04_integration.js && node backend/tests/test_s1_05_integration.js && node backend/tests/test_s1_06_integration.js && node backend/tests/test_s1_07_integration.js && node backend/tests/test_s1_08_integration.js && node backend/tests/test_s1_09_integration.js && node backend/tests/test_s1_10_integration.js",
+    "test:reapproval": "node backend/tests/test_requisition_reapproval.js"
   },
   "keywords": [
     "ats",

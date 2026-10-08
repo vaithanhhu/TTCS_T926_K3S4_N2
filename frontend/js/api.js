@@ -920,9 +920,16 @@ async function updateOfferStatusApi(token, id, status) {
   }
 }
 
-async function getRequisitionByIdApi(token, id) {
+async function getInterviewOptionsApi(token) {
   try {
-    const response = await fetch(`${API_BASE}/requisitions/${id}`, {
+    const response=await fetch(`${API_BASE}/interview-options`,{headers:{Authorization:token?'Bearer '+token:''}});
+    return {status:response.status,ok:response.ok,data:await response.json()};
+  } catch { return {status:0,ok:false,data:{success:false,message:'Không thể tải người phỏng vấn.'}}; }
+}
+
+async function getRequisitionByIdApi(token, id, options = {}) {
+  try {
+    const response = await fetch(`${API_BASE}/requisitions/${id}${options.edit ? '?intent=edit' : ''}`, {
       method: 'GET',
       headers: { 'Authorization': token ? `Bearer ${token}` : '' }
     });
@@ -1547,6 +1554,7 @@ async function updateInterviewQuestionApi(token, id, questionData) {
 }
 
 window.ATS_API = {
+  getInterviewOptionsApi,
   loginApi,
   logoutApi,
   getMeApi,

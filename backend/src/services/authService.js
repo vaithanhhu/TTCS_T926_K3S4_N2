@@ -2,6 +2,7 @@ const crypto = require('node:crypto');
 const { getDatabase } = require('../db/database');
 const { verifyPassword, hashPassword } = require('../utils/password');
 const config = require('../config/config');
+const RbacMiddleware = require('../middlewares/rbacMiddleware');
 const { getEmailService } = require('./emailService');
 
 // Dummy hash used for constant-time failure when email is not found
@@ -20,6 +21,7 @@ class AuthService {
   constructor(db) {
     this.db = db || getDatabase();
     this.emailService = getEmailService(this.db);
+    this.rbac = new RbacMiddleware(this.db);
   }
 
   /**
@@ -194,15 +196,7 @@ class AuthService {
     const defaultHome = this.determineDefaultHome(roleCodes, userRoles);
 
     // Fetch user permissions from DB (S1-05 RBAC)
-    const permsStmt = this.db.prepare(`
-      SELECT DISTINCT p.code
-      FROM permissions p
-      JOIN role_permissions rp ON p.id = rp.permission_id
-      JOIN user_roles ur ON rp.role_id = ur.role_id
-      WHERE ur.user_id = ?
-      ORDER BY p.code ASC
-    `);
-    const permissions = (await permsStmt.all(user.id)).map(p => p.code);
+    const permissions = await this.rbac.getUserPermissions(user.id);
 
     // Create session token with configurable TTL (S1-02)
     const token = 'ats_sess_' + crypto.randomBytes(32).toString('hex');
@@ -352,15 +346,7 @@ class AuthService {
     const defaultHome = this.determineDefaultHome(roleCodes, userRoles);
 
     // Fetch user permissions from DB (S1-05 RBAC)
-    const permsStmt = this.db.prepare(`
-      SELECT DISTINCT p.code
-      FROM permissions p
-      JOIN role_permissions rp ON p.id = rp.permission_id
-      JOIN user_roles ur ON rp.role_id = ur.role_id
-      WHERE ur.user_id = ?
-      ORDER BY p.code ASC
-    `);
-    const permissions = (await permsStmt.all(session.user_id)).map(p => p.code);
+    const permissions = await this.rbac.getUserPermissions(session.user_id);
 
     return {
       valid: true,

@@ -8,15 +8,55 @@
   const reqDetailRecruiterSelect = document.getElementById('req-detail-recruiter-select');
   const reqDetailWorkLocationSelect = document.getElementById('req-detail-work-location-select');
   const reqDetailWorkModeSelect = document.getElementById('req-detail-work-mode-select');
+  let requisitionDetailLoadRevision = 0;
+  let editingLegacyRequisition = null;
+  let legacyRequisitionEditAccess = null;
+  let pendingLegacyProposal=null;
+  const reapproveDetailBtn=document.getElementById('req-detail-reapprove');
+  if(reapproveDetailBtn)reapproveDetailBtn.addEventListener('click',()=>{if(!pendingLegacyProposal)return;reqDetailModal.classList.add('hidden');return window.ATS_REQUISITION_APPROVAL_UI.propose(editingLegacyRequisition.id,pendingLegacyProposal,legacyRequisitionEditAccess?.editVersion);});
 
-  async function openRequisitionDetails(id) {
-    if (!reqDetailModal) return;
-    const req = currentRequisitionsList.find(r => r.id === id);
-    if (!req) return;
+  function requisitionFailureMessage(result, fallback) {
+    const error = result?.data;
+    if (error?.code === 'FORBIDDEN_PERMISSION_DENIED' && ['requisition.edit', 'requisition.draft.edit'].includes(error.requiredPermission)) return 'Bạn không có quyền chỉnh sửa yêu cầu tuyển dụng này.';
+    return error?.message || fallback;
+  }
+
+  async function openRequisitionDetails(id, edit = false) {
+    pendingLegacyProposal=null;reapproveDetailBtn?.classList.add('hidden');
+    const revision = ++requisitionDetailLoadRevision;
+    const token = sessionStorage.getItem('ats_token');
+    const view = typeof currentActiveView === 'string' ? currentActiveView : null;
+    const isCurrentDetail = () => revision === requisitionDetailLoadRevision && token === sessionStorage.getItem('ats_token') && (view === null || currentActiveView === view);
+    if (!token) {
+      showToast('warning', 'Cần đăng nhập', 'Phiên làm việc không còn hợp lệ. Vui lòng đăng nhập lại.');
+      return;
+    }
+    if (!reqDetailModal) {
+      showToast('danger', 'Không thể mở chi tiết', 'Không thể tải biểu mẫu yêu cầu tuyển dụng. Vui lòng tải lại trang.');
+      return;
+    }
+    reqDetailModal.classList.add('hidden');
+    if (createReqModal) createReqModal.classList.add('hidden');
+    let req;
+    try {
+      const result = await window.ATS_API.getRequisitionByIdApi(token, id, {edit});
+      if (!isCurrentDetail()) return;
+      if (!result.ok || !result.data?.success || !result.data.data) {
+        showToast('danger', 'Không thể đọc yêu cầu', result.data?.message || 'Không thể tải yêu cầu tuyển dụng.');
+        return;
+      }
+      req = result.data.data;
+      legacyRequisitionEditAccess=edit?result.data.access:{canEdit:false};
+    } catch {
+      if (isCurrentDetail()) showToast('danger', 'Không thể đọc yêu cầu', 'Không thể kết nối để tải yêu cầu tuyển dụng. Vui lòng thử lại.');
+      return;
+    }
     if (req.formVersion === 'S2-10') {
-      const result = await window.ATS_API.getRequisitionByIdApi(sessionStorage.getItem('ats_token'), id);
-      if (result.ok && result.data?.success) await openCreateReqModal(result.data.data);
-      else showToast('error', 'Không thể đọc yêu cầu', result.data?.message || 'Không thể tải yêu cầu tuyển dụng.');
+      try {
+        await openCreateReqModal(req,legacyRequisitionEditAccess);
+      } catch {
+        showToast('danger', 'Không thể mở biểu mẫu', 'Không thể tải biểu mẫu yêu cầu tuyển dụng. Vui lòng thử lại.');
+      }
       return;
     }
 
@@ -26,6 +66,8 @@
     document.getElementById('req-detail-dept-input').value = req.departmentName || req.department || '';
     document.getElementById('req-detail-headcount-input').value = req.headcount;
     document.getElementById('req-detail-status-select').value = req.status;
+    editingLegacyRequisition = req;
+    document.getElementById('req-detail-handover-notes').value=req.handoverNotes||'';
 
     const statusBadge = document.getElementById('req-detail-status-badge');
     if (statusBadge) {
@@ -33,7 +75,6 @@
       statusBadge.textContent = req.status === 'OPEN' ? 'Đang mở' : (req.status === 'IN_PROGRESS' ? 'Đang tuyển' : 'Đã đóng');
     }
 
-    const token = sessionStorage.getItem('ats_token');
     if (token && reqDetailRecruiterSelect) {
       try {
         const usersRes = await window.ATS_API.getUsersApi(token, { role: 'RECRUITER', status: 'ACTIVE' });
@@ -113,6 +154,13 @@
           '<option value="">-- Không tải được hình thức --</option>';
       }
     }
+    if (!isCurrentDetail()) return;
+    reqDetailForm.querySelectorAll('input,select,textarea').forEach(node=>{node.disabled=!edit;});
+    const significant=Boolean(edit&&legacyRequisitionEditAccess?.canChangeSignificant);
+    for(const id of ['req-detail-title-input','req-detail-dept-input','req-detail-headcount-input','req-detail-work-location-select','req-detail-work-mode-select'])document.getElementById(id).disabled=!significant;
+    if(reqDetailRecruiterSelect)reqDetailRecruiterSelect.disabled=!legacyRequisitionEditAccess?.operationalFields?.includes('recruiterId');
+    document.getElementById('req-detail-status-select').disabled=!legacyRequisitionEditAccess?.operationalFields?.includes('status');
+    document.getElementById('submit-req-detail-btn').classList.toggle('hidden',!edit);
     if (reqDetailAlert) reqDetailAlert.classList.add('hidden');
     reqDetailModal.classList.remove('hidden');
   }
@@ -126,6 +174,8 @@
       const token = sessionStorage.getItem('ats_token');
       if (!token) return;
 
+      const editorRevision=requisitionDetailLoadRevision;
+      const isCurrentEditor=()=>token===sessionStorage.getItem('ats_token')&&editorRevision===requisitionDetailLoadRevision&&!reqDetailModal.classList.contains('hidden');
       const id = document.getElementById('req-detail-id').value;
       const title = document.getElementById('req-detail-title-input').value.trim();
       const departmentName = document.getElementById('req-detail-dept-input').value.trim();
@@ -140,15 +190,19 @@
         : null;
 
       try {
-        const res = await window.ATS_API.updateRequisitionApi(token, id, {
+        const values = {
           title,
           departmentName,
           headcount,
           status,
           recruiterId,
           workLocationId: workLocationId || null,
-          workModeId: workModeId || null
-        });
+          workModeId: workModeId || null,
+          handoverNotes:document.getElementById('req-detail-handover-notes').value
+        };
+        const changes=Object.fromEntries(Object.entries(values).filter(([key,value])=>(value??'')!==(editingLegacyRequisition?.[key]??'')));
+        const res = await window.ATS_API.updateRequisitionApi(token, id, {...changes,expectedOperationVersion:legacyRequisitionEditAccess?.operationVersion});
+        if(!isCurrentEditor())return;
         if (res.ok && res.data && res.data.success) {
           reqDetailModal.classList.add('hidden');
           showToast('success', 'Cập nhật thành công', `Vị trí "${title}" đã được lưu.`);
@@ -156,13 +210,15 @@
           loadDashboardData();
         } else {
           if (reqDetailAlert && reqDetailAlertMsg) {
-            reqDetailAlertMsg.textContent = res.data.message || 'Không thể cập nhật.';
+            reqDetailAlertMsg.textContent = requisitionFailureMessage(res, 'Không thể cập nhật yêu cầu tuyển dụng. Vui lòng thử lại.');
             reqDetailAlert.classList.remove('hidden');
+            if(res.data?.code==='REQUISITION_REAPPROVAL_REQUIRED'&&res.data.approvalEnabled){pendingLegacyProposal=Object.fromEntries(Object.entries(changes).filter(([key])=>legacyRequisitionEditAccess?.significantFields?.includes(key)));reapproveDetailBtn?.classList.remove('hidden');}
           }
         }
       } catch (err) {
+        if(!isCurrentEditor())return;
         if (reqDetailAlert && reqDetailAlertMsg) {
-          reqDetailAlertMsg.textContent = err.message;
+          reqDetailAlertMsg.textContent = 'Không thể kết nối để cập nhật yêu cầu tuyển dụng. Vui lòng thử lại.';
           reqDetailAlert.classList.remove('hidden');
         }
       }

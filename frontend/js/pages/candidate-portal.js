@@ -23,7 +23,7 @@
 
       const candidates = (candRes.ok && candRes.data && candRes.data.candidates) ? candRes.data.candidates : [];
       const userEmail = currentAuthenticatedUser ? currentAuthenticatedUser.email.toLowerCase() : '';
-      let myCand = candidates.find(c => c.email && c.email.toLowerCase() === userEmail) || candidates[0];
+      let myCand = candidates.find(c => c.email && c.email.toLowerCase() === userEmail);
 
       if (myCand) {
         if (candNameEl) candNameEl.textContent = myCand.fullName;

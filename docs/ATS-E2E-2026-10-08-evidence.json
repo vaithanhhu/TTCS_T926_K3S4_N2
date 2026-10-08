@@ -1,0 +1,3710 @@
+{
+  "date": "2026-10-08",
+  "branch": "feature/s2-bulk-user-import",
+  "head": "d6fa9f46c62ca11f9f2f03ebf332b12d1af615c5",
+  "environment": {
+    "neon": false,
+    "email": "simulated/stubbed",
+    "sqlite": "fresh isolated temporary source copies",
+    "postgres": "PGlite embedded only",
+    "browser": "NOT RUN"
+  },
+  "suites": [
+    {
+      "script": "test:sprint1",
+      "status": "PASS",
+      "passed": 56,
+      "total": 56,
+      "exitCode": 0,
+      "log": "work/ats-e2e/final-run/test-sprint1.log"
+    },
+    {
+      "script": "test:s1-01",
+      "status": "PASS",
+      "passed": 8,
+      "total": 8,
+      "exitCode": 0,
+      "log": "work/ats-e2e/final-run/test-s1-01.log"
+    },
+    {
+      "script": "test:s1-02",
+      "status": "PASS",
+      "passed": 5,
+      "total": 5,
+      "exitCode": 0,
+      "log": "work/ats-e2e/final-run/test-s1-02.log"
+    },
+    {
+      "script": "test:s1-03",
+      "status": "PASS",
+      "passed": 5,
+      "total": 5,
+      "exitCode": 0,
+      "log": "work/ats-e2e/final-run/test-s1-03.log"
+    },
+    {
+      "script": "test:s1-04",
+      "status": "PASS",
+      "passed": 5,
+      "total": 5,
+      "exitCode": 0,
+      "log": "work/ats-e2e/final-run/test-s1-04.log"
+    },
+    {
+      "script": "test:s1-05",
+      "status": "PASS",
+      "passed": 6,
+      "total": 6,
+      "exitCode": 0,
+      "log": "work/ats-e2e/final-run/test-s1-05.log"
+    },
+    {
+      "script": "test:s1-06",
+      "status": "PASS",
+      "passed": 3,
+      "total": 3,
+      "exitCode": 0,
+      "log": "work/ats-e2e/final-run/test-s1-06.log"
+    },
+    {
+      "script": "test:s1-07",
+      "status": "PASS",
+      "passed": 4,
+      "total": 4,
+      "exitCode": 0,
+      "log": "work/ats-e2e/final-run/test-s1-07.log"
+    },
+    {
+      "script": "test:s1-08",
+      "status": "PASS",
+      "passed": 5,
+      "total": 5,
+      "exitCode": 0,
+      "log": "work/ats-e2e/final-run/test-s1-08.log"
+    },
+    {
+      "script": "test:s1-09",
+      "status": "PASS",
+      "passed": 7,
+      "total": 7,
+      "exitCode": 0,
+      "log": "work/ats-e2e/final-run/test-s1-09.log"
+    },
+    {
+      "script": "test:s1-10",
+      "status": "PASS",
+      "passed": 8,
+      "total": 8,
+      "exitCode": 0,
+      "log": "work/ats-e2e/final-run/test-s1-10.log"
+    },
+    {
+      "script": "test:coverage:sprint1",
+      "status": "PASS",
+      "passed": 23,
+      "total": 23,
+      "exitCode": 0,
+      "log": "work/ats-e2e/final-run/test-coverage-sprint1.log"
+    },
+    {
+      "script": "test:s1-03:email",
+      "status": "PASS",
+      "passed": 49,
+      "total": 49,
+      "exitCode": 0,
+      "log": "work/ats-e2e/email-complete/test-s1-03-email.log"
+    },
+    {
+      "script": "test:otp",
+      "status": "PASS",
+      "passed": 8,
+      "total": 8,
+      "exitCode": 0,
+      "log": "work/ats-e2e/final-run/test-otp.log"
+    },
+    {
+      "script": "test:sprint2",
+      "status": "FAIL",
+      "passed": 31,
+      "total": 32,
+      "exitCode": 1,
+      "log": "work/ats-e2e/final-run/test-sprint2.log"
+    },
+    {
+      "script": "test:coverage:sprint2",
+      "status": "PASS",
+      "passed": 25,
+      "total": 25,
+      "exitCode": 0,
+      "log": "work/ats-e2e/final-run/test-coverage-sprint2.log"
+    },
+    {
+      "script": "test:s2-10",
+      "status": "PASS",
+      "passed": 59,
+      "total": 59,
+      "exitCode": 0,
+      "log": "work/ats-e2e/final-run/test-s2-10.log"
+    },
+    {
+      "script": "test:s3-01",
+      "status": "PASS",
+      "passed": 108,
+      "total": 108,
+      "exitCode": 0,
+      "log": "work/ats-e2e/final-run/test-s3-01.log"
+    },
+    {
+      "script": "test:s3-02",
+      "status": "PASS",
+      "passed": 93,
+      "total": 93,
+      "exitCode": 0,
+      "log": "work/ats-e2e/final-run/test-s3-02.log"
+    },
+    {
+      "script": "test:rbac",
+      "status": "PASS",
+      "passed": 47,
+      "total": 47,
+      "exitCode": 0,
+      "log": "work/ats-e2e/final-run/test-rbac.log"
+    },
+    {
+      "script": "test:ats-e2e",
+      "status": "PASS",
+      "passed": 51,
+      "total": 51,
+      "exitCode": 0,
+      "log": "work/ats-e2e/final-run/test-ats-e2e.log"
+    },
+    {
+      "script": "test:postgres",
+      "status": "PASS",
+      "passed": 15,
+      "total": 15,
+      "exitCode": 0,
+      "log": "work/ats-e2e/final-run/test-postgres.log"
+    },
+    {
+      "script": "test:postgres:live",
+      "status": "NOT RUN",
+      "passed": null,
+      "total": null,
+      "exitCode": 0,
+      "log": "work/ats-e2e/final-run/test-postgres-live.log"
+    },
+    {
+      "script": "test:review-updates",
+      "status": "PASS",
+      "passed": 22,
+      "total": 22,
+      "exitCode": 0,
+      "log": "work/ats-e2e/final-run/test-review-updates.log"
+    },
+    {
+      "script": "test:routing",
+      "status": "PASS",
+      "passed": 174,
+      "total": 174,
+      "exitCode": 0,
+      "log": "work/ats-e2e/final-run/test-routing.log"
+    },
+    {
+      "script": "test:user-ux",
+      "status": "PASS",
+      "passed": 87,
+      "total": 87,
+      "exitCode": 0,
+      "log": "work/ats-e2e/final-run/test-user-ux.log"
+    },
+    {
+      "script": "test:datetime-dashboard",
+      "status": "PASS",
+      "passed": 28,
+      "total": 28,
+      "exitCode": 0,
+      "log": "work/ats-e2e/final-run/test-datetime-dashboard.log"
+    },
+    {
+      "script": "test:avatar",
+      "status": "PASS",
+      "passed": 21,
+      "total": 21,
+      "exitCode": 0,
+      "log": "work/ats-e2e/final-run/test-avatar.log"
+    },
+    {
+      "script": "test:mobile-shell",
+      "status": "PASS",
+      "passed": 53,
+      "total": 53,
+      "exitCode": 0,
+      "log": "work/ats-e2e/final-run/test-mobile-shell.log"
+    },
+    {
+      "script": "test:layout",
+      "status": "PASS",
+      "passed": 44,
+      "total": 44,
+      "exitCode": 0,
+      "log": "work/ats-e2e/final-run/test-layout.log"
+    },
+    {
+      "script": "test:career-upload",
+      "status": "PASS",
+      "passed": 24,
+      "total": 24,
+      "exitCode": 0,
+      "log": "work/ats-e2e/final-run/test-career-upload.log"
+    },
+    {
+      "script": "test:user-roles-avatar",
+      "status": "PASS",
+      "passed": 17,
+      "total": 17,
+      "exitCode": 0,
+      "log": "work/ats-e2e/final-run/test-user-roles-avatar.log"
+    }
+  ],
+  "staticChecks": {
+    "passed": 114,
+    "total": 114,
+    "activeBackendFrontend": 110,
+    "syntaxOnlyBackupScratch": 4
+  },
+  "accounts": [
+    {
+      "role": "ADMIN",
+      "id": "usr-admin",
+      "email": "admin@company.com",
+      "status": "ACTIVE",
+      "home": "/admin",
+      "permissions": [
+        "account.lock",
+        "account.unlock",
+        "approval_configuration.manage",
+        "audit.read",
+        "candidate.create",
+        "candidate.read",
+        "candidate.update",
+        "career_page.manage",
+        "career_page.read",
+        "competency.manage",
+        "competency.read",
+        "department.manage",
+        "department.read",
+        "interview.create",
+        "interview.evaluate",
+        "interview.read",
+        "offer.approve",
+        "offer.create",
+        "offer.read",
+        "question_bank.manage",
+        "question_bank.read",
+        "recruitment_catalog.manage",
+        "recruitment_catalog.read",
+        "requisition.approve",
+        "requisition.create",
+        "requisition.draft.edit",
+        "requisition.read",
+        "role.assign",
+        "role.read",
+        "salary_range.read",
+        "user.create",
+        "user.delete",
+        "user.read",
+        "user.update"
+      ],
+      "menu": [
+        "/dashboard",
+        "/admin/departments",
+        "/admin/recruitment-catalogs",
+        "/admin/career-page",
+        "/admin/competencies",
+        "/admin/users",
+        "/admin/roles",
+        "/admin/audit",
+        "/requisitions",
+        "/candidates",
+        "/interviews",
+        "/question-bank",
+        "/offers",
+        "/approvals",
+        "/admin/approval-configurations",
+        "/reports"
+      ]
+    },
+    {
+      "role": "HR_MANAGER",
+      "id": "usr-hr-mgr",
+      "email": "hrmanager@company.com",
+      "status": "ACTIVE",
+      "home": "/dashboard",
+      "permissions": [
+        "approval_configuration.manage",
+        "candidate.read",
+        "candidate.update",
+        "career_page.manage",
+        "career_page.read",
+        "competency.manage",
+        "competency.read",
+        "department.manage",
+        "department.read",
+        "interview.create",
+        "interview.read",
+        "offer.approve",
+        "offer.create",
+        "offer.read",
+        "question_bank.manage",
+        "question_bank.read",
+        "recruitment_catalog.manage",
+        "recruitment_catalog.read",
+        "requisition.approve",
+        "requisition.create",
+        "requisition.draft.edit",
+        "requisition.read",
+        "role.read",
+        "salary_range.read",
+        "user.read"
+      ],
+      "menu": [
+        "/dashboard",
+        "/admin/departments",
+        "/admin/recruitment-catalogs",
+        "/admin/career-page",
+        "/admin/competencies",
+        "/admin/users",
+        "/admin/roles",
+        "/requisitions",
+        "/candidates",
+        "/interviews",
+        "/question-bank",
+        "/offers",
+        "/approvals",
+        "/admin/approval-configurations"
+      ]
+    },
+    {
+      "role": "HIRING_MGR",
+      "id": "usr-hiring-mgr",
+      "email": "hiringmgr@company.com",
+      "status": "ACTIVE",
+      "home": "/hiring",
+      "permissions": [
+        "candidate.read",
+        "interview.evaluate",
+        "interview.read",
+        "recruitment_catalog.read",
+        "requisition.create",
+        "requisition.draft.edit",
+        "requisition.read"
+      ],
+      "menu": [
+        "/dashboard",
+        "/requisitions",
+        "/candidates",
+        "/interviews"
+      ]
+    },
+    {
+      "role": "APPROVER",
+      "id": "usr-approver",
+      "email": "approver@company.com",
+      "status": "ACTIVE",
+      "home": "/approvals",
+      "permissions": [
+        "offer.approve",
+        "offer.read",
+        "requisition.approve",
+        "requisition.read"
+      ],
+      "menu": [
+        "/dashboard",
+        "/requisitions",
+        "/offers",
+        "/approvals"
+      ]
+    },
+    {
+      "role": "RECRUITER",
+      "id": "usr-recruiter",
+      "email": "recruiter@company.com",
+      "status": "ACTIVE",
+      "home": "/recruitment",
+      "permissions": [
+        "candidate.create",
+        "candidate.read",
+        "candidate.update",
+        "interview.create",
+        "interview.read",
+        "offer.create",
+        "offer.read",
+        "recruitment_catalog.read",
+        "requisition.read"
+      ],
+      "menu": [
+        "/dashboard",
+        "/requisitions",
+        "/candidates",
+        "/interviews",
+        "/offers"
+      ]
+    },
+    {
+      "role": "INTERVIEWER",
+      "id": "usr-interviewer",
+      "email": "interviewer@company.com",
+      "status": "ACTIVE",
+      "home": "/interviews",
+      "permissions": [
+        "interview.evaluate",
+        "interview.read",
+        "question_bank.read"
+      ],
+      "menu": [
+        "/dashboard",
+        "/interviews",
+        "/question-bank"
+      ]
+    },
+    {
+      "role": "CANDIDATE",
+      "id": "usr-candidate",
+      "email": "candidate@example.com",
+      "status": "ACTIVE",
+      "home": "/candidate",
+      "permissions": [
+        "candidate.create",
+        "offer.read"
+      ],
+      "menu": [
+        "/candidate"
+      ]
+    }
+  ],
+  "requests": [
+    {
+      "method": "POST",
+      "route": "/auth/login",
+      "role": "ANONYMOUS",
+      "status": 200,
+      "elapsedMs": 164.14
+    },
+    {
+      "method": "GET",
+      "route": "/auth/me",
+      "role": "ADMIN",
+      "status": 200,
+      "elapsedMs": 145.49
+    },
+    {
+      "method": "GET",
+      "route": "/navigation/menu",
+      "role": "ADMIN",
+      "status": 200,
+      "elapsedMs": 9.84
+    },
+    {
+      "method": "GET",
+      "route": "/approval-configurations",
+      "role": "ADMIN",
+      "status": 200,
+      "elapsedMs": 18.36
+    },
+    {
+      "method": "GET",
+      "route": "/approval-configurations/options",
+      "role": "ADMIN",
+      "status": 200,
+      "elapsedMs": 5.31
+    },
+    {
+      "method": "GET",
+      "route": "/admin/users?page=1&limit=20&role=ALL&status=ALL",
+      "role": "ADMIN",
+      "status": 200,
+      "elapsedMs": 10.9
+    },
+    {
+      "method": "GET",
+      "route": "/admin/roles/list",
+      "role": "ADMIN",
+      "status": 200,
+      "elapsedMs": 17.7
+    },
+    {
+      "method": "GET",
+      "route": "/departments",
+      "role": "ADMIN",
+      "status": 200,
+      "elapsedMs": 16.21
+    },
+    {
+      "method": "GET",
+      "route": "/competency-frameworks",
+      "role": "ADMIN",
+      "status": 200,
+      "elapsedMs": 12.14
+    },
+    {
+      "method": "GET",
+      "route": "/job-titles",
+      "role": "ADMIN",
+      "status": 200,
+      "elapsedMs": 6.36
+    },
+    {
+      "method": "GET",
+      "route": "/interview-questions",
+      "role": "ADMIN",
+      "status": 200,
+      "elapsedMs": 10.9
+    },
+    {
+      "method": "GET",
+      "route": "/recruitment-catalogs",
+      "role": "ADMIN",
+      "status": 200,
+      "elapsedMs": 5.2
+    },
+    {
+      "method": "GET",
+      "route": "/career-page",
+      "role": "ADMIN",
+      "status": 200,
+      "elapsedMs": 21.53
+    },
+    {
+      "method": "GET",
+      "route": "/admin/audit-logs",
+      "role": "ADMIN",
+      "status": 200,
+      "elapsedMs": 5.46
+    },
+    {
+      "method": "GET",
+      "route": "/requisitions",
+      "role": "ADMIN",
+      "status": 200,
+      "elapsedMs": 7.11
+    },
+    {
+      "method": "GET",
+      "route": "/candidates",
+      "role": "ADMIN",
+      "status": 200,
+      "elapsedMs": 24.91
+    },
+    {
+      "method": "GET",
+      "route": "/interviews",
+      "role": "ADMIN",
+      "status": 200,
+      "elapsedMs": 16.27
+    },
+    {
+      "method": "GET",
+      "route": "/offers",
+      "role": "ADMIN",
+      "status": 200,
+      "elapsedMs": 6.47
+    },
+    {
+      "method": "POST",
+      "route": "/auth/login",
+      "role": "ANONYMOUS",
+      "status": 200,
+      "elapsedMs": 87.21
+    },
+    {
+      "method": "GET",
+      "route": "/auth/me",
+      "role": "HR_MANAGER",
+      "status": 200,
+      "elapsedMs": 6.01
+    },
+    {
+      "method": "GET",
+      "route": "/navigation/menu",
+      "role": "HR_MANAGER",
+      "status": 200,
+      "elapsedMs": 5.36
+    },
+    {
+      "method": "GET",
+      "route": "/approval-configurations",
+      "role": "HR_MANAGER",
+      "status": 200,
+      "elapsedMs": 18.85
+    },
+    {
+      "method": "GET",
+      "route": "/approval-configurations/options",
+      "role": "HR_MANAGER",
+      "status": 200,
+      "elapsedMs": 11.84
+    },
+    {
+      "method": "GET",
+      "route": "/admin/users?page=1&limit=20&role=ALL&status=ALL",
+      "role": "HR_MANAGER",
+      "status": 200,
+      "elapsedMs": 19.29
+    },
+    {
+      "method": "GET",
+      "route": "/admin/roles/list",
+      "role": "HR_MANAGER",
+      "status": 200,
+      "elapsedMs": 10.76
+    },
+    {
+      "method": "GET",
+      "route": "/departments",
+      "role": "HR_MANAGER",
+      "status": 200,
+      "elapsedMs": 16.08
+    },
+    {
+      "method": "GET",
+      "route": "/competency-frameworks",
+      "role": "HR_MANAGER",
+      "status": 200,
+      "elapsedMs": 14.62
+    },
+    {
+      "method": "GET",
+      "route": "/job-titles",
+      "role": "HR_MANAGER",
+      "status": 200,
+      "elapsedMs": 15.92
+    },
+    {
+      "method": "GET",
+      "route": "/interview-questions",
+      "role": "HR_MANAGER",
+      "status": 200,
+      "elapsedMs": 17.19
+    },
+    {
+      "method": "GET",
+      "route": "/recruitment-catalogs",
+      "role": "HR_MANAGER",
+      "status": 200,
+      "elapsedMs": 20.07
+    },
+    {
+      "method": "GET",
+      "route": "/career-page",
+      "role": "HR_MANAGER",
+      "status": 200,
+      "elapsedMs": 5.83
+    },
+    {
+      "method": "GET",
+      "route": "/admin/audit-logs",
+      "role": "HR_MANAGER",
+      "status": 403,
+      "elapsedMs": 7.17
+    },
+    {
+      "method": "GET",
+      "route": "/requisitions",
+      "role": "HR_MANAGER",
+      "status": 200,
+      "elapsedMs": 8.4
+    },
+    {
+      "method": "GET",
+      "route": "/candidates",
+      "role": "HR_MANAGER",
+      "status": 200,
+      "elapsedMs": 4.73
+    },
+    {
+      "method": "GET",
+      "route": "/interviews",
+      "role": "HR_MANAGER",
+      "status": 200,
+      "elapsedMs": 16.93
+    },
+    {
+      "method": "GET",
+      "route": "/offers",
+      "role": "HR_MANAGER",
+      "status": 200,
+      "elapsedMs": 16.21
+    },
+    {
+      "method": "POST",
+      "route": "/auth/login",
+      "role": "ANONYMOUS",
+      "status": 200,
+      "elapsedMs": 69.9
+    },
+    {
+      "method": "GET",
+      "route": "/auth/me",
+      "role": "HIRING_MGR",
+      "status": 200,
+      "elapsedMs": 6.29
+    },
+    {
+      "method": "GET",
+      "route": "/navigation/menu",
+      "role": "HIRING_MGR",
+      "status": 200,
+      "elapsedMs": 15.8
+    },
+    {
+      "method": "GET",
+      "route": "/approval-configurations",
+      "role": "HIRING_MGR",
+      "status": 403,
+      "elapsedMs": 8.96
+    },
+    {
+      "method": "GET",
+      "route": "/approval-configurations/options",
+      "role": "HIRING_MGR",
+      "status": 403,
+      "elapsedMs": 15.34
+    },
+    {
+      "method": "GET",
+      "route": "/admin/users?page=1&limit=20&role=ALL&status=ALL",
+      "role": "HIRING_MGR",
+      "status": 403,
+      "elapsedMs": 15.81
+    },
+    {
+      "method": "GET",
+      "route": "/admin/roles/list",
+      "role": "HIRING_MGR",
+      "status": 403,
+      "elapsedMs": 15.28
+    },
+    {
+      "method": "GET",
+      "route": "/departments",
+      "role": "HIRING_MGR",
+      "status": 403,
+      "elapsedMs": 3.32
+    },
+    {
+      "method": "GET",
+      "route": "/competency-frameworks",
+      "role": "HIRING_MGR",
+      "status": 403,
+      "elapsedMs": 12.01
+    },
+    {
+      "method": "GET",
+      "route": "/job-titles",
+      "role": "HIRING_MGR",
+      "status": 403,
+      "elapsedMs": 15.73
+    },
+    {
+      "method": "GET",
+      "route": "/interview-questions",
+      "role": "HIRING_MGR",
+      "status": 403,
+      "elapsedMs": 16.8
+    },
+    {
+      "method": "GET",
+      "route": "/recruitment-catalogs",
+      "role": "HIRING_MGR",
+      "status": 200,
+      "elapsedMs": 15.97
+    },
+    {
+      "method": "GET",
+      "route": "/career-page",
+      "role": "HIRING_MGR",
+      "status": 403,
+      "elapsedMs": 5.95
+    },
+    {
+      "method": "GET",
+      "route": "/admin/audit-logs",
+      "role": "HIRING_MGR",
+      "status": 403,
+      "elapsedMs": 3.17
+    },
+    {
+      "method": "GET",
+      "route": "/requisitions",
+      "role": "HIRING_MGR",
+      "status": 200,
+      "elapsedMs": 5.29
+    },
+    {
+      "method": "GET",
+      "route": "/candidates",
+      "role": "HIRING_MGR",
+      "status": 200,
+      "elapsedMs": 15.48
+    },
+    {
+      "method": "GET",
+      "route": "/interviews",
+      "role": "HIRING_MGR",
+      "status": 200,
+      "elapsedMs": 4.5
+    },
+    {
+      "method": "GET",
+      "route": "/offers",
+      "role": "HIRING_MGR",
+      "status": 403,
+      "elapsedMs": 11.07
+    },
+    {
+      "method": "POST",
+      "route": "/auth/login",
+      "role": "ANONYMOUS",
+      "status": 200,
+      "elapsedMs": 57.87
+    },
+    {
+      "method": "GET",
+      "route": "/auth/me",
+      "role": "APPROVER",
+      "status": 200,
+      "elapsedMs": 10.44
+    },
+    {
+      "method": "GET",
+      "route": "/navigation/menu",
+      "role": "APPROVER",
+      "status": 200,
+      "elapsedMs": 14.71
+    },
+    {
+      "method": "GET",
+      "route": "/approval-configurations",
+      "role": "APPROVER",
+      "status": 403,
+      "elapsedMs": 16.54
+    },
+    {
+      "method": "GET",
+      "route": "/approval-configurations/options",
+      "role": "APPROVER",
+      "status": 403,
+      "elapsedMs": 16.8
+    },
+    {
+      "method": "GET",
+      "route": "/admin/users?page=1&limit=20&role=ALL&status=ALL",
+      "role": "APPROVER",
+      "status": 403,
+      "elapsedMs": 14.4
+    },
+    {
+      "method": "GET",
+      "route": "/admin/roles/list",
+      "role": "APPROVER",
+      "status": 403,
+      "elapsedMs": 14.48
+    },
+    {
+      "method": "GET",
+      "route": "/departments",
+      "role": "APPROVER",
+      "status": 403,
+      "elapsedMs": 16.66
+    },
+    {
+      "method": "GET",
+      "route": "/competency-frameworks",
+      "role": "APPROVER",
+      "status": 403,
+      "elapsedMs": 15.25
+    },
+    {
+      "method": "GET",
+      "route": "/job-titles",
+      "role": "APPROVER",
+      "status": 403,
+      "elapsedMs": 14.97
+    },
+    {
+      "method": "GET",
+      "route": "/interview-questions",
+      "role": "APPROVER",
+      "status": 403,
+      "elapsedMs": 16.24
+    },
+    {
+      "method": "GET",
+      "route": "/recruitment-catalogs",
+      "role": "APPROVER",
+      "status": 403,
+      "elapsedMs": 3.02
+    },
+    {
+      "method": "GET",
+      "route": "/career-page",
+      "role": "APPROVER",
+      "status": 403,
+      "elapsedMs": 12.54
+    },
+    {
+      "method": "GET",
+      "route": "/admin/audit-logs",
+      "role": "APPROVER",
+      "status": 403,
+      "elapsedMs": 17.45
+    },
+    {
+      "method": "GET",
+      "route": "/requisitions",
+      "role": "APPROVER",
+      "status": 200,
+      "elapsedMs": 13.95
+    },
+    {
+      "method": "GET",
+      "route": "/candidates",
+      "role": "APPROVER",
+      "status": 403,
+      "elapsedMs": 16.59
+    },
+    {
+      "method": "GET",
+      "route": "/interviews",
+      "role": "APPROVER",
+      "status": 403,
+      "elapsedMs": 3.84
+    },
+    {
+      "method": "GET",
+      "route": "/offers",
+      "role": "APPROVER",
+      "status": 200,
+      "elapsedMs": 12.15
+    },
+    {
+      "method": "POST",
+      "route": "/auth/login",
+      "role": "ANONYMOUS",
+      "status": 200,
+      "elapsedMs": 66.96
+    },
+    {
+      "method": "GET",
+      "route": "/auth/me",
+      "role": "RECRUITER",
+      "status": 200,
+      "elapsedMs": 10.37
+    },
+    {
+      "method": "GET",
+      "route": "/navigation/menu",
+      "role": "RECRUITER",
+      "status": 200,
+      "elapsedMs": 14.9
+    },
+    {
+      "method": "GET",
+      "route": "/approval-configurations",
+      "role": "RECRUITER",
+      "status": 403,
+      "elapsedMs": 11.41
+    },
+    {
+      "method": "GET",
+      "route": "/approval-configurations/options",
+      "role": "RECRUITER",
+      "status": 403,
+      "elapsedMs": 15.15
+    },
+    {
+      "method": "GET",
+      "route": "/admin/users?page=1&limit=20&role=ALL&status=ALL",
+      "role": "RECRUITER",
+      "status": 403,
+      "elapsedMs": 16.14
+    },
+    {
+      "method": "GET",
+      "route": "/admin/roles/list",
+      "role": "RECRUITER",
+      "status": 403,
+      "elapsedMs": 14.62
+    },
+    {
+      "method": "GET",
+      "route": "/departments",
+      "role": "RECRUITER",
+      "status": 403,
+      "elapsedMs": 16.07
+    },
+    {
+      "method": "GET",
+      "route": "/competency-frameworks",
+      "role": "RECRUITER",
+      "status": 403,
+      "elapsedMs": 11.17
+    },
+    {
+      "method": "GET",
+      "route": "/job-titles",
+      "role": "RECRUITER",
+      "status": 403,
+      "elapsedMs": 4.88
+    },
+    {
+      "method": "GET",
+      "route": "/interview-questions",
+      "role": "RECRUITER",
+      "status": 403,
+      "elapsedMs": 15.76
+    },
+    {
+      "method": "GET",
+      "route": "/recruitment-catalogs",
+      "role": "RECRUITER",
+      "status": 200,
+      "elapsedMs": 14.01
+    },
+    {
+      "method": "GET",
+      "route": "/career-page",
+      "role": "RECRUITER",
+      "status": 403,
+      "elapsedMs": 15.35
+    },
+    {
+      "method": "GET",
+      "route": "/admin/audit-logs",
+      "role": "RECRUITER",
+      "status": 403,
+      "elapsedMs": 2.86
+    },
+    {
+      "method": "GET",
+      "route": "/requisitions",
+      "role": "RECRUITER",
+      "status": 200,
+      "elapsedMs": 3.51
+    },
+    {
+      "method": "GET",
+      "route": "/candidates",
+      "role": "RECRUITER",
+      "status": 200,
+      "elapsedMs": 14.82
+    },
+    {
+      "method": "GET",
+      "route": "/interviews",
+      "role": "RECRUITER",
+      "status": 200,
+      "elapsedMs": 12.99
+    },
+    {
+      "method": "GET",
+      "route": "/offers",
+      "role": "RECRUITER",
+      "status": 200,
+      "elapsedMs": 19.2
+    },
+    {
+      "method": "POST",
+      "route": "/auth/login",
+      "role": "ANONYMOUS",
+      "status": 200,
+      "elapsedMs": 53.68
+    },
+    {
+      "method": "GET",
+      "route": "/auth/me",
+      "role": "INTERVIEWER",
+      "status": 200,
+      "elapsedMs": 17.05
+    },
+    {
+      "method": "GET",
+      "route": "/navigation/menu",
+      "role": "INTERVIEWER",
+      "status": 200,
+      "elapsedMs": 15.77
+    },
+    {
+      "method": "GET",
+      "route": "/approval-configurations",
+      "role": "INTERVIEWER",
+      "status": 403,
+      "elapsedMs": 3.37
+    },
+    {
+      "method": "GET",
+      "route": "/approval-configurations/options",
+      "role": "INTERVIEWER",
+      "status": 403,
+      "elapsedMs": 9.91
+    },
+    {
+      "method": "GET",
+      "route": "/admin/users?page=1&limit=20&role=ALL&status=ALL",
+      "role": "INTERVIEWER",
+      "status": 403,
+      "elapsedMs": 12.54
+    },
+    {
+      "method": "GET",
+      "route": "/admin/roles/list",
+      "role": "INTERVIEWER",
+      "status": 403,
+      "elapsedMs": 15.92
+    },
+    {
+      "method": "GET",
+      "route": "/departments",
+      "role": "INTERVIEWER",
+      "status": 403,
+      "elapsedMs": 15.13
+    },
+    {
+      "method": "GET",
+      "route": "/competency-frameworks",
+      "role": "INTERVIEWER",
+      "status": 403,
+      "elapsedMs": 4.36
+    },
+    {
+      "method": "GET",
+      "route": "/job-titles",
+      "role": "INTERVIEWER",
+      "status": 403,
+      "elapsedMs": 11.78
+    },
+    {
+      "method": "GET",
+      "route": "/interview-questions",
+      "role": "INTERVIEWER",
+      "status": 200,
+      "elapsedMs": 15.5
+    },
+    {
+      "method": "GET",
+      "route": "/recruitment-catalogs",
+      "role": "INTERVIEWER",
+      "status": 403,
+      "elapsedMs": 16.52
+    },
+    {
+      "method": "GET",
+      "route": "/career-page",
+      "role": "INTERVIEWER",
+      "status": 403,
+      "elapsedMs": 13.9
+    },
+    {
+      "method": "GET",
+      "route": "/admin/audit-logs",
+      "role": "INTERVIEWER",
+      "status": 403,
+      "elapsedMs": 16.4
+    },
+    {
+      "method": "GET",
+      "route": "/requisitions",
+      "role": "INTERVIEWER",
+      "status": 200,
+      "elapsedMs": 16.29
+    },
+    {
+      "method": "GET",
+      "route": "/candidates",
+      "role": "INTERVIEWER",
+      "status": 403,
+      "elapsedMs": 14.04
+    },
+    {
+      "method": "GET",
+      "route": "/interviews",
+      "role": "INTERVIEWER",
+      "status": 200,
+      "elapsedMs": 17.76
+    },
+    {
+      "method": "GET",
+      "route": "/offers",
+      "role": "INTERVIEWER",
+      "status": 403,
+      "elapsedMs": 18.8
+    },
+    {
+      "method": "GET",
+      "route": "/requisitions",
+      "role": "INTERVIEWER",
+      "status": 200,
+      "elapsedMs": 10.87
+    },
+    {
+      "method": "POST",
+      "route": "/auth/login",
+      "role": "ANONYMOUS",
+      "status": 200,
+      "elapsedMs": 76.87
+    },
+    {
+      "method": "GET",
+      "route": "/auth/me",
+      "role": "CANDIDATE",
+      "status": 200,
+      "elapsedMs": 14.96
+    },
+    {
+      "method": "GET",
+      "route": "/navigation/menu",
+      "role": "CANDIDATE",
+      "status": 200,
+      "elapsedMs": 2.94
+    },
+    {
+      "method": "GET",
+      "route": "/approval-configurations",
+      "role": "CANDIDATE",
+      "status": 403,
+      "elapsedMs": 8.38
+    },
+    {
+      "method": "GET",
+      "route": "/approval-configurations/options",
+      "role": "CANDIDATE",
+      "status": 403,
+      "elapsedMs": 20.14
+    },
+    {
+      "method": "GET",
+      "route": "/admin/users?page=1&limit=20&role=ALL&status=ALL",
+      "role": "CANDIDATE",
+      "status": 403,
+      "elapsedMs": 8.8
+    },
+    {
+      "method": "GET",
+      "route": "/admin/roles/list",
+      "role": "CANDIDATE",
+      "status": 403,
+      "elapsedMs": 14.81
+    },
+    {
+      "method": "GET",
+      "route": "/departments",
+      "role": "CANDIDATE",
+      "status": 403,
+      "elapsedMs": 16.45
+    },
+    {
+      "method": "GET",
+      "route": "/competency-frameworks",
+      "role": "CANDIDATE",
+      "status": 403,
+      "elapsedMs": 16.49
+    },
+    {
+      "method": "GET",
+      "route": "/job-titles",
+      "role": "CANDIDATE",
+      "status": 403,
+      "elapsedMs": 4.44
+    },
+    {
+      "method": "GET",
+      "route": "/interview-questions",
+      "role": "CANDIDATE",
+      "status": 403,
+      "elapsedMs": 10.8
+    },
+    {
+      "method": "GET",
+      "route": "/recruitment-catalogs",
+      "role": "CANDIDATE",
+      "status": 403,
+      "elapsedMs": 3.42
+    },
+    {
+      "method": "GET",
+      "route": "/career-page",
+      "role": "CANDIDATE",
+      "status": 403,
+      "elapsedMs": 12.05
+    },
+    {
+      "method": "GET",
+      "route": "/admin/audit-logs",
+      "role": "CANDIDATE",
+      "status": 403,
+      "elapsedMs": 15.02
+    },
+    {
+      "method": "GET",
+      "route": "/requisitions",
+      "role": "CANDIDATE",
+      "status": 200,
+      "elapsedMs": 14.81
+    },
+    {
+      "method": "GET",
+      "route": "/candidates",
+      "role": "CANDIDATE",
+      "status": 200,
+      "elapsedMs": 15.84
+    },
+    {
+      "method": "GET",
+      "route": "/interviews",
+      "role": "CANDIDATE",
+      "status": 200,
+      "elapsedMs": 15.31
+    },
+    {
+      "method": "GET",
+      "route": "/offers",
+      "role": "CANDIDATE",
+      "status": 200,
+      "elapsedMs": 14.61
+    },
+    {
+      "method": "GET",
+      "route": "/requisitions",
+      "role": "CANDIDATE",
+      "status": 200,
+      "elapsedMs": 16.43
+    },
+    {
+      "method": "GET",
+      "route": "/admin/users",
+      "role": "ANONYMOUS",
+      "status": 401,
+      "elapsedMs": 14.05
+    },
+    {
+      "method": "GET",
+      "route": "/approval-configurations",
+      "role": "ANONYMOUS",
+      "status": 401,
+      "elapsedMs": 1.88
+    },
+    {
+      "method": "GET",
+      "route": "/requisition-approvals",
+      "role": "ANONYMOUS",
+      "status": 401,
+      "elapsedMs": 13.67
+    },
+    {
+      "method": "GET",
+      "route": "/navigation/menu",
+      "role": "ANONYMOUS",
+      "status": 401,
+      "elapsedMs": 14.63
+    },
+    {
+      "method": "GET",
+      "route": "/not-an-api",
+      "role": "ANONYMOUS",
+      "status": 404,
+      "elapsedMs": 1.04
+    },
+    {
+      "method": "POST",
+      "route": "/job-titles",
+      "role": "HR_MANAGER",
+      "status": 201,
+      "elapsedMs": 18.67
+    },
+    {
+      "method": "GET",
+      "route": "/job-titles",
+      "role": "ADMIN",
+      "status": 200,
+      "elapsedMs": 12.99
+    },
+    {
+      "method": "GET",
+      "route": "/job-titles",
+      "role": "HR_MANAGER",
+      "status": 200,
+      "elapsedMs": 16.08
+    },
+    {
+      "method": "GET",
+      "route": "/approval-configurations",
+      "role": "ADMIN",
+      "status": 200,
+      "elapsedMs": 13.95
+    },
+    {
+      "method": "POST",
+      "route": "/job-titles",
+      "role": "HR_MANAGER",
+      "status": 201,
+      "elapsedMs": 18.18
+    },
+    {
+      "method": "POST",
+      "route": "/approval-configurations/resolve",
+      "role": "ADMIN",
+      "status": 200,
+      "elapsedMs": 7
+    },
+    {
+      "method": "POST",
+      "route": "/approval-configurations/resolve",
+      "role": "ADMIN",
+      "status": 200,
+      "elapsedMs": 18.35
+    },
+    {
+      "method": "POST",
+      "route": "/approval-configurations/resolve",
+      "role": "ADMIN",
+      "status": 200,
+      "elapsedMs": 29.22
+    },
+    {
+      "method": "POST",
+      "route": "/approval-configurations/resolve",
+      "role": "ADMIN",
+      "status": 409,
+      "elapsedMs": 17.55
+    },
+    {
+      "method": "POST",
+      "route": "/approval-configurations",
+      "role": "HR_MANAGER",
+      "status": 400,
+      "elapsedMs": 15.44
+    },
+    {
+      "method": "POST",
+      "route": "/requisitions",
+      "role": "HIRING_MGR",
+      "status": 201,
+      "elapsedMs": 15.54
+    },
+    {
+      "method": "GET",
+      "route": "/requisition-approvals",
+      "role": "HIRING_MGR",
+      "status": 200,
+      "elapsedMs": 12.37
+    },
+    {
+      "method": "GET",
+      "route": "/requisition-approvals",
+      "role": "HIRING_MGR",
+      "status": 200,
+      "elapsedMs": 15.17
+    },
+    {
+      "method": "GET",
+      "route": "/requisition-approvals/apw-2271dfa8-d508-4638-9027-cabadb341054",
+      "role": "HR_MANAGER",
+      "status": 200,
+      "elapsedMs": 14.23
+    },
+    {
+      "method": "GET",
+      "route": "/requisition-approvals/apw-2271dfa8-d508-4638-9027-cabadb341054",
+      "role": "HIRING_MGR",
+      "status": 200,
+      "elapsedMs": 15.64
+    },
+    {
+      "method": "GET",
+      "route": "/requisition-approvals/apw-2271dfa8-d508-4638-9027-cabadb341054",
+      "role": "HIRING_MGR",
+      "status": 200,
+      "elapsedMs": 16.19
+    },
+    {
+      "method": "GET",
+      "route": "/requisition-approvals/apw-2271dfa8-d508-4638-9027-cabadb341054",
+      "role": "HR_MANAGER",
+      "status": 200,
+      "elapsedMs": 16.99
+    },
+    {
+      "method": "GET",
+      "route": "/requisition-approvals/apw-2271dfa8-d508-4638-9027-cabadb341054",
+      "role": "APPROVER",
+      "status": 200,
+      "elapsedMs": 16.17
+    },
+    {
+      "method": "GET",
+      "route": "/requisition-approvals/apw-2271dfa8-d508-4638-9027-cabadb341054",
+      "role": "HIRING_MGR",
+      "status": 200,
+      "elapsedMs": 14.25
+    },
+    {
+      "method": "GET",
+      "route": "/requisitions/req-8b963be8-1142-42c3-b5af-219b0cbc163c",
+      "role": "HIRING_MGR",
+      "status": 200,
+      "elapsedMs": 16.44
+    },
+    {
+      "method": "POST",
+      "route": "/requisitions",
+      "role": "HIRING_MGR",
+      "status": 201,
+      "elapsedMs": 68.13
+    },
+    {
+      "method": "POST",
+      "route": "/requisition-approvals",
+      "role": "HIRING_MGR",
+      "status": 201,
+      "elapsedMs": 57.63
+    },
+    {
+      "method": "GET",
+      "route": "/requisition-approvals/apw-2378111c-17ee-4475-8b4c-277b4087f02b",
+      "role": "HR_MANAGER",
+      "status": 200,
+      "elapsedMs": 26.04
+    },
+    {
+      "method": "GET",
+      "route": "/offers",
+      "role": "CANDIDATE",
+      "status": 200,
+      "elapsedMs": 8.67
+    },
+    {
+      "method": "POST",
+      "route": "/candidates",
+      "role": "HIRING_MGR",
+      "status": 403,
+      "elapsedMs": 13.75
+    },
+    {
+      "method": "PUT",
+      "route": "/candidates/cand-001/stage",
+      "role": "HIRING_MGR",
+      "status": 403,
+      "elapsedMs": 4.17
+    },
+    {
+      "method": "GET",
+      "route": "/offers",
+      "role": "ADMIN",
+      "status": 200,
+      "elapsedMs": 10.39
+    },
+    {
+      "method": "POST",
+      "route": "/offers",
+      "role": "CANDIDATE",
+      "status": 403,
+      "elapsedMs": 15
+    },
+    {
+      "method": "PUT",
+      "route": "/offers/off-001/status",
+      "role": "CANDIDATE",
+      "status": 403,
+      "elapsedMs": 17.99
+    },
+    {
+      "method": "GET",
+      "route": "/offers",
+      "role": "ADMIN",
+      "status": 200,
+      "elapsedMs": 13.06
+    },
+    {
+      "method": "PUT",
+      "route": "/offers/off-001/status",
+      "role": "RECRUITER",
+      "status": 403,
+      "elapsedMs": 29.62
+    },
+    {
+      "method": "GET",
+      "route": "/reports/recruitment",
+      "role": "CANDIDATE",
+      "status": 403,
+      "elapsedMs": 17.38
+    },
+    {
+      "method": "GET",
+      "route": "/dashboard/stats",
+      "role": "CANDIDATE",
+      "status": 403,
+      "elapsedMs": 14.94
+    },
+    {
+      "method": "POST",
+      "route": "/interviews",
+      "role": "INTERVIEWER",
+      "status": 403,
+      "elapsedMs": 6.02
+    },
+    {
+      "method": "POST",
+      "route": "/candidates",
+      "role": "RECRUITER",
+      "status": 201,
+      "elapsedMs": 9.45
+    },
+    {
+      "method": "POST",
+      "route": "/candidates",
+      "role": "RECRUITER",
+      "status": 201,
+      "elapsedMs": 5.77
+    },
+    {
+      "method": "POST",
+      "route": "/interviews",
+      "role": "RECRUITER",
+      "status": 201,
+      "elapsedMs": 11.94
+    },
+    {
+      "method": "POST",
+      "route": "/offers",
+      "role": "RECRUITER",
+      "status": 201,
+      "elapsedMs": 14.63
+    },
+    {
+      "method": "POST",
+      "route": "/interviews",
+      "role": "RECRUITER",
+      "status": 201,
+      "elapsedMs": 16.94
+    },
+    {
+      "method": "POST",
+      "route": "/offers",
+      "role": "RECRUITER",
+      "status": 201,
+      "elapsedMs": 5.96
+    },
+    {
+      "method": "GET",
+      "route": "/candidates",
+      "role": "CANDIDATE",
+      "status": 200,
+      "elapsedMs": 6.14
+    },
+    {
+      "method": "GET",
+      "route": "/interviews",
+      "role": "CANDIDATE",
+      "status": 200,
+      "elapsedMs": 5.4
+    },
+    {
+      "method": "GET",
+      "route": "/offers",
+      "role": "CANDIDATE",
+      "status": 200,
+      "elapsedMs": 9.97
+    },
+    {
+      "method": "GET",
+      "route": "/candidates",
+      "role": "ADMIN",
+      "status": 200,
+      "elapsedMs": 21.25
+    },
+    {
+      "method": "POST",
+      "route": "/interviews",
+      "role": "ADMIN",
+      "status": 201,
+      "elapsedMs": 31.74
+    },
+    {
+      "method": "POST",
+      "route": "/interviews",
+      "role": "HR_MANAGER",
+      "status": 201,
+      "elapsedMs": 20.52
+    },
+    {
+      "method": "POST",
+      "route": "/interviews",
+      "role": "HIRING_MGR",
+      "status": 403,
+      "elapsedMs": 16.58
+    },
+    {
+      "method": "POST",
+      "route": "/interviews",
+      "role": "APPROVER",
+      "status": 403,
+      "elapsedMs": 15.36
+    },
+    {
+      "method": "POST",
+      "route": "/interviews",
+      "role": "RECRUITER",
+      "status": 201,
+      "elapsedMs": 4.95
+    },
+    {
+      "method": "POST",
+      "route": "/interviews",
+      "role": "INTERVIEWER",
+      "status": 403,
+      "elapsedMs": 5.08
+    },
+    {
+      "method": "POST",
+      "route": "/interviews",
+      "role": "CANDIDATE",
+      "status": 403,
+      "elapsedMs": 8.51
+    },
+    {
+      "method": "GET",
+      "route": "/candidates",
+      "role": "CANDIDATE",
+      "status": 200,
+      "elapsedMs": 7
+    },
+    {
+      "method": "POST",
+      "route": "/offers",
+      "role": "RECRUITER",
+      "status": 201,
+      "elapsedMs": 7.72
+    },
+    {
+      "method": "PUT",
+      "route": "/offers/off-97ff4389-bad4-4771-b9ed-d83ea0581c96/status",
+      "role": "APPROVER",
+      "status": 403,
+      "elapsedMs": 15.33
+    },
+    {
+      "method": "PUT",
+      "route": "/offers/off-97ff4389-bad4-4771-b9ed-d83ea0581c96/status",
+      "role": "APPROVER",
+      "status": 200,
+      "elapsedMs": 30.01
+    },
+    {
+      "method": "PUT",
+      "route": "/offers/off-97ff4389-bad4-4771-b9ed-d83ea0581c96/status",
+      "role": "RECRUITER",
+      "status": 200,
+      "elapsedMs": 15.86
+    },
+    {
+      "method": "PUT",
+      "route": "/offers/off-97ff4389-bad4-4771-b9ed-d83ea0581c96/status",
+      "role": "CANDIDATE",
+      "status": 200,
+      "elapsedMs": 13.79
+    },
+    {
+      "method": "GET",
+      "route": "/offers",
+      "role": "ADMIN",
+      "status": 200,
+      "elapsedMs": 3.94
+    },
+    {
+      "method": "PUT",
+      "route": "/offers/off-af08e885-cbc9-4d60-b7d7-16a9dc258306/status",
+      "role": "CANDIDATE",
+      "status": 403,
+      "elapsedMs": 10.61
+    },
+    {
+      "method": "GET",
+      "route": "/auth/me",
+      "role": "RECRUITER",
+      "status": 200,
+      "elapsedMs": 3.88
+    },
+    {
+      "method": "GET",
+      "route": "/navigation/menu",
+      "role": "RECRUITER",
+      "status": 200,
+      "elapsedMs": 10.13
+    },
+    {
+      "method": "POST",
+      "route": "/auth/logout",
+      "role": "ADMIN",
+      "status": 200,
+      "elapsedMs": 14.13
+    },
+    {
+      "method": "GET",
+      "route": "/auth/me",
+      "role": "ADMIN",
+      "status": 401,
+      "elapsedMs": 13.3
+    },
+    {
+      "method": "POST",
+      "route": "/auth/logout",
+      "role": "HR_MANAGER",
+      "status": 200,
+      "elapsedMs": 19.84
+    },
+    {
+      "method": "GET",
+      "route": "/auth/me",
+      "role": "HR_MANAGER",
+      "status": 401,
+      "elapsedMs": 12.42
+    },
+    {
+      "method": "POST",
+      "route": "/auth/logout",
+      "role": "HIRING_MGR",
+      "status": 200,
+      "elapsedMs": 17.08
+    },
+    {
+      "method": "GET",
+      "route": "/auth/me",
+      "role": "HIRING_MGR",
+      "status": 401,
+      "elapsedMs": 1.64
+    },
+    {
+      "method": "POST",
+      "route": "/auth/logout",
+      "role": "APPROVER",
+      "status": 200,
+      "elapsedMs": 13.23
+    },
+    {
+      "method": "GET",
+      "route": "/auth/me",
+      "role": "APPROVER",
+      "status": 401,
+      "elapsedMs": 1.61
+    },
+    {
+      "method": "POST",
+      "route": "/auth/logout",
+      "role": "RECRUITER",
+      "status": 200,
+      "elapsedMs": 25.66
+    },
+    {
+      "method": "GET",
+      "route": "/auth/me",
+      "role": "RECRUITER",
+      "status": 401,
+      "elapsedMs": 18.33
+    },
+    {
+      "method": "POST",
+      "route": "/auth/logout",
+      "role": "INTERVIEWER",
+      "status": 200,
+      "elapsedMs": 16.84
+    },
+    {
+      "method": "GET",
+      "route": "/auth/me",
+      "role": "INTERVIEWER",
+      "status": 401,
+      "elapsedMs": 13.4
+    },
+    {
+      "method": "POST",
+      "route": "/auth/logout",
+      "role": "CANDIDATE",
+      "status": 200,
+      "elapsedMs": 18.23
+    },
+    {
+      "method": "GET",
+      "route": "/auth/me",
+      "role": "CANDIDATE",
+      "status": 401,
+      "elapsedMs": 12.62
+    }
+  ],
+  "tests": [
+    {
+      "name": "ADMIN seeded account login session and effective permissions",
+      "status": "PASS"
+    },
+    {
+      "name": "ADMIN frontend login renders role home full name and permitted navigation",
+      "status": "PASS"
+    },
+    {
+      "name": "ADMIN S3 configuration API and frontend guard agree",
+      "status": "PASS"
+    },
+    {
+      "name": "ADMIN real module APIs enforce the expected role matrix",
+      "status": "PASS"
+    },
+    {
+      "name": "HR_MANAGER seeded account login session and effective permissions",
+      "status": "PASS"
+    },
+    {
+      "name": "HR_MANAGER frontend login renders role home full name and permitted navigation",
+      "status": "PASS"
+    },
+    {
+      "name": "HR_MANAGER S3 configuration API and frontend guard agree",
+      "status": "PASS"
+    },
+    {
+      "name": "HR_MANAGER real module APIs enforce the expected role matrix",
+      "status": "PASS"
+    },
+    {
+      "name": "HIRING_MGR seeded account login session and effective permissions",
+      "status": "PASS"
+    },
+    {
+      "name": "HIRING_MGR frontend login renders role home full name and permitted navigation",
+      "status": "PASS"
+    },
+    {
+      "name": "HIRING_MGR S3 configuration API and frontend guard agree",
+      "status": "PASS"
+    },
+    {
+      "name": "HIRING_MGR real module APIs enforce the expected role matrix",
+      "status": "PASS"
+    },
+    {
+      "name": "APPROVER seeded account login session and effective permissions",
+      "status": "PASS"
+    },
+    {
+      "name": "APPROVER frontend login renders role home full name and permitted navigation",
+      "status": "PASS"
+    },
+    {
+      "name": "APPROVER S3 configuration API and frontend guard agree",
+      "status": "PASS"
+    },
+    {
+      "name": "APPROVER real module APIs enforce the expected role matrix",
+      "status": "PASS"
+    },
+    {
+      "name": "RECRUITER seeded account login session and effective permissions",
+      "status": "PASS"
+    },
+    {
+      "name": "RECRUITER frontend login renders role home full name and permitted navigation",
+      "status": "PASS"
+    },
+    {
+      "name": "RECRUITER S3 configuration API and frontend guard agree",
+      "status": "PASS"
+    },
+    {
+      "name": "RECRUITER real module APIs enforce the expected role matrix",
+      "status": "PASS"
+    },
+    {
+      "name": "INTERVIEWER seeded account login session and effective permissions",
+      "status": "PASS"
+    },
+    {
+      "name": "INTERVIEWER frontend login renders role home full name and permitted navigation",
+      "status": "PASS"
+    },
+    {
+      "name": "INTERVIEWER S3 configuration API and frontend guard agree",
+      "status": "PASS"
+    },
+    {
+      "name": "INTERVIEWER real module APIs enforce the expected role matrix",
+      "status": "PASS"
+    },
+    {
+      "name": "CANDIDATE seeded account login session and effective permissions",
+      "status": "PASS"
+    },
+    {
+      "name": "CANDIDATE frontend login renders role home full name and permitted navigation",
+      "status": "PASS"
+    },
+    {
+      "name": "CANDIDATE S3 configuration API and frontend guard agree",
+      "status": "PASS"
+    },
+    {
+      "name": "CANDIDATE real module APIs enforce the expected role matrix",
+      "status": "PASS"
+    },
+    {
+      "name": "Anonymous protected APIs remain 401 and unknown API remains JSON 404",
+      "status": "PASS"
+    },
+    {
+      "name": "ADMIN and HR standard salary confidentiality remains a business restriction",
+      "status": "PASS"
+    },
+    {
+      "name": "HR frontend creates and publishes persisted two-level S3-01 configuration",
+      "status": "PASS"
+    },
+    {
+      "name": "S3-01 resolver below equal above and uncovered salary validates real API",
+      "status": "PASS"
+    },
+    {
+      "name": "Hiring frontend explicitly submits OPEN request and HR sees assigned first step",
+      "status": "PASS"
+    },
+    {
+      "name": "Frontend comment validation request info owner revision restart and preserved history",
+      "status": "PASS"
+    },
+    {
+      "name": "Frontend sequential approval reaches APPROVED without changing Sprint2 OPEN",
+      "status": "PASS"
+    },
+    {
+      "name": "Frontend rejection persists comment and shows terminal REJECTED independently of Offer",
+      "status": "PASS"
+    },
+    {
+      "name": "Candidate offer read contains only matching account records",
+      "status": "PASS"
+    },
+    {
+      "name": "Read-only HIRING_MGR cannot create candidate or mutate candidate stage",
+      "status": "PASS"
+    },
+    {
+      "name": "Candidate cannot create or approve other peoples offers",
+      "status": "PASS"
+    },
+    {
+      "name": "Recruiter cannot use offer.read to approve an Offer",
+      "status": "PASS"
+    },
+    {
+      "name": "Candidate cannot read internal recruitment analytics",
+      "status": "PASS"
+    },
+    {
+      "name": "Interviewer cannot schedule interviews via interview.read",
+      "status": "PASS"
+    },
+    {
+      "name": "Candidate own profile interview and offers readback are scoped at backend",
+      "status": "PASS"
+    },
+    {
+      "name": "Interview scheduling grants follow confirmed roles without expanding evaluator permissions",
+      "status": "PASS"
+    },
+    {
+      "name": "Offer approval sending and candidate response enforce distinct permissions and ownership",
+      "status": "PASS"
+    },
+    {
+      "name": "Internal plus candidate roles retain permission union navigation and refresh on heartbeat",
+      "status": "PASS"
+    },
+    {
+      "name": "Seven roles log out and old session token cannot access protected API",
+      "status": "PASS"
+    },
+    {
+      "name": "PostgreSQL embedded scheduling permissions and idempotent seed match SQLite",
+      "status": "PASS"
+    },
+    {
+      "name": "PostgreSQL embedded getCandidates enforces candidate scope with case-insensitive matching",
+      "status": "PASS"
+    },
+    {
+      "name": "PostgreSQL embedded getInterviews enforces candidate scope with case-insensitive matching",
+      "status": "PASS"
+    },
+    {
+      "name": "PostgreSQL embedded getOffers enforces candidate scope with case-insensitive matching",
+      "status": "PASS"
+    }
+  ],
+  "protectedFiles": [
+    {
+      "file": "A:\\Projects\\TTCS_T926_K3S4_N2\\backend\\data\\ats.db",
+      "before": "abd32cc663be58a45dec262bca0effb6bef1ce28a76a9d45523e7ca54d4e28df",
+      "after": "abd32cc663be58a45dec262bca0effb6bef1ce28a76a9d45523e7ca54d4e28df"
+    },
+    {
+      "file": "A:\\Projects\\TTCS_T926_K3S4_N2\\backend\\data\\ats.db-shm",
+      "before": "cecda1c8fa43f56a689bcbb27d85403ebfa92af7b06fdeb292ee671eb2a65b71",
+      "after": "cecda1c8fa43f56a689bcbb27d85403ebfa92af7b06fdeb292ee671eb2a65b71"
+    },
+    {
+      "file": "A:\\Projects\\TTCS_T926_K3S4_N2\\backend\\data\\ats.db-wal",
+      "before": "f4a470fe8d70acb02cafaf3d85412ac8c3bc44e2473b5d5f2f915af5207f1228",
+      "after": "f4a470fe8d70acb02cafaf3d85412ac8c3bc44e2473b5d5f2f915af5207f1228"
+    },
+    {
+      "file": "A:\\Projects\\TTCS_T926_K3S4_N2\\backend\\data\\ats_test.db",
+      "before": "67442a892d6f897d396d22a4007b6bddb525202db8c3bc46f072646f56dd722a",
+      "after": "67442a892d6f897d396d22a4007b6bddb525202db8c3bc46f072646f56dd722a"
+    },
+    {
+      "file": "A:/ATS_SPRINT3_TEST/sprint3_test.db",
+      "before": "73e6930639f60f1b2a83f57fcad6f534c137ee395c0cf87a635beb86c13c2170",
+      "after": "73e6930639f60f1b2a83f57fcad6f534c137ee395c0cf87a635beb86c13c2170"
+    },
+    {
+      "file": "A:/ATS_SPRINT3_TEST/sprint3_test.db-wal",
+      "before": "fbb6894a3dd96bc0c9db6c468f3149cb56895eb3417e9fd4b897fa4400c0471c",
+      "after": "fbb6894a3dd96bc0c9db6c468f3149cb56895eb3417e9fd4b897fa4400c0471c"
+    },
+    {
+      "file": "A:/ATS_SPRINT3_TEST/sprint3_test.db-shm",
+      "before": "5a1d822480afcbd41890da8b5ec8045f7992bf6f1176faa495d475eccf2303f6",
+      "after": "5a1d822480afcbd41890da8b5ec8045f7992bf6f1176faa495d475eccf2303f6"
+    }
+  ],
+  "migrationsUnchanged": [
+    {
+      "file": "backend/src/db/migrations/002_approval_configurations_postgres.sql",
+      "unchanged": true
+    },
+    {
+      "file": "backend/src/db/migrations/002_approval_configurations_sqlite.sql",
+      "unchanged": true
+    },
+    {
+      "file": "backend/src/db/migrations/003_requisition_approvals_postgres.sql",
+      "unchanged": true
+    },
+    {
+      "file": "backend/src/db/migrations/003_requisition_approvals_sqlite.sql",
+      "unchanged": true
+    },
+    {
+      "file": "backend/src/db/migrations/001_postgres.sql",
+      "unchanged": true
+    }
+  ],
+  "changedThisTurn": [
+    "backend/src/db/sync-permissions.js",
+    "backend/tests/test_ats_e2e.js",
+    "docs/RBAC-admin-permissions.md",
+    "backend/src/controllers/authController.js",
+    "backend/src/middlewares/rbacMiddleware.js",
+    "backend/src/server.js",
+    "backend/src/services/requisitionService.js",
+    "backend/tests/test_s1_03_email_security.js",
+    "frontend/js/pages/candidate-portal.js",
+    "frontend/js/services/session.js",
+    "package.json",
+    "docs/ATS-E2E-2026-10-08.md",
+    "docs/ATS-E2E-2026-10-08-evidence.json"
+  ],
+  "gitStatusBefore": "M backend/data/ats.db\n M backend/data/ats.db-shm\n M backend/data/ats.db-wal\n M backend/data/ats_test.db\n M backend/src/config/config.js\n M backend/src/controllers/authController.js\n M backend/src/db/migrations/001_postgres.sql\n M backend/src/db/seed.js\n M backend/src/middlewares/rbacMiddleware.js\n M backend/src/server.js\n M backend/src/services/authService.js\n M backend/tests/test_frontend_routing.js\n M backend/tests/test_s1_coverage.js\n M backend/tests/test_s2_10_integration.js\n M backend/tests/test_shared_layout.js\n M frontend/index.html\n M frontend/js/app.js\n M frontend/js/components/navigation.js\n M frontend/js/pages/question-bank.js\n M frontend/js/services/session.js\n M frontend/js/shared/route-lifecycle.js\n M frontend/js/shared/state.js\n M frontend/routes.json\n M package.json\n?? backend/src/controllers/approvalConfigurationController.js\n?? backend/src/controllers/requisitionApprovalController.js\n?? backend/src/db/migrate-approval-configurations.js\n?? backend/src/db/migrate-requisition-approvals.js\n?? backend/src/db/migrations/002_approval_configurations_postgres.sql\n?? backend/src/db/migrations/002_approval_configurations_sqlite.sql\n?? backend/src/db/migrations/003_requisition_approvals_postgres.sql\n?? backend/src/db/migrations/003_requisition_approvals_sqlite.sql\n?? backend/src/db/sync-permissions.js\n?? backend/src/services/approvalConfigurationService.js\n?? backend/src/services/requisitionApprovalService.js\n?? backend/tests/test_rbac_admin.js\n?? backend/tests/test_s3_01_integration.js\n?? backend/tests/test_s3_02_integration.js\n?? docs/RBAC-admin-permissions.md\n?? docs/S3-01-approval-configurations.md\n?? docs/S3-02-requisition-approvals.md\n?? frontend/components/requisition-approval-modal.html\n?? frontend/js/components/requisition-approval.js\n?? frontend/js/pages/approval-configurations.js\n?? frontend/js/services/approval-configuration-api.js\n?? frontend/js/services/requisition-approval-api.js\n?? frontend/pages/approval-configurations.html",
+  "gitStatusAfter": "M backend/data/ats.db\n M backend/data/ats.db-shm\n M backend/data/ats.db-wal\n M backend/data/ats_test.db\n M backend/src/config/config.js\n M backend/src/controllers/authController.js\n M backend/src/db/migrations/001_postgres.sql\n M backend/src/db/seed.js\n M backend/src/middlewares/rbacMiddleware.js\n M backend/src/server.js\n M backend/src/services/authService.js\n M backend/src/services/requisitionService.js\n M backend/tests/test_frontend_routing.js\n M backend/tests/test_s1_03_email_security.js\n M backend/tests/test_s1_coverage.js\n M backend/tests/test_s2_10_integration.js\n M backend/tests/test_shared_layout.js\n M frontend/index.html\n M frontend/js/app.js\n M frontend/js/components/navigation.js\n M frontend/js/pages/candidate-portal.js\n M frontend/js/pages/question-bank.js\n M frontend/js/services/session.js\n M frontend/js/shared/route-lifecycle.js\n M frontend/js/shared/state.js\n M frontend/routes.json\n M package.json\n?? backend/src/controllers/approvalConfigurationController.js\n?? backend/src/controllers/requisitionApprovalController.js\n?? backend/src/db/migrate-approval-configurations.js\n?? backend/src/db/migrate-requisition-approvals.js\n?? backend/src/db/migrations/002_approval_configurations_postgres.sql\n?? backend/src/db/migrations/002_approval_configurations_sqlite.sql\n?? backend/src/db/migrations/003_requisition_approvals_postgres.sql\n?? backend/src/db/migrations/003_requisition_approvals_sqlite.sql\n?? backend/src/db/sync-permissions.js\n?? backend/src/services/approvalConfigurationService.js\n?? backend/src/services/requisitionApprovalService.js\n?? backend/tests/test_ats_e2e.js\n?? backend/tests/test_rbac_admin.js\n?? backend/tests/test_s3_01_integration.js\n?? backend/tests/test_s3_02_integration.js\n?? docs/ATS-E2E-2026-10-08-evidence.json\n?? docs/ATS-E2E-2026-10-08.md\n?? docs/RBAC-admin-permissions.md\n?? docs/S3-01-approval-configurations.md\n?? docs/S3-02-requisition-approvals.md\n?? frontend/components/requisition-approval-modal.html\n?? frontend/js/components/requisition-approval.js\n?? frontend/js/pages/approval-configurations.js\n?? frontend/js/services/approval-configuration-api.js\n?? frontend/js/services/requisition-approval-api.js\n?? frontend/pages/approval-configurations.html",
+  "requestTotals": {
+    "total": 208,
+    "byStatus": {
+      "200": 107,
+      "201": 15,
+      "400": 1,
+      "401": 11,
+      "403": 72,
+      "404": 1,
+      "409": 1
+    }
+  },
+  "pendingPolicyProbes": {
+    "permissionExists": false,
+    "probes": [
+      {
+        "role": "HR_MANAGER",
+        "method": "PUT",
+        "route": "/requisitions/:id",
+        "status": 403,
+        "code": "FORBIDDEN_PERMISSION_DENIED",
+        "requiredPermission": "requisition.edit"
+      },
+      {
+        "role": "HIRING_MGR",
+        "method": "PUT",
+        "route": "/requisitions/:id",
+        "status": 403,
+        "code": "FORBIDDEN_PERMISSION_DENIED",
+        "requiredPermission": "requisition.edit"
+      }
+    ]
+  },
+  "followUp": {
+    "task": "RBAC, requisition detail/edit and permission feedback",
+    "date": "2026-10-08",
+    "head": "d6fa9f46c62ca11f9f2f03ebf332b12d1af615c5",
+    "branch": "feature/s2-bulk-user-import",
+    "status": "PARTIAL; business decisions pending",
+    "suites": [
+      {
+        "script": "test:sprint1",
+        "exitCode": 0,
+        "execution": "PASS",
+        "coverage": "EXISTING ASSERTIONS VERIFIED",
+        "passed": 56,
+        "failed": 0,
+        "total": 56
+      },
+      {
+        "script": "test:requisition-access",
+        "exitCode": 0,
+        "execution": "PASS",
+        "coverage": "EXISTING ASSERTIONS VERIFIED",
+        "passed": 16,
+        "failed": 0,
+        "total": 16
+      },
+      {
+        "script": "test:ats-e2e",
+        "exitCode": 0,
+        "execution": "PASS",
+        "coverage": "EXISTING ASSERTIONS VERIFIED",
+        "passed": 51,
+        "failed": 0,
+        "total": 51
+      },
+      {
+        "script": "test:rbac",
+        "exitCode": 0,
+        "execution": "PASS",
+        "coverage": "EXISTING ASSERTIONS VERIFIED",
+        "passed": 47,
+        "failed": 0,
+        "total": 47
+      },
+      {
+        "script": "test:s3-02",
+        "exitCode": 0,
+        "execution": "PASS",
+        "coverage": "EXISTING ASSERTIONS VERIFIED",
+        "passed": 93,
+        "failed": 0,
+        "total": 93
+      },
+      {
+        "script": "test:s3-01",
+        "exitCode": 0,
+        "execution": "PASS",
+        "coverage": "EXISTING ASSERTIONS VERIFIED",
+        "passed": 108,
+        "failed": 0,
+        "total": 108
+      },
+      {
+        "script": "test:postgres",
+        "exitCode": 0,
+        "execution": "PASS",
+        "coverage": "EXISTING ASSERTIONS VERIFIED",
+        "passed": 15,
+        "failed": 0,
+        "total": 15
+      },
+      {
+        "script": "test:postgres:live",
+        "exitCode": 0,
+        "execution": "NOT RUN",
+        "coverage": "NOT RUN",
+        "passed": null,
+        "failed": null,
+        "total": null
+      },
+      {
+        "script": "test:review-updates",
+        "exitCode": 0,
+        "execution": "PASS",
+        "coverage": "EXISTING ASSERTIONS VERIFIED",
+        "passed": 22,
+        "failed": 0,
+        "total": 22
+      },
+      {
+        "script": "test:s1-01",
+        "exitCode": 0,
+        "execution": "PASS",
+        "coverage": "EXISTING ASSERTIONS VERIFIED",
+        "passed": 8,
+        "failed": 0,
+        "total": 8
+      },
+      {
+        "script": "test:s1-02",
+        "exitCode": 0,
+        "execution": "PASS",
+        "coverage": "EXISTING ASSERTIONS VERIFIED",
+        "passed": 5,
+        "failed": 0,
+        "total": 5
+      },
+      {
+        "script": "test:s1-03",
+        "exitCode": 0,
+        "execution": "PASS",
+        "coverage": "EXISTING ASSERTIONS VERIFIED",
+        "passed": 5,
+        "failed": 0,
+        "total": 5
+      },
+      {
+        "script": "test:s1-03:email",
+        "exitCode": 0,
+        "execution": "PASS",
+        "coverage": "EXISTING ASSERTIONS VERIFIED",
+        "passed": 49,
+        "failed": 0,
+        "total": 49
+      },
+      {
+        "script": "test:s1-04",
+        "exitCode": 0,
+        "execution": "PASS",
+        "coverage": "EXISTING ASSERTIONS VERIFIED",
+        "passed": 5,
+        "failed": 0,
+        "total": 5
+      },
+      {
+        "script": "test:s1-05",
+        "exitCode": 0,
+        "execution": "PASS",
+        "coverage": "EXISTING ASSERTIONS VERIFIED",
+        "passed": 6,
+        "failed": 0,
+        "total": 6
+      },
+      {
+        "script": "test:s1-06",
+        "exitCode": 0,
+        "execution": "PASS",
+        "coverage": "EXISTING ASSERTIONS VERIFIED",
+        "passed": 3,
+        "failed": 0,
+        "total": 3
+      },
+      {
+        "script": "test:s1-07",
+        "exitCode": 0,
+        "execution": "PASS",
+        "coverage": "EXISTING ASSERTIONS VERIFIED",
+        "passed": 4,
+        "failed": 0,
+        "total": 4
+      },
+      {
+        "script": "test:s1-08",
+        "exitCode": 0,
+        "execution": "PASS",
+        "coverage": "EXISTING ASSERTIONS VERIFIED",
+        "passed": 5,
+        "failed": 0,
+        "total": 5
+      },
+      {
+        "script": "test:s1-09",
+        "exitCode": 0,
+        "execution": "PASS",
+        "coverage": "EXISTING ASSERTIONS VERIFIED",
+        "passed": 7,
+        "failed": 0,
+        "total": 7
+      },
+      {
+        "script": "test:s1-10",
+        "exitCode": 0,
+        "execution": "PASS",
+        "coverage": "EXISTING ASSERTIONS VERIFIED",
+        "passed": 8,
+        "failed": 0,
+        "total": 8
+      },
+      {
+        "script": "test:otp",
+        "exitCode": 0,
+        "execution": "PASS",
+        "coverage": "EXISTING ASSERTIONS VERIFIED",
+        "passed": 8,
+        "failed": 0,
+        "total": 8
+      },
+      {
+        "script": "test:sprint2",
+        "exitCode": 1,
+        "execution": "FAIL",
+        "coverage": "BLOCKED: legacy Hiring Manager stage policy conflicts with mandatory R*",
+        "passed": 31,
+        "failed": 1,
+        "total": 32
+      },
+      {
+        "script": "test:s2-10",
+        "exitCode": 0,
+        "execution": "PASS",
+        "coverage": "EXISTING ASSERTIONS VERIFIED",
+        "passed": 59,
+        "failed": 0,
+        "total": 59
+      },
+      {
+        "script": "test:routing",
+        "exitCode": 0,
+        "execution": "PASS",
+        "coverage": "EXISTING ASSERTIONS VERIFIED",
+        "passed": 174,
+        "failed": 0,
+        "total": 174
+      },
+      {
+        "script": "test:user-ux",
+        "exitCode": 0,
+        "execution": "PASS",
+        "coverage": "EXISTING ASSERTIONS VERIFIED",
+        "passed": 87,
+        "failed": 0,
+        "total": 87
+      },
+      {
+        "script": "test:datetime-dashboard",
+        "exitCode": 0,
+        "execution": "PASS",
+        "coverage": "EXISTING ASSERTIONS VERIFIED",
+        "passed": 28,
+        "failed": 0,
+        "total": 28
+      },
+      {
+        "script": "test:avatar",
+        "exitCode": 0,
+        "execution": "PASS",
+        "coverage": "EXISTING ASSERTIONS VERIFIED",
+        "passed": 21,
+        "failed": 0,
+        "total": 21
+      },
+      {
+        "script": "test:mobile-shell",
+        "exitCode": 0,
+        "execution": "PASS",
+        "coverage": "EXISTING ASSERTIONS VERIFIED",
+        "passed": 53,
+        "failed": 0,
+        "total": 53
+      },
+      {
+        "script": "test:layout",
+        "exitCode": 0,
+        "execution": "PASS",
+        "coverage": "EXISTING ASSERTIONS VERIFIED",
+        "passed": 44,
+        "failed": 0,
+        "total": 44
+      },
+      {
+        "script": "test:coverage:sprint1",
+        "exitCode": 0,
+        "execution": "PASS",
+        "coverage": "EXISTING ASSERTIONS VERIFIED",
+        "passed": 23,
+        "failed": 0,
+        "total": 23
+      },
+      {
+        "script": "test:coverage:sprint2",
+        "exitCode": 0,
+        "execution": "PASS",
+        "coverage": "EXISTING ASSERTIONS VERIFIED",
+        "passed": 25,
+        "failed": 0,
+        "total": 25
+      },
+      {
+        "script": "test:career-upload",
+        "exitCode": 0,
+        "execution": "PASS",
+        "coverage": "EXISTING ASSERTIONS VERIFIED",
+        "passed": 24,
+        "failed": 0,
+        "total": 24
+      },
+      {
+        "script": "test:user-roles-avatar",
+        "exitCode": 0,
+        "execution": "PASS",
+        "coverage": "EXISTING ASSERTIONS VERIFIED",
+        "passed": 17,
+        "failed": 0,
+        "total": 17
+      }
+    ],
+    "staticChecks": {
+      "passed": 115,
+      "total": 115
+    },
+    "browser": "NOT RUN: registered browser list empty",
+    "protectedFiles": [
+      {
+        "file": "A:\\Projects\\TTCS_T926_K3S4_N2\\backend\\data\\ats.db",
+        "before": "abd32cc663be58a45dec262bca0effb6bef1ce28a76a9d45523e7ca54d4e28df",
+        "after": "abd32cc663be58a45dec262bca0effb6bef1ce28a76a9d45523e7ca54d4e28df"
+      },
+      {
+        "file": "A:\\Projects\\TTCS_T926_K3S4_N2\\backend\\data\\ats.db-shm",
+        "before": "cecda1c8fa43f56a689bcbb27d85403ebfa92af7b06fdeb292ee671eb2a65b71",
+        "after": "cecda1c8fa43f56a689bcbb27d85403ebfa92af7b06fdeb292ee671eb2a65b71"
+      },
+      {
+        "file": "A:\\Projects\\TTCS_T926_K3S4_N2\\backend\\data\\ats.db-wal",
+        "before": "f4a470fe8d70acb02cafaf3d85412ac8c3bc44e2473b5d5f2f915af5207f1228",
+        "after": "f4a470fe8d70acb02cafaf3d85412ac8c3bc44e2473b5d5f2f915af5207f1228"
+      },
+      {
+        "file": "A:\\Projects\\TTCS_T926_K3S4_N2\\backend\\data\\ats_test.db",
+        "before": "67442a892d6f897d396d22a4007b6bddb525202db8c3bc46f072646f56dd722a",
+        "after": "67442a892d6f897d396d22a4007b6bddb525202db8c3bc46f072646f56dd722a"
+      },
+      {
+        "file": "A:/ATS_SPRINT3_TEST/sprint3_test.db",
+        "before": "73e6930639f60f1b2a83f57fcad6f534c137ee395c0cf87a635beb86c13c2170",
+        "after": "73e6930639f60f1b2a83f57fcad6f534c137ee395c0cf87a635beb86c13c2170"
+      },
+      {
+        "file": "A:/ATS_SPRINT3_TEST/sprint3_test.db-wal",
+        "before": "fbb6894a3dd96bc0c9db6c468f3149cb56895eb3417e9fd4b897fa4400c0471c",
+        "after": "fbb6894a3dd96bc0c9db6c468f3149cb56895eb3417e9fd4b897fa4400c0471c"
+      },
+      {
+        "file": "A:/ATS_SPRINT3_TEST/sprint3_test.db-shm",
+        "before": "5a1d822480afcbd41890da8b5ec8045f7992bf6f1176faa495d475eccf2303f6",
+        "after": "5a1d822480afcbd41890da8b5ec8045f7992bf6f1176faa495d475eccf2303f6"
+      }
+    ],
+    "migrations": [
+      {
+        "file": "backend/src/db/migrations/002_approval_configurations_postgres.sql",
+        "unchanged": true
+      },
+      {
+        "file": "backend/src/db/migrations/002_approval_configurations_sqlite.sql",
+        "unchanged": true
+      },
+      {
+        "file": "backend/src/db/migrations/003_requisition_approvals_postgres.sql",
+        "unchanged": true
+      },
+      {
+        "file": "backend/src/db/migrations/003_requisition_approvals_sqlite.sql",
+        "unchanged": true
+      },
+      {
+        "file": "backend/src/db/migrations/001_postgres.sql",
+        "unchanged": true
+      }
+    ],
+    "oldTestsUnchanged": true,
+    "gitStatusBefore": "M backend/data/ats.db\n M backend/data/ats.db-shm\n M backend/data/ats.db-wal\n M backend/data/ats_test.db\n M backend/src/config/config.js\n M backend/src/controllers/authController.js\n M backend/src/db/migrations/001_postgres.sql\n M backend/src/db/seed.js\n M backend/src/middlewares/rbacMiddleware.js\n M backend/src/server.js\n M backend/src/services/authService.js\n M backend/src/services/requisitionService.js\n M backend/tests/test_frontend_routing.js\n M backend/tests/test_s1_03_email_security.js\n M backend/tests/test_s1_coverage.js\n M backend/tests/test_s2_10_integration.js\n M backend/tests/test_shared_layout.js\n M frontend/index.html\n M frontend/js/app.js\n M frontend/js/components/navigation.js\n M frontend/js/pages/candidate-portal.js\n M frontend/js/pages/question-bank.js\n M frontend/js/services/session.js\n M frontend/js/shared/route-lifecycle.js\n M frontend/js/shared/state.js\n M frontend/routes.json\n M package.json\n?? backend/src/controllers/approvalConfigurationController.js\n?? backend/src/controllers/requisitionApprovalController.js\n?? backend/src/db/migrate-approval-configurations.js\n?? backend/src/db/migrate-requisition-approvals.js\n?? backend/src/db/migrations/002_approval_configurations_postgres.sql\n?? backend/src/db/migrations/002_approval_configurations_sqlite.sql\n?? backend/src/db/migrations/003_requisition_approvals_postgres.sql\n?? backend/src/db/migrations/003_requisition_approvals_sqlite.sql\n?? backend/src/db/sync-permissions.js\n?? backend/src/services/approvalConfigurationService.js\n?? backend/src/services/requisitionApprovalService.js\n?? backend/tests/test_ats_e2e.js\n?? backend/tests/test_rbac_admin.js\n?? backend/tests/test_s3_01_integration.js\n?? backend/tests/test_s3_02_integration.js\n?? docs/ATS-E2E-2026-10-08-evidence.json\n?? docs/ATS-E2E-2026-10-08.md\n?? docs/RBAC-admin-permissions.md\n?? docs/S3-01-approval-configurations.md\n?? docs/S3-02-requisition-approvals.md\n?? frontend/components/requisition-approval-modal.html\n?? frontend/js/components/requisition-approval.js\n?? frontend/js/pages/approval-configurations.js\n?? frontend/js/services/approval-configuration-api.js\n?? frontend/js/services/requisition-approval-api.js\n?? frontend/pages/approval-configurations.html",
+    "gitStatusAfter": "M backend/data/ats.db\n M backend/data/ats.db-shm\n M backend/data/ats.db-wal\n M backend/data/ats_test.db\n M backend/src/config/config.js\n M backend/src/controllers/authController.js\n M backend/src/db/migrations/001_postgres.sql\n M backend/src/db/seed.js\n M backend/src/middlewares/rbacMiddleware.js\n M backend/src/server.js\n M backend/src/services/authService.js\n M backend/src/services/requisitionService.js\n M backend/tests/test_frontend_routing.js\n M backend/tests/test_s1_03_email_security.js\n M backend/tests/test_s1_coverage.js\n M backend/tests/test_s2_10_integration.js\n M backend/tests/test_shared_layout.js\n M frontend/index.html\n M frontend/js/app.js\n M frontend/js/components/navigation.js\n M frontend/js/components/requisition-detail.js\n M frontend/js/components/requisition-form.js\n M frontend/js/pages/candidate-portal.js\n M frontend/js/pages/question-bank.js\n M frontend/js/pages/requisitions.js\n M frontend/js/services/session.js\n M frontend/js/shared/route-lifecycle.js\n M frontend/js/shared/state.js\n M frontend/routes.json\n M package.json\n?? backend/src/controllers/approvalConfigurationController.js\n?? backend/src/controllers/requisitionApprovalController.js\n?? backend/src/db/migrate-approval-configurations.js\n?? backend/src/db/migrate-requisition-approvals.js\n?? backend/src/db/migrations/002_approval_configurations_postgres.sql\n?? backend/src/db/migrations/002_approval_configurations_sqlite.sql\n?? backend/src/db/migrations/003_requisition_approvals_postgres.sql\n?? backend/src/db/migrations/003_requisition_approvals_sqlite.sql\n?? backend/src/db/sync-permissions.js\n?? backend/src/services/approvalConfigurationService.js\n?? backend/src/services/requisitionApprovalService.js\n?? backend/tests/test_ats_e2e.js\n?? backend/tests/test_rbac_admin.js\n?? backend/tests/test_requisition_access.js\n?? backend/tests/test_s3_01_integration.js\n?? backend/tests/test_s3_02_integration.js\n?? docs/ATS-E2E-2026-10-08-evidence.json\n?? docs/ATS-E2E-2026-10-08.md\n?? docs/RBAC-admin-permissions.md\n?? docs/S3-01-approval-configurations.md\n?? docs/S3-02-requisition-approvals.md\n?? frontend/components/requisition-approval-modal.html\n?? frontend/js/components/requisition-approval.js\n?? frontend/js/pages/approval-configurations.js\n?? frontend/js/services/approval-configuration-api.js\n?? frontend/js/services/requisition-approval-api.js\n?? frontend/pages/approval-configurations.html",
+    "tempRoot": "C:\\Users\\ASUSOF~1\\AppData\\Local\\Temp\\ats-s301-baseline-l1UJnL",
+    "neon": false,
+    "smtp": "simulated/stubbed",
+    "postgres": "PGlite embedded",
+    "pending": [
+      "Hiring Manager stage-only exception versus mandatory R*",
+      "OPEN edit allowed roles, fields and states",
+      "New matrix policy assertions versus preserved legacy policy assertions"
+    ],
+    "gitDiffCheck": "PASS",
+    "filesChangedThisTask": [
+      "docs/ATS-E2E-2026-10-08-evidence.json",
+      "docs/ATS-E2E-2026-10-08.md",
+      "docs/RBAC-admin-permissions.md",
+      "backend/src/server.js",
+      "backend/src/services/requisitionService.js",
+      "frontend/js/components/requisition-detail.js",
+      "frontend/js/components/requisition-form.js",
+      "frontend/js/pages/requisitions.js",
+      "package.json",
+      "backend/tests/test_requisition_access.js"
+    ]
+  },
+  "finalTask": {
+    "date": "2026-10-08",
+    "status": "PARTIAL: approval reinitiation and applying approved revision decisions pending",
+    "branch": "feature/s2-bulk-user-import",
+    "head": "d6fa9f46c62ca11f9f2f03ebf332b12d1af615c5",
+    "suites": [
+      {
+        "script": "test:sprint1",
+        "status": "PASS",
+        "passed": 56,
+        "total": 56,
+        "exitCode": 0,
+        "log": "work/ats-final-rbac/s1-final/test-sprint1.log"
+      },
+      {
+        "script": "test:final-rbac-open",
+        "status": "PASS",
+        "passed": 33,
+        "total": 33,
+        "exitCode": 0,
+        "log": "work/ats-final-rbac/regression-final/test-final-rbac-open.log"
+      },
+      {
+        "script": "test:requisition-access",
+        "status": "PASS",
+        "passed": 16,
+        "total": 16,
+        "exitCode": 0,
+        "log": "work/ats-final-rbac/regression-final/test-requisition-access.log"
+      },
+      {
+        "script": "test:ats-e2e",
+        "status": "PASS",
+        "passed": 51,
+        "total": 51,
+        "exitCode": 0,
+        "log": "work/ats-final-rbac/regression-final/test-ats-e2e.log"
+      },
+      {
+        "script": "test:rbac",
+        "status": "PASS",
+        "passed": 47,
+        "total": 47,
+        "exitCode": 0,
+        "log": "work/ats-final-rbac/regression-final/test-rbac.log"
+      },
+      {
+        "script": "test:s3-02",
+        "status": "PASS",
+        "passed": 93,
+        "total": 93,
+        "exitCode": 0,
+        "log": "work/ats-final-rbac/regression-final/test-s3-02.log"
+      },
+      {
+        "script": "test:s3-01",
+        "status": "PASS",
+        "passed": 108,
+        "total": 108,
+        "exitCode": 0,
+        "log": "work/ats-final-rbac/regression-final/test-s3-01.log"
+      },
+      {
+        "script": "test:postgres",
+        "status": "PASS",
+        "passed": 15,
+        "total": 15,
+        "exitCode": 0,
+        "log": "work/ats-final-rbac/regression-final/test-postgres.log"
+      },
+      {
+        "script": "test:postgres:live",
+        "status": "NOT RUN",
+        "passed": null,
+        "total": null,
+        "exitCode": 0,
+        "log": "work/ats-final-rbac/regression-final/test-postgres-live.log"
+      },
+      {
+        "script": "test:review-updates",
+        "status": "PASS",
+        "passed": 22,
+        "total": 22,
+        "exitCode": 0,
+        "log": "work/ats-final-rbac/regression-final/test-review-updates.log"
+      },
+      {
+        "script": "test:s1-01",
+        "status": "PASS",
+        "passed": 8,
+        "total": 8,
+        "exitCode": 0,
+        "log": "work/ats-final-rbac/regression-final/test-s1-01.log"
+      },
+      {
+        "script": "test:s1-02",
+        "status": "PASS",
+        "passed": 5,
+        "total": 5,
+        "exitCode": 0,
+        "log": "work/ats-final-rbac/regression-final/test-s1-02.log"
+      },
+      {
+        "script": "test:s1-03",
+        "status": "PASS",
+        "passed": 5,
+        "total": 5,
+        "exitCode": 0,
+        "log": "work/ats-final-rbac/regression-final/test-s1-03.log"
+      },
+      {
+        "script": "test:s1-03:email",
+        "status": "PASS",
+        "passed": 49,
+        "total": 49,
+        "exitCode": 0,
+        "log": "work/ats-final-rbac/regression-final/test-s1-03-email.log"
+      },
+      {
+        "script": "test:s1-04",
+        "status": "PASS",
+        "passed": 5,
+        "total": 5,
+        "exitCode": 0,
+        "log": "work/ats-final-rbac/regression-final/test-s1-04.log"
+      },
+      {
+        "script": "test:s1-05",
+        "status": "PASS",
+        "passed": 6,
+        "total": 6,
+        "exitCode": 0,
+        "log": "work/ats-final-rbac/regression-final/test-s1-05.log"
+      },
+      {
+        "script": "test:s1-06",
+        "status": "PASS",
+        "passed": 3,
+        "total": 3,
+        "exitCode": 0,
+        "log": "work/ats-final-rbac/regression-final/test-s1-06.log"
+      },
+      {
+        "script": "test:s1-07",
+        "status": "PASS",
+        "passed": 4,
+        "total": 4,
+        "exitCode": 0,
+        "log": "work/ats-final-rbac/regression-final/test-s1-07.log"
+      },
+      {
+        "script": "test:s1-08",
+        "status": "PASS",
+        "passed": 5,
+        "total": 5,
+        "exitCode": 0,
+        "log": "work/ats-final-rbac/regression-final/test-s1-08.log"
+      },
+      {
+        "script": "test:s1-09",
+        "status": "PASS",
+        "passed": 7,
+        "total": 7,
+        "exitCode": 0,
+        "log": "work/ats-final-rbac/s1-final/test-s1-09.log"
+      },
+      {
+        "script": "test:s1-10",
+        "status": "PASS",
+        "passed": 8,
+        "total": 8,
+        "exitCode": 0,
+        "log": "work/ats-final-rbac/regression-final/test-s1-10.log"
+      },
+      {
+        "script": "test:otp",
+        "status": "PASS",
+        "passed": 8,
+        "total": 8,
+        "exitCode": 0,
+        "log": "work/ats-final-rbac/regression-final/test-otp.log"
+      },
+      {
+        "script": "test:sprint2",
+        "status": "PASS",
+        "passed": 32,
+        "total": 32,
+        "exitCode": 0,
+        "log": "work/ats-final-rbac/regression-final/test-sprint2.log"
+      },
+      {
+        "script": "test:s2-10",
+        "status": "PASS",
+        "passed": 59,
+        "total": 59,
+        "exitCode": 0,
+        "log": "work/ats-final-rbac/regression-final/test-s2-10.log"
+      },
+      {
+        "script": "test:routing",
+        "status": "PASS",
+        "passed": 174,
+        "total": 174,
+        "exitCode": 0,
+        "log": "work/ats-final-rbac/regression-final/test-routing.log"
+      },
+      {
+        "script": "test:user-ux",
+        "status": "PASS",
+        "passed": 87,
+        "total": 87,
+        "exitCode": 0,
+        "log": "work/ats-final-rbac/regression-final/test-user-ux.log"
+      },
+      {
+        "script": "test:datetime-dashboard",
+        "status": "PASS",
+        "passed": 28,
+        "total": 28,
+        "exitCode": 0,
+        "log": "work/ats-final-rbac/regression-final/test-datetime-dashboard.log"
+      },
+      {
+        "script": "test:avatar",
+        "status": "PASS",
+        "passed": 21,
+        "total": 21,
+        "exitCode": 0,
+        "log": "work/ats-final-rbac/regression-final/test-avatar.log"
+      },
+      {
+        "script": "test:mobile-shell",
+        "status": "PASS",
+        "passed": 53,
+        "total": 53,
+        "exitCode": 0,
+        "log": "work/ats-final-rbac/regression-final/test-mobile-shell.log"
+      },
+      {
+        "script": "test:layout",
+        "status": "PASS",
+        "passed": 44,
+        "total": 44,
+        "exitCode": 0,
+        "log": "work/ats-final-rbac/regression-final/test-layout.log"
+      },
+      {
+        "script": "test:coverage:sprint1",
+        "status": "PASS",
+        "passed": 23,
+        "total": 23,
+        "exitCode": 0,
+        "log": "work/ats-final-rbac/regression-final/test-coverage-sprint1.log"
+      },
+      {
+        "script": "test:coverage:sprint2",
+        "status": "PASS",
+        "passed": 25,
+        "total": 25,
+        "exitCode": 0,
+        "log": "work/ats-final-rbac/regression-final/test-coverage-sprint2.log"
+      },
+      {
+        "script": "test:career-upload",
+        "status": "PASS",
+        "passed": 24,
+        "total": 24,
+        "exitCode": 0,
+        "log": "work/ats-final-rbac/regression-final/test-career-upload.log"
+      },
+      {
+        "script": "test:user-roles-avatar",
+        "status": "PASS",
+        "passed": 17,
+        "total": 17,
+        "exitCode": 0,
+        "log": "work/ats-final-rbac/regression-final/test-user-roles-avatar.log"
+      }
+    ],
+    "accounts": [
+      {
+        "role": "ADMIN",
+        "id": "usr-admin",
+        "email": "admin@company.com",
+        "status": "ACTIVE",
+        "home": "/admin",
+        "permissions": [
+          "account.lock",
+          "account.unlock",
+          "approval_configuration.manage",
+          "audit.read",
+          "candidate.create",
+          "candidate.read",
+          "candidate.update",
+          "career_page.manage",
+          "career_page.read",
+          "competency.manage",
+          "competency.read",
+          "dashboard.read",
+          "department.manage",
+          "department.read",
+          "interview.create",
+          "interview.evaluate",
+          "interview.evaluation.read",
+          "interview.read",
+          "interview.update",
+          "offer.approve",
+          "offer.create",
+          "offer.read",
+          "question_bank.manage",
+          "question_bank.read",
+          "recruitment_catalog.manage",
+          "recruitment_catalog.read",
+          "report.read",
+          "requisition.approve",
+          "requisition.create",
+          "requisition.draft.edit",
+          "requisition.edit",
+          "requisition.read",
+          "role.assign",
+          "role.read",
+          "salary_range.read",
+          "user.create",
+          "user.delete",
+          "user.read",
+          "user.update"
+        ],
+        "menu": [
+          "/dashboard",
+          "/admin/departments",
+          "/admin/recruitment-catalogs",
+          "/admin/career-page",
+          "/admin/competencies",
+          "/admin/users",
+          "/admin/roles",
+          "/admin/audit",
+          "/requisitions",
+          "/candidates",
+          "/interviews",
+          "/question-bank",
+          "/offers",
+          "/approvals",
+          "/admin/approval-configurations",
+          "/reports"
+        ]
+      },
+      {
+        "role": "HR_MANAGER",
+        "id": "usr-hr-mgr",
+        "email": "hrmanager@company.com",
+        "status": "ACTIVE",
+        "home": "/dashboard",
+        "permissions": [
+          "approval_configuration.manage",
+          "audit.read",
+          "candidate.create",
+          "candidate.read",
+          "candidate.update",
+          "career_page.manage",
+          "career_page.read",
+          "competency.manage",
+          "competency.read",
+          "dashboard.read",
+          "department.manage",
+          "department.read",
+          "interview.create",
+          "interview.evaluate",
+          "interview.evaluation.read",
+          "interview.read",
+          "interview.update",
+          "offer.approve",
+          "offer.create",
+          "offer.read",
+          "question_bank.manage",
+          "question_bank.read",
+          "recruitment_catalog.manage",
+          "recruitment_catalog.read",
+          "report.read",
+          "requisition.approve",
+          "requisition.create",
+          "requisition.draft.edit",
+          "requisition.edit",
+          "requisition.read",
+          "role.read",
+          "salary_range.read",
+          "user.read"
+        ],
+        "menu": [
+          "/dashboard",
+          "/admin/departments",
+          "/admin/recruitment-catalogs",
+          "/admin/career-page",
+          "/admin/competencies",
+          "/admin/users",
+          "/admin/roles",
+          "/admin/audit",
+          "/requisitions",
+          "/candidates",
+          "/interviews",
+          "/question-bank",
+          "/offers",
+          "/approvals",
+          "/admin/approval-configurations",
+          "/reports"
+        ]
+      },
+      {
+        "role": "HIRING_MGR",
+        "id": "usr-hiring-mgr",
+        "email": "hiringmgr@company.com",
+        "status": "ACTIVE",
+        "home": "/hiring",
+        "permissions": [
+          "candidate.read",
+          "competency.read",
+          "dashboard.read",
+          "department.read",
+          "interview.evaluation.read",
+          "interview.read",
+          "offer.read",
+          "recruitment_catalog.read",
+          "report.read",
+          "requisition.create",
+          "requisition.draft.edit",
+          "requisition.edit",
+          "requisition.read"
+        ],
+        "menu": [
+          "/dashboard",
+          "/admin/departments",
+          "/admin/competencies",
+          "/requisitions",
+          "/candidates",
+          "/interviews",
+          "/offers",
+          "/reports"
+        ]
+      },
+      {
+        "role": "APPROVER",
+        "id": "usr-approver",
+        "email": "approver@company.com",
+        "status": "ACTIVE",
+        "home": "/approvals",
+        "permissions": [
+          "candidate.read",
+          "competency.read",
+          "dashboard.read",
+          "department.read",
+          "interview.evaluation.read",
+          "offer.approve",
+          "offer.read",
+          "recruitment_catalog.read",
+          "report.read",
+          "requisition.approve",
+          "requisition.read"
+        ],
+        "menu": [
+          "/dashboard",
+          "/admin/departments",
+          "/admin/competencies",
+          "/requisitions",
+          "/candidates",
+          "/offers",
+          "/approvals",
+          "/reports"
+        ]
+      },
+      {
+        "role": "RECRUITER",
+        "id": "usr-recruiter",
+        "email": "recruiter@company.com",
+        "status": "ACTIVE",
+        "home": "/recruitment",
+        "permissions": [
+          "candidate.create",
+          "candidate.read",
+          "candidate.update",
+          "competency.read",
+          "dashboard.read",
+          "department.read",
+          "interview.create",
+          "interview.evaluation.read",
+          "interview.read",
+          "interview.update",
+          "offer.create",
+          "offer.read",
+          "recruitment_catalog.read",
+          "report.read",
+          "requisition.edit",
+          "requisition.read"
+        ],
+        "menu": [
+          "/dashboard",
+          "/admin/departments",
+          "/admin/competencies",
+          "/requisitions",
+          "/candidates",
+          "/interviews",
+          "/offers",
+          "/reports"
+        ]
+      },
+      {
+        "role": "INTERVIEWER",
+        "id": "usr-interviewer",
+        "email": "interviewer@company.com",
+        "status": "ACTIVE",
+        "home": "/interviews",
+        "permissions": [
+          "candidate.read",
+          "competency.read",
+          "department.read",
+          "interview.evaluate",
+          "interview.evaluation.read",
+          "interview.read",
+          "question_bank.read",
+          "recruitment_catalog.read"
+        ],
+        "menu": [
+          "/admin/departments",
+          "/admin/competencies",
+          "/candidates",
+          "/interviews",
+          "/question-bank"
+        ]
+      },
+      {
+        "role": "CANDIDATE",
+        "id": "usr-candidate",
+        "email": "candidate@example.com",
+        "status": "ACTIVE",
+        "home": "/candidate",
+        "permissions": [
+          "candidate.create",
+          "candidate.read",
+          "interview.read",
+          "offer.read"
+        ],
+        "menu": [
+          "/candidate"
+        ]
+      }
+    ],
+    "protectedFiles": [
+      {
+        "file": "A:\\Projects\\TTCS_T926_K3S4_N2\\backend\\data\\ats.db",
+        "before": "abd32cc663be58a45dec262bca0effb6bef1ce28a76a9d45523e7ca54d4e28df",
+        "after": "abd32cc663be58a45dec262bca0effb6bef1ce28a76a9d45523e7ca54d4e28df"
+      },
+      {
+        "file": "A:\\Projects\\TTCS_T926_K3S4_N2\\backend\\data\\ats.db-shm",
+        "before": "cecda1c8fa43f56a689bcbb27d85403ebfa92af7b06fdeb292ee671eb2a65b71",
+        "after": "cecda1c8fa43f56a689bcbb27d85403ebfa92af7b06fdeb292ee671eb2a65b71"
+      },
+      {
+        "file": "A:\\Projects\\TTCS_T926_K3S4_N2\\backend\\data\\ats.db-wal",
+        "before": "f4a470fe8d70acb02cafaf3d85412ac8c3bc44e2473b5d5f2f915af5207f1228",
+        "after": "f4a470fe8d70acb02cafaf3d85412ac8c3bc44e2473b5d5f2f915af5207f1228"
+      },
+      {
+        "file": "A:\\Projects\\TTCS_T926_K3S4_N2\\backend\\data\\ats_test.db",
+        "before": "67442a892d6f897d396d22a4007b6bddb525202db8c3bc46f072646f56dd722a",
+        "after": "67442a892d6f897d396d22a4007b6bddb525202db8c3bc46f072646f56dd722a"
+      },
+      {
+        "file": "A:/ATS_SPRINT3_TEST/sprint3_test.db",
+        "before": "73e6930639f60f1b2a83f57fcad6f534c137ee395c0cf87a635beb86c13c2170",
+        "after": "73e6930639f60f1b2a83f57fcad6f534c137ee395c0cf87a635beb86c13c2170"
+      },
+      {
+        "file": "A:/ATS_SPRINT3_TEST/sprint3_test.db-wal",
+        "before": "fbb6894a3dd96bc0c9db6c468f3149cb56895eb3417e9fd4b897fa4400c0471c",
+        "after": "fbb6894a3dd96bc0c9db6c468f3149cb56895eb3417e9fd4b897fa4400c0471c"
+      },
+      {
+        "file": "A:/ATS_SPRINT3_TEST/sprint3_test.db-shm",
+        "before": "5a1d822480afcbd41890da8b5ec8045f7992bf6f1176faa495d475eccf2303f6",
+        "after": "5a1d822480afcbd41890da8b5ec8045f7992bf6f1176faa495d475eccf2303f6"
+      }
+    ],
+    "changedFiles": [
+      "backend/src/db/sync-permissions.js",
+      "backend/src/services/requisitionApprovalService.js",
+      "backend/tests/test_ats_e2e.js",
+      "backend/tests/test_rbac_admin.js",
+      "backend/tests/test_requisition_access.js",
+      "backend/src/db/seed.js",
+      "backend/src/middlewares/rbacMiddleware.js",
+      "backend/src/server.js",
+      "backend/src/services/requisitionService.js",
+      "backend/tests/test_review_updates.js",
+      "backend/tests/test_s1_05_integration.js",
+      "backend/tests/test_s1_06_integration.js",
+      "backend/tests/test_s1_07_integration.js",
+      "backend/tests/test_s1_09_integration.js",
+      "backend/tests/test_s1_coverage.js",
+      "backend/tests/test_s2_10_integration.js",
+      "backend/tests/test_s2_integration.js",
+      "frontend/components/create-req-modal.html",
+      "frontend/components/requisition-detail-modal.html",
+      "frontend/js/api.js",
+      "frontend/js/components/interview-dialogs.js",
+      "frontend/js/components/offer-dialogs.js",
+      "frontend/js/components/requisition-detail.js",
+      "frontend/js/components/requisition-form.js",
+      "frontend/js/pages/competencies.js",
+      "frontend/js/pages/departments.js",
+      "frontend/js/pages/requisitions.js",
+      "frontend/js/services/session.js",
+      "package.json",
+      "backend/tests/test_final_rbac_open.js"
+    ],
+    "browser": "NOT RUN: no registered browser",
+    "neon": false,
+    "staticChecks": {
+      "passed": 116,
+      "total": 116
+    },
+    "gitDiffCheck": "PASS",
+    "gitStatusBefore": "M backend/data/ats.db\n M backend/data/ats.db-shm\n M backend/data/ats.db-wal\n M backend/data/ats_test.db\n M backend/src/config/config.js\n M backend/src/controllers/authController.js\n M backend/src/db/migrations/001_postgres.sql\n M backend/src/db/seed.js\n M backend/src/middlewares/rbacMiddleware.js\n M backend/src/server.js\n M backend/src/services/authService.js\n M backend/src/services/requisitionService.js\n M backend/tests/test_frontend_routing.js\n M backend/tests/test_s1_03_email_security.js\n M backend/tests/test_s1_coverage.js\n M backend/tests/test_s2_10_integration.js\n M backend/tests/test_shared_layout.js\n M frontend/index.html\n M frontend/js/app.js\n M frontend/js/components/navigation.js\n M frontend/js/components/requisition-detail.js\n M frontend/js/components/requisition-form.js\n M frontend/js/pages/candidate-portal.js\n M frontend/js/pages/question-bank.js\n M frontend/js/pages/requisitions.js\n M frontend/js/services/session.js\n M frontend/js/shared/route-lifecycle.js\n M frontend/js/shared/state.js\n M frontend/routes.json\n M package.json\n?? backend/src/controllers/approvalConfigurationController.js\n?? backend/src/controllers/requisitionApprovalController.js\n?? backend/src/db/migrate-approval-configurations.js\n?? backend/src/db/migrate-requisition-approvals.js\n?? backend/src/db/migrations/002_approval_configurations_postgres.sql\n?? backend/src/db/migrations/002_approval_configurations_sqlite.sql\n?? backend/src/db/migrations/003_requisition_approvals_postgres.sql\n?? backend/src/db/migrations/003_requisition_approvals_sqlite.sql\n?? backend/src/db/sync-permissions.js\n?? backend/src/services/approvalConfigurationService.js\n?? backend/src/services/requisitionApprovalService.js\n?? backend/tests/test_ats_e2e.js\n?? backend/tests/test_rbac_admin.js\n?? backend/tests/test_requisition_access.js\n?? backend/tests/test_s3_01_integration.js\n?? backend/tests/test_s3_02_integration.js\n?? docs/ATS-E2E-2026-10-08-evidence.json\n?? docs/ATS-E2E-2026-10-08.md\n?? docs/RBAC-admin-permissions.md\n?? docs/S3-01-approval-configurations.md\n?? docs/S3-02-requisition-approvals.md\n?? frontend/components/requisition-approval-modal.html\n?? frontend/js/components/requisition-approval.js\n?? frontend/js/pages/approval-configurations.js\n?? frontend/js/services/approval-configuration-api.js\n?? frontend/js/services/requisition-approval-api.js\n?? frontend/pages/approval-configurations.html",
+    "gitStatusAfter": "M backend/data/ats.db\n M backend/data/ats.db-shm\n M backend/data/ats.db-wal\n M backend/data/ats_test.db\n M backend/src/config/config.js\n M backend/src/controllers/authController.js\n M backend/src/db/migrations/001_postgres.sql\n M backend/src/db/seed.js\n M backend/src/middlewares/rbacMiddleware.js\n M backend/src/server.js\n M backend/src/services/authService.js\n M backend/src/services/requisitionService.js\n M backend/tests/test_frontend_routing.js\n M backend/tests/test_review_updates.js\n M backend/tests/test_s1_03_email_security.js\n M backend/tests/test_s1_05_integration.js\n M backend/tests/test_s1_06_integration.js\n M backend/tests/test_s1_07_integration.js\n M backend/tests/test_s1_09_integration.js\n M backend/tests/test_s1_coverage.js\n M backend/tests/test_s2_10_integration.js\n M backend/tests/test_s2_integration.js\n M backend/tests/test_shared_layout.js\n M frontend/components/create-req-modal.html\n M frontend/components/requisition-detail-modal.html\n M frontend/index.html\n M frontend/js/api.js\n M frontend/js/app.js\n M frontend/js/components/interview-dialogs.js\n M frontend/js/components/navigation.js\n M frontend/js/components/offer-dialogs.js\n M frontend/js/components/requisition-detail.js\n M frontend/js/components/requisition-form.js\n M frontend/js/pages/candidate-portal.js\n M frontend/js/pages/competencies.js\n M frontend/js/pages/departments.js\n M frontend/js/pages/question-bank.js\n M frontend/js/pages/requisitions.js\n M frontend/js/services/session.js\n M frontend/js/shared/route-lifecycle.js\n M frontend/js/shared/state.js\n M frontend/routes.json\n M package.json\n?? backend/src/controllers/approvalConfigurationController.js\n?? backend/src/controllers/requisitionApprovalController.js\n?? backend/src/db/migrate-approval-configurations.js\n?? backend/src/db/migrate-requisition-approvals.js\n?? backend/src/db/migrations/002_approval_configurations_postgres.sql\n?? backend/src/db/migrations/002_approval_configurations_sqlite.sql\n?? backend/src/db/migrations/003_requisition_approvals_postgres.sql\n?? backend/src/db/migrations/003_requisition_approvals_sqlite.sql\n?? backend/src/db/sync-permissions.js\n?? backend/src/services/approvalConfigurationService.js\n?? backend/src/services/requisitionApprovalService.js\n?? backend/tests/test_ats_e2e.js\n?? backend/tests/test_final_rbac_open.js\n?? backend/tests/test_rbac_admin.js\n?? backend/tests/test_requisition_access.js\n?? backend/tests/test_s3_01_integration.js\n?? backend/tests/test_s3_02_integration.js\n?? docs/ATS-E2E-2026-10-08-evidence.json\n?? docs/ATS-E2E-2026-10-08.md\n?? docs/RBAC-admin-permissions.md\n?? docs/S3-01-approval-configurations.md\n?? docs/S3-02-requisition-approvals.md\n?? frontend/components/requisition-approval-modal.html\n?? frontend/js/components/requisition-approval.js\n?? frontend/js/pages/approval-configurations.js\n?? frontend/js/services/approval-configuration-api.js\n?? frontend/js/services/requisition-approval-api.js\n?? frontend/pages/approval-configurations.html",
+    "migrationsUnchanged": true
+  },
+  "openReapprovalFinal": {
+    "date": "2026-10-08",
+    "branch": "feature/s2-bulk-user-import",
+    "head": "d6fa9f46c62ca11f9f2f03ebf332b12d1af615c5",
+    "status": "IMPLEMENTED_AUTOMATED_REGRESSION_PASS",
+    "suites": [
+      {
+        "script": "test:sprint1",
+        "status": "PASS",
+        "passed": 56,
+        "total": 56,
+        "exitCode": 0,
+        "evidenceRun": "all-final",
+        "log": "test-sprint1.log"
+      },
+      {
+        "script": "test:final-rbac-open",
+        "status": "PASS",
+        "passed": 33,
+        "total": 33,
+        "exitCode": 0,
+        "evidenceRun": "scope-final",
+        "log": "test-final-rbac-open.log"
+      },
+      {
+        "script": "test:requisition-access",
+        "status": "PASS",
+        "passed": 16,
+        "total": 16,
+        "exitCode": 0,
+        "evidenceRun": "concurrency-final",
+        "log": "test-requisition-access.log"
+      },
+      {
+        "script": "test:ats-e2e",
+        "status": "PASS",
+        "passed": 51,
+        "total": 51,
+        "exitCode": 0,
+        "evidenceRun": "concurrency-final",
+        "log": "test-ats-e2e.log"
+      },
+      {
+        "script": "test:rbac",
+        "status": "PASS",
+        "passed": 47,
+        "total": 47,
+        "exitCode": 0,
+        "evidenceRun": "scope-final",
+        "log": "test-rbac.log"
+      },
+      {
+        "script": "test:s3-02",
+        "status": "PASS",
+        "passed": 93,
+        "total": 93,
+        "exitCode": 0,
+        "evidenceRun": "concurrency-final",
+        "log": "test-s3-02.log"
+      },
+      {
+        "script": "test:s3-01",
+        "status": "PASS",
+        "passed": 108,
+        "total": 108,
+        "exitCode": 0,
+        "evidenceRun": "scope-final",
+        "log": "test-s3-01.log"
+      },
+      {
+        "script": "test:postgres",
+        "status": "PASS",
+        "passed": 15,
+        "total": 15,
+        "exitCode": 0,
+        "evidenceRun": "all-final",
+        "log": "test-postgres.log"
+      },
+      {
+        "script": "test:postgres:live",
+        "status": "NOT RUN",
+        "passed": null,
+        "total": null,
+        "exitCode": 0,
+        "evidenceRun": "all-final",
+        "log": "test-postgres-live.log"
+      },
+      {
+        "script": "test:review-updates",
+        "status": "PASS",
+        "passed": 22,
+        "total": 22,
+        "exitCode": 0,
+        "evidenceRun": "all-final",
+        "log": "test-review-updates.log"
+      },
+      {
+        "script": "test:s1-01",
+        "status": "PASS",
+        "passed": 8,
+        "total": 8,
+        "exitCode": 0,
+        "evidenceRun": "all-final",
+        "log": "test-s1-01.log"
+      },
+      {
+        "script": "test:s1-02",
+        "status": "PASS",
+        "passed": 5,
+        "total": 5,
+        "exitCode": 0,
+        "evidenceRun": "all-final",
+        "log": "test-s1-02.log"
+      },
+      {
+        "script": "test:s1-03",
+        "status": "PASS",
+        "passed": 5,
+        "total": 5,
+        "exitCode": 0,
+        "evidenceRun": "all-final",
+        "log": "test-s1-03.log"
+      },
+      {
+        "script": "test:s1-03:email",
+        "status": "PASS",
+        "passed": 49,
+        "total": 49,
+        "exitCode": 0,
+        "evidenceRun": "all-final",
+        "log": "test-s1-03-email.log"
+      },
+      {
+        "script": "test:s1-04",
+        "status": "PASS",
+        "passed": 5,
+        "total": 5,
+        "exitCode": 0,
+        "evidenceRun": "all-final",
+        "log": "test-s1-04.log"
+      },
+      {
+        "script": "test:s1-05",
+        "status": "PASS",
+        "passed": 6,
+        "total": 6,
+        "exitCode": 0,
+        "evidenceRun": "all-final",
+        "log": "test-s1-05.log"
+      },
+      {
+        "script": "test:s1-06",
+        "status": "PASS",
+        "passed": 3,
+        "total": 3,
+        "exitCode": 0,
+        "evidenceRun": "all-final",
+        "log": "test-s1-06.log"
+      },
+      {
+        "script": "test:s1-07",
+        "status": "PASS",
+        "passed": 4,
+        "total": 4,
+        "exitCode": 0,
+        "evidenceRun": "all-final",
+        "log": "test-s1-07.log"
+      },
+      {
+        "script": "test:s1-08",
+        "status": "PASS",
+        "passed": 5,
+        "total": 5,
+        "exitCode": 0,
+        "evidenceRun": "all-final",
+        "log": "test-s1-08.log"
+      },
+      {
+        "script": "test:s1-09",
+        "status": "PASS",
+        "passed": 7,
+        "total": 7,
+        "exitCode": 0,
+        "evidenceRun": "all-final",
+        "log": "test-s1-09.log"
+      },
+      {
+        "script": "test:s1-10",
+        "status": "PASS",
+        "passed": 8,
+        "total": 8,
+        "exitCode": 0,
+        "evidenceRun": "all-final",
+        "log": "test-s1-10.log"
+      },
+      {
+        "script": "test:otp",
+        "status": "PASS",
+        "passed": 8,
+        "total": 8,
+        "exitCode": 0,
+        "evidenceRun": "all-final",
+        "log": "test-otp.log"
+      },
+      {
+        "script": "test:sprint2",
+        "status": "PASS",
+        "passed": 32,
+        "total": 32,
+        "exitCode": 0,
+        "evidenceRun": "all-final",
+        "log": "test-sprint2.log"
+      },
+      {
+        "script": "test:s2-10",
+        "status": "PASS",
+        "passed": 59,
+        "total": 59,
+        "exitCode": 0,
+        "evidenceRun": "all-final",
+        "log": "test-s2-10.log"
+      },
+      {
+        "script": "test:routing",
+        "status": "PASS",
+        "passed": 174,
+        "total": 174,
+        "exitCode": 0,
+        "evidenceRun": "concurrency-final",
+        "log": "test-routing.log"
+      },
+      {
+        "script": "test:user-ux",
+        "status": "PASS",
+        "passed": 87,
+        "total": 87,
+        "exitCode": 0,
+        "evidenceRun": "concurrency-final",
+        "log": "test-user-ux.log"
+      },
+      {
+        "script": "test:datetime-dashboard",
+        "status": "PASS",
+        "passed": 28,
+        "total": 28,
+        "exitCode": 0,
+        "evidenceRun": "all-final",
+        "log": "test-datetime-dashboard.log"
+      },
+      {
+        "script": "test:avatar",
+        "status": "PASS",
+        "passed": 21,
+        "total": 21,
+        "exitCode": 0,
+        "evidenceRun": "all-final",
+        "log": "test-avatar.log"
+      },
+      {
+        "script": "test:mobile-shell",
+        "status": "PASS",
+        "passed": 53,
+        "total": 53,
+        "exitCode": 0,
+        "evidenceRun": "all-final",
+        "log": "test-mobile-shell.log"
+      },
+      {
+        "script": "test:layout",
+        "status": "PASS",
+        "passed": 44,
+        "total": 44,
+        "exitCode": 0,
+        "evidenceRun": "all-final",
+        "log": "test-layout.log"
+      },
+      {
+        "script": "test:coverage:sprint1",
+        "status": "PASS",
+        "passed": 23,
+        "total": 23,
+        "exitCode": 0,
+        "evidenceRun": "all-final",
+        "log": "test-coverage-sprint1.log"
+      },
+      {
+        "script": "test:coverage:sprint2",
+        "status": "PASS",
+        "passed": 25,
+        "total": 25,
+        "exitCode": 0,
+        "evidenceRun": "all-final",
+        "log": "test-coverage-sprint2.log"
+      },
+      {
+        "script": "test:career-upload",
+        "status": "PASS",
+        "passed": 24,
+        "total": 24,
+        "exitCode": 0,
+        "evidenceRun": "all-final",
+        "log": "test-career-upload.log"
+      },
+      {
+        "script": "test:user-roles-avatar",
+        "status": "PASS",
+        "passed": 17,
+        "total": 17,
+        "exitCode": 0,
+        "evidenceRun": "all-final",
+        "log": "test-user-roles-avatar.log"
+      },
+      {
+        "script": "test:reapproval",
+        "status": "PASS",
+        "passed": 94,
+        "total": 94,
+        "exitCode": 0,
+        "evidenceRun": "concurrency-final",
+        "log": "test-reapproval.log"
+      }
+    ],
+    "scriptsPass": 34,
+    "scriptsNotRun": 1,
+    "caseExecutions": 1235,
+    "caseCountExcludingSprint1Aggregate": 1179,
+    "newCases": 94,
+    "static": {
+      "passed": 117,
+      "total": 117
+    },
+    "browser": "NOT RUN",
+    "postgresLive": "NOT RUN",
+    "postgresEmbedded": "PGlite; not live pg-wire/multi-client verification",
+    "protectedFiles": [
+      {
+        "file": "backend/data/ats.db",
+        "before": "abd32cc663be58a45dec262bca0effb6bef1ce28a76a9d45523e7ca54d4e28df",
+        "after": "abd32cc663be58a45dec262bca0effb6bef1ce28a76a9d45523e7ca54d4e28df",
+        "unchanged": true
+      },
+      {
+        "file": "backend/data/ats.db-shm",
+        "before": "cecda1c8fa43f56a689bcbb27d85403ebfa92af7b06fdeb292ee671eb2a65b71",
+        "after": "cecda1c8fa43f56a689bcbb27d85403ebfa92af7b06fdeb292ee671eb2a65b71",
+        "unchanged": true
+      },
+      {
+        "file": "backend/data/ats.db-wal",
+        "before": "f4a470fe8d70acb02cafaf3d85412ac8c3bc44e2473b5d5f2f915af5207f1228",
+        "after": "f4a470fe8d70acb02cafaf3d85412ac8c3bc44e2473b5d5f2f915af5207f1228",
+        "unchanged": true
+      },
+      {
+        "file": "backend/data/ats_test.db",
+        "before": "67442a892d6f897d396d22a4007b6bddb525202db8c3bc46f072646f56dd722a",
+        "after": "67442a892d6f897d396d22a4007b6bddb525202db8c3bc46f072646f56dd722a",
+        "unchanged": true
+      },
+      {
+        "file": "backend/src/db/migrations/001_postgres.sql",
+        "before": "e9c5a6926c196c523d1ac4e8a808d467b37a85e15f17f8732746803c4dacab2b",
+        "after": "e9c5a6926c196c523d1ac4e8a808d467b37a85e15f17f8732746803c4dacab2b",
+        "unchanged": true
+      },
+      {
+        "file": "backend/src/db/migrations/002_approval_configurations_postgres.sql",
+        "before": "46f949e9d7d6a06316aa20ea62a9c0f45be29cd8f242c401d3925ff1c3f9b477",
+        "after": "46f949e9d7d6a06316aa20ea62a9c0f45be29cd8f242c401d3925ff1c3f9b477",
+        "unchanged": true
+      },
+      {
+        "file": "backend/src/db/migrations/002_approval_configurations_sqlite.sql",
+        "before": "33318e32b4c4ae377c555312050074377295db94682235a6f2d597ab9b57cee2",
+        "after": "33318e32b4c4ae377c555312050074377295db94682235a6f2d597ab9b57cee2",
+        "unchanged": true
+      },
+      {
+        "file": "backend/src/db/migrations/003_requisition_approvals_postgres.sql",
+        "before": "41c375f22d61439ddd61a18ca9adba1a8d3ceb31297c4c35a49c55d52797d0a7",
+        "after": "41c375f22d61439ddd61a18ca9adba1a8d3ceb31297c4c35a49c55d52797d0a7",
+        "unchanged": true
+      },
+      {
+        "file": "backend/src/db/migrations/003_requisition_approvals_sqlite.sql",
+        "before": "126d26d938aba06c01627a188b87f49536688d43439c2ac44b0b7963b3860296",
+        "after": "126d26d938aba06c01627a188b87f49536688d43439c2ac44b0b7963b3860296",
+        "unchanged": true
+      },
+      {
+        "file": "A:/ATS_SPRINT3_TEST/sprint3_test.db",
+        "before": "73e6930639f60f1b2a83f57fcad6f534c137ee395c0cf87a635beb86c13c2170",
+        "after": "73e6930639f60f1b2a83f57fcad6f534c137ee395c0cf87a635beb86c13c2170",
+        "unchanged": true
+      },
+      {
+        "file": "A:/ATS_SPRINT3_TEST/sprint3_test.db-wal",
+        "before": "fbb6894a3dd96bc0c9db6c468f3149cb56895eb3417e9fd4b897fa4400c0471c",
+        "after": "fbb6894a3dd96bc0c9db6c468f3149cb56895eb3417e9fd4b897fa4400c0471c",
+        "unchanged": true
+      },
+      {
+        "file": "A:/ATS_SPRINT3_TEST/sprint3_test.db-shm",
+        "before": "5a1d822480afcbd41890da8b5ec8045f7992bf6f1176faa495d475eccf2303f6",
+        "after": "5a1d822480afcbd41890da8b5ec8045f7992bf6f1176faa495d475eccf2303f6",
+        "unchanged": true
+      }
+    ],
+    "changedThisTurn": [
+      "backend/src/controllers/requisitionApprovalController.js",
+      "backend/src/services/requisitionApprovalService.js",
+      "backend/tests/test_rbac_admin.js",
+      "backend/tests/test_s3_02_integration.js",
+      "frontend/components/requisition-approval-modal.html",
+      "frontend/js/components/requisition-approval.js",
+      "backend/src/services/requisitionService.js",
+      "frontend/components/create-req-modal.html",
+      "frontend/components/requisition-detail-modal.html",
+      "frontend/js/components/requisition-detail.js",
+      "frontend/js/components/requisition-form.js",
+      "package.json",
+      "backend/tests/test_requisition_reapproval.js",
+      "docs/ATS-E2E-2026-10-08.md",
+      "docs/RBAC-admin-permissions.md",
+      "docs/ATS-E2E-2026-10-08-evidence.json"
+    ],
+    "statusBefore": "M backend/data/ats.db\n M backend/data/ats.db-shm\n M backend/data/ats.db-wal\n M backend/data/ats_test.db\n M backend/src/config/config.js\n M backend/src/controllers/authController.js\n M backend/src/db/migrations/001_postgres.sql\n M backend/src/db/seed.js\n M backend/src/middlewares/rbacMiddleware.js\n M backend/src/server.js\n M backend/src/services/authService.js\n M backend/src/services/requisitionService.js\n M backend/tests/test_frontend_routing.js\n M backend/tests/test_review_updates.js\n M backend/tests/test_s1_03_email_security.js\n M backend/tests/test_s1_05_integration.js\n M backend/tests/test_s1_06_integration.js\n M backend/tests/test_s1_07_integration.js\n M backend/tests/test_s1_09_integration.js\n M backend/tests/test_s1_coverage.js\n M backend/tests/test_s2_10_integration.js\n M backend/tests/test_s2_integration.js\n M backend/tests/test_shared_layout.js\n M frontend/components/create-req-modal.html\n M frontend/components/requisition-detail-modal.html\n M frontend/index.html\n M frontend/js/api.js\n M frontend/js/app.js\n M frontend/js/components/interview-dialogs.js\n M frontend/js/components/navigation.js\n M frontend/js/components/offer-dialogs.js\n M frontend/js/components/requisition-detail.js\n M frontend/js/components/requisition-form.js\n M frontend/js/pages/candidate-portal.js\n M frontend/js/pages/competencies.js\n M frontend/js/pages/departments.js\n M frontend/js/pages/question-bank.js\n M frontend/js/pages/requisitions.js\n M frontend/js/services/session.js\n M frontend/js/shared/route-lifecycle.js\n M frontend/js/shared/state.js\n M frontend/routes.json\n M package.json\n?? backend/src/controllers/approvalConfigurationController.js\n?? backend/src/controllers/requisitionApprovalController.js\n?? backend/src/db/migrate-approval-configurations.js\n?? backend/src/db/migrate-requisition-approvals.js\n?? backend/src/db/migrations/002_approval_configurations_postgres.sql\n?? backend/src/db/migrations/002_approval_configurations_sqlite.sql\n?? backend/src/db/migrations/003_requisition_approvals_postgres.sql\n?? backend/src/db/migrations/003_requisition_approvals_sqlite.sql\n?? backend/src/db/sync-permissions.js\n?? backend/src/services/approvalConfigurationService.js\n?? backend/src/services/requisitionApprovalService.js\n?? backend/tests/test_ats_e2e.js\n?? backend/tests/test_final_rbac_open.js\n?? backend/tests/test_rbac_admin.js\n?? backend/tests/test_requisition_access.js\n?? backend/tests/test_s3_01_integration.js\n?? backend/tests/test_s3_02_integration.js\n?? docs/ATS-E2E-2026-10-08-evidence.json\n?? docs/ATS-E2E-2026-10-08.md\n?? docs/RBAC-admin-permissions.md\n?? docs/S3-01-approval-configurations.md\n?? docs/S3-02-requisition-approvals.md\n?? frontend/components/requisition-approval-modal.html\n?? frontend/js/components/requisition-approval.js\n?? frontend/js/pages/approval-configurations.js\n?? frontend/js/services/approval-configuration-api.js\n?? frontend/js/services/requisition-approval-api.js\n?? frontend/pages/approval-configurations.html",
+    "statusAfter": "M backend/data/ats.db\n M backend/data/ats.db-shm\n M backend/data/ats.db-wal\n M backend/data/ats_test.db\n M backend/src/config/config.js\n M backend/src/controllers/authController.js\n M backend/src/db/migrations/001_postgres.sql\n M backend/src/db/seed.js\n M backend/src/middlewares/rbacMiddleware.js\n M backend/src/server.js\n M backend/src/services/authService.js\n M backend/src/services/requisitionService.js\n M backend/tests/test_frontend_routing.js\n M backend/tests/test_review_updates.js\n M backend/tests/test_s1_03_email_security.js\n M backend/tests/test_s1_05_integration.js\n M backend/tests/test_s1_06_integration.js\n M backend/tests/test_s1_07_integration.js\n M backend/tests/test_s1_09_integration.js\n M backend/tests/test_s1_coverage.js\n M backend/tests/test_s2_10_integration.js\n M backend/tests/test_s2_integration.js\n M backend/tests/test_shared_layout.js\n M frontend/components/create-req-modal.html\n M frontend/components/requisition-detail-modal.html\n M frontend/index.html\n M frontend/js/api.js\n M frontend/js/app.js\n M frontend/js/components/interview-dialogs.js\n M frontend/js/components/navigation.js\n M frontend/js/components/offer-dialogs.js\n M frontend/js/components/requisition-detail.js\n M frontend/js/components/requisition-form.js\n M frontend/js/pages/candidate-portal.js\n M frontend/js/pages/competencies.js\n M frontend/js/pages/departments.js\n M frontend/js/pages/question-bank.js\n M frontend/js/pages/requisitions.js\n M frontend/js/services/session.js\n M frontend/js/shared/route-lifecycle.js\n M frontend/js/shared/state.js\n M frontend/routes.json\n M package.json\n?? backend/src/controllers/approvalConfigurationController.js\n?? backend/src/controllers/requisitionApprovalController.js\n?? backend/src/db/migrate-approval-configurations.js\n?? backend/src/db/migrate-requisition-approvals.js\n?? backend/src/db/migrations/002_approval_configurations_postgres.sql\n?? backend/src/db/migrations/002_approval_configurations_sqlite.sql\n?? backend/src/db/migrations/003_requisition_approvals_postgres.sql\n?? backend/src/db/migrations/003_requisition_approvals_sqlite.sql\n?? backend/src/db/sync-permissions.js\n?? backend/src/services/approvalConfigurationService.js\n?? backend/src/services/requisitionApprovalService.js\n?? backend/tests/test_ats_e2e.js\n?? backend/tests/test_final_rbac_open.js\n?? backend/tests/test_rbac_admin.js\n?? backend/tests/test_requisition_access.js\n?? backend/tests/test_requisition_reapproval.js\n?? backend/tests/test_s3_01_integration.js\n?? backend/tests/test_s3_02_integration.js\n?? docs/ATS-E2E-2026-10-08-evidence.json\n?? docs/ATS-E2E-2026-10-08.md\n?? docs/RBAC-admin-permissions.md\n?? docs/S3-01-approval-configurations.md\n?? docs/S3-02-requisition-approvals.md\n?? frontend/components/requisition-approval-modal.html\n?? frontend/js/components/requisition-approval.js\n?? frontend/js/pages/approval-configurations.js\n?? frontend/js/services/approval-configuration-api.js\n?? frontend/js/services/requisition-approval-api.js\n?? frontend/pages/approval-configurations.html",
+    "diffStat": "backend/data/ats.db                               | Bin 880640 -> 1064960 bytes\n backend/data/ats.db-shm                           | Bin 32768 -> 32768 bytes\n backend/data/ats.db-wal                           | Bin 519152 -> 4120032 bytes\n backend/data/ats_test.db                          | Bin 520192 -> 679936 bytes\n backend/src/config/config.js                      |   2 +\n backend/src/db/seed.js                            |  61 +----\n backend/src/middlewares/rbacMiddleware.js         |  71 +++---\n backend/src/server.js                             | 135 +++++++++--\n backend/src/services/authService.js               |  22 +-\n backend/src/services/requisitionService.js        | 264 ++++++++++++++++++++--\n backend/tests/test_frontend_routing.js            |   2 +\n backend/tests/test_review_updates.js              |   2 +-\n backend/tests/test_s1_03_email_security.js        |   2 +-\n backend/tests/test_s1_05_integration.js           |   9 +-\n backend/tests/test_s1_06_integration.js           |   4 +-\n backend/tests/test_s1_07_integration.js           |   6 +-\n backend/tests/test_s1_09_integration.js           |  22 +-\n backend/tests/test_s1_coverage.js                 |   6 +-\n backend/tests/test_s2_10_integration.js           |  15 +-\n backend/tests/test_s2_integration.js              |   6 +-\n backend/tests/test_shared_layout.js               |   2 +\n frontend/components/create-req-modal.html         |   5 +\n frontend/components/requisition-detail-modal.html |   5 +\n frontend/index.html                               |   5 +\n frontend/js/api.js                                |  12 +-\n frontend/js/app.js                                |   2 +-\n frontend/js/components/interview-dialogs.js       |  26 ++-\n frontend/js/components/navigation.js              |   6 +-\n frontend/js/components/offer-dialogs.js           |   1 +\n frontend/js/components/requisition-detail.js      |  82 +++++--\n frontend/js/components/requisition-form.js        |  39 +++-\n frontend/js/pages/candidate-portal.js             |   2 +-\n frontend/js/pages/competencies.js                 |   7 +-\n frontend/js/pages/departments.js                  |   4 +-\n frontend/js/pages/question-bank.js                |  11 +-\n frontend/js/pages/requisitions.js                 |  16 +-\n frontend/js/services/session.js                   |  17 ++\n frontend/js/shared/route-lifecycle.js             |   2 +\n frontend/js/shared/state.js                       |   1 +\n frontend/routes.json                              |  13 ++\n package.json                                      |  12 +-\n 41 files changed, 656 insertions(+), 243 deletions(-)",
+    "diffCheck": "PASS",
+    "sourceTestsUnchangedDuringFinalReapproval": true
+  }
+}

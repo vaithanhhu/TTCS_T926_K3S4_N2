@@ -27,7 +27,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       authenticated: () => !!currentAuthenticatedUser && !!sessionStorage.getItem('ats_token'),
       allowed: route => {
         if (route.menu) return currentAllowedPaths.has(route.menuPath || route.path);
-        if (route.view === 'reports') return !currentAuthenticatedUser.roles.includes('CANDIDATE');
+        if (route.view === 'reports') return currentAllowedPaths.has('/dashboard');
         return true;
       },
       home: getAuthenticatedHome,

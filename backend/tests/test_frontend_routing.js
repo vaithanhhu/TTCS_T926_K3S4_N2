@@ -17,6 +17,8 @@ async function test(name, action) {
 }
 async function main() {
   await startServer(0);
+  await require('../src/db/migrate-approval-configurations').migrate(require('../src/db/database').getDatabase());
+  require('../src/config/config').APPROVAL_CONFIGURATION_ENABLED = true;
   const base = 'http://127.0.0.1:' + server.address().port;
   const shell = fs.readFileSync(path.join(root, 'frontend/index.html'), 'utf8');
   for (const route of manifest.routes) {

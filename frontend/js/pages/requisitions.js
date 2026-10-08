@@ -56,8 +56,11 @@
               <td><span class="badge ${statusBadge}">${statusText}</span></td>
               <td style="text-align: center;">
                 <div style="display: flex; gap: 6px; justify-content: center;">
+                  <button type="button" class="btn btn-outline btn-xs btn-detail-req" data-id="${req.id}">
+                    Chi tiết
+                  </button>
                   <button type="button" class="btn btn-outline btn-xs btn-edit-req" data-id="${req.id}">
-                    Chi tiết / Sửa
+                    Sửa
                   </button>
                   ${isHandover ? `
                     <button type="button" class="btn btn-outline btn-xs btn-reassign-req" data-id="${req.id}" data-code="${req.code}" data-title="${req.title}" style="color: var(--color-warning); border-color: var(--color-warning);">
@@ -77,9 +80,10 @@
         document.querySelectorAll('.btn-edit-req').forEach(btn => {
           btn.addEventListener('click', () => {
             const reqId = btn.getAttribute('data-id');
-            openRequisitionDetails(reqId);
+            return openRequisitionDetails(reqId,true);
           });
         });
+        document.querySelectorAll('.btn-detail-req').forEach(btn=>btn.addEventListener('click',()=>openRequisitionDetails(btn.getAttribute('data-id'),false)));
 
         document.querySelectorAll('.btn-reassign-req').forEach(btn => {
           btn.addEventListener('click', () => {
@@ -98,9 +102,15 @@
             showToast('info', 'Ứng viên theo vị trí', `Đang lọc danh sách ứng viên cho vị trí: "${reqTitle}"`);
           });
         });
+      } else {
+        currentRequisitionsList = [];
+        if (requisitionsTotalBadge) requisitionsTotalBadge.textContent = '0 vị trí';
+        if (requisitionsTableBody) requisitionsTableBody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 24px;">${escapeDepartmentHtml(res.data?.message || 'Không thể tải danh sách yêu cầu tuyển dụng. Vui lòng thử lại.')}</td></tr>`;
       }
     } catch (e) {
-      console.error('Failed to load requisitions:', e);
+      currentRequisitionsList = [];
+      if (requisitionsTotalBadge) requisitionsTotalBadge.textContent = '0 vị trí';
+      if (requisitionsTableBody) requisitionsTableBody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 24px;">Không thể kết nối để tải danh sách yêu cầu tuyển dụng. Vui lòng thử lại.</td></tr>';
     }
   }
 

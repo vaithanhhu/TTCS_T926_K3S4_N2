@@ -15,6 +15,10 @@ const CompetencyService = require('./services/competencyService');
 const QuestionBankService = require('./services/questionBankService');
 const RecruitmentCatalogService = require('./services/recruitmentCatalogService');
 const CareerPageService = require('./services/careerPageService');
+const { ApprovalConfigurationService } = require('./services/approvalConfigurationService');
+const ApprovalConfigurationController = require('./controllers/approvalConfigurationController');
+const RequisitionApprovalService = require('./services/requisitionApprovalService');
+const RequisitionApprovalController = require('./controllers/requisitionApprovalController');
 const frontendRoutes = new Set(require('../../frontend/routes.json').routes.map(route => route.path));
 
 function serveFrontendEntry(res, status = 200) {
@@ -37,6 +41,8 @@ async function initializeApplication() {
     await ensureQuestionBankFeature(db); await ensureRecruitmentCatalogFeature(db);
     await ensureCareerPageFeature(db); await ensureRequisitionDraftFeature(db);
   }
+  if (config.APPROVAL_CONFIGURATION_ENABLED) await require('./db/migrate-approval-configurations').verify(db);
+  if (config.REQUISITION_APPROVAL_ENABLED) await require('./db/migrate-requisition-approvals').verify(db);
 }
 
 const avatarService = new AvatarService();
@@ -50,6 +56,9 @@ const competencyService = new CompetencyService(db);
 const questionBankService = new QuestionBankService(db);
 const recruitmentCatalogService = new RecruitmentCatalogService(db);
 const careerPageService = new CareerPageService(db);
+const approvalConfigurationController = new ApprovalConfigurationController(new ApprovalConfigurationService(db), rbacMiddleware, authController.authService);
+const requisitionApprovalService = new RequisitionApprovalService(db);
+const requisitionApprovalController = new RequisitionApprovalController(requisitionApprovalService, rbacMiddleware, authController.authService);
 
 async function canReadJobTitleSalary(user) {
   return user.roles.includes('HR_MANAGER') && (await rbacMiddleware.hasPermission(user.id, 'salary_range.read'));
@@ -58,6 +67,17 @@ async function canReadJobTitleSalary(user) {
 function denyJobTitleSalary(res) {
   res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify({ success: false, statusCode: 403, code: 'FORBIDDEN_PERMISSION_DENIED', message: 'Chỉ Trưởng phòng Nhân sự được khai báo và xem dải lương.' }));
+}
+
+function isCandidateOnly(user) {
+  return Boolean(user?.roles?.length && user.roles.every(role => role === 'CANDIDATE'));
+}
+
+function denyInternalCandidate(res, user) {
+  if (!isCandidateOnly(user)) return false;
+  res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+  res.end(JSON.stringify({ success: false, statusCode: 403, code: 'FORBIDDEN_PERMISSION_DENIED', message: 'Tài khoản ứng viên không có quyền truy cập chức năng nội bộ.', recovery: { action: 'NAVIGATE_HOME', suggestedPath: '/candidate', label: 'Về hồ sơ của tôi' } }));
+  return true;
 }
 
 const MIME_TYPES = {
@@ -227,6 +247,24 @@ async function handleRequest(req, res) {
         recovery: { action: 'CHANGE_PASSWORD', suggestedPath: '/change-password', label: 'Đổi mật khẩu' } }));
       return;
     }
+  }
+  if (pathname === '/api/v1/requisition-approvals' || pathname.startsWith('/api/v1/requisition-approvals/')) {
+    if (!config.REQUISITION_APPROVAL_ENABLED) {
+      res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, code: 'S302_DISABLED', message: 'Phê duyệt yêu cầu tuyển dụng chưa được bật.' }));
+      return;
+    }
+    await requisitionApprovalController.handle(req, res, parsedUrl, parseBody);
+    return;
+  }
+  if (pathname === '/api/v1/approval-configurations' || pathname.startsWith('/api/v1/approval-configurations/')) {
+    if (!config.APPROVAL_CONFIGURATION_ENABLED) {
+      res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, code: 'S301_DISABLED', message: 'Cấu hình phê duyệt chưa được bật. Quản trị viên cần áp dụng migration S3-01.' }));
+      return;
+    }
+    await approvalConfigurationController.handle(req, res, parsedUrl, parseBody);
+    return;
   }
   // Preserve unprefixed REST aliases: only browser document requests opt into HTML.
   if (req.method === 'GET' && frontendRoutes.has(frontendPath) && (req.headers.accept || '').includes('text/html')) {
@@ -770,7 +808,9 @@ async function handleRequest(req, res) {
       return;
     }
 
-    const stats = (await requisitionService.getDashboardStats());
+    if (denyInternalCandidate(res, sessionResult.user)) return;
+    const dashboardUser=await rbacMiddleware.authorize(req,res,authController.authService,'dashboard.read');if(!dashboardUser)return;
+    const stats = (await requisitionService.getDashboardStats({viewer:dashboardUser,approvalEnabled:config.REQUISITION_APPROVAL_ENABLED}));
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(stats));
     return;
@@ -1084,11 +1124,12 @@ async function handleRequest(req, res) {
     }
     const departments = (await db.prepare("SELECT id, name, parent_id AS parentId, status FROM departments WHERE status = 'ACTIVE' ORDER BY name").all());
     const s210Departments = (await db.prepare(`SELECT id, name, parent_id AS parentId, status FROM departments
-      WHERE status='ACTIVE' AND (?=1 OR manager_id=?) ORDER BY name`).all(user.roles.includes('HR_MANAGER') ? 1 : 0, user.id));
+      WHERE status='ACTIVE' AND (?=1 OR manager_id=?) ORDER BY name`).all(user.roles.some(role=>['HR_MANAGER','ADMIN'].includes(role)) ? 1 : 0, user.id));
     const salaryColumns = (await canReadJobTitleSalary(user)) ? ', min_salary AS minSalary, max_salary AS maxSalary' : '';
     const jobTitles = (await db.prepare(`SELECT id, code, name, level${salaryColumns} FROM job_titles WHERE status='ACTIVE' ORDER BY name`).all());
+    const recruiters=await db.prepare("SELECT DISTINCT u.id,u.full_name AS fullName FROM users u JOIN user_roles ur ON ur.user_id=u.id JOIN roles r ON r.id=ur.role_id WHERE u.status='ACTIVE' AND r.code='RECRUITER' ORDER BY u.full_name").all();
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify({ success: true, tree: departmentService.buildTree(departments), s210Departments, jobTitles }));
+    res.end(JSON.stringify({ success: true, tree: departmentService.buildTree(departments), s210Departments, jobTitles, recruiters }));
     return;
   }
 
@@ -1200,6 +1241,7 @@ async function handleRequest(req, res) {
     if (!user) return;
 
     const result = (await competencyService.getFrameworks());
+    result.canManage=await rbacMiddleware.hasPermission(user.id,'competency.manage');
 
     res.writeHead(200, {
       'Content-Type': 'application/json; charset=utf-8'
@@ -1298,6 +1340,7 @@ async function handleRequest(req, res) {
     if (!user) return;
 
     const result = (await competencyService.getJobTitles({ includeSalary: (await canReadJobTitleSalary(user)) }));
+    result.canManage=await rbacMiddleware.hasPermission(user.id,'competency.manage');
 
     res.writeHead(200, {
       'Content-Type': 'application/json; charset=utf-8'
@@ -1576,12 +1619,16 @@ async function handleRequest(req, res) {
       return;
     }
 
+    const requisitionUser = await rbacMiddleware.authorize(req,res,authController.authService,'requisition.read');
+    if (!requisitionUser) return;
     const options = {
       search: parsedUrl.searchParams.get('search') || '',
       status: parsedUrl.searchParams.get('status') || '',
       handoverOnly: parsedUrl.searchParams.get('handoverOnly') === 'true',
       viewerId: sessionResult.user.id,
-      canReadS210: (await rbacMiddleware.hasPermission(sessionResult.user.id, 'requisition.read'))
+      canReadS210: true,
+      viewer: requisitionUser,
+      approvalEnabled: config.REQUISITION_APPROVAL_ENABLED
     };
     const result = (await requisitionService.getRequisitions(options));
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -1612,7 +1659,10 @@ async function handleRequest(req, res) {
     try {
       const reqId = pathname.replace(/^\/api\/v1\/requisitions\//, '').replace(/^\/requisitions\//, '').replace(/\/handover$/, '');
       const body = await parseBody(req);
-      const result = (await requisitionService.reassignHandover(reqId, body.newRecruiterId, body.notes));
+      if (!user.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))) {
+        res.writeHead(403,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:'REQUISITION_ASSIGN_FORBIDDEN',message:'Bạn không có quyền phân công người phụ trách.'}));return;
+      }
+      const result = (await requisitionService.reassignHandover(reqId, body.newRecruiterId, body.notes,user));
       res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
@@ -1633,13 +1683,14 @@ async function handleRequest(req, res) {
       res.end(JSON.stringify({ success: false, statusCode: 404, message: 'Không tìm thấy vị trí tuyển dụng.' }));
       return;
     }
-    if (item.formVersion === 'S2-10' && item.status === 'DRAFT' && item.createdBy !== user.id) {
-      res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ success: false, code: 'REQUISITION_DRAFT_FORBIDDEN', message: 'Bạn chỉ được đọc nháp do mình tạo.' }));
+    const access = await requisitionService.requisitionAccess(item,user,parsedUrl.searchParams.get('intent')==='edit',config.REQUISITION_APPROVAL_ENABLED);
+    if (!access.success) {
+      res.writeHead(access.statusCode, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(access));
       return;
     }
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify({ success: true, data: item }));
+    res.end(JSON.stringify({ success: true, data: item, access }));
     return;
   }
 
@@ -1657,7 +1708,7 @@ async function handleRequest(req, res) {
     }
     try {
       const body = await parseBody(req);
-      const result = (await requisitionService.updateRequisition(reqId, body, user));
+      const result = (await requisitionService.updateRequisition(reqId, body, user, {approvalEnabled:config.REQUISITION_APPROVAL_ENABLED}));
       res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
@@ -1790,8 +1841,10 @@ async function handleRequest(req, res) {
     const options = {
       search: parsedUrl.searchParams.get('search') || '',
       stage: parsedUrl.searchParams.get('stage') || 'ALL',
-      requisitionId: parsedUrl.searchParams.get('requisitionId') || 'ALL'
+      requisitionId: parsedUrl.searchParams.get('requisitionId') || 'ALL',
+      viewer: user
     };
+    if (isCandidateOnly(user)) options.candidateEmail = user.email;
     const result = (await requisitionService.getCandidates(options));
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(result));
@@ -1800,10 +1853,11 @@ async function handleRequest(req, res) {
 
   // 13.7.1 API: Create Candidate
   if (req.method === 'POST' && (pathname === '/api/v1/candidates' || pathname === '/candidates')) {
-    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.read'));
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.create'));
     if (!user) return;
     try {
       const body = await parseBody(req);
+      if (isCandidateOnly(user)) Object.assign(body, { email: user.email, fullName: user.fullName, stage: 'NEW', notes: null, rejectionReasonId: null });
       const result = (await requisitionService.createCandidate(body));
       res.writeHead(result.statusCode || 201, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
@@ -1816,7 +1870,7 @@ async function handleRequest(req, res) {
 
   // 13.7.2 API: Update Candidate Stage
   if (req.method === 'PUT' && ((pathname.startsWith('/api/v1/candidates/') && pathname.endsWith('/stage')) || (pathname.startsWith('/candidates/') && pathname.endsWith('/stage')))) {
-    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.read'));
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.update'));
     if (!user) return;
     try {
       const candId = pathname.replace(/^\/api\/v1\/candidates\//, '').replace(/^\/candidates\//, '').replace(/\/stage$/, '');
@@ -1837,7 +1891,7 @@ async function handleRequest(req, res) {
   if (req.method === 'GET' && (pathname === '/api/v1/interviews' || pathname === '/interviews')) {
     const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'interview.read'));
     if (!user) return;
-    const result = (await requisitionService.getInterviews());
+    const result = (await requisitionService.getInterviews({viewer:user,...(isCandidateOnly(user) ? { candidateEmail: user.email } : {})}));
     for (const interview of result.interviews) {
       if (interview.interviewer) {
         Object.assign(interview.interviewer, avatarService.getAvatarUrls(interview.interviewer.id));
@@ -1848,13 +1902,25 @@ async function handleRequest(req, res) {
     return;
   }
 
+  if (req.method==='GET' && pathname==='/api/v1/interview-options') {
+    const user=await rbacMiddleware.authorize(req,res,authController.authService,'interview.create');if(!user)return;
+    const interviewers=await db.prepare("SELECT u.id,u.full_name AS fullName FROM users u WHERE u.status='ACTIVE' AND u.must_change_password=FALSE AND "+rbacMiddleware.permissionPredicate('u.id',"'interview.evaluate'")+" ORDER BY u.full_name").all();
+    res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:true,interviewers}));return;
+  }
+
+  if (req.method==='GET' && pathname==='/api/v1/interview-evaluations') {
+    const user=await rbacMiddleware.authorize(req,res,authController.authService,'interview.evaluation.read');if(!user)return;
+    const result=await requisitionService.getInterviews({viewer:user,evaluationsOnly:true});
+    res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:true,evaluations:result.interviews.map(row=>({id:row.id,candidate:row.candidate,requisition:row.requisition,interviewer:row.interviewer,feedback:row.feedback,score:row.score}))}));return;
+  }
+
   // 13.8.1 API: Create Interview
   if (req.method === 'POST' && (pathname === '/api/v1/interviews' || pathname === '/interviews')) {
-    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'interview.read'));
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'interview.create'));
     if (!user) return;
     try {
       const body = await parseBody(req);
-      const result = (await requisitionService.createInterview(body));
+      const result = (await requisitionService.createInterview(body,user));
       res.writeHead(result.statusCode || 201, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
@@ -1871,7 +1937,13 @@ async function handleRequest(req, res) {
     try {
       const intId = pathname.replace(/^\/api\/v1\/interviews\//, '').replace(/^\/interviews\//, '').replace(/\/status$/, '');
       const body = await parseBody(req);
-      const result = (await requisitionService.updateInterviewStatus(intId, body.status, body.feedback, body.score));
+      const evaluating=Object.hasOwn(body,'feedback')||Object.hasOwn(body,'score')||(!user.permissions.includes('interview.update')&&user.roles.includes('INTERVIEWER'));
+      if(!await rbacMiddleware.authorize(req,res,authController.authService,evaluating?'interview.evaluate':'interview.update'))return;
+      if(evaluating&&!user.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))){
+        const assigned=await db.prepare('SELECT id FROM interviews WHERE id=? AND interviewer_id=?').get(intId,user.id);
+        if(!user.roles.includes('INTERVIEWER')||!assigned){res.writeHead(403,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:'INTERVIEW_ASSIGNEE_REQUIRED',message:'Bạn chỉ được đánh giá vòng phỏng vấn được phân công.'}));return;}
+      }
+      const result = (await requisitionService.updateInterviewStatus(intId, body.status, body.feedback, body.score,user,evaluating?'interview.evaluate':'interview.update'));
       res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
@@ -1885,7 +1957,7 @@ async function handleRequest(req, res) {
   if (req.method === 'GET' && (pathname === '/api/v1/offers' || pathname === '/offers')) {
     const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'offer.read'));
     if (!user) return;
-    const result = (await requisitionService.getOffers());
+    const result = (await requisitionService.getOffers({viewer:user,...(isCandidateOnly(user) ? { candidateEmail: user.email } : {})}));
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(result));
     return;
@@ -1893,11 +1965,11 @@ async function handleRequest(req, res) {
 
   // 13.9.1 API: Create Offer
   if (req.method === 'POST' && (pathname === '/api/v1/offers' || pathname === '/offers')) {
-    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'offer.read'));
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'offer.create'));
     if (!user) return;
     try {
       const body = await parseBody(req);
-      const result = (await requisitionService.createOffer(body));
+      const result = (await requisitionService.createOffer(body,user));
       res.writeHead(result.statusCode || 201, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
@@ -1914,7 +1986,15 @@ async function handleRequest(req, res) {
     try {
       const offId = pathname.replace(/^\/api\/v1\/offers\//, '').replace(/^\/offers\//, '').replace(/\/status$/, '');
       const body = await parseBody(req);
-      const result = (await requisitionService.updateOfferStatus(offId, body.status));
+      if (isCandidateOnly(user) && body.status === 'ACCEPTED') {
+        const own = await db.prepare('SELECT o.id FROM offers o JOIN candidates c ON c.id=o.candidate_id WHERE o.id=? AND LOWER(c.email)=LOWER(?)').get(offId, user.email);
+        if (!own) { res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ success: false, statusCode: 403, code: 'OFFER_OWNER_REQUIRED', message: 'Bạn chỉ được phản hồi Offer của mình.' })); return; }
+      } else if (!await rbacMiddleware.authorize(req, res, authController.authService, ['APPROVED', 'REJECTED'].includes(body.status) ? 'offer.approve' : 'offer.create')) return;
+      if(!user.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))){
+        const scoped=await requisitionService.getOffers({viewer:user});
+        if(!scoped.offers.some(offer=>offer.id===offId)){res.writeHead(403,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:'OFFER_OUT_OF_SCOPE',message:'Offer không thuộc phạm vi xử lý của bạn.'}));return;}
+      }
+      const result = (await requisitionService.updateOfferStatus(offId, body.status,user));
       res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
@@ -1939,7 +2019,9 @@ async function handleRequest(req, res) {
       res.end(JSON.stringify({ success: false, statusCode: sessionResult.statusCode || 401, message: sessionResult.message, code: sessionResult.code }));
       return;
     }
-    const result = (await requisitionService.getReports());
+    if (denyInternalCandidate(res, sessionResult.user)) return;
+    const reportUser=await rbacMiddleware.authorize(req,res,authController.authService,'report.read');if(!reportUser)return;
+    const result = (await requisitionService.getReports({viewer:reportUser,approvalEnabled:config.REQUISITION_APPROVAL_ENABLED}));
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(result));
     return;
@@ -1985,11 +2067,12 @@ async function handleRequest(req, res) {
 
     const user = sessionResult.user;
     const userPerms = (await rbacMiddleware.getUserPermissions(user.id));
-    const isCandidate = user.roles.includes('CANDIDATE');
+    const isAdministrator = await rbacMiddleware.isAdministrator(user.id);
+    const isCandidate = isCandidateOnly(user);
 
     // All possible ATS menu items with required permissions
     const ALL_NAVIGATION_ITEMS = [
-      { id: 'nav-dashboard', label: 'Bảng điều khiển', path: '/dashboard', icon: '📊', requiredPermission: null, internalOnly: true },
+      { id: 'nav-dashboard', label: 'Bảng điều khiển', path: '/dashboard', icon: '📊', requiredPermission: 'dashboard.read', internalOnly: true },
       { id: 'nav-departments', label: 'Phòng ban & Sơ đồ tổ chức', path: '/admin/departments', icon: '🏢', requiredPermission: 'department.read', internalOnly: true },
       { id: 'nav-recruitment-catalogs', label: 'Danh mục tuyển dụng', path: '/admin/recruitment-catalogs', icon: '📋', requiredPermission: 'recruitment_catalog.manage', internalOnly: true },
       { id: 'nav-career-page', label: 'Trang giới thiệu công ty', path: '/admin/career-page', icon: '🏢', requiredPermission: 'career_page.manage', internalOnly: true },
@@ -2008,7 +2091,11 @@ async function handleRequest(req, res) {
 
     // AC-01 & AC-02: Strictly filter menu items based on real database permissions
     // Items user has no permission for are COMPLETELY REMOVED from the payload (AC-02)
+    if (config.APPROVAL_CONFIGURATION_ENABLED) ALL_NAVIGATION_ITEMS.push({ id: 'nav-approval-configurations', label: 'Cấu hình phê duyệt', path: '/admin/approval-configurations', requiredPermission: 'approval_configuration.manage', internalOnly: true });
+    ALL_NAVIGATION_ITEMS.push({ id: 'nav-reports', label: 'Báo cáo & Phân tích Tuyển dụng', path: '/reports', requiredPermission: 'report.read', internalOnly: true });
     const allowedMenuItems = ALL_NAVIGATION_ITEMS.filter(item => {
+      if (item.candidateOnly) return user.roles.includes('CANDIDATE');
+      if (isAdministrator) return true;
       if (isCandidate) {
         return item.candidateOnly === true;
       }

@@ -100,9 +100,14 @@
             </select>
           </div>
 
+          <div class="form-group hidden" id="create-req-operational-fields">
+            <label for="create-req-handover-notes" class="form-label">Ghi chú vận hành</label>
+            <textarea id="create-req-handover-notes" class="form-input" rows="3"></textarea>
+          </div>
           <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 10px;">
             <button type="button" id="cancel-create-req-btn" class="btn btn-outline btn-sm">Hủy bỏ</button>
             <button type="button" id="save-create-req-draft-btn" class="btn btn-outline btn-sm">Lưu nháp</button>
+            <button type="button" id="create-req-reapprove" class="btn btn-outline btn-sm hidden">Gửi thay đổi phê duyệt lại</button>
             <button type="submit" id="submit-create-req-btn" class="btn btn-primary btn-sm">
               <span>Lưu & Mở tuyển dụng</span>
             </button>

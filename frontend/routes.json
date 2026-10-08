@@ -1,6 +1,13 @@
 {
   "routes": [
     {
+      "path": "/admin/approval-configurations",
+        "view": "approval-configurations",
+        "auth": true,
+        "menu": true,
+        "permission": "approval_configuration.manage"
+    },
+    {
       "path": "/change-password",
       "view": "change-password",
       "auth": true
@@ -165,6 +172,10 @@
     }
   ],
   "scripts": [
+    "/js/services/requisition-approval-api.js",
+    "/js/components/requisition-approval.js",
+    "/js/services/approval-configuration-api.js",
+    "/js/pages/approval-configurations.js",
     "/js/shared/state.js",
     "/js/shared/datetime.js",
     "/js/components/action-menu.js",
@@ -205,6 +216,8 @@
     "/js/shared/route-lifecycle.js"
   ],
   "fragments": [
+    "/components/requisition-approval-modal.html",
+    "/pages/approval-configurations.html",
     "/pages/change-password.html",
     "/pages/login.html",
     "/pages/dashboard.html",
