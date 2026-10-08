@@ -180,3 +180,7 @@ node --check128/128; git diff --check PASS; không thêm comment; hash11file đ�
 - `frontend/routes.json`
 - `package.json`
 - `docs/ATS-S3-05-S3-06-2026-10-09-evidence.json`
+
+## Tích hợp và bằng chứng cuối
+
+Source commit813774b đã fast-forward vào develop từ65be119. Chạy lại toàn bộ39npm scripts trên các bản sao TEMP của worktree develop:38PASS, PostgreSQL live cách ly NOT RUN; startup11/11 PASS. Source và DB trong worktree không bị test thay đổi. Tổng1419case,1363nếu bỏ aggregate56case trùng; static128/128 và diff --check PASS. Ref/push cuối được xác minh sau khi push thực tế và báo riêng.
