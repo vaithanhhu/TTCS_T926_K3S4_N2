@@ -3718,7 +3718,7 @@
         "passed": 56,
         "total": 56,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\full-regression\\test-sprint1.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-sprint1.log"
       },
       {
         "script": "test:final-rbac-open",
@@ -3726,7 +3726,7 @@
         "passed": 33,
         "total": 33,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\full-regression\\test-final-rbac-open.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-final-rbac-open.log"
       },
       {
         "script": "test:requisition-access",
@@ -3734,7 +3734,7 @@
         "passed": 16,
         "total": 16,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\full-regression\\test-requisition-access.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-requisition-access.log"
       },
       {
         "script": "test:ats-e2e",
@@ -3742,7 +3742,7 @@
         "passed": 51,
         "total": 51,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\full-regression\\test-ats-e2e.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-ats-e2e.log"
       },
       {
         "script": "test:rbac",
@@ -3750,7 +3750,7 @@
         "passed": 47,
         "total": 47,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\grant-regression\\test-rbac.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-rbac.log"
       },
       {
         "script": "test:s3-02",
@@ -3758,7 +3758,7 @@
         "passed": 93,
         "total": 93,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\grant-regression\\test-s3-02.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-s3-02.log"
       },
       {
         "script": "test:s3-01",
@@ -3766,7 +3766,7 @@
         "passed": 108,
         "total": 108,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\grant-regression\\test-s3-01.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-s3-01.log"
       },
       {
         "script": "test:postgres",
@@ -3774,7 +3774,7 @@
         "passed": 15,
         "total": 15,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\full-regression\\test-postgres.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-postgres.log"
       },
       {
         "script": "test:postgres:live",
@@ -3782,7 +3782,7 @@
         "passed": null,
         "total": null,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\full-regression\\test-postgres-live.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-postgres-live.log"
       },
       {
         "script": "test:review-updates",
@@ -3790,7 +3790,7 @@
         "passed": 22,
         "total": 22,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\full-regression\\test-review-updates.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-review-updates.log"
       },
       {
         "script": "test:s1-01",
@@ -3798,7 +3798,7 @@
         "passed": 8,
         "total": 8,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\full-regression\\test-s1-01.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-s1-01.log"
       },
       {
         "script": "test:s1-02",
@@ -3806,7 +3806,7 @@
         "passed": 5,
         "total": 5,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\full-regression\\test-s1-02.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-s1-02.log"
       },
       {
         "script": "test:s1-03",
@@ -3814,7 +3814,7 @@
         "passed": 5,
         "total": 5,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\full-regression\\test-s1-03.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-s1-03.log"
       },
       {
         "script": "test:s1-03:email",
@@ -3822,7 +3822,7 @@
         "passed": 49,
         "total": 49,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\full-regression\\test-s1-03-email.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-s1-03-email.log"
       },
       {
         "script": "test:s1-04",
@@ -3830,7 +3830,7 @@
         "passed": 5,
         "total": 5,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\full-regression\\test-s1-04.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-s1-04.log"
       },
       {
         "script": "test:s1-05",
@@ -3838,7 +3838,7 @@
         "passed": 6,
         "total": 6,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\full-regression\\test-s1-05.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-s1-05.log"
       },
       {
         "script": "test:s1-06",
@@ -3846,7 +3846,7 @@
         "passed": 3,
         "total": 3,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\full-regression\\test-s1-06.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-s1-06.log"
       },
       {
         "script": "test:s1-07",
@@ -3854,7 +3854,7 @@
         "passed": 4,
         "total": 4,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\full-regression\\test-s1-07.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-s1-07.log"
       },
       {
         "script": "test:s1-08",
@@ -3862,7 +3862,7 @@
         "passed": 5,
         "total": 5,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\full-regression\\test-s1-08.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-s1-08.log"
       },
       {
         "script": "test:s1-09",
@@ -3870,7 +3870,7 @@
         "passed": 7,
         "total": 7,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\full-regression\\test-s1-09.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-s1-09.log"
       },
       {
         "script": "test:s1-10",
@@ -3878,7 +3878,7 @@
         "passed": 8,
         "total": 8,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\full-regression\\test-s1-10.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-s1-10.log"
       },
       {
         "script": "test:otp",
@@ -3886,7 +3886,7 @@
         "passed": 8,
         "total": 8,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\full-regression\\test-otp.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-otp.log"
       },
       {
         "script": "test:sprint2",
@@ -3894,7 +3894,7 @@
         "passed": 32,
         "total": 32,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\full-regression\\test-sprint2.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-sprint2.log"
       },
       {
         "script": "test:s2-10",
@@ -3902,7 +3902,7 @@
         "passed": 59,
         "total": 59,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\full-regression\\test-s2-10.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-s2-10.log"
       },
       {
         "script": "test:routing",
@@ -3910,7 +3910,7 @@
         "passed": 179,
         "total": 179,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\rerun\\test-routing.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-routing.log"
       },
       {
         "script": "test:user-ux",
@@ -3918,7 +3918,7 @@
         "passed": 87,
         "total": 87,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\full-regression\\test-user-ux.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-user-ux.log"
       },
       {
         "script": "test:datetime-dashboard",
@@ -3926,7 +3926,7 @@
         "passed": 28,
         "total": 28,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\full-regression\\test-datetime-dashboard.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-datetime-dashboard.log"
       },
       {
         "script": "test:avatar",
@@ -3934,7 +3934,7 @@
         "passed": 21,
         "total": 21,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\full-regression\\test-avatar.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-avatar.log"
       },
       {
         "script": "test:mobile-shell",
@@ -3942,7 +3942,7 @@
         "passed": 53,
         "total": 53,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\full-regression\\test-mobile-shell.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-mobile-shell.log"
       },
       {
         "script": "test:layout",
@@ -3950,7 +3950,7 @@
         "passed": 45,
         "total": 45,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\rerun\\test-layout.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-layout.log"
       },
       {
         "script": "test:coverage:sprint1",
@@ -3958,7 +3958,7 @@
         "passed": 23,
         "total": 23,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\full-regression\\test-coverage-sprint1.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-coverage-sprint1.log"
       },
       {
         "script": "test:coverage:sprint2",
@@ -3966,7 +3966,7 @@
         "passed": 25,
         "total": 25,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\full-regression\\test-coverage-sprint2.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-coverage-sprint2.log"
       },
       {
         "script": "test:career-upload",
@@ -3974,7 +3974,7 @@
         "passed": 24,
         "total": 24,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\full-regression\\test-career-upload.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-career-upload.log"
       },
       {
         "script": "test:user-roles-avatar",
@@ -3982,7 +3982,7 @@
         "passed": 17,
         "total": 17,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\full-regression\\test-user-roles-avatar.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-user-roles-avatar.log"
       },
       {
         "script": "test:reapproval",
@@ -3990,7 +3990,7 @@
         "passed": 94,
         "total": 94,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\grant-regression\\test-reapproval.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-reapproval.log"
       },
       {
         "script": "test:s3-03",
@@ -3998,7 +3998,7 @@
         "passed": 29,
         "total": 29,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\final-target\\test-s3-03.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-s3-03.log"
       },
       {
         "script": "test:s3-04",
@@ -4006,11 +4006,19 @@
         "passed": 55,
         "total": 55,
         "exitCode": 0,
-        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\grant-regression\\test-s3-04.log"
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\post-integration\\test-s3-04.log"
+      },
+      {
+        "script": "node backend/tests/test_postgres_startup.js",
+        "status": "PASS",
+        "passed": 11,
+        "total": 11,
+        "exitCode": 0,
+        "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s303-s304\\startup-regression\\file-postgres-startup.log"
       }
     ],
-    "totalCaseExecutions": 1325,
-    "casesExcludingDuplicateSprint1Aggregate": 1269,
+    "totalCaseExecutions": 1336,
+    "casesExcludingDuplicateSprint1Aggregate": 1280,
     "sqliteAndPgliteNew": {
       "s303": 29,
       "s304": 55
@@ -4330,6 +4338,159 @@
       "failed": []
     },
     "diffCheck": "PASS",
-    "noNewComments": true
+    "noNewComments": true,
+    "postIntegration": {
+      "head": "5a5af1138ca5391d85c0f6178403ad9ca4398320",
+      "method": "FAST_FORWARD",
+      "safety": {
+        "headBefore": "5a5af1138ca5391d85c0f6178403ad9ca4398320",
+        "headAfter": "5a5af1138ca5391d85c0f6178403ad9ca4398320",
+        "statusBefore": "",
+        "statusAfter": "",
+        "changedFiles": [],
+        "addedFiles": [],
+        "database": {
+          "backend/data/ats.db": {
+            "before": "3f5d0464dcc68e60b8e6e820fc71096f58e2e13ab72d6f418da89b6a30f29e85",
+            "after": "3f5d0464dcc68e60b8e6e820fc71096f58e2e13ab72d6f418da89b6a30f29e85"
+          },
+          "backend/data/ats.db-shm": {
+            "before": "ee760668c64614b6adb27b0d4bf3f59c4f7ff84bb9a2ef32b430c9488a9485b3",
+            "after": "ee760668c64614b6adb27b0d4bf3f59c4f7ff84bb9a2ef32b430c9488a9485b3"
+          },
+          "backend/data/ats.db-wal": {
+            "before": "373704982d83188a3f10df829fea772b93d52cfe3d540fac42a7067aa591d75a",
+            "after": "373704982d83188a3f10df829fea772b93d52cfe3d540fac42a7067aa591d75a"
+          },
+          "backend/data/ats_test.db": {
+            "before": "5167fcb734715acc0a2b8c024c19328623610a9064cfb147440bb45c42c86ae2",
+            "after": "5167fcb734715acc0a2b8c024c19328623610a9064cfb147440bb45c42c86ae2"
+          }
+        },
+        "migrationUnchanged": true,
+        "diffCheck": "PASS",
+        "diffCheckOutput": ""
+      },
+      "static": {
+        "protectedChanged": [],
+        "syntax": {
+          "passed": 123,
+          "total": 123,
+          "failed": []
+        },
+        "diffCheck": "PASS",
+        "worktreeStatus": ""
+      }
+    },
+    "commits": {
+      "baselineCommit": "3fee92d24920464850fe61f0ded11cdfddcce920",
+      "taskCommit": "5a5af1138ca5391d85c0f6178403ad9ca4398320",
+      "baselineFiles": [
+        "backend/src/config/config.js",
+        "backend/src/controllers/approvalConfigurationController.js",
+        "backend/src/controllers/requisitionApprovalController.js",
+        "backend/src/db/migrate-approval-configurations.js",
+        "backend/src/db/migrate-requisition-approvals.js",
+        "backend/src/db/migrations/002_approval_configurations_postgres.sql",
+        "backend/src/db/migrations/002_approval_configurations_sqlite.sql",
+        "backend/src/db/migrations/003_requisition_approvals_postgres.sql",
+        "backend/src/db/migrations/003_requisition_approvals_sqlite.sql",
+        "backend/src/db/seed.js",
+        "backend/src/db/sync-permissions.js",
+        "backend/src/middlewares/rbacMiddleware.js",
+        "backend/src/server.js",
+        "backend/src/services/approvalConfigurationService.js",
+        "backend/src/services/authService.js",
+        "backend/src/services/requisitionApprovalService.js",
+        "backend/src/services/requisitionService.js",
+        "backend/tests/test_ats_e2e.js",
+        "backend/tests/test_final_rbac_open.js",
+        "backend/tests/test_frontend_routing.js",
+        "backend/tests/test_rbac_admin.js",
+        "backend/tests/test_requisition_access.js",
+        "backend/tests/test_requisition_reapproval.js",
+        "backend/tests/test_review_updates.js",
+        "backend/tests/test_s1_03_email_security.js",
+        "backend/tests/test_s1_05_integration.js",
+        "backend/tests/test_s1_06_integration.js",
+        "backend/tests/test_s1_07_integration.js",
+        "backend/tests/test_s1_09_integration.js",
+        "backend/tests/test_s1_coverage.js",
+        "backend/tests/test_s2_10_integration.js",
+        "backend/tests/test_s2_integration.js",
+        "backend/tests/test_s3_01_integration.js",
+        "backend/tests/test_s3_02_integration.js",
+        "backend/tests/test_shared_layout.js",
+        "docs/ATS-E2E-2026-10-08-evidence.json",
+        "docs/ATS-E2E-2026-10-08.md",
+        "docs/RBAC-admin-permissions.md",
+        "docs/S3-01-approval-configurations.md",
+        "docs/S3-02-requisition-approvals.md",
+        "frontend/components/create-req-modal.html",
+        "frontend/components/requisition-approval-modal.html",
+        "frontend/components/requisition-detail-modal.html",
+        "frontend/index.html",
+        "frontend/js/api.js",
+        "frontend/js/app.js",
+        "frontend/js/components/interview-dialogs.js",
+        "frontend/js/components/navigation.js",
+        "frontend/js/components/offer-dialogs.js",
+        "frontend/js/components/requisition-approval.js",
+        "frontend/js/components/requisition-detail.js",
+        "frontend/js/components/requisition-form.js",
+        "frontend/js/pages/approval-configurations.js",
+        "frontend/js/pages/candidate-portal.js",
+        "frontend/js/pages/competencies.js",
+        "frontend/js/pages/departments.js",
+        "frontend/js/pages/question-bank.js",
+        "frontend/js/pages/requisitions.js",
+        "frontend/js/services/approval-configuration-api.js",
+        "frontend/js/services/requisition-approval-api.js",
+        "frontend/js/services/session.js",
+        "frontend/js/shared/route-lifecycle.js",
+        "frontend/js/shared/state.js",
+        "frontend/pages/approval-configurations.html",
+        "frontend/routes.json",
+        "package.json"
+      ],
+      "taskFiles": [
+        "backend/src/config/config.js",
+        "backend/src/controllers/headcountBudgetController.js",
+        "backend/src/controllers/requisitionApprovalController.js",
+        "backend/src/db/migrate-headcount-budgets.js",
+        "backend/src/db/migrations/004_headcount_budgets_postgres.sql",
+        "backend/src/db/migrations/004_headcount_budgets_sqlite.sql",
+        "backend/src/db/sync-permissions.js",
+        "backend/src/server.js",
+        "backend/src/services/headcountBudgetService.js",
+        "backend/src/services/requisitionApprovalService.js",
+        "backend/src/services/requisitionService.js",
+        "backend/tests/test_frontend_routing.js",
+        "backend/tests/test_s3_03_04.js",
+        "backend/tests/test_shared_layout.js",
+        "docs/ATS-E2E-2026-10-08-evidence.json",
+        "docs/ATS-E2E-2026-10-08.md",
+        "docs/RBAC-admin-permissions.md",
+        "docs/S3-03-S3-04-tracking-headcount.md",
+        "frontend/components/create-req-modal.html",
+        "frontend/components/requisition-approval-modal.html",
+        "frontend/components/requisition-detail-modal.html",
+        "frontend/index.html",
+        "frontend/js/api.js",
+        "frontend/js/components/navigation.js",
+        "frontend/js/components/requisition-approval.js",
+        "frontend/js/components/requisition-detail.js",
+        "frontend/js/components/requisition-form.js",
+        "frontend/js/components/requisition-tracking.js",
+        "frontend/js/pages/headcount-budgets.js",
+        "frontend/js/services/session.js",
+        "frontend/js/shared/route-lifecycle.js",
+        "frontend/js/shared/state.js",
+        "frontend/pages/headcount-budgets.html",
+        "frontend/routes.json",
+        "package.json"
+      ],
+      "status": "M backend/data/ats.db\n M backend/data/ats.db-shm\n M backend/data/ats.db-wal\n M backend/data/ats_test.db\n M backend/src/db/migrations/001_postgres.sql"
+    }
   }
 }

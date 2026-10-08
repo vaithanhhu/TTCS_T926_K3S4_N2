@@ -129,3 +129,50 @@ Email delivery thật S1-03/S1-08, mobile visual S1-06, Career Page visual S2-09
 - `package.json`
 
 C?c n?n t?ng S3-01/S3-02/RBAC/t?i ph? duy?t ?? c? trong working tree tr??c nhi?m v? nh?ng ch?a c? trong HEAD; ch?ng c?n ???c gi? trong l?ch s? t?ch h?p ?? commit S3-03/S3-04 ch?y ??c l?p. Database runtime, .env v? n?i dung migration l?ch s?001/002/003 kh?ng ???c ch?nh s?a ho?c ??a database v?o commit.
+
+## Regression sau t?ch h?p develop
+
+T?ch h?p fast-forward t?i source commit5a5af11, b?o to?n origin/develop trong l?ch s?. Ch?y l?i to?n b?37script tr?n b?n sao TEMP c?a worktree develop; kh?ng thay source/data trong worktree. Th?m ki?m th? startup tr?c ti?p11/11.
+
+| Suite | K?t qu? | Cases |
+|---|---|---|
+| test:sprint1 | PASS | 56/56 |
+| test:final-rbac-open | PASS | 33/33 |
+| test:requisition-access | PASS | 16/16 |
+| test:ats-e2e | PASS | 51/51 |
+| test:rbac | PASS | 47/47 |
+| test:s3-02 | PASS | 93/93 |
+| test:s3-01 | PASS | 108/108 |
+| test:postgres | PASS | 15/15 |
+| test:postgres:live | NOT RUN | ? |
+| test:review-updates | PASS | 22/22 |
+| test:s1-01 | PASS | 8/8 |
+| test:s1-02 | PASS | 5/5 |
+| test:s1-03 | PASS | 5/5 |
+| test:s1-03:email | PASS | 49/49 |
+| test:s1-04 | PASS | 5/5 |
+| test:s1-05 | PASS | 6/6 |
+| test:s1-06 | PASS | 3/3 |
+| test:s1-07 | PASS | 4/4 |
+| test:s1-08 | PASS | 5/5 |
+| test:s1-09 | PASS | 7/7 |
+| test:s1-10 | PASS | 8/8 |
+| test:otp | PASS | 8/8 |
+| test:sprint2 | PASS | 32/32 |
+| test:s2-10 | PASS | 59/59 |
+| test:routing | PASS | 179/179 |
+| test:user-ux | PASS | 87/87 |
+| test:datetime-dashboard | PASS | 28/28 |
+| test:avatar | PASS | 21/21 |
+| test:mobile-shell | PASS | 53/53 |
+| test:layout | PASS | 45/45 |
+| test:coverage:sprint1 | PASS | 23/23 |
+| test:coverage:sprint2 | PASS | 25/25 |
+| test:career-upload | PASS | 24/24 |
+| test:user-roles-avatar | PASS | 17/17 |
+| test:reapproval | PASS | 94/94 |
+| test:s3-03 | PASS | 29/29 |
+| test:s3-04 | PASS | 55/55 |
+| node backend/tests/test_postgres_startup.js | PASS | 11/11 |
+
+Static123/123, diff --check PASS. Source prerequisite commit3fee92d; S3-03/S3-04 commit5a5af11. Receipt push/ref cu?i ???c b?o ri?ng sau khi push th?nh c?ng; kh?ng t? ghi tr??c k?t qu? push.
