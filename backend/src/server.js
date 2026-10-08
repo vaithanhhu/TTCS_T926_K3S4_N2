@@ -31,7 +31,8 @@ async function initializeApplication() {
   const userCount = (await db.prepare('SELECT COUNT(*) AS c FROM users').get()).c;
   if (db.provider === 'sqlite' && (isTestEnv || userCount === 0)) {
     await seedDatabase(db);
-  } else if (userCount > 0) {
+  } else if (db.provider === 'sqlite' && userCount > 0) {
+    // PostgreSQL metadata is managed by explicit migration/import, never startup writes.
     await ensureDepartmentFeature(db); await ensureCompetencyFeature(db);
     await ensureQuestionBankFeature(db); await ensureRecruitmentCatalogFeature(db);
     await ensureCareerPageFeature(db); await ensureRequisitionDraftFeature(db);

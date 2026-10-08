@@ -2,7 +2,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const sql = () => fs.readFileSync(path.join(__dirname, 'migrations/001_postgres.sql'), 'utf8');
-const checksum = () => crypto.createHash('sha256').update(sql()).digest('hex');
+// Git/Windows may check out CRLF while the applied migration was hashed as LF.
+// Canonicalize EOL only; content changes must still fail verification.
+const checksum = () => crypto.createHash('sha256').update(sql().replace(/\r\n/g, '\n')).digest('hex');
 async function migrate(db) {
   await db.transaction(async () => {
     await db.exec('SELECT pg_advisory_xact_lock(74261007)');
