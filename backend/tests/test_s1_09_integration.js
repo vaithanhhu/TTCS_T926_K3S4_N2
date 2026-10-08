@@ -49,7 +49,7 @@ async function runTests() {
 
   // Reset database state using seed
   const db = getDatabase();
-  seedDatabase(db);
+  (await seedDatabase(db));
 
   await startServer(TEST_PORT);
   console.log(`[Test S1-09] Server started on port ${TEST_PORT}\n`);
@@ -104,13 +104,13 @@ async function runTests() {
     assert(assignMultiRes.body.data.roles.includes('INTERVIEWER'));
 
     // Kiểm tra trực tiếp bảng user_roles trong CSDL SQLite thật
-    const dbRoles = db.prepare(`
+    const dbRoles = (await db.prepare(`
       SELECT r.code
       FROM roles r
       JOIN user_roles ur ON r.id = ur.role_id
       WHERE ur.user_id = 'usr-interviewer'
       ORDER BY r.code ASC
-    `).all().map(r => r.code);
+    `).all()).map(r => r.code);
 
     assert.deepStrictEqual(dbRoles, ['HIRING_MGR', 'INTERVIEWER']);
     console.log('   ✓ Bảng CSDL thật user_roles đã lưu chính xác cả 2 vai trò HIRING_MGR và INTERVIEWER.');
@@ -206,12 +206,12 @@ async function runTests() {
     assert(selfRevokeRes.body.message.includes('không thể tự thu hồi vai trò Quản trị hệ thống (ADMIN)'));
 
     // Kiểm tra CSDL xem vai trò ADMIN của usr-admin vẫn còn nguyên vẹn
-    const adminRolesInDb = db.prepare(`
+    const adminRolesInDb = (await db.prepare(`
       SELECT r.code
       FROM roles r
       JOIN user_roles ur ON r.id = ur.role_id
       WHERE ur.user_id = 'usr-admin'
-    `).all().map(r => r.code);
+    `).all()).map(r => r.code);
 
     assert(adminRolesInDb.includes('ADMIN'), 'Vai trò ADMIN của quản trị viên phải được giữ nguyên');
     console.log('   ✓ Hệ thống từ chối HTTP 400 CANNOT_REVOKE_OWN_ADMIN_ROLE khi Admin cố tự gỡ vai trò ADMIN của mình.');
@@ -312,7 +312,7 @@ async function runTests() {
     console.log('================================================================');
   } finally {
     // Reset seed back to clean state
-    seedDatabase(db);
+    (await seedDatabase(db));
     server.close();
   }
 }

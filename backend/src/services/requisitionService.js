@@ -9,7 +9,7 @@ class RequisitionService {
   /**
    * Get all requisitions with recruiter and hiring manager details
    */
-  getRequisitions(options = {}) {
+  async getRequisitions(options = {}) {
     const search = typeof options.search === 'string' ? options.search.trim() : '';
     const status = typeof options.status === 'string' ? options.status.trim() : 'ALL';
     const handoverOnly = options.handoverOnly === true || options.handoverOnly === 'true';
@@ -29,7 +29,7 @@ class RequisitionService {
     }
 
     if (handoverOnly) {
-      conditions.push('r.handover_required = 1');
+      conditions.push('r.handover_required = TRUE');
     }
     if (options.viewerId) {
       conditions.push("(r.s210_version = 0 OR r.status <> 'DRAFT' OR r.created_by = ?)");
@@ -40,7 +40,7 @@ class RequisitionService {
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     const stmt = this.db.prepare(`
-      SELECT 
+      SELECT
         r.id,
         r.code,
         r.title,
@@ -71,7 +71,7 @@ class RequisitionService {
       ORDER BY r.handover_required DESC, r.created_at DESC
     `);
 
-    const rows = stmt.all(...params);
+    const rows = (await stmt.all(...params));
 
     const mapped = rows.map(r => ({
       id: r.id,
@@ -114,8 +114,10 @@ class RequisitionService {
   /**
    * Create new recruitment requisition in SQLite
    */
-  createRequisition(data = {}, actor = null) {
-    if (this.isS210Request(data)) return this.saveS210Requisition(null, data, actor);
+  async createRequisition(data = {}, actor = null) {
+    return this.db.transaction(async () => {
+      if (this.db.provider === 'postgres') await this.db.prepare('SELECT pg_advisory_xact_lock(hashtext(?))').get('requisition-code');
+    if (this.isS210Request(data)) return (await this.saveS210Requisition(null, data, actor));
     const title = typeof data.title === 'string' ? data.title.trim() : '';
     const departmentId = typeof data.departmentId === 'string'
       ? data.departmentId.trim()
@@ -130,10 +132,10 @@ class RequisitionService {
     const workLocationId = data.workLocationId || null;
     const workModeId = data.workModeId || null;
 
-    const workCatalogValidation = this.validateRequisitionCatalogs(
+    const workCatalogValidation = (await this.validateRequisitionCatalogs(
       workLocationId,
       workModeId
-    );
+    ));
 
     if (!workCatalogValidation.success) return workCatalogValidation;
     const jobTitleId = typeof data.jobTitleId === 'string'
@@ -141,11 +143,11 @@ class RequisitionService {
       : '';
 
     if (jobTitleId) {
-      const jobTitle = this.db.prepare(`
+      const jobTitle = (await this.db.prepare(`
         SELECT id, status, framework_id
         FROM job_titles
         WHERE id = ?
-      `).get(jobTitleId);
+      `).get(jobTitleId));
 
       if (!jobTitle) {
         return {
@@ -186,11 +188,11 @@ class RequisitionService {
     let department = null;
 
     if (departmentId) {
-      department = this.db.prepare(`
+      department = (await this.db.prepare(`
         SELECT id, name, manager_id, status
         FROM departments
         WHERE id = ?
-      `).get(departmentId);
+      `).get(departmentId));
     } else if (legacyDepartmentName) {
       // Sprint 1 accepts free-text departments and the caller's Hiring Manager.
       department = { id: null, name: legacyDepartmentName, manager_id: data.hiringManagerId || null, status: 'ACTIVE' };
@@ -226,7 +228,7 @@ class RequisitionService {
     }
 
     const countStmt = this.db.prepare('SELECT COUNT(*) as count FROM requisitions');
-    const nextNum = (countStmt.get().count || 0) + 1;
+    const nextNum = ((await countStmt.get()).count || 0) + 1;
     const code = `REQ-2026-${String(nextNum).padStart(3, '0')}`;
     const id = 'req-' + crypto.randomUUID();
 
@@ -249,11 +251,11 @@ class RequisitionService {
         updated_at
       )
       VALUES (
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', 0, datetime('now'), datetime('now')
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', FALSE, datetime('now'), datetime('now')
       )
     `);
 
-    insertStmt.run(
+    (await insertStmt.run(
       id,
       code,
       title,
@@ -265,7 +267,7 @@ class RequisitionService {
       headcount,
       department.manager_id,
       recruiterId
-    );
+    ));
 
     return {
       success: true,
@@ -281,22 +283,24 @@ class RequisitionService {
         status: 'OPEN'
       }
     };
+
+    });
   }
   /**
    * Reassign recruiter or resolve handover requirement (S1-10)
    */
-  reassignHandover(requisitionId, newRecruiterId, notes = '') {
+  async reassignHandover(requisitionId, newRecruiterId, notes = '') {
     if (!requisitionId) {
       return { success: false, statusCode: 400, message: 'Thiếu ID vị trí cần phân công.' };
     }
 
     const updateStmt = this.db.prepare(`
       UPDATE requisitions
-      SET recruiter_id = ?, handover_required = 0, handover_notes = ?, updated_at = datetime('now')
+      SET recruiter_id = ?, handover_required = FALSE, handover_notes = ?, updated_at = datetime('now')
       WHERE id = ?
     `);
 
-    const result = updateStmt.run(newRecruiterId, notes || 'Đã bàn giao cho nhân sự mới', requisitionId);
+    const result = (await updateStmt.run(newRecruiterId, notes || 'Đã bàn giao cho nhân sự mới', requisitionId));
     if (result.changes === 0) {
       return { success: false, statusCode: 404, message: 'Không tìm thấy vị trí tuyển dụng tương ứng.' };
     }
@@ -311,10 +315,10 @@ class RequisitionService {
   /**
    * Get single requisition by ID
    */
-  getRequisitionById(id) {
+  async getRequisitionById(id) {
     if (!id) return null;
     const stmt = this.db.prepare(`
-      SELECT 
+      SELECT
         r.id, r.code, r.title, r.job_title_id, r.department_id, r.department_name, r.work_location_id, r.work_mode_id, r.headcount, r.status, r.handover_required, r.handover_notes,
         r.created_at, r.updated_at,
         r.s210_version, r.created_by, r.recruitment_reason,
@@ -327,7 +331,7 @@ class RequisitionService {
       LEFT JOIN users rec ON r.recruiter_id = rec.id
       WHERE r.id = ?
     `);
-    const r = stmt.get(id);
+    const r = (await stmt.get(id));
     if (!r) return null;
     return {
       id: r.id,
@@ -355,7 +359,7 @@ class RequisitionService {
   /**
    * Update requisition details and status
    */
-  updateRequisition(id, data = {}, actor = null) {
+  async updateRequisition(id, data = {}, actor = null) {
     if (!id) {
       return {
         success: false,
@@ -364,7 +368,7 @@ class RequisitionService {
       };
     }
 
-    const current = this.getRequisitionById(id);
+    const current = (await this.getRequisitionById(id));
 
     if (!current) {
       return {
@@ -375,7 +379,7 @@ class RequisitionService {
     }
 
     if (current.formVersion === 'S2-10' || this.isS210Request(data)) {
-      return this.saveS210Requisition(current, data, actor);
+      return (await this.saveS210Requisition(current, data, actor));
     }
 
     const title = typeof data.title === 'string' && data.title.trim()
@@ -415,10 +419,10 @@ class RequisitionService {
         ? workModeId
         : null;
 
-    const workCatalogValidation = this.validateRequisitionCatalogs(
+    const workCatalogValidation = (await this.validateRequisitionCatalogs(
       validateWorkLocationId,
       validateWorkModeId
-    );
+    ));
     if (!workCatalogValidation.success) return workCatalogValidation;
 
     const requestedJobTitleId = typeof data.jobTitleId === 'string'
@@ -426,11 +430,11 @@ class RequisitionService {
       : '';
 
     if (requestedJobTitleId) {
-      const jobTitle = this.db.prepare(`
+      const jobTitle = (await this.db.prepare(`
         SELECT id, status, framework_id
         FROM job_titles
         WHERE id = ?
-      `).get(requestedJobTitleId);
+      `).get(requestedJobTitleId));
 
       if (!jobTitle) {
         return {
@@ -475,11 +479,11 @@ class RequisitionService {
       : (typeof data.department === 'string' ? data.department.trim() : '');
 
     if (requestedDepartmentId) {
-      const department = this.db.prepare(`
+      const department = (await this.db.prepare(`
             SELECT id, name, manager_id, status
             FROM departments
             WHERE id = ?
-          `).get(requestedDepartmentId);
+          `).get(requestedDepartmentId));
 
       if (!department) {
         return {
@@ -524,7 +528,7 @@ class RequisitionService {
       WHERE id = ?
     `);
 
-    stmt.run(
+    (await stmt.run(
             title,
       jobTitleId,
       departmentId,
@@ -536,13 +540,13 @@ class RequisitionService {
       status,
       recruiterId,
       id
-    );
+    ));
 
     return {
       success: true,
       statusCode: 200,
       message: 'Cập nhật vị trí tuyển dụng thành công.',
-      data: this.getRequisitionById(id)
+      data: (await this.getRequisitionById(id))
     };
   }
   isS210Request(data) {
@@ -581,10 +585,10 @@ class RequisitionService {
     return { success: false, statusCode: 409, code: 'JOB_TITLE_SALARY_RANGE_UNAVAILABLE', message: 'Chức danh chưa được cấu hình đầy đủ dải lương chuẩn. HR Manager cần thiết lập dải lương trước khi yêu cầu tuyển dụng có thể được hoàn tất. Có thể lưu nháp.' };
   }
 
-  checkS210SalaryRange(data) {
+  async checkS210SalaryRange(data) {
     // Read-only preview: the caller cannot disable justification on a write request.
-    const validation = this.validateS210({ status: 'DRAFT', jobTitleId: data.jobTitleId,
-      proposedSalaryMin: data.proposedSalaryMin, proposedSalaryMax: data.proposedSalaryMax }, null, null, { requireJustification: false });
+    const validation = (await this.validateS210({ status: 'DRAFT', jobTitleId: data.jobTitleId,
+      proposedSalaryMin: data.proposedSalaryMin, proposedSalaryMax: data.proposedSalaryMax }, null, null, { requireJustification: false }));
     if (!validation.success) return validation;
     if (!validation.jobTitle || validation.values.proposedSalaryMin === null || validation.values.proposedSalaryMax === null) {
       return { success: false, statusCode: 400, code: 'MISSING_SALARY_CHECK_FIELD', message: 'Chọn chức danh và nhập đủ dải lương đề xuất để kiểm tra.' };
@@ -594,7 +598,7 @@ class RequisitionService {
     return { success: true, statusCode: 200, salaryRangeStatus: validation.salaryRangeStatus };
   }
 
-  validateS210(data, current = null, actor = null, { requireJustification = true } = {}) {
+  async validateS210(data, current = null, actor = null, { requireJustification = true } = {}) {
     const fail = (code, message) => ({ success: false, statusCode: 400, code, message });
     const fields = ['title', 'jobTitleId', 'departmentId', 'headcount', 'recruitmentReason',
       'proposedSalaryMin', 'proposedSalaryMax', 'neededDate', 'jobDescription',
@@ -630,14 +634,14 @@ class RequisitionService {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(values.neededDate) || !Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== values.neededDate) return fail('INVALID_NEEDED_DATE', 'Ngày cần người phải là ngày hợp lệ theo YYYY-MM-DD.');
       if ((!current || current.status === 'DRAFT' || Object.hasOwn(data, 'neededDate')) && values.neededDate < this.businessDate()) return fail('NEEDED_DATE_IN_PAST', 'Ngày cần người không được ở quá khứ (múi giờ Việt Nam).');
     }
-    const jobTitle = values.jobTitleId ? this.db.prepare('SELECT id, name, min_salary, max_salary, status FROM job_titles WHERE id = ?').get(values.jobTitleId) : null;
+    const jobTitle = values.jobTitleId ? (await this.db.prepare('SELECT id, name, min_salary, max_salary, status FROM job_titles WHERE id = ?').get(values.jobTitleId)) : null;
     if (values.jobTitleId && (!jobTitle || jobTitle.status !== 'ACTIVE')) return fail('INVALID_JOB_TITLE', 'Chức danh không tồn tại hoặc đã ngừng áp dụng.');
-    const department = values.departmentId ? this.db.prepare('SELECT id, name, manager_id, status FROM departments WHERE id = ?').get(values.departmentId) : null;
+    const department = values.departmentId ? (await this.db.prepare('SELECT id, name, manager_id, status FROM departments WHERE id = ?').get(values.departmentId)) : null;
     if (values.departmentId && (!department || department.status !== 'ACTIVE')) return fail('INVALID_DEPARTMENT', 'Phòng ban không tồn tại hoặc đã ngừng áp dụng.');
     if (department && actor && !actor.roles.includes('HR_MANAGER') && department.manager_id !== actor.id) return { success: false, statusCode: 403, code: 'REQUISITION_DEPARTMENT_FORBIDDEN', message: 'Bạn chỉ được tạo yêu cầu cho phòng ban mình phụ trách.' };
-    const catalogResult = this.validateRequisitionCatalogs(values.workLocationId, values.workModeId);
+    const catalogResult = (await this.validateRequisitionCatalogs(values.workLocationId, values.workModeId));
     if (!catalogResult.success) return catalogResult;
-    if (values.recruiterId && !this.db.prepare('SELECT id FROM users WHERE id = ?').get(values.recruiterId)) return fail('INVALID_RECRUITER', 'Nhân sự phụ trách không tồn tại.');
+    if (values.recruiterId && !(await this.db.prepare('SELECT id FROM users WHERE id = ?').get(values.recruiterId))) return fail('INVALID_RECRUITER', 'Nhân sự phụ trách không tồn tại.');
     if (!draft) {
       for (const key of ['jobTitleId', 'departmentId', 'headcount', 'recruitmentReason', 'proposedSalaryMin', 'proposedSalaryMax', 'neededDate', 'jobDescription', 'candidateRequirements']) {
         if (values[key] === null || (typeof values[key] === 'string' && !values[key].trim())) return fail('MISSING_REQUISITION_FIELD', `Vui lòng nhập đầy đủ ${key} trước khi hoàn tất yêu cầu.`);
@@ -654,11 +658,13 @@ class RequisitionService {
     return { success: true, values, status, jobTitle, department, salaryRangeStatus };
   }
 
-  saveS210Requisition(current, data, actor) {
+  async saveS210Requisition(current, data, actor) {
+    return this.db.transaction(async () => {
+      if (this.db.provider === 'postgres') await this.db.prepare('SELECT pg_advisory_xact_lock(hashtext(?))').get('requisition-code');
     if (current?.status === 'DRAFT' && actor && current.createdBy !== actor.id) {
       return { success: false, statusCode: 403, code: 'REQUISITION_DRAFT_FORBIDDEN', message: 'Bạn chỉ được sửa nháp do mình tạo.' };
     }
-    const validation = this.validateS210(data, current, actor);
+    const validation = (await this.validateS210(data, current, actor));
     if (!validation.success) return validation;
     const { values: v, status, jobTitle, department } = validation;
     const title = v.title || jobTitle?.name || '';
@@ -667,30 +673,32 @@ class RequisitionService {
     const createdBy = current?.createdBy || actor?.id || null;
     const manager = department?.manager_id || null;
     if (current) {
-      this.db.prepare(`UPDATE requisitions SET title=?, job_title_id=?, department_id=?, department_name=?,
+      (await this.db.prepare(`UPDATE requisitions SET title=?, job_title_id=?, department_id=?, department_name=?,
         headcount=?, hiring_manager_id=?, recruiter_id=?, work_location_id=?, work_mode_id=?, status=?,
         s210_version=1, created_by=?, recruitment_reason=?, proposed_salary_min=?, proposed_salary_max=?,
         needed_date=?, job_description=?, candidate_requirements=?, salary_justification=?, updated_at=datetime('now') WHERE id=?`)
         .run(title, v.jobTitleId, v.departmentId, department?.name || '', headcount, manager,
           v.recruiterId, v.workLocationId, v.workModeId, status, createdBy, v.recruitmentReason,
-          v.proposedSalaryMin, v.proposedSalaryMax, v.neededDate, v.jobDescription, v.candidateRequirements, v.salaryJustification, id);
+          v.proposedSalaryMin, v.proposedSalaryMax, v.neededDate, v.jobDescription, v.candidateRequirements, v.salaryJustification, id));
     } else {
-      let number = this.db.prepare('SELECT COUNT(*) AS count FROM requisitions').get().count + 1;
+      let number = (await this.db.prepare('SELECT COUNT(*) AS count FROM requisitions').get()).count + 1;
       let code;
-      do { code = `REQ-2026-${String(number++).padStart(3, '0')}`; } while (this.db.prepare('SELECT id FROM requisitions WHERE code=?').get(code));
-      this.db.prepare(`INSERT INTO requisitions (id,code,title,job_title_id,department_id,department_name,headcount,
+      do { code = `REQ-2026-${String(number++).padStart(3, '0')}`; } while ((await this.db.prepare('SELECT id FROM requisitions WHERE code=?').get(code)));
+      (await this.db.prepare(`INSERT INTO requisitions (id,code,title,job_title_id,department_id,department_name,headcount,
         hiring_manager_id,recruiter_id,work_location_id,work_mode_id,status,s210_version,created_by,recruitment_reason,
         proposed_salary_min,proposed_salary_max,needed_date,job_description,candidate_requirements,salary_justification)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1,?,?,?,?,?,?,?,?)`)
         .run(id, code, title, v.jobTitleId, v.departmentId, department?.name || '', headcount, manager,
           v.recruiterId, v.workLocationId, v.workModeId, status, createdBy, v.recruitmentReason,
-          v.proposedSalaryMin, v.proposedSalaryMax, v.neededDate, v.jobDescription, v.candidateRequirements, v.salaryJustification);
+          v.proposedSalaryMin, v.proposedSalaryMax, v.neededDate, v.jobDescription, v.candidateRequirements, v.salaryJustification));
     }
     return { success: true, statusCode: current ? 200 : 201, message: status === 'DRAFT' ? 'Đã lưu nháp yêu cầu tuyển dụng.' : 'Đã lưu yêu cầu tuyển dụng.',
-      ...(validation.salaryRangeStatus ? { salaryRangeStatus: validation.salaryRangeStatus } : {}), data: this.getRequisitionById(id) };
+      ...(validation.salaryRangeStatus ? { salaryRangeStatus: validation.salaryRangeStatus } : {}), data: (await this.getRequisitionById(id)) };
+
+    });
   }
 
-  validateRequisitionCatalogs(workLocationId, workModeId) {
+  async validateRequisitionCatalogs(workLocationId, workModeId) {
     const checks = [
       {
         id: workLocationId,
@@ -709,13 +717,13 @@ class RequisitionService {
     for (const check of checks) {
       if (!check.id) continue;
 
-      const item = this.db.prepare(`
+      const item = (await this.db.prepare(`
         SELECT id
         FROM recruitment_catalog_items
         WHERE id = ?
           AND type = ?
           AND status = 'ACTIVE'
-      `).get(check.id, check.type);
+      `).get(check.id, check.type));
 
       if (!item) {
         return {
@@ -732,39 +740,39 @@ class RequisitionService {
   /**
    * Get enterprise real-time dashboard statistics from SQLite
    */
-  getDashboardStats() {
+  async getDashboardStats() {
     // 1. User stats
-    const userStats = this.db.prepare(`
-      SELECT 
+    const userStats = (await this.db.prepare(`
+      SELECT
         COUNT(*) AS total_users,
         SUM(CASE WHEN status = 'ACTIVE' THEN 1 ELSE 0 END) AS active_users,
         SUM(CASE WHEN status = 'LOCKED' THEN 1 ELSE 0 END) AS locked_users
       FROM users
-    `).get();
+    `).get());
 
     // 2. Active sessions count
-    const sessionStats = this.db.prepare(`
+    const sessionStats = (await this.db.prepare(`
       SELECT COUNT(*) AS active_sessions
       FROM sessions
       WHERE datetime(expires_at) > datetime('now')
-    `).get();
+    `).get());
 
     // 3. Requisition stats
-    const reqStats = this.db.prepare(`
-      SELECT 
+    const reqStats = (await this.db.prepare(`
+      SELECT
         COUNT(*) AS total_requisitions,
         SUM(CASE WHEN status = 'OPEN' THEN 1 ELSE 0 END) AS open_requisitions,
         SUM(CASE WHEN status = 'IN_PROGRESS' THEN 1 ELSE 0 END) AS in_progress_requisitions,
-        SUM(CASE WHEN handover_required = 1 THEN 1 ELSE 0 END) AS handover_alerts,
+        SUM(CASE WHEN handover_required = TRUE THEN 1 ELSE 0 END) AS handover_alerts,
         SUM(headcount) AS total_headcount
       FROM requisitions
-    `).get();
+    `).get());
 
     // 4. Candidate stats & Funnel
     let candStats = { total: 0, new: 0, screening: 0, interview: 0, offer: 0, hired: 0 };
     try {
-      const cRow = this.db.prepare(`
-        SELECT 
+      const cRow = (await this.db.prepare(`
+        SELECT
           COUNT(*) AS total_candidates,
           SUM(CASE WHEN stage = 'NEW' THEN 1 ELSE 0 END) AS stage_new,
           SUM(CASE WHEN stage = 'SCREENING' THEN 1 ELSE 0 END) AS stage_screening,
@@ -772,7 +780,7 @@ class RequisitionService {
           SUM(CASE WHEN stage = 'OFFER' THEN 1 ELSE 0 END) AS stage_offer,
           SUM(CASE WHEN stage = 'HIRED' THEN 1 ELSE 0 END) AS stage_hired
         FROM candidates
-      `).get();
+      `).get());
       if (cRow) {
         candStats = {
           total: cRow.total_candidates || 0,
@@ -788,32 +796,32 @@ class RequisitionService {
     // 5. Upcoming interviews
     let upcomingInterviewsCount = 0;
     try {
-      const iRow = this.db.prepare(`
+      const iRow = (await this.db.prepare(`
         SELECT COUNT(*) AS c FROM interviews WHERE status = 'SCHEDULED'
-      `).get();
+      `).get());
       if (iRow) upcomingInterviewsCount = iRow.c || 0;
     } catch (e) {}
 
     // 6. Department breakdown
     let departmentBreakdown = [];
     try {
-      departmentBreakdown = this.db.prepare(`
+      departmentBreakdown = (await this.db.prepare(`
         SELECT department_name, COUNT(*) AS req_count, SUM(headcount) AS total_headcount
         FROM requisitions
         GROUP BY department_name
         ORDER BY req_count DESC
-      `).all();
+      `).all());
     } catch (e) {}
 
     // 7. Recent recruitment activities (from real SQLite records)
     const recentActivities = [];
     try {
-      const recentCands = this.db.prepare(`
+      const recentCands = (await this.db.prepare(`
         SELECT c.full_name, c.stage, c.created_at, r.title AS req_title
         FROM candidates c
         LEFT JOIN requisitions r ON c.requisition_id = r.id
         ORDER BY c.created_at DESC LIMIT 3
-      `).all();
+      `).all());
       recentCands.forEach(c => {
         recentActivities.push({
           type: 'CANDIDATE',
@@ -823,13 +831,13 @@ class RequisitionService {
         });
       });
 
-      const recentInts = this.db.prepare(`
+      const recentInts = (await this.db.prepare(`
         SELECT i.round_name, i.scheduled_time, i.status, c.full_name AS cand_name, u.full_name AS interviewer_name
         FROM interviews i
         LEFT JOIN candidates c ON i.candidate_id = c.id
         LEFT JOIN users u ON i.interviewer_id = u.id
         ORDER BY i.created_at DESC LIMIT 2
-      `).all();
+      `).all());
       recentInts.forEach(it => {
         recentActivities.push({
           type: 'INTERVIEW',
@@ -841,30 +849,30 @@ class RequisitionService {
     } catch (e) {}
 
     // 8. Recent requisitions
-    const recentRequisitions = this.db.prepare(`
+    const recentRequisitions = (await this.db.prepare(`
       SELECT r.id, r.code, r.title, r.department_name, r.headcount, r.status, r.handover_required, rec.full_name AS recruiter_name
       FROM requisitions r
       LEFT JOIN users rec ON r.recruiter_id = rec.id
       ORDER BY r.handover_required DESC, r.created_at DESC
       LIMIT 5
-    `).all();
+    `).all());
 
     // 9. Recent audit logs
-    const recentAudit = this.db.prepare(`
+    const recentAudit = (await this.db.prepare(`
       SELECT email, status, reason, attempted_at
       FROM login_audit_logs
       ORDER BY attempted_at DESC
       LIMIT 5
-    `).all();
+    `).all());
 
     // 10. Role distribution
-    const roleDistribution = this.db.prepare(`
+    const roleDistribution = (await this.db.prepare(`
       SELECT r.code, r.name, COUNT(ur.user_id) AS user_count
       FROM roles r
       LEFT JOIN user_roles ur ON r.id = ur.role_id
       GROUP BY r.id
       ORDER BY user_count DESC
-    `).all();
+    `).all());
 
     return {
       success: true,
@@ -898,7 +906,7 @@ class RequisitionService {
   /**
    * Get candidates list with search and filters
    */
-  getCandidates(options = {}) {
+  async getCandidates(options = {}) {
     const search = typeof options.search === 'string' ? options.search.trim() : '';
     const stage = typeof options.stage === 'string' ? options.stage.trim() : 'ALL';
     const reqId = typeof options.requisitionId === 'string' ? options.requisitionId.trim() : 'ALL';
@@ -925,7 +933,7 @@ class RequisitionService {
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     const stmt = this.db.prepare(`
-      SELECT 
+      SELECT
         c.id,
         c.full_name,
         c.email,
@@ -954,7 +962,7 @@ class RequisitionService {
       ORDER BY c.created_at DESC
     `);
 
-    const rows = stmt.all(...params);
+    const rows = (await stmt.all(...params));
     return {
       success: true,
       total: rows.length,
@@ -996,9 +1004,9 @@ class RequisitionService {
   /**
    * Get interviews list
    */
-  getInterviews(options = {}) {
+  async getInterviews(options = {}) {
     const stmt = this.db.prepare(`
-      SELECT 
+      SELECT
         i.id,
         i.round_name,
         i.scheduled_time,
@@ -1025,7 +1033,7 @@ class RequisitionService {
       ORDER BY i.scheduled_time DESC
     `);
 
-    const rows = stmt.all();
+    const rows = (await stmt.all());
     return {
       success: true,
       total: rows.length,
@@ -1061,9 +1069,9 @@ class RequisitionService {
   /**
    * Get offers list
    */
-  getOffers(options = {}) {
+  async getOffers(options = {}) {
     const stmt = this.db.prepare(`
-      SELECT 
+      SELECT
         o.id,
         o.salary_monthly,
         o.start_date,
@@ -1085,7 +1093,7 @@ class RequisitionService {
       ORDER BY o.created_at DESC
     `);
 
-    const rows = stmt.all();
+    const rows = (await stmt.all());
     return {
       success: true,
       total: rows.length,
@@ -1116,8 +1124,8 @@ class RequisitionService {
   /**
    * Get recruitment reports
    */
-  getReports() {
-    const stats = this.getDashboardStats();
+  async getReports() {
+    const stats = (await this.getDashboardStats());
     return {
       success: true,
       report: {
@@ -1135,16 +1143,16 @@ class RequisitionService {
     };
   }
 
-  validateCandidateCatalog(id, expectedType) {
+  async validateCandidateCatalog(id, expectedType) {
     if (!id) return { success: true };
 
-    const item = this.db.prepare(`
+    const item = (await this.db.prepare(`
       SELECT id
       FROM recruitment_catalog_items
       WHERE id = ?
         AND type = ?
         AND status = 'ACTIVE'
-    `).get(id, expectedType);
+    `).get(id, expectedType));
 
     if (!item) {
       return {
@@ -1164,17 +1172,17 @@ class RequisitionService {
   /**
    * Create candidate record
    */
-  createCandidate(data = {}) {
+  async createCandidate(data = {}) {
     const fullName = typeof data.fullName === 'string' ? data.fullName.trim() : '';
     const email = typeof data.email === 'string' ? data.email.trim() : '';
     const phoneNumber = typeof data.phoneNumber === 'string' ? data.phoneNumber.trim() : '';
     const requisitionId = data.requisitionId || null;
     const sourceId = data.sourceId || null;
 
-    const sourceValidation = this.validateCandidateCatalog(
+    const sourceValidation = (await this.validateCandidateCatalog(
       sourceId,
       'CANDIDATE_SOURCE'
-    );
+    ));
 
     if (!sourceValidation.success) return sourceValidation;
     const stage = data.stage || 'NEW';
@@ -1195,7 +1203,7 @@ class RequisitionService {
       INSERT INTO candidates (id, full_name, email, phone_number, requisition_id, source_id, stage, experience_years, current_company, expected_salary, notes, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
     `);
-    insertStmt.run(id, fullName, email, phoneNumber, requisitionId, sourceId, stage, experienceYears, currentCompany, expectedSalary, notes);
+    (await insertStmt.run(id, fullName, email, phoneNumber, requisitionId, sourceId, stage, experienceYears, currentCompany, expectedSalary, notes));
 
     return {
       success: true,
@@ -1208,22 +1216,22 @@ class RequisitionService {
   /**
    * Update candidate stage / pipeline status
    */
-  updateCandidateStage(id, stage, notes, rejectionReasonId) {
+  async updateCandidateStage(id, stage, notes, rejectionReasonId) {
     if (!id) return { success: false, statusCode: 400, message: 'Thiếu mã ứng viên.' };
     const validStages = ['NEW', 'APPLIED', 'SCREENING', 'INTERVIEW', 'OFFER', 'HIRED', 'REJECTED'];
     if (!validStages.includes(stage)) {
       return { success: false, statusCode: 400, message: 'Giai đoạn không hợp lệ.' };
     }
     if (stage === 'REJECTED' && rejectionReasonId) {
-      const reasonValidation = this.validateCandidateCatalog(
+      const reasonValidation = (await this.validateCandidateCatalog(
         rejectionReasonId,
         'REJECTION_REASON'
-      );
+      ));
 
       if (!reasonValidation.success) return reasonValidation;
     }
     const updateStmt = this.db.prepare(`
-      UPDATE candidates 
+      UPDATE candidates
       SET stage = ?, notes = COALESCE(?, notes),
           rejection_reason_id = CASE WHEN ? THEN rejection_reason_id ELSE ? END
       WHERE id = ?
@@ -1232,13 +1240,13 @@ class RequisitionService {
       ? (rejectionReasonId || null)
       : null;
 
-    const res = updateStmt.run(
+    const res = (await updateStmt.run(
       stage,
       notes || null,
       stage === 'REJECTED' && rejectionReasonId === undefined ? 1 : 0,
       rejectionReasonValue,
       id
-    );
+    ));
     if (res.changes === 0) {
       return { success: false, statusCode: 404, message: 'Không tìm thấy hồ sơ ứng viên.' };
     }
@@ -1248,7 +1256,7 @@ class RequisitionService {
   /**
    * Schedule new interview
    */
-  createInterview(data = {}) {
+  async createInterview(data = {}) {
     const candidateId = data.candidateId;
     const requisitionId = data.requisitionId || null;
     const interviewerId = data.interviewerId || null;
@@ -1264,10 +1272,10 @@ class RequisitionService {
       INSERT INTO interviews (id, candidate_id, requisition_id, interviewer_id, round_name, scheduled_time, location_or_link, status, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, 'SCHEDULED', datetime('now'))
     `);
-    stmt.run(id, candidateId, requisitionId, interviewerId, roundName, scheduledTime, locationOrLink);
+    (await stmt.run(id, candidateId, requisitionId, interviewerId, roundName, scheduledTime, locationOrLink));
 
     // Update candidate stage to INTERVIEW
-    this.db.prepare("UPDATE candidates SET stage = 'INTERVIEW' WHERE id = ?").run(candidateId);
+    (await this.db.prepare("UPDATE candidates SET stage = 'INTERVIEW' WHERE id = ?").run(candidateId));
 
     return { success: true, statusCode: 201, message: 'Lên lịch phỏng vấn thành công.', data: { id } };
   }
@@ -1275,14 +1283,14 @@ class RequisitionService {
   /**
    * Update interview status / score / feedback
    */
-  updateInterviewStatus(id, status, feedback, score) {
+  async updateInterviewStatus(id, status, feedback, score) {
     if (!id) return { success: false, statusCode: 400, message: 'Thiếu mã phỏng vấn.' };
     const stmt = this.db.prepare(`
       UPDATE interviews
       SET status = ?, feedback = COALESCE(?, feedback), score = COALESCE(?, score)
       WHERE id = ?
     `);
-    const res = stmt.run(status, feedback || null, score ? parseInt(score, 10) : null, id);
+    const res = (await stmt.run(status, feedback || null, score ? parseInt(score, 10) : null, id));
     if (res.changes === 0) return { success: false, statusCode: 404, message: 'Không tìm thấy lịch phỏng vấn.' };
     return { success: true, statusCode: 200, message: 'Cập nhật lịch phỏng vấn thành công.' };
   }
@@ -1290,7 +1298,7 @@ class RequisitionService {
   /**
    * Create Job Offer
    */
-  createOffer(data = {}) {
+  async createOffer(data = {}) {
     const candidateId = data.candidateId;
     const requisitionId = data.requisitionId || null;
     const salaryMonthly = parseInt(data.salaryMonthly, 10) || 0;
@@ -1305,10 +1313,10 @@ class RequisitionService {
       INSERT INTO offers (id, candidate_id, requisition_id, salary_monthly, start_date, status, approver_id, created_at)
       VALUES (?, ?, ?, ?, ?, 'PENDING_APPROVAL', ?, datetime('now'))
     `);
-    stmt.run(id, candidateId, requisitionId, salaryMonthly, startDate, approverId);
+    (await stmt.run(id, candidateId, requisitionId, salaryMonthly, startDate, approverId));
 
     // Update candidate stage to OFFER
-    this.db.prepare("UPDATE candidates SET stage = 'OFFER' WHERE id = ?").run(candidateId);
+    (await this.db.prepare("UPDATE candidates SET stage = 'OFFER' WHERE id = ?").run(candidateId));
 
     return { success: true, statusCode: 201, message: 'Khởi tạo đề xuất việc làm (Offer) thành công.', data: { id } };
   }
@@ -1316,16 +1324,16 @@ class RequisitionService {
   /**
    * Approve / Reject Offer
    */
-  updateOfferStatus(id, status) {
+  async updateOfferStatus(id, status) {
     if (!id) return { success: false, statusCode: 400, message: 'Thiếu mã offer.' };
     const stmt = this.db.prepare(`UPDATE offers SET status = ? WHERE id = ?`);
-    const res = stmt.run(status, id);
+    const res = (await stmt.run(status, id));
     if (res.changes === 0) return { success: false, statusCode: 404, message: 'Không tìm thấy offer.' };
 
     if (status === 'APPROVED') {
-      const off = this.db.prepare('SELECT candidate_id FROM offers WHERE id = ?').get(id);
+      const off = (await this.db.prepare('SELECT candidate_id FROM offers WHERE id = ?').get(id));
       if (off && off.candidate_id) {
-        this.db.prepare("UPDATE candidates SET stage = 'HIRED' WHERE id = ?").run(off.candidate_id);
+        (await this.db.prepare("UPDATE candidates SET stage = 'HIRED' WHERE id = ?").run(off.candidate_id));
       }
     }
     return { success: true, statusCode: 200, message: 'Cập nhật trạng thái offer thành công.' };

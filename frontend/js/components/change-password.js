@@ -4,21 +4,40 @@
   const changePwdForm = document.getElementById('change-pwd-form');
   const changePwdAlert = document.getElementById('change-pwd-alert');
   const changePwdAlertMsg = document.getElementById('change-pwd-alert-msg');
+  let changingPassword = false;
 
   function openChangePwdModal() {
     if (!changePwdModal) return;
+    if (currentActiveView === 'change-password') {
+      document.getElementById('change-password-view').classList.remove('hidden');
+      document.getElementById('change-password-form-host').appendChild(changePwdModal);
+      changePwdModal.classList.add('password-page-form');
+    } else {
+      document.body.appendChild(changePwdModal);
+      changePwdModal.classList.remove('password-page-form');
+    }
+    const forced = Boolean(currentAuthenticatedUser?.mustChangePassword);
+    closeChangePwdModal?.classList.toggle('hidden', forced);
+    document.getElementById('forced-password-logout-btn')?.classList.toggle('hidden', currentActiveView !== 'change-password');
+    document.getElementById('change-pwd-title').textContent = forced ? 'Đổi mật khẩu tạm thời' : 'Đổi mật khẩu tài khoản';
     if (changePwdForm) changePwdForm.reset();
     if (changePwdAlert) changePwdAlert.classList.add('hidden');
     changePwdModal.classList.remove('hidden');
   }
 
   if (closeChangePwdModal) {
-    closeChangePwdModal.addEventListener('click', () => changePwdModal.classList.add('hidden'));
+    closeChangePwdModal.addEventListener('click', () => {
+      if (currentAuthenticatedUser?.mustChangePassword) return;
+      changePwdModal.classList.add('hidden');
+      if (currentActiveView === 'change-password') window.ATS_ROUTER.navigate(getAuthenticatedHome());
+    });
   }
+  document.getElementById('forced-password-logout-btn')?.addEventListener('click', () => performLogout());
 
   if (changePwdForm) {
     changePwdForm.addEventListener('submit', async (e) => {
       e.preventDefault();
+      if (changingPassword) return;
       const token = sessionStorage.getItem('ats_token');
       if (!token) return;
 
@@ -35,7 +54,10 @@
       }
 
       try {
+        changingPassword = true;
+        document.getElementById('change-pwd-submit-btn').disabled = true;
         const res = await window.ATS_API.changePasswordApi(token, currentPassword, newPassword);
+        if (token !== sessionStorage.getItem('ats_token')) return;
         if (res.ok && res.data && res.data.success) {
           const userEmail = currentAuthenticatedUser ? currentAuthenticatedUser.email : '';
           changePwdModal.classList.add('hidden');
@@ -57,9 +79,12 @@
         }
       } catch (err) {
         if (changePwdAlert && changePwdAlertMsg) {
-          changePwdAlertMsg.textContent = err.message;
+          changePwdAlertMsg.textContent = 'Không thể kết nối đến máy chủ. Vui lòng thử lại.';
           changePwdAlert.classList.remove('hidden');
         }
+      } finally {
+        changingPassword = false;
+        document.getElementById('change-pwd-submit-btn').disabled = false;
       }
     });
   }

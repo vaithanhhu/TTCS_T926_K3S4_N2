@@ -56,7 +56,8 @@
     audit: document.getElementById('audit-view'),
     profile: document.getElementById('profile-view'),
     candidatePortal: document.getElementById('candidate-portal-view'),
-    error: document.getElementById('error-view')
+    error: document.getElementById('error-view'),
+    'change-password': document.getElementById('change-password-view')
   };
 
   // Toast Container

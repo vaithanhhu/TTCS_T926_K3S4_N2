@@ -6,8 +6,8 @@ class CompetencyService {
     this.db = db || getDatabase();
   }
 
-  getFrameworks() {
-    const frameworks = this.db.prepare(`
+  async getFrameworks() {
+    const frameworks = (await this.db.prepare(`
       SELECT
         id,
         code,
@@ -18,19 +18,19 @@ class CompetencyService {
         updated_at
       FROM competency_frameworks
       ORDER BY name ASC
-    `).all();
+    `).all());
 
     return {
       success: true,
       total: frameworks.length,
-      frameworks: frameworks.map(row => this.mapFramework(row))
+      frameworks: (await Promise.all(frameworks.map(async row => (await this.mapFramework(row)))))
     };
   }
 
-  getFrameworkById(id) {
+  async getFrameworkById(id) {
     if (!id) return null;
 
-    const row = this.db.prepare(`
+    const row = (await this.db.prepare(`
       SELECT
         id,
         code,
@@ -41,15 +41,15 @@ class CompetencyService {
         updated_at
       FROM competency_frameworks
       WHERE id = ?
-    `).get(id);
+    `).get(id));
 
     if (!row) return null;
 
-    return this.mapFramework(row);
+    return (await this.mapFramework(row));
   }
 
-  mapFramework(row) {
-    const criteria = this.db.prepare(`
+  async mapFramework(row) {
+    const criteria = (await this.db.prepare(`
       SELECT
         id,
         name,
@@ -59,14 +59,14 @@ class CompetencyService {
       FROM competency_criteria
       WHERE framework_id = ?
       ORDER BY display_order ASC, created_at ASC
-    `).all(row.id);
+    `).all(row.id));
 
-    const jobTitles = this.db.prepare(`
+    const jobTitles = (await this.db.prepare(`
       SELECT id, code, name, status
       FROM job_titles
       WHERE framework_id = ?
       ORDER BY name ASC
-    `).all(row.id);
+    `).all(row.id));
 
     const totalWeight = criteria.reduce(
       (sum, item) => sum + Number(item.weight || 0),
@@ -164,7 +164,8 @@ class CompetencyService {
     };
   }
 
-  createFramework(data = {}) {
+  async createFramework(data = {}) {
+    return this.db.transaction(async () => {
     const code =
       typeof data.code === 'string'
         ? data.code.trim().toUpperCase()
@@ -196,11 +197,11 @@ class CompetencyService {
     const validation = this.validateCriteria(criteria);
     if (!validation.success) return validation;
 
-    const duplicate = this.db.prepare(`
+    const duplicate = (await this.db.prepare(`
       SELECT id
       FROM competency_frameworks
       WHERE code = ?
-    `).get(code);
+    `).get(code));
 
     if (duplicate) {
       return {
@@ -214,10 +215,10 @@ class CompetencyService {
     const frameworkId =
       `cf-${crypto.randomUUID()}`;
 
-    this.db.exec('BEGIN');
+    (await this.db.exec('BEGIN'));
 
     try {
-      this.db.prepare(`
+      (await this.db.prepare(`
         INSERT INTO competency_frameworks (
           id,
           code,
@@ -237,7 +238,7 @@ class CompetencyService {
         code,
         name,
         description || null
-      );
+      ));
 
       const insertCriterion = this.db.prepare(`
         INSERT INTO competency_criteria (
@@ -257,8 +258,8 @@ class CompetencyService {
         )
       `);
 
-      criteria.forEach((item, index) => {
-        insertCriterion.run(
+      (await Promise.all(criteria.map(async (item, index) => {
+        (await insertCriterion.run(
           `cc-${crypto.randomUUID()}`,
           frameworkId,
           item.name.trim(),
@@ -267,12 +268,12 @@ class CompetencyService {
             : null,
           Number(item.weight),
           index + 1
-        );
-      });
+        ));
+      })));
 
-      this.db.exec('COMMIT');
+      (await this.db.exec('COMMIT'));
     } catch (error) {
-      this.db.exec('ROLLBACK');
+      (await this.db.exec('ROLLBACK'));
       throw error;
     }
 
@@ -280,16 +281,19 @@ class CompetencyService {
       success: true,
       statusCode: 201,
       message: 'Tạo khung năng lực thành công.',
-      data: this.getFrameworkById(frameworkId)
+      data: (await this.getFrameworkById(frameworkId))
     };
+
+    });
   }
 
-  updateFramework(id, data = {}) {
+  async updateFramework(id, data = {}) {
+    return this.db.transaction(async () => {
     if (['code', 'name'].some(key => Object.hasOwn(data, key) && (typeof data[key] !== 'string' || !data[key].trim())) ||
         (Object.hasOwn(data, 'criteria') && !Array.isArray(data.criteria))) {
       return { success: false, statusCode: 400, code: 'INVALID_COMPETENCY_FRAMEWORK', message: 'Mã, tên và danh sách tiêu chí không hợp lệ.' };
     }
-    const current = this.getFrameworkById(id);
+    const current = (await this.getFrameworkById(id));
 
     if (!current) {
       return {
@@ -322,11 +326,11 @@ class CompetencyService {
     const validation = this.validateCriteria(criteria);
     if (!validation.success) return validation;
 
-    const duplicate = this.db.prepare(`
+    const duplicate = (await this.db.prepare(`
       SELECT id
       FROM competency_frameworks
       WHERE code = ? AND id <> ?
-    `).get(code, id);
+    `).get(code, id));
 
     if (duplicate) {
       return {
@@ -337,19 +341,19 @@ class CompetencyService {
       };
     }
 
-    const existingIds = this.db.prepare('SELECT id FROM competency_criteria WHERE framework_id = ?').all(id).map(row => row.id);
+    const existingIds = (await this.db.prepare('SELECT id FROM competency_criteria WHERE framework_id = ?').all(id)).map(row => row.id);
     if (criteria.some(item => item.id && !existingIds.includes(item.id))) {
       return { success: false, statusCode: 400, code: 'INVALID_COMPETENCY_CRITERION', message: 'Tiêu chí không thuộc khung năng lực này.' };
     }
     for (const criterionId of existingIds.filter(value => !criteria.some(item => item.id === value))) {
-      if (this.db.prepare('SELECT 1 FROM interview_questions WHERE criterion_id = ? LIMIT 1').get(criterionId)) {
+      if ((await this.db.prepare('SELECT 1 FROM interview_questions WHERE criterion_id = ? LIMIT 1').get(criterionId))) {
         return { success: false, statusCode: 409, code: 'COMPETENCY_CRITERION_IN_USE', message: 'Tiêu chí đang có câu hỏi phỏng vấn nên không thể xóa.' };
       }
     }
-    this.db.exec('BEGIN');
+    (await this.db.exec('BEGIN'));
 
     try {
-      this.db.prepare(`
+      (await this.db.prepare(`
         UPDATE competency_frameworks
         SET
           code = ?,
@@ -362,13 +366,13 @@ class CompetencyService {
         name,
         description || null,
         id
-      );
+      ));
 
-      const existingCriteria = this.db.prepare(`
+      const existingCriteria = (await this.db.prepare(`
         SELECT id, description
         FROM competency_criteria
         WHERE framework_id = ?
-      `).all(id);
+      `).all(id));
 
       const existingById = new Map(
         existingCriteria.map(item => [item.id, item])
@@ -405,7 +409,7 @@ class CompetencyService {
         )
       `);
 
-      criteria.forEach((item, index) => {
+      (await Promise.all(criteria.map(async (item, index) => {
         const requestedId =
           typeof item.id === 'string'
             ? item.id.trim()
@@ -425,14 +429,14 @@ class CompetencyService {
               );
 
         if (existingCriterion) {
-          updateCriterion.run(
+          (await updateCriterion.run(
             item.name.trim(),
             description,
             Number(item.weight),
             index + 1,
             requestedId,
             id
-          );
+          ));
 
           retainedIds.add(requestedId);
           return;
@@ -441,32 +445,32 @@ class CompetencyService {
         const newCriterionId =
           `cc-${crypto.randomUUID()}`;
 
-        insertCriterion.run(
+        (await insertCriterion.run(
           newCriterionId,
           id,
           item.name.trim(),
           description,
           Number(item.weight),
           index + 1
-        );
+        ));
 
         retainedIds.add(newCriterionId);
-      });
+      })));
 
       const deleteCriterion = this.db.prepare(`
         DELETE FROM competency_criteria
         WHERE id = ? AND framework_id = ?
       `);
 
-      existingCriteria
+      (await Promise.all(existingCriteria
         .filter(item => !retainedIds.has(item.id))
-        .forEach(item => {
-          deleteCriterion.run(item.id, id);
-        });
+        .map(async item => {
+          (await deleteCriterion.run(item.id, id));
+        })));
 
-      this.db.exec('COMMIT');
+      (await this.db.exec('COMMIT'));
     } catch (error) {
-      this.db.exec('ROLLBACK');
+      (await this.db.exec('ROLLBACK'));
       throw error;
     }
 
@@ -474,17 +478,19 @@ class CompetencyService {
       success: true,
       statusCode: 200,
       message: 'Cập nhật khung năng lực thành công.',
-      data: this.getFrameworkById(id)
+      data: (await this.getFrameworkById(id))
     };
+
+    });
   }
 
-  getJobTitles({ includeSalary = false } = {}) {
-    const rows = this.db.prepare(`
+  async getJobTitles({ includeSalary = false } = {}) {
+    const rows = (await this.db.prepare(`
       SELECT jt.*, cf.code AS framework_code, cf.name AS framework_name
       FROM job_titles jt
       LEFT JOIN competency_frameworks cf ON jt.framework_id = cf.id
       ORDER BY jt.name ASC
-    `).all();
+    `).all());
     return {
       success: true, total: rows.length, canViewSalary: includeSalary,
       jobTitles: rows.map(row => ({
@@ -495,7 +501,7 @@ class CompetencyService {
     };
   }
 
-  validateJobTitle(data, current = null) {
+  async validateJobTitle(data, current = null) {
     const text = (key, fallback = '') => Object.hasOwn(data, key)
       ? (typeof data[key] === 'string' ? data[key].trim() : '') : fallback;
     const code = text('code', current?.code).toUpperCase();
@@ -517,45 +523,45 @@ class CompetencyService {
       }
     }
     if (frameworkId && (!current || frameworkId !== current.framework_id)) {
-      const framework = this.getFrameworkById(frameworkId);
+      const framework = (await this.getFrameworkById(frameworkId));
       if (!framework || framework.status !== 'ACTIVE' || framework.totalWeight !== 100) {
         return error('INVALID_COMPETENCY_FRAMEWORK', 'Khung năng lực phải đang áp dụng và có tổng trọng số 100%.');
       }
     }
-    const duplicate = this.db.prepare('SELECT id FROM job_titles WHERE code = ? AND id <> ?').get(code, current?.id || '');
+    const duplicate = (await this.db.prepare('SELECT id FROM job_titles WHERE code = ? AND id <> ?').get(code, current?.id || ''));
     if (duplicate) return { success: false, statusCode: 409, code: 'JOB_TITLE_CODE_EXISTS', message: 'Mã chức danh đã tồn tại.' };
     return { success: true, code, name, level, frameworkId, minSalary: minSalary == null ? null : Number(minSalary), maxSalary: maxSalary == null ? null : Number(maxSalary) };
   }
 
-  createJobTitle(data = {}, options = {}) {
-    const value = this.validateJobTitle(data);
+  async createJobTitle(data = {}, options = {}) {
+    const value = (await this.validateJobTitle(data));
     if (!value.success) return value;
     const id = 'jt-' + crypto.randomUUID();
-    this.db.prepare(`
+    (await this.db.prepare(`
       INSERT INTO job_titles (id, code, name, level, min_salary, max_salary, framework_id, status, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', datetime('now'), datetime('now'))
-    `).run(id, value.code, value.name, value.level, value.minSalary, value.maxSalary, value.frameworkId || null);
-    return { success: true, statusCode: 201, message: 'Tạo chức danh thành công.', data: this.getJobTitles(options).jobTitles.find(item => item.id === id) };
+    `).run(id, value.code, value.name, value.level, value.minSalary, value.maxSalary, value.frameworkId || null));
+    return { success: true, statusCode: 201, message: 'Tạo chức danh thành công.', data: (await this.getJobTitles(options)).jobTitles.find(item => item.id === id) };
   }
 
-  updateJobTitle(id, data = {}, options = {}) {
-    const current = this.db.prepare('SELECT * FROM job_titles WHERE id = ?').get(id);
+  async updateJobTitle(id, data = {}, options = {}) {
+    const current = (await this.db.prepare('SELECT * FROM job_titles WHERE id = ?').get(id));
     if (!current) return { success: false, statusCode: 404, code: 'JOB_TITLE_NOT_FOUND', message: 'Không tìm thấy chức danh.' };
-    const value = this.validateJobTitle(data, current);
+    const value = (await this.validateJobTitle(data, current));
     if (!value.success) return value;
-    this.db.prepare(`
+    (await this.db.prepare(`
       UPDATE job_titles SET code = ?, name = ?, level = ?, min_salary = ?, max_salary = ?,
         framework_id = ?, updated_at = datetime('now') WHERE id = ?
-    `).run(value.code, value.name, value.level || null, value.minSalary, value.maxSalary, value.frameworkId || null, id);
-    return { success: true, statusCode: 200, message: 'Cập nhật chức danh thành công.', data: this.getJobTitles(options).jobTitles.find(item => item.id === id) };
+    `).run(value.code, value.name, value.level || null, value.minSalary, value.maxSalary, value.frameworkId || null, id));
+    return { success: true, statusCode: 200, message: 'Cập nhật chức danh thành công.', data: (await this.getJobTitles(options)).jobTitles.find(item => item.id === id) };
   }
 
-  getFrameworkForJobTitle(jobTitleId) {
-    const jobTitle = this.db.prepare(`
+  async getFrameworkForJobTitle(jobTitleId) {
+    const jobTitle = (await this.db.prepare(`
       SELECT id, code, name, framework_id, status
       FROM job_titles
       WHERE id = ?
-    `).get(jobTitleId);
+    `).get(jobTitleId));
 
     if (!jobTitle) {
       return {
@@ -567,7 +573,7 @@ class CompetencyService {
     }
 
     const framework = jobTitle.framework_id
-      ? this.getFrameworkById(jobTitle.framework_id)
+      ? (await this.getFrameworkById(jobTitle.framework_id))
       : null;
 
     return {

@@ -9,6 +9,15 @@ const { getEmailService } = require('./emailService');
  * Vận hành trực tiếp trên CSDL SQLite thật (backend/data/ats.db).
  */
 class UserService {
+  async resolveDepartment(id, legacyName = '') {
+    if (id !== undefined && id !== null && id !== '') {
+      const department = (await this.db.prepare('SELECT id,name FROM departments WHERE id=?').get(id));
+      if (!department) return { success: false, statusCode: 400, code: 'INVALID_DEPARTMENT', message: 'Phòng ban không tồn tại.' };
+      return { success: true, id: department.id, name: department.name };
+    }
+    const matches = legacyName ? (await this.db.prepare('SELECT id,name FROM departments WHERE name=?').all(legacyName)) : [];
+    return { success: true, id: matches.length === 1 ? matches[0].id : null, name: legacyName };
+  }
   constructor(db) {
     this.db = db || getDatabase();
     this.emailService = getEmailService(this.db);
@@ -73,7 +82,7 @@ class UserService {
       to: 'F1'
     };
 
-    const roles = this.getRolesList().map(role => role.code);
+    const roles = (await this.getRolesList()).map(role => role.code);
     const roleListFormula = `"${roles.join(',')}"`;
 
     for (let rowNumber = 2; rowNumber <= 501; rowNumber++) {
@@ -251,14 +260,14 @@ class UserService {
     }
 
     const validRoleCodes = new Set(
-      this.getRolesList().map(role => role.code)
+      (await this.getRolesList()).map(role => role.code)
     );
 
     const existingEmailStmt = this.db.prepare(
       'SELECT id FROM users WHERE email = ? COLLATE NOCASE LIMIT 1'
     );
 
-    const rows = rawRows.map(row => {
+    const rows = (await Promise.all(rawRows.map(async row => {
       const errors = [];
 
       if (!row.fullName) {
@@ -290,7 +299,7 @@ class UserService {
           });
         }
 
-        if (existingEmailStmt.get(row.email)) {
+        if ((await existingEmailStmt.get(row.email))) {
           errors.push({
             field: 'email',
             code: 'EMAIL_ALREADY_EXISTS',
@@ -312,7 +321,7 @@ class UserService {
         valid: errors.length === 0,
         errors
       };
-    });
+    })));
 
     const validRows = rows.filter(row => row.valid).length;
     const invalidRows = rows.length - validRows;
@@ -369,71 +378,21 @@ class UserService {
         continue;
       }
 
-      let rowTransactionOpen = false;
       try {
-        this.db.exec('BEGIN IMMEDIATE');
-        rowTransactionOpen = true;
-        const createResult = this.createUser({
-          fullName: row.fullName,
-          email: row.email,
-          jobTitle: row.jobTitle,
-          departmentName: row.departmentName,
-          phoneNumber: row.phoneNumber,
-          roleCode: row.roleCode
-        }, createdByUserId);
-
-        if (createResult.success) {
-          this.db.exec('COMMIT');
-          rowTransactionOpen = false;
-          importedRows++;
-
-          results.push({
-            rowNumber: row.rowNumber,
-            email: row.email,
-            fullName: row.fullName,
-            status: 'IMPORTED',
-            imported: true,
-            userId: createResult.data?.user?.id || null,
-            errors: []
-          });
-        } else {
-          this.db.exec('ROLLBACK');
-          rowTransactionOpen = false;
-          skippedRows++;
-
-          results.push({
-            rowNumber: row.rowNumber,
-            email: row.email,
-            fullName: row.fullName,
-            status: 'SKIPPED',
-            imported: false,
-            errors: [
-              {
-                field: 'row',
-                code: createResult.code || 'USER_CREATE_FAILED',
-                message: createResult.message || 'Không thể tạo tài khoản.'
-              }
-            ]
-          });
-        }
-      } catch (err) {
-        if (rowTransactionOpen) this.db.exec('ROLLBACK');
-        skippedRows++;
-
-        results.push({
-          rowNumber: row.rowNumber,
-          email: row.email,
-          fullName: row.fullName,
-          status: 'SKIPPED',
-          imported: false,
-          errors: [
-            {
-              field: 'row',
-              code: 'USER_CREATE_ERROR',
-              message: 'Có lỗi khi tạo tài khoản cho dòng này.'
-            }
-          ]
+        const createResult = await this.db.transaction(async () => {
+          const result = await this.createUser({fullName:row.fullName,email:row.email,jobTitle:row.jobTitle,
+            departmentName:row.departmentName,phoneNumber:row.phoneNumber,roleCode:row.roleCode}, createdByUserId);
+          if (!result.success) { const error = new Error('ROW_IMPORT_REJECTED'); error.result = result; throw error; }
+          return result;
         });
+        importedRows++;
+        results.push({rowNumber:row.rowNumber,email:row.email,fullName:row.fullName,status:'IMPORTED',imported:true,
+          userId:createResult.data?.user?.id || null,errors:[]});
+      } catch (error) {
+        skippedRows++;
+        results.push({rowNumber:row.rowNumber,email:row.email,fullName:row.fullName,status:'SKIPPED',imported:false,
+          errors:[{field:'row',code:error.result?.code || 'USER_CREATE_ERROR',
+            message:error.result?.message || 'Có lỗi khi tạo tài khoản cho dòng này.'}]});
       }
     }
 
@@ -460,7 +419,7 @@ class UserService {
    * @param {object} options
    * @returns {object}
    */
-  getUsers(options = {}) {
+  async getUsers(options = {}) {
     let page = parseInt(options.page, 10);
     if (isNaN(page) || page < 1) page = 1;
 
@@ -501,7 +460,7 @@ class UserService {
 
     // 1. Tính tổng số dòng
     const countStmt = this.db.prepare(`SELECT COUNT(*) as total FROM users u ${whereSql}`);
-    const countResult = countStmt.get(...params);
+    const countResult = (await countStmt.get(...params));
     const totalItems = countResult ? countResult.total : 0;
     const totalPages = Math.ceil(totalItems / limit) || 1;
 
@@ -517,7 +476,7 @@ class UserService {
       LIMIT ? OFFSET ?
     `);
 
-    const users = dataStmt.all(...queryParams);
+    const users = (await dataStmt.all(...queryParams));
 
     // Lấy vai trò cho từng user
     const rolesStmt = this.db.prepare(`
@@ -528,8 +487,8 @@ class UserService {
       ORDER BY r.code ASC
     `);
 
-    const items = users.map(user => {
-      const userRoles = rolesStmt.all(user.id);
+    const items = (await Promise.all(users.map(async user => {
+      const userRoles = (await rolesStmt.all(user.id));
       return {
         id: user.id,
         email: user.email,
@@ -545,7 +504,7 @@ class UserService {
         createdAt: user.created_at,
         updatedAt: user.updated_at
       };
-    });
+    })));
 
     return {
       success: true,
@@ -568,7 +527,7 @@ class UserService {
    * @param {string} id
    * @returns {object|null}
    */
-  getUserById(id) {
+  async getUserById(id) {
     if (!id) return null;
 
     const userStmt = this.db.prepare(`
@@ -576,7 +535,7 @@ class UserService {
       FROM users
       WHERE id = ?
     `);
-    const user = userStmt.get(id);
+    const user = (await userStmt.get(id));
     if (!user) return null;
 
     const rolesStmt = this.db.prepare(`
@@ -585,7 +544,7 @@ class UserService {
       JOIN user_roles ur ON r.id = ur.role_id
       WHERE ur.user_id = ?
     `);
-    const roles = rolesStmt.all(id);
+    const roles = (await rolesStmt.all(id));
 
     return {
       id: user.id,
@@ -610,12 +569,16 @@ class UserService {
    * @param {string} createdByUserId
    * @returns {object}
    */
-  createUser(data = {}, createdByUserId = 'ADMIN') {
+  async createUser(data = {}, createdByUserId = 'ADMIN') {
+    return this.db.transaction(async () => {
     const fullName = typeof data.fullName === 'string' ? data.fullName.trim() : '';
     const email = typeof data.email === 'string' ? data.email.trim().toLowerCase() : '';
     const jobTitle = typeof data.jobTitle === 'string' ? data.jobTitle.trim() : '';
-    const departmentName = typeof data.departmentName === 'string' ? data.departmentName.trim() : '';
-    const phoneNumber = typeof data.phoneNumber === 'string' ? data.phoneNumber.trim() : '';
+    let departmentName = typeof (data.departmentName ?? data.department) === 'string' ? (data.departmentName ?? data.department).trim() : '';
+    const department = (await this.resolveDepartment(data.departmentId, departmentName));
+    if (!department.success) return department;
+    departmentName = department.name;
+    const phoneNumber = typeof (data.phoneNumber ?? data.phone) === 'string' ? (data.phoneNumber ?? data.phone).trim() : '';
     let roleCode = typeof data.roleCode === 'string' ? data.roleCode.trim() : 'INTERVIEWER';
 
     // 1. Kiểm tra đầu vào bắt buộc
@@ -638,8 +601,9 @@ class UserService {
     }
 
     // 2. AC-02: Kiểm tra email trùng lặp (Collated NOCASE)
+    if (this.db.provider === 'postgres') await this.db.prepare('SELECT pg_advisory_xact_lock(hashtext(?))').get('create-user:' + email);
     const checkEmailStmt = this.db.prepare('SELECT id FROM users WHERE email = ? COLLATE NOCASE LIMIT 1');
-    const existing = checkEmailStmt.get(email);
+    const existing = (await checkEmailStmt.get(email));
     if (existing) {
       return {
         success: false,
@@ -650,9 +614,9 @@ class UserService {
     }
 
     // 3. Xác định Role ID từ database
-    let roleRow = this.db.prepare('SELECT id, code, name FROM roles WHERE code = ? LIMIT 1').get(roleCode);
+    let roleRow = (await this.db.prepare('SELECT id, code, name FROM roles WHERE code = ? LIMIT 1').get(roleCode));
     if (!roleRow) {
-      roleRow = this.db.prepare('SELECT id, code, name FROM roles WHERE code = "INTERVIEWER" LIMIT 1').get();
+      roleRow = (await this.db.prepare("SELECT id, code, name FROM roles WHERE code = 'INTERVIEWER' LIMIT 1").get());
       roleCode = roleRow.code;
     }
 
@@ -664,42 +628,42 @@ class UserService {
 
     const insertUserStmt = this.db.prepare(`
       INSERT INTO users (
-        id, email, password_hash, full_name, job_title, department_id, department_name, phone_number, status, failed_attempts, created_at, updated_at
+        id, email, password_hash, full_name, job_title, department_id, department_name, phone_number, status, failed_attempts, must_change_password, created_at, updated_at
       ) VALUES (
-        ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', 0, datetime('now'), datetime('now')
+        ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', 0, TRUE, datetime('now'), datetime('now')
       )
     `);
 
-    insertUserStmt.run(
+    (await insertUserStmt.run(
       newUserId,
       email,
       passwordHash,
       fullName,
       jobTitle || null,
-      'dept-auto',
+      department.id,
       departmentName || 'Hệ thống Nội bộ',
       phoneNumber || null
-    );
+    ));
 
     // Gán vai trò ban đầu vào bảng user_roles
     const insertRoleStmt = this.db.prepare(`
       INSERT INTO user_roles (user_id, role_id)
       VALUES (?, ?)
     `);
-    insertRoleStmt.run(newUserId, roleRow.id);
+    (await insertRoleStmt.run(newUserId, roleRow.id));
 
     // Chuẩn bị email kích hoạt (AC-01)
     const activationEmail = {
       recipient: email,
-      subject: '🔐 [ATS] Kích hoạt tài khoản nội bộ & Mật khẩu tạm thời',
+      subject: '[ATS] Kích hoạt tài khoản nội bộ & Mật khẩu tạm thời',
       body: `Kính gửi ${fullName},\n\nTài khoản của bạn trên Hệ thống Tuyển dụng Nội bộ (ATS) đã được tạo thành công.\n\nThông tin đăng nhập:\n- Email: ${email}\n- Mật khẩu tạm: ${tempPassword}\n- Vai trò cấp quyền: ${roleRow.name} (${roleRow.code})\n\nVui lòng đăng nhập và đổi mật khẩu trong phiên làm việc đầu tiên.`
     };
 
     // Dispatch real email via EmailService
     if (this.emailService) {
-      this.emailService.sendAccountActivationEmail(email, fullName, tempPassword, roleRow.name).catch(err => {
+      this.db.afterCommit(() => this.emailService.sendAccountActivationEmail(email, fullName, tempPassword, roleRow.name).catch(err => {
         console.error('[UserService] Error dispatching activation email:', err.message);
-      });
+      }));
     }
 
     return {
@@ -723,6 +687,8 @@ class UserService {
         activationEmail
       }
     };
+
+    });
   }
 
   /**
@@ -732,21 +698,24 @@ class UserService {
    * @param {string} updatedByUserId
    * @returns {object}
    */
-  updateUser(id, data = {}, updatedByUserId = 'ADMIN') {
+  async updateUser(id, data = {}, updatedByUserId = 'ADMIN') {
     if (!id) {
       return { success: false, statusCode: 400, code: 'MISSING_ID', message: 'Mã người dùng không hợp lệ.' };
     }
 
     const checkStmt = this.db.prepare('SELECT id, email FROM users WHERE id = ?');
-    const existing = checkStmt.get(id);
+    const existing = (await checkStmt.get(id));
     if (!existing) {
       return { success: false, statusCode: 404, code: 'USER_NOT_FOUND', message: 'Không tìm thấy người dùng cần cập nhật.' };
     }
 
     const fullName = typeof data.fullName === 'string' ? data.fullName.trim() : '';
     const jobTitle = typeof data.jobTitle === 'string' ? data.jobTitle.trim() : '';
-    const departmentName = typeof data.departmentName === 'string' ? data.departmentName.trim() : '';
-    const phoneNumber = typeof data.phoneNumber === 'string' ? data.phoneNumber.trim() : '';
+    let departmentName = typeof (data.departmentName ?? data.department) === 'string' ? (data.departmentName ?? data.department).trim() : '';
+    const department = (await this.resolveDepartment(data.departmentId, departmentName));
+    if (!department.success) return department;
+    departmentName = department.name;
+    const phoneNumber = typeof (data.phoneNumber ?? data.phone) === 'string' ? (data.phoneNumber ?? data.phone).trim() : '';
 
     if (!fullName) {
       return { success: false, statusCode: 400, code: 'VALIDATION_ERROR', message: 'Họ và tên là trường bắt buộc.' };
@@ -754,13 +723,13 @@ class UserService {
 
     const updateStmt = this.db.prepare(`
       UPDATE users
-      SET full_name = ?, job_title = ?, department_name = ?, phone_number = ?, updated_at = datetime('now')
+      SET full_name = ?, job_title = ?, department_id = ?, department_name = ?, phone_number = ?, updated_at = datetime('now')
       WHERE id = ?
     `);
 
-    updateStmt.run(fullName, jobTitle || null, departmentName || null, phoneNumber || null, id);
+    (await updateStmt.run(fullName, jobTitle || null, department.id, departmentName || null, phoneNumber || null, id));
 
-    const updatedUser = this.getUserById(id);
+    const updatedUser = (await this.getUserById(id));
 
     return {
       success: true,
@@ -778,7 +747,7 @@ class UserService {
    * Chỉ cho phép sửa họ tên, chức danh và số điện thoại.
    * Email, phòng ban và vai trò luôn được giữ nguyên.
    */
-  updateProfile(id, data = {}, { validatePhone = true } = {}) {
+  async updateProfile(id, data = {}, { validatePhone = true } = {}) {
     if (!id) {
       return {
         success: false,
@@ -788,9 +757,9 @@ class UserService {
       };
     }
 
-    const existing = this.db.prepare(
+    const existing = (await this.db.prepare(
       'SELECT id FROM users WHERE id = ?'
-    ).get(id);
+    ).get(id));
 
     if (!existing) {
       return {
@@ -851,14 +820,14 @@ class UserService {
       WHERE id = ?
     `);
 
-    updateStmt.run(
+    (await updateStmt.run(
       fullName,
       jobTitle || null,
       phoneNumber || null,
       id
-    );
+    ));
 
-    const updatedUser = this.getUserById(id);
+    const updatedUser = (await this.getUserById(id));
 
     return {
       success: true,
@@ -872,9 +841,9 @@ class UserService {
    * Lấy danh sách 7 vai trò để hiển thị trên Dropdown bộ lọc hoặc form tạo (AC-03)
    * @returns {Array<object>}
    */
-  getRolesList() {
+  async getRolesList() {
     const stmt = this.db.prepare('SELECT id, code, name, default_path, description FROM roles ORDER BY code ASC');
-    return stmt.all();
+    return (await stmt.all());
   }
 
   /**
@@ -882,13 +851,13 @@ class UserService {
    * @param {string} userId
    * @returns {object|null}
    */
-  getUserRoles(userId) {
+  async getUserRoles(userId) {
     if (!userId) return null;
 
-    const user = this.getUserById(userId);
+    const user = (await this.getUserById(userId));
     if (!user) return null;
 
-    const allRoles = this.getRolesList();
+    const allRoles = (await this.getRolesList());
 
     return {
       userId: user.id,
@@ -907,12 +876,13 @@ class UserService {
    * @param {object} requestingUser Người dùng đang thực hiện yêu cầu
    * @returns {object}
    */
-  assignUserRoles(targetUserId, roleCodes, requestingUser = {}) {
+  async assignUserRoles(targetUserId, roleCodes, requestingUser = {}) {
+    return this.db.transaction(async () => {
     if (!targetUserId) {
       return { success: false, statusCode: 400, code: 'MISSING_USER_ID', message: 'Mã người dùng không hợp lệ.' };
     }
 
-    const targetUser = this.getUserById(targetUserId);
+    const targetUser = (await this.getUserById(targetUserId));
     if (!targetUser) {
       return { success: false, statusCode: 404, code: 'USER_NOT_FOUND', message: 'Không tìm thấy người dùng cần phân vai trò.' };
     }
@@ -947,7 +917,7 @@ class UserService {
     }
 
     // Kiểm tra tất cả mã vai trò có tồn tại trong CSDL không
-    const allRoles = this.getRolesList();
+    const allRoles = (await this.getRolesList());
     const validRoleMap = new Map(allRoles.map(r => [r.code, r.id]));
 
     for (const code of normalizedCodes) {
@@ -966,18 +936,18 @@ class UserService {
     const insertNewRole = this.db.prepare('INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)');
 
     let updatedUser;
-    this.db.exec('SAVEPOINT assign_user_roles');
+    (await this.db.exec('SAVEPOINT assign_user_roles'));
     try {
-      deleteOldRoles.run(targetUserId);
+      (await deleteOldRoles.run(targetUserId));
       for (const code of normalizedCodes) {
         const roleId = validRoleMap.get(code);
-        insertNewRole.run(targetUserId, roleId);
+        (await insertNewRole.run(targetUserId, roleId));
       }
-      updatedUser = this.getUserById(targetUserId);
-      this.db.exec('RELEASE SAVEPOINT assign_user_roles');
+      updatedUser = (await this.getUserById(targetUserId));
+      (await this.db.exec('RELEASE SAVEPOINT assign_user_roles'));
     } catch (error) {
-      this.db.exec('ROLLBACK TO SAVEPOINT assign_user_roles');
-      this.db.exec('RELEASE SAVEPOINT assign_user_roles');
+      (await this.db.exec('ROLLBACK TO SAVEPOINT assign_user_roles'));
+      (await this.db.exec('RELEASE SAVEPOINT assign_user_roles'));
       throw error;
     }
 
@@ -994,6 +964,8 @@ class UserService {
         roleNames: updatedUser.roleNames
       }
     };
+
+    });
   }
 
   /**
@@ -1001,7 +973,7 @@ class UserService {
    * @param {string} userId
    * @returns {Array<object>}
    */
-  getUserHandoverRequisitions(userId) {
+  async getUserHandoverRequisitions(userId) {
     if (!userId) return [];
     const stmt = this.db.prepare(`
       SELECT r.id, r.code, r.title, r.department_name, r.status, r.headcount, r.handover_required,
@@ -1016,7 +988,7 @@ class UserService {
         AND r.status IN ('OPEN', 'IN_PROGRESS')
       ORDER BY r.code ASC
     `);
-    return stmt.all(userId, userId, userId, userId, userId, userId);
+    return (await stmt.all(userId, userId, userId, userId, userId, userId));
   }
 
   /**
@@ -1026,12 +998,13 @@ class UserService {
    * @param {object} requestingUser Người thực hiện khóa
    * @returns {object}
    */
-  lockUser(targetUserId, reason, requestingUser = {}) {
+  async lockUser(targetUserId, reason, requestingUser = {}) {
+    return this.db.transaction(async () => {
     if (!targetUserId) {
       return { success: false, statusCode: 400, code: 'MISSING_USER_ID', message: 'Mã người dùng không hợp lệ.' };
     }
 
-    const targetUser = this.getUserById(targetUserId);
+    const targetUser = (await this.getUserById(targetUserId));
     if (!targetUser) {
       return { success: false, statusCode: 404, code: 'USER_NOT_FOUND', message: 'Không tìm thấy người dùng cần khóa.' };
     }
@@ -1064,40 +1037,40 @@ class UserService {
       SET status = 'LOCKED', lock_reason = ?, updated_at = datetime('now')
       WHERE id = ?
     `);
-    updateStmt.run(trimmedReason, targetUserId);
+    (await updateStmt.run(trimmedReason, targetUserId));
 
     // AC-01: Thu hồi ngay lập tức tất cả các phiên đăng nhập đang mở phía server
     const deleteSessionsStmt = this.db.prepare('DELETE FROM sessions WHERE user_id = ?');
-    deleteSessionsStmt.run(targetUserId);
+    (await deleteSessionsStmt.run(targetUserId));
 
     // Ghi audit log
     const auditStmt = this.db.prepare(`
       INSERT INTO login_audit_logs (id, email, ip_address, status, reason, attempted_at)
       VALUES (?, ?, ?, 'ACCOUNT_LOCKED', ?, datetime('now'))
     `);
-    auditStmt.run(crypto.randomUUID(), targetUser.email, 'SYSTEM', `Khóa bởi ${requestingUser.email || 'ADMIN'}: ${trimmedReason}`);
+    (await auditStmt.run(crypto.randomUUID(), targetUser.email, 'SYSTEM', `Khóa bởi ${requestingUser.email || 'ADMIN'}: ${trimmedReason}`));
 
     // AC-03: Kiểm tra vị trí tuyển dụng do người đó phụ trách
-    const handoverRequisitions = this.getUserHandoverRequisitions(targetUserId);
+    const handoverRequisitions = (await this.getUserHandoverRequisitions(targetUserId));
     const handoverRequired = handoverRequisitions.length > 0;
 
     if (handoverRequired) {
       const markHandoverStmt = this.db.prepare(`
         UPDATE requisitions
-        SET handover_required = 1,
+        SET handover_required = TRUE,
             handover_notes = ?,
             updated_at = datetime('now')
         WHERE (recruiter_id = ? OR hiring_manager_id = ?)
           AND status IN ('OPEN', 'IN_PROGRESS')
       `);
-      markHandoverStmt.run(
+      (await markHandoverStmt.run(
         `Cảnh báo: Nhân sự ${targetUser.fullName} (${targetUser.email}) đã bị khóa tài khoản vào lúc ${new Date().toISOString()}. Lý do: ${trimmedReason}. Cần bàn giao vị trí.`,
         targetUserId,
         targetUserId
-      );
+      ));
     }
 
-    const updatedUser = this.getUserById(targetUserId);
+    const updatedUser = (await this.getUserById(targetUserId));
 
     return {
       success: true,
@@ -1113,6 +1086,8 @@ class UserService {
         handoverRequisitions
       }
     };
+
+    });
   }
 
   /**
@@ -1121,12 +1096,13 @@ class UserService {
    * @param {object} requestingUser
    * @returns {object}
    */
-  unlockUser(targetUserId, requestingUser = {}) {
+  async unlockUser(targetUserId, requestingUser = {}) {
+    return this.db.transaction(async () => {
     if (!targetUserId) {
       return { success: false, statusCode: 400, code: 'MISSING_USER_ID', message: 'Mã người dùng không hợp lệ.' };
     }
 
-    const targetUser = this.getUserById(targetUserId);
+    const targetUser = (await this.getUserById(targetUserId));
     if (!targetUser) {
       return { success: false, statusCode: 404, code: 'USER_NOT_FOUND', message: 'Không tìm thấy người dùng cần mở khóa.' };
     }
@@ -1140,16 +1116,16 @@ class UserService {
           updated_at = datetime('now')
       WHERE id = ?
     `);
-    unlockStmt.run(targetUserId);
+    (await unlockStmt.run(targetUserId));
 
     // Ghi audit log
     const auditStmt = this.db.prepare(`
       INSERT INTO login_audit_logs (id, email, ip_address, status, reason, attempted_at)
       VALUES (?, ?, ?, 'ACCOUNT_UNLOCKED', ?, datetime('now'))
     `);
-    auditStmt.run(crypto.randomUUID(), targetUser.email, 'SYSTEM', `Mở khóa bởi ${requestingUser.email || 'ADMIN'}`);
+    (await auditStmt.run(crypto.randomUUID(), targetUser.email, 'SYSTEM', `Mở khóa bởi ${requestingUser.email || 'ADMIN'}`));
 
-    const updatedUser = this.getUserById(targetUserId);
+    const updatedUser = (await this.getUserById(targetUserId));
 
     return {
       success: true,
@@ -1160,18 +1136,21 @@ class UserService {
         user: updatedUser
       }
     };
+
+    });
   }
 
   /**
    * Reset mật khẩu người dùng bởi Quản trị viên
    * Sinh mật khẩu tạm mới, cập nhật CSDL và gửi email
    */
-  resetUserPassword(targetUserId, requestingUser = {}) {
+  async resetUserPassword(targetUserId, requestingUser = {}) {
+    return this.db.transaction(async () => {
     if (!targetUserId) {
       return { success: false, statusCode: 400, code: 'MISSING_USER_ID', message: 'Mã người dùng không hợp lệ.' };
     }
 
-    const targetUser = this.getUserById(targetUserId);
+    const targetUser = (await this.getUserById(targetUserId));
     if (!targetUser) {
       return { success: false, statusCode: 404, code: 'USER_NOT_FOUND', message: 'Không tìm thấy người dùng cần đặt lại mật khẩu.' };
     }
@@ -1181,19 +1160,19 @@ class UserService {
 
     const updateStmt = this.db.prepare(`
       UPDATE users
-      SET password_hash = ?, failed_attempts = 0, locked_until = NULL, updated_at = datetime('now')
+      SET password_hash = ?, must_change_password = TRUE, failed_attempts = 0, locked_until = NULL, updated_at = datetime('now')
       WHERE id = ?
     `);
-    updateStmt.run(passwordHash, targetUserId);
+    (await updateStmt.run(passwordHash, targetUserId));
 
     // Chấm dứt các session cũ
-    this.db.prepare('DELETE FROM sessions WHERE user_id = ?').run(targetUserId);
+    (await this.db.prepare('DELETE FROM sessions WHERE user_id = ?').run(targetUserId));
 
     // Gửi email thông báo
     if (this.emailService) {
-      this.emailService.sendAccountActivationEmail(targetUser.email, targetUser.fullName, tempPassword, targetUser.roles.join(', ')).catch(err => {
+      this.db.afterCommit(() => this.emailService.sendAccountActivationEmail(targetUser.email, targetUser.fullName, tempPassword, targetUser.roles.join(', ')).catch(err => {
         console.error('[UserService] Error sending reset email:', err.message);
-      });
+      }));
     }
 
     return {
@@ -1207,17 +1186,20 @@ class UserService {
         temporaryPassword: tempPassword
       }
     };
+
+    });
   }
 
   /**
    * Xóa tài khoản người dùng
    */
-  deleteUser(targetUserId, requestingUser = {}) {
+  async deleteUser(targetUserId, requestingUser = {}) {
+    return this.db.transaction(async () => {
     if (!targetUserId) {
       return { success: false, statusCode: 400, code: 'MISSING_USER_ID', message: 'Mã người dùng không hợp lệ.' };
     }
 
-    const targetUser = this.getUserById(targetUserId);
+    const targetUser = (await this.getUserById(targetUserId));
     if (!targetUser) {
       return { success: false, statusCode: 404, code: 'USER_NOT_FOUND', message: 'Không tìm thấy người dùng cần xóa.' };
     }
@@ -1228,18 +1210,18 @@ class UserService {
     }
 
     // Department ownership introduced in Sprint 2 must never partially delete a user.
-    this.db.exec('BEGIN IMMEDIATE');
+    (await this.db.exec('BEGIN IMMEDIATE'));
     try {
-      if (this.db.prepare('SELECT 1 FROM departments WHERE manager_id = ? LIMIT 1').get(targetUserId)) {
-        this.db.exec('ROLLBACK');
+      if ((await this.db.prepare('SELECT 1 FROM departments WHERE manager_id = ? LIMIT 1').get(targetUserId))) {
+        (await this.db.exec('ROLLBACK'));
         return { success: false, statusCode: 409, code: 'USER_IS_DEPARTMENT_MANAGER', message: 'Người dùng đang phụ trách phòng ban nên không thể xóa.' };
       }
-      this.db.prepare('DELETE FROM sessions WHERE user_id = ?').run(targetUserId);
-      this.db.prepare('DELETE FROM user_roles WHERE user_id = ?').run(targetUserId);
-      this.db.prepare('DELETE FROM users WHERE id = ?').run(targetUserId);
-      this.db.exec('COMMIT');
+      (await this.db.prepare('DELETE FROM sessions WHERE user_id = ?').run(targetUserId));
+      (await this.db.prepare('DELETE FROM user_roles WHERE user_id = ?').run(targetUserId));
+      (await this.db.prepare('DELETE FROM users WHERE id = ?').run(targetUserId));
+      (await this.db.exec('COMMIT'));
     } catch (error) {
-      this.db.exec('ROLLBACK');
+      (await this.db.exec('ROLLBACK'));
       throw error;
     }
 
@@ -1249,6 +1231,8 @@ class UserService {
       code: 'USER_DELETED_SUCCESS',
       message: `Đã xóa tài khoản '${targetUser.email}' khỏi hệ thống.`
     };
+
+    });
   }
 }
 

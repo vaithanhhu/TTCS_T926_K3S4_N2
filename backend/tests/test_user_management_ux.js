@@ -71,7 +71,7 @@ async function fixture() {
     if (/^\/api\/v1\/departments\/[^/]+$/.test(target.pathname) && method === 'DELETE') return model.departmentDelete(call);
     if (target.pathname === '/api/v1/auth/permissions') return model.permissions(call);
     if (/^\/api\/v1\/admin\/users\/[^/]+\/unlock$/.test(target.pathname) && method === 'POST') return model.unlock(call);
-    if (/^\/api\/v1\/admin\/users\/[^/]+\/reset-password$/.test(target.pathname) && method === 'POST') return model.resetPassword(call);
+    if (/^\/api\/v1\/admin\/users\/[^/]+\/reset-password$/.test(target.pathname) && method === 'POST') return (await model.resetPassword(call));
     if (/^\/api\/v1\/admin\/users\/[^/]+$/.test(target.pathname) && method === 'DELETE') return model.remove(call);
     if (target.pathname === '/api/v1/admin/users' && method === 'POST') return model.create(call);
     if (/^\/api\/v1\/admin\/users\/[^/]+\/roles$/.test(target.pathname) && method === 'PUT') return model.roles(call);
@@ -211,7 +211,9 @@ async function main() {
   await test('Create success: one real API helper request preserves every payload field', async () => {
     const f = await fixture(); await f.open(); await f.submit();
     const calls = f.calls.filter(call => call.method === 'POST'); assert.equal(calls.length, 1);
-    assert.deepEqual(calls[0].body, { fullName: 'Test User', email: 'test@example.invalid', jobTitle: 'Specialist', department: 'Engineering', phone: '0123456789', initialRole: 'INTERVIEWER', departmentName: 'Engineering', phoneNumber: '0123456789', roleCode: 'INTERVIEWER' });
+    const { departmentId, ...legacyPayload } = calls[0].body;
+    assert.equal(departmentId, 'dept-engineering');
+    assert.deepEqual(legacyPayload, { fullName: 'Test User', email: 'test@example.invalid', jobTitle: 'Specialist', department: 'Engineering', phone: '0123456789', initialRole: 'INTERVIEWER', departmentName: 'Engineering', phoneNumber: '0123456789', roleCode: 'INTERVIEWER' });
   });
   await test('Create success: modal closes, native form resets and Save is hidden by overlay', async () => {
     const f = await fixture(); await f.open(); await f.submit(); assertClosed(f);

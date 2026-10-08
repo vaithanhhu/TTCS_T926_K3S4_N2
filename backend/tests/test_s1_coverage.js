@@ -54,7 +54,7 @@ async function main() {
         assert.equal(session.status, 200);
         assert.ok(session.data.data.user.roles.includes(role));
         // The existing role/defaultHome contract is the oracle, not the router's own hardcoded home.
-        const expected = app.db.prepare('SELECT default_path FROM roles WHERE code=?').get(role).default_path;
+        const expected = (await app.db.prepare('SELECT default_path FROM roles WHERE code=?').get(role)).default_path;
         assert.equal(f.window.location.pathname, expected, role + ' must reach its configured home');
         const route = manifest.routes.find(row => row.path === expected);
         assert.ok(route, role + ' home must resolve to a real frontend route');
@@ -66,14 +66,14 @@ async function main() {
     await test('S1-02', 'AC3', 'Expired real session -> heartbeat -> cleanup -> login notice', async () => {
       const f = await frontend(app.base, 'hrmanager@company.com');
       const token = f.storage.get('ats_token');
-      app.db.prepare('UPDATE sessions SET expires_at=? WHERE token=?').run(new Date(Date.now() - 1000).toISOString(), token);
+      (await app.db.prepare('UPDATE sessions SET expires_at=? WHERE token=?').run(new Date(Date.now() - 1000).toISOString(), token));
       const response = await app.api('GET', '/auth/me', token);
       assert.equal(response.status, 401); assert.equal(response.data.code, 'SESSION_EXPIRED');
       // The endpoint removes expired sessions. Reinsert the same isolated session with an expired
       // deadline so the actual frontend heartbeat independently receives SESSION_EXPIRED as well.
-      const user = app.db.prepare("SELECT id FROM users WHERE email='hrmanager@company.com'").get();
-      app.db.prepare('INSERT INTO sessions (id,user_id,token,expires_at) VALUES (?,?,?,?)')
-        .run('coverage-expired-session', user.id, token, new Date(Date.now() - 1000).toISOString());
+      const user = (await app.db.prepare("SELECT id FROM users WHERE email='hrmanager@company.com'").get());
+      (await app.db.prepare('INSERT INTO sessions (id,user_id,token,expires_at) VALUES (?,?,?,?)')
+        .run('coverage-expired-session', user.id, token, new Date(Date.now() - 1000).toISOString()));
       const heartbeat = [...f.intervals.values()]; assert.equal(heartbeat.length, 1);
       await heartbeat[0](); await f.settle();
       for (const key of ['ats_token', 'ats_user', 'ats_expires_at']) assert.equal(f.storage.has(key), false);
@@ -88,9 +88,9 @@ async function main() {
 
     await test('S1-05', 'AC3', 'Real denied request is rendered as specific Vietnamese feedback', async () => {
       const f = await frontend(app.base, 'admin@company.com');
-      const permission = app.db.prepare("SELECT * FROM role_permissions WHERE role_id='role-admin' AND permission_id='perm-user-read'").get();
+      const permission = (await app.db.prepare("SELECT * FROM role_permissions WHERE role_id='role-admin' AND permission_id='perm-user-read'").get());
       assert.ok(permission);
-      app.db.prepare('DELETE FROM role_permissions WHERE role_id=? AND permission_id=?').run(permission.role_id, permission.permission_id);
+      (await app.db.prepare('DELETE FROM role_permissions WHERE role_id=? AND permission_id=?').run(permission.role_id, permission.permission_id));
       try {
         const denied = await app.api('GET', '/admin/users', f.storage.get('ats_token'));
         assert.equal(denied.status, 403);
@@ -110,7 +110,7 @@ async function main() {
           'Received real 403 but no Vietnamese denial is rendered; table=' + inline);
         assert.deepEqual(f.errors, []);
       } finally {
-        app.db.prepare('INSERT INTO role_permissions (role_id,permission_id) VALUES (?,?)').run(permission.role_id, permission.permission_id);
+        (await app.db.prepare('INSERT INTO role_permissions (role_id,permission_id) VALUES (?,?)').run(permission.role_id, permission.permission_id));
       }
     });
 
@@ -187,7 +187,7 @@ async function main() {
       assert.equal(res.status, 201); created = res.data.data;
       assert.equal(created.activationEmail.recipient, 'coverage.activation@test.example');
       assert.ok(created.activationEmail.body.includes(created.temporaryPassword));
-      const row = app.db.prepare('SELECT * FROM users WHERE id=?').get(created.user.id);
+      const row = (await app.db.prepare('SELECT * FROM users WHERE id=?').get(created.user.id));
       assert.equal(row.status, 'ACTIVE'); assert.ok(row.password_hash !== created.temporaryPassword);
       const { verifyPassword } = require('../src/utils/password');
       assert.ok(verifyPassword(created.temporaryPassword, row.password_hash));
@@ -211,7 +211,7 @@ async function main() {
       const old = await app.api('POST', '/auth/login', null, { email: created.user.email, password: created.temporaryPassword });
       assert.equal(old.status, 401);
       const current = await app.login(created.user.email, password); assert.equal(current.user.id, created.user.id);
-      const row = app.db.prepare('SELECT password_hash FROM users WHERE id=?').get(created.user.id);
+      const row = (await app.db.prepare('SELECT password_hash FROM users WHERE id=?').get(created.user.id));
       assert.ok(require('../src/utils/password').verifyPassword(password, row.password_hash));
     });
   } finally { await app.close(); }

@@ -15,7 +15,7 @@ class AuthController {
       const { email, password } = body || {};
       const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
 
-      const result = this.authService.login(email, password, ipAddress);
+      const result = (await this.authService.login(email, password, ipAddress));
 
       res.writeHead(result.statusCode, {
         'Content-Type': 'application/json; charset=utf-8',
@@ -37,6 +37,7 @@ class AuthController {
       if (result.remainingMinutes) {
         responsePayload.remainingMinutes = result.remainingMinutes;
       }
+      if (Number.isInteger(result.remainingAttempts)) responsePayload.remainingAttempts = result.remainingAttempts;
 
       res.end(JSON.stringify(responsePayload));
     } catch (err) {
@@ -60,7 +61,7 @@ class AuthController {
       }
 
       const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
-      const result = this.authService.logout(token, ipAddress);
+      const result = (await this.authService.logout(token, ipAddress));
 
       res.writeHead(result.statusCode, {
         'Content-Type': 'application/json; charset=utf-8'
@@ -100,7 +101,7 @@ class AuthController {
       }
 
       const token = authHeader.substring(7).trim();
-      const result = this.authService.validateSession(token, true);
+      const result = (await this.authService.validateSession(token, true, true));
 
       res.writeHead(result.statusCode, {
         'Content-Type': 'application/json; charset=utf-8'
@@ -144,7 +145,7 @@ class AuthController {
     try {
       const { email } = body || {};
       const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
-      const result = this.authService.requestPasswordReset(email, ipAddress);
+      const result = (await this.authService.requestPasswordReset(email, ipAddress));
 
       res.writeHead(result.statusCode, { 'Content-Type': 'application/json; charset=utf-8' });
       const payload = {
@@ -165,7 +166,7 @@ class AuthController {
    */
   async handleVerifyResetToken(req, res, token) {
     try {
-      const result = this.authService.verifyResetToken(token);
+      const result = (await this.authService.verifyResetToken(token));
       res.writeHead(result.statusCode, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({
         success: result.valid,
@@ -186,7 +187,7 @@ class AuthController {
   async handleVerifyOtp(req, res, body) {
     try {
       const { email, otp } = body || {};
-      const result = this.authService.verifyOtp(email, otp);
+      const result = (await this.authService.verifyOtp(email, otp));
 
       res.writeHead(result.statusCode, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({
@@ -231,7 +232,7 @@ class AuthController {
     try {
       const { token, newPassword, email, otp } = body || {};
       const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
-      const result = this.authService.resetPassword(token, newPassword, ipAddress, email, otp);
+      const result = (await this.authService.resetPassword(token, newPassword, ipAddress, email, otp));
 
       res.writeHead(result.statusCode, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({
@@ -272,7 +273,7 @@ class AuthController {
       const { currentPassword, newPassword } = body || {};
       const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
 
-      const result = this.authService.changePassword(token, currentPassword, newPassword, ipAddress);
+      const result = (await this.authService.changePassword(token, currentPassword, newPassword, ipAddress));
 
       res.writeHead(result.statusCode, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({

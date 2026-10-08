@@ -40,7 +40,7 @@ async function main() {
     sheet.getRow(5).values = ['Coverage valid B', 'coverage.import.b@test.example', 'Engineer', 'Internal', '', 'RECRUITER'];
     const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
     await test('S2-01', 'AC1/AC2', 'Excel preview errors map to exact row and distinct field/code; no writes', async () => {
-      const before = app.db.prepare('SELECT COUNT(*) AS count FROM users').get().count;
+      const before = (await app.db.prepare('SELECT COUNT(*) AS count FROM users').get()).count;
       const preview = await ok('POST', '/admin/users/import/preview', buffer, 200, admin.token, 'application/octet-stream');
       assert.deepEqual(preview.data.rows.map(row => row.rowNumber), [2, 3, 4, 5]);
       const [a, emailError, roleError, b] = preview.data.rows;
@@ -49,7 +49,7 @@ async function main() {
       sameErrors(emailError, [{ field: 'email', code: 'INVALID_EMAIL' }]);
       assert.equal(roleError.rowNumber, 4); assert.equal(roleError.email, 'coverage.import.role@test.example'); assert.equal(roleError.valid, false);
       sameErrors(roleError, [{ field: 'roleCode', code: 'INVALID_ROLE_CODE' }]);
-      assert.equal(app.db.prepare('SELECT COUNT(*) AS count FROM users').get().count, before);
+      assert.equal((await app.db.prepare('SELECT COUNT(*) AS count FROM users').get()).count, before);
     });
     await test('S2-01', 'AC2/AC3', 'Import preserves row/error mapping and only valid rows persist', async () => {
       const imported = await ok('POST', '/admin/users/import', buffer, 200, admin.token, 'application/octet-stream');
@@ -59,16 +59,16 @@ async function main() {
       sameErrors(imported.data.rows[1], [{ field: 'email', code: 'INVALID_EMAIL' }]);
       sameErrors(imported.data.rows[2], [{ field: 'roleCode', code: 'INVALID_ROLE_CODE' }]);
       for (const email of ['coverage.import.a@test.example', 'coverage.import.b@test.example']) {
-        assert.ok(app.db.prepare('SELECT id FROM users WHERE email=?').get(email));
+        assert.ok((await app.db.prepare('SELECT id FROM users WHERE email=?').get(email)));
       }
       for (const email of ['invalid-address', 'coverage.import.role@test.example']) {
-        assert.equal(app.db.prepare('SELECT id FROM users WHERE email=?').get(email), undefined);
+        assert.equal((await app.db.prepare('SELECT id FROM users WHERE email=?').get(email)), undefined);
       }
     });
 
     await test('S2-02', 'AC1/AC2/AC3', 'Personal update -> independent GET and SQLite readback; protected fields unchanged', async () => {
       const before = (await ok('GET', '/profile', undefined, 200, hiring.token)).data;
-      const beforeDepartment = app.db.prepare('SELECT department_id FROM users WHERE id=?').get(before.id).department_id;
+      const beforeDepartment = (await app.db.prepare('SELECT department_id FROM users WHERE id=?').get(before.id)).department_id;
       await ok('PUT', '/profile/personal', { fullName: 'Coverage Nguyễn Văn A', jobTitle: 'Coverage Lead',
         phoneNumber: '+84 912 345 678', email: 'forbidden@test.example', departmentName: 'Forbidden',
         departmentId: 'forbidden-dept', roles: ['ADMIN'] }, 200, hiring.token);
@@ -77,7 +77,7 @@ async function main() {
       assert.equal(after.phoneNumber, '+84912345678'); assert.equal(after.email, before.email);
       assert.equal(after.departmentName, before.departmentName);
       assert.deepEqual(after.roles, before.roles);
-      const row = app.db.prepare('SELECT full_name,job_title,phone_number,email,department_id FROM users WHERE id=?').get(after.id);
+      const row = (await app.db.prepare('SELECT full_name,job_title,phone_number,email,department_id FROM users WHERE id=?').get(after.id));
       assert.equal(row.full_name, after.fullName); assert.equal(row.job_title, after.jobTitle);
       assert.equal(row.phone_number, after.phoneNumber); assert.equal(row.email, before.email);
       assert.equal(row.department_id, beforeDepartment);
@@ -98,7 +98,7 @@ async function main() {
       const read = (await ok('GET', '/job-titles')).jobTitles.find(item => item.id === saved.id);
       assert.ok(read); assert.equal(read.code, 'COVERAGE-SALARY'); assert.equal(read.name, 'COVERAGE-SALARY');
       assert.equal(read.level, 'Senior'); assert.equal(read.minSalary, 15000000); assert.equal(read.maxSalary, 25000000);
-      const row = app.db.prepare('SELECT min_salary,max_salary FROM job_titles WHERE id=?').get(saved.id);
+      const row = (await app.db.prepare('SELECT min_salary,max_salary FROM job_titles WHERE id=?').get(saved.id));
       assert.equal(row.min_salary, read.minSalary); assert.equal(row.max_salary, read.maxSalary);
       await ok('PUT', '/job-titles/' + saved.id, { level: 'Lead', minSalary: 18000000, maxSalary: 30000000 });
       const updated = (await ok('GET', '/job-titles')).jobTitles.find(item => item.id === saved.id);
@@ -120,7 +120,7 @@ async function main() {
       assert.equal(af.id, shared.id); assert.equal(bf.id, shared.id); assert.deepEqual(af.criteria, bf.criteria);
       assert.deepEqual(af.criteria.map(item => [item.name, item.weight]), [['Technical skill', 60], ['Communication', 40]]);
       assert.equal(af.criteria.reduce((sum, item) => sum + item.weight, 0), 100);
-      assert.equal(app.db.prepare('SELECT COUNT(*) AS n FROM job_titles WHERE framework_id=?').get(shared.id).n, 2);
+      assert.equal((await app.db.prepare('SELECT COUNT(*) AS n FROM job_titles WHERE framework_id=?').get(shared.id)).n, 2);
     });
     await test('S2-06', 'AC1/AC2/AC3', 'Shared framework edits remain identical through both title readbacks', async () => {
       assert.ok(shared && titleA && titleB);
@@ -148,7 +148,7 @@ async function main() {
       await ok('PUT', '/interview-questions/' + qa.id, { difficulty: 'MEDIUM', goodAnswerHint: 'Persisted microtask explanation' });
       read = (await ok('GET', '/interview-questions')).questions.find(item => item.id === qa.id);
       assert.equal(read.difficulty, 'MEDIUM'); assert.equal(read.goodAnswerHint, 'Persisted microtask explanation');
-      const row = app.db.prepare('SELECT difficulty,good_answer_hint FROM interview_questions WHERE id=?').get(qa.id);
+      const row = (await app.db.prepare('SELECT difficulty,good_answer_hint FROM interview_questions WHERE id=?').get(qa.id));
       assert.equal(row.difficulty, 'MEDIUM'); assert.equal(row.good_answer_hint, read.goodAnswerHint);
     });
     await test('S2-07', 'AC3', 'Keyword search includes javascript question and excludes accounting question', async () => {
@@ -179,10 +179,10 @@ async function main() {
         await ok('PUT', '/recruitment-catalogs/' + created.id, { name: 'Coverage updated', displayOrder: 9 });
         read = (await ok('GET', '/recruitment-catalogs?type=' + type)).items.find(item => item.id === created.id);
         assert.equal(read.name, 'Coverage updated'); assert.equal(read.displayOrder, 9);
-        assert.equal(app.db.prepare('SELECT name FROM recruitment_catalog_items WHERE id=?').get(created.id).name, read.name);
+        assert.equal((await app.db.prepare('SELECT name FROM recruitment_catalog_items WHERE id=?').get(created.id)).name, read.name);
         await ok('DELETE', '/recruitment-catalogs/' + created.id);
         assert.equal((await ok('GET', '/recruitment-catalogs?type=' + type)).items.some(item => item.id === created.id), false);
-        assert.equal(app.db.prepare('SELECT id FROM recruitment_catalog_items WHERE id=?').get(created.id), undefined);
+        assert.equal((await app.db.prepare('SELECT id FROM recruitment_catalog_items WHERE id=?').get(created.id)), undefined);
       });
       await test('S2-08', 'AC3', type + ': reorder C/A/B persists through independent GET and SQLite', async () => {
         const items = [];
@@ -194,22 +194,22 @@ async function main() {
         const read = (await ok('GET', '/recruitment-catalogs?type=' + type)).items.filter(item => ordered.includes(item.id));
         assert.deepEqual(read.map(item => item.id), ordered); assert.deepEqual(read.map(item => item.displayOrder), [1, 2, 3]);
         for (let i = 0; i < ordered.length; i++) assert.equal(
-          app.db.prepare('SELECT display_order FROM recruitment_catalog_items WHERE id=?').get(ordered[i]).display_order, i + 1);
+          (await app.db.prepare('SELECT display_order FROM recruitment_catalog_items WHERE id=?').get(ordered[i])).display_order, i + 1);
       });
       await test('S2-08', 'AC2', type + ': referenced item deletion rejected; reference and item retained', async () => {
         const item = (await ok('POST', '/recruitment-catalogs', { type, code: 'COVERAGE-REF', name: 'Coverage referenced' }, 201)).data;
         const [table, column] = ({ CANDIDATE_SOURCE: ['candidates', 'source_id'], REJECTION_REASON: ['candidates', 'rejection_reason_id'],
           WORK_LOCATION: ['requisitions', 'work_location_id'], WORK_MODE: ['requisitions', 'work_mode_id'] })[type];
-        const row = app.db.prepare(`SELECT id,${column} AS value FROM ${table} ORDER BY id LIMIT 1`).get(); assert.ok(row);
+        const row = (await app.db.prepare(`SELECT id,${column} AS value FROM ${table} ORDER BY id LIMIT 1`).get()); assert.ok(row);
         // Arrange a real FK reference in the isolated fixture; DELETE still goes through the real API/service.
-        app.db.prepare(`UPDATE ${table} SET ${column}=? WHERE id=?`).run(item.id, row.id);
+        (await app.db.prepare(`UPDATE ${table} SET ${column}=? WHERE id=?`).run(item.id, row.id));
         try {
           const deletion = await app.api('DELETE', '/recruitment-catalogs/' + item.id, hr.token);
           assert.equal(deletion.status, 409); assert.equal(deletion.data.code, 'CATALOG_ITEM_IN_USE');
           assert.ok((await ok('GET', '/recruitment-catalogs?type=' + type)).items.some(value => value.id === item.id));
-          assert.equal(app.db.prepare(`SELECT ${column} AS value FROM ${table} WHERE id=?`).get(row.id).value, item.id);
-          assert.deepEqual(app.db.prepare('PRAGMA foreign_key_check').all(), []);
-        } finally { app.db.prepare(`UPDATE ${table} SET ${column}=? WHERE id=?`).run(row.value, row.id); }
+          assert.equal((await app.db.prepare(`SELECT ${column} AS value FROM ${table} WHERE id=?`).get(row.id)).value, item.id);
+          assert.deepEqual((await app.db.prepare('PRAGMA foreign_key_check').all()), []);
+        } finally { (await app.db.prepare(`UPDATE ${table} SET ${column}=? WHERE id=?`).run(row.value, row.id)); }
       });
     }
 
@@ -224,7 +224,7 @@ async function main() {
       const data = publicResult.data.data;
       assert.equal(data.introduction, introduction); assert.equal(data.logoUrl, logoUrl); assert.equal(data.heroImageUrl, heroImageUrl);
       assert.ok(data.updatedAt);
-      const persisted = app.db.prepare('SELECT introduction,logo_url,hero_image_url FROM career_page_settings WHERE id=1').get();
+      const persisted = (await app.db.prepare('SELECT introduction,logo_url,hero_image_url FROM career_page_settings WHERE id=1').get());
       assert.equal(persisted.introduction, introduction); assert.equal(persisted.logo_url, logoUrl); assert.equal(persisted.hero_image_url, heroImageUrl);
       for (const url of [logoUrl, heroImageUrl]) {
         const asset = await fetch(app.base + url); assert.equal(asset.status, 200);
@@ -239,7 +239,7 @@ async function main() {
     }
     await test('S2-09', 'AC2', 'Real unsaved preview interaction renders authored intro/media without saving settings', async () => {
       f = await createFrontendRuntime(app.base, '/admin/career-page', [['ats_token', hr.token], ['ats_user', JSON.stringify(hr.user)]]);
-      const before = app.db.prepare('SELECT * FROM career_page_settings WHERE id=1').get();
+      const before = (await app.db.prepare('SELECT * FROM career_page_settings WHERE id=1').get());
       f.nodes.get('career-page-introduction-input').value = 'Frontend authored intro\nPersist and render this';
       const logoFile = new Blob([logo], { type: 'image/png' }); logoFile.name = 'coverage-logo.png';
       const heroFile = new Blob([hero], { type: 'image/jpeg' }); heroFile.name = 'coverage-hero.jpg';
@@ -248,7 +248,7 @@ async function main() {
       const rendered = authoredNodes(f.nodes.get('career-page-preview-container'));
       assert.ok(rendered.some(node => node.textContent === 'Frontend authored intro\nPersist and render this'));
       assert.equal(rendered.filter(node => typeof node.src === 'string' && node.src.startsWith('blob:')).length, 2);
-      assert.deepEqual(app.db.prepare('SELECT * FROM career_page_settings WHERE id=1').get(), before);
+      assert.deepEqual((await app.db.prepare('SELECT * FROM career_page_settings WHERE id=1').get()), before);
       assert.equal(f.requests.some(row => row.method === 'PUT' && row.path === '/api/v1/career-page'), false);
       assert.deepEqual(f.errors, []);
     });

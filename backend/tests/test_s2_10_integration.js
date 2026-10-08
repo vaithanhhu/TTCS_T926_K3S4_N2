@@ -33,10 +33,10 @@ async function api(method, route, token = tokens.hiring, body) {
 }
 const create = changes => api('POST', '/requisitions', tokens.hiring, { ...valid, ...changes });
 const rejected = async (changes, code) => {
-  const before = db.prepare('SELECT COUNT(*) AS n FROM requisitions').get().n;
+  const before = (await db.prepare('SELECT COUNT(*) AS n FROM requisitions').get()).n;
   const res = await create(changes); assert.equal(res.status, 400, JSON.stringify(res.data));
   if (code) assert.equal(res.data.code, code);
-  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM requisitions').get().n, before);
+  assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM requisitions').get()).n, before);
 };
 function dayOffset(offset) {
   const date = new Date(service.businessDate() + 'T12:00:00Z'); date.setUTCDate(date.getUTCDate() + offset);
@@ -61,47 +61,47 @@ async function main() {
 
   await test('01 Valid requisition is persisted in the existing OPEN workflow', async () => {
     const res = await create({}); assert.equal(res.status, 201); assert.equal(res.data.data.status, 'OPEN');
-    assert.equal(res.data.data.title, job.name); assert.equal(db.prepare('SELECT s210_version FROM requisitions WHERE id=?').get(res.data.data.id).s210_version, 1);
+    assert.equal(res.data.data.title, job.name); assert.equal((await db.prepare('SELECT s210_version FROM requisitions WHERE id=?').get(res.data.data.id)).s210_version, 1);
   });
   await test('02 Job title must reference an active S2-05 title; framework is optional', async () => {
     assert.equal(job.framework, null); assert.equal((await create({})).status, 201);
     await rejected({ jobTitleId: 'not-a-title' }, 'INVALID_JOB_TITLE');
-    db.prepare("UPDATE job_titles SET status='INACTIVE' WHERE id=?").run(job.id);
-    try { await rejected({}, 'INVALID_JOB_TITLE'); } finally { db.prepare("UPDATE job_titles SET status='ACTIVE' WHERE id=?").run(job.id); }
+    (await db.prepare("UPDATE job_titles SET status='INACTIVE' WHERE id=?").run(job.id));
+    try { await rejected({}, 'INVALID_JOB_TITLE'); } finally { (await db.prepare("UPDATE job_titles SET status='ACTIVE' WHERE id=?").run(job.id)); }
   });
   await test('03 Department must reference an active department', async () => {
     await rejected({ departmentId: 'not-a-department' }, 'INVALID_DEPARTMENT');
-    db.prepare("UPDATE departments SET status='INACTIVE' WHERE id=?").run(department.id);
-    try { await rejected({}, 'INVALID_DEPARTMENT'); } finally { db.prepare("UPDATE departments SET status='ACTIVE' WHERE id=?").run(department.id); }
+    (await db.prepare("UPDATE departments SET status='INACTIVE' WHERE id=?").run(department.id));
+    try { await rejected({}, 'INVALID_DEPARTMENT'); } finally { (await db.prepare("UPDATE departments SET status='ACTIVE' WHERE id=?").run(department.id)); }
   });
   await test('04 Positive integer headcount including numeric strings is accepted', async () => {
     for (const headcount of [1, 501, '3']) { const res = await create({ headcount }); assert.equal(res.status, 201); assert.equal(res.data.data.headcount, Number(headcount)); }
   });
-  await test('05 Zero headcount is rejected', () => rejected({ headcount: 0 }, 'INVALID_HEADCOUNT'));
-  await test('06 Negative headcount is rejected', () => rejected({ headcount: -1 }, 'INVALID_HEADCOUNT'));
+  await test('05 Zero headcount is rejected', async () => (await rejected({ headcount: 0 }, 'INVALID_HEADCOUNT')));
+  await test('06 Negative headcount is rejected', async () => (await rejected({ headcount: -1 }, 'INVALID_HEADCOUNT')));
   await test('07 Replacement reason is accepted', async () => assert.equal((await create({ recruitmentReason: 'REPLACEMENT' })).status, 201));
   await test('08 New headcount reason is accepted', async () => assert.equal((await create({ recruitmentReason: 'NEW_HEADCOUNT' })).status, 201));
-  await test('09 Other recruitment reasons are rejected by the backend', () => rejected({ recruitmentReason: 'OTHER' }, 'INVALID_RECRUITMENT_REASON'));
+  await test('09 Other recruitment reasons are rejected by the backend', async () => (await rejected({ recruitmentReason: 'OTHER' }, 'INVALID_RECRUITMENT_REASON')));
   await test('10 Salary inside or exactly on the standard range needs no justification', async () => {
     for (const range of [{}, { proposedSalaryMin: 15000000, proposedSalaryMax: 25000000 }]) assert.equal((await create(range)).status, 201);
   });
   await test('11 Minimum below standard without justification is rejected', async () => {
     for (const salaryJustification of [undefined, null, '', '   \n ']) await rejected({ proposedSalaryMin: 14000000, salaryJustification }, 'SALARY_JUSTIFICATION_REQUIRED');
   });
-  await test('12 Maximum above standard without justification is rejected', () => rejected({ proposedSalaryMax: 30000000 }, 'SALARY_JUSTIFICATION_REQUIRED'));
+  await test('12 Maximum above standard without justification is rejected', async () => (await rejected({ proposedSalaryMax: 30000000 }, 'SALARY_JUSTIFICATION_REQUIRED')));
   await test('13 Outside salary with justification is accepted and preserved', async () => {
     const res = await create({ proposedSalaryMin: 14000000, proposedSalaryMax: 30000000, salaryJustification: 'Năng lực chuyên biệt' });
     assert.equal(res.status, 201); assert.equal(res.data.data.salaryJustification, 'Năng lực chuyên biệt');
   });
-  await test('14 Inverted proposed salary range is rejected', () => rejected({ proposedSalaryMin: 24000000, proposedSalaryMax: 18000000 }, 'INVALID_PROPOSED_SALARY_RANGE'));
-  await test('15 Yesterday is rejected', () => rejected({ neededDate: dayOffset(-1) }, 'NEEDED_DATE_IN_PAST'));
+  await test('14 Inverted proposed salary range is rejected', async () => (await rejected({ proposedSalaryMin: 24000000, proposedSalaryMax: 18000000 }, 'INVALID_PROPOSED_SALARY_RANGE')));
+  await test('15 Yesterday is rejected', async () => (await rejected({ neededDate: dayOffset(-1) }, 'NEEDED_DATE_IN_PAST')));
   await test('16 Today in Vietnam is accepted', async () => assert.equal((await create({ neededDate: service.businessDate() })).status, 201));
   await test('17 A future needed date is accepted', async () => assert.equal((await create({ neededDate: dayOffset(3) })).status, 201));
   await test('18 Entire authored job description is stored and read back', async () => {
     const res = await create({}); const read = await api('GET', '/requisitions/' + res.data.data.id); assert.equal(read.data.data.jobDescription, valid.jobDescription);
   });
   await test('19 Entire authored candidate requirements are stored and read back', async () => {
-    const res = await create({}); assert.equal(db.prepare('SELECT candidate_requirements FROM requisitions WHERE id=?').get(res.data.data.id).candidate_requirements, valid.candidateRequirements);
+    const res = await create({}); assert.equal((await db.prepare('SELECT candidate_requirements FROM requisitions WHERE id=?').get(res.data.data.id)).candidate_requirements, valid.candidateRequirements);
   });
   await test('20 Incomplete and empty DRAFT can be persisted without invented data', async () => {
     const res = await api('POST', '/requisitions', tokens.hiring, { status: 'DRAFT' }); assert.equal(res.status, 201); draft = res.data.data;
@@ -123,9 +123,9 @@ async function main() {
   await test('24 Completing DRAFT missing any mandatory field is rejected atomically', async () => {
     for (const key of ['jobTitleId', 'departmentId', 'headcount', 'recruitmentReason', 'proposedSalaryMin', 'proposedSalaryMax', 'neededDate', 'jobDescription', 'candidateRequirements']) {
       const empty = await api('POST', '/requisitions', tokens.hiring, { status: 'DRAFT' });
-      const before = service.getRequisitionById(empty.data.data.id);
+      const before = (await service.getRequisitionById(empty.data.data.id));
       const res = await api('PUT', '/requisitions/' + before.id, tokens.hiring, { ...valid, status: 'OPEN', [key]: null }); assert.equal(res.status, 400, key);
-      assert.deepEqual(service.getRequisitionById(before.id), before);
+      assert.deepEqual((await service.getRequisitionById(before.id)), before);
     }
   });
   await test('25 Hiring Manager uses minimal choices and only managed departments', async () => {
@@ -144,16 +144,16 @@ async function main() {
   await test('27 Legacy requisition request/response, manager and handover remain compatible', async () => {
     const res = await api('POST', '/requisitions', tokens.hiring, { title: 'Legacy title', departmentName: 'Legacy free text', headcount: 2, hiringManagerId: 'usr-hiring-mgr' });
     assert.equal(res.status, 201); assert.deepEqual(Object.keys(res.data.data).sort(), ['id', 'code', 'title', 'departmentName', 'headcount', 'status'].sort());
-    assert.equal(service.getRequisitionById(res.data.data.id).hiringManagerId, 'usr-hiring-mgr');
-    assert.equal(service.updateRequisition(res.data.data.id, { departmentName: 'Changed legacy name' }).success, true);
-    assert.equal(service.reassignHandover(res.data.data.id, 'usr-recruiter', 'Legacy handover').success, true);
+    assert.equal((await service.getRequisitionById(res.data.data.id)).hiringManagerId, 'usr-hiring-mgr');
+    assert.equal((await service.updateRequisition(res.data.data.id, { departmentName: 'Changed legacy name' })).success, true);
+    assert.equal((await service.reassignHandover(res.data.data.id, 'usr-recruiter', 'Legacy handover')).success, true);
     const legacyS2 = await api('POST', '/requisitions', tokens.hiring, { title: 'Old department reference', departmentId: department.id }); assert.equal(legacyS2.status, 201);
   });
   await test('28 Backend reads current standard salary directly from S2-05, never from client', async () => {
-    db.prepare('UPDATE job_titles SET min_salary=20000000 WHERE id=?').run(job.id);
+    (await db.prepare('UPDATE job_titles SET min_salary=20000000 WHERE id=?').run(job.id));
     try { await rejected({ standardMin: 0, standardMax: 999999999 }, 'SALARY_JUSTIFICATION_REQUIRED'); }
-    finally { db.prepare('UPDATE job_titles SET min_salary=15000000 WHERE id=?').run(job.id); }
-    assert.equal(db.prepare('SELECT min_salary,max_salary FROM job_titles WHERE id=?').get(job.id).max_salary, 25000000);
+    finally { (await db.prepare('UPDATE job_titles SET min_salary=15000000 WHERE id=?').run(job.id)); }
+    assert.equal((await db.prepare('SELECT min_salary,max_salary FROM job_titles WHERE id=?').get(job.id)).max_salary, 25000000);
   });
   await test('29 Wrong types, fractions, blank and nonnumeric headcounts are rejected', async () => {
     for (const headcount of ['', null, 'bad', '1.5', 1.5, true, {}, []]) await rejected({ headcount });
@@ -183,14 +183,14 @@ async function main() {
     const res = await api('POST', '/requisitions', tokens.hiring, { status: 'DRAFT' }); const id = res.data.data.id;
     assert.equal((await api('PUT', '/requisitions/' + id, tokens.hiring, { status: 'IN_PROGRESS' })).status, 400);
     assert.equal((await api('PUT', '/requisitions/' + id, tokens.hiring, { formVersion: 'old', status: 'OPEN' })).status, 400);
-    assert.equal(service.getRequisitionById(id).status, 'DRAFT');
+    assert.equal((await service.getRequisitionById(id)).status, 'DRAFT');
   });
   await test('35 Failed SQL update leaves the complete draft unchanged', async () => {
-    const res = await api('POST', '/requisitions', tokens.hiring, { status: 'DRAFT' }); const before = service.getRequisitionById(res.data.data.id);
-    db.exec(`CREATE TEMP TRIGGER s210_fail BEFORE UPDATE ON requisitions WHEN OLD.id='${before.id}' BEGIN SELECT RAISE(ABORT, 'test failure'); END`);
-    try { assert.equal((await api('PUT', '/requisitions/' + before.id, tokens.hiring, { ...valid, status: 'OPEN' })).status, 400); assert.deepEqual(service.getRequisitionById(before.id), before); }
-    finally { db.exec('DROP TRIGGER s210_fail'); }
-    db.exec('BEGIN'); db.exec('ROLLBACK'); assert.equal(db.prepare('PRAGMA foreign_key_check').all().length, 0);
+    const res = await api('POST', '/requisitions', tokens.hiring, { status: 'DRAFT' }); const before = (await service.getRequisitionById(res.data.data.id));
+    (await db.exec(`CREATE TEMP TRIGGER s210_fail BEFORE UPDATE ON requisitions WHEN OLD.id='${before.id}' BEGIN SELECT RAISE(ABORT, 'test failure'); END`));
+    try { assert.equal((await api('PUT', '/requisitions/' + before.id, tokens.hiring, { ...valid, status: 'OPEN' })).status, 400); assert.deepEqual((await service.getRequisitionById(before.id)), before); }
+    finally { (await db.exec('DROP TRIGGER s210_fail')); }
+    (await db.exec('BEGIN')); (await db.exec('ROLLBACK')); assert.equal((await db.prepare('PRAGMA foreign_key_check').all()).length, 0);
   });
   await test('36 Additive requisition migration preserves old records and is idempotent', async () => {
     const fixture = path.join(root, 'backend/data/old_requisition.db');
@@ -279,11 +279,11 @@ async function main() {
     ui.clearSent(); await ui.nodes.get('save-create-req-draft-btn').listeners.click(); assert.equal(ui.getSent(), null);
   });
   await test('43 Legacy title without salary can be drafted but is explicitly blocked from completion', async () => {
-    db.prepare('UPDATE job_titles SET min_salary=NULL,max_salary=NULL WHERE id=?').run(job.id);
+    (await db.prepare('UPDATE job_titles SET min_salary=NULL,max_salary=NULL WHERE id=?').run(job.id));
     try {
       const complete = await create({}); assert.equal(complete.status, 409); assert.equal(complete.data.code, 'JOB_TITLE_SALARY_RANGE_UNAVAILABLE');
       const partial = await create({ status: 'DRAFT' }); assert.equal(partial.status, 201); assert.equal(partial.data.data.status, 'DRAFT');
-    } finally { db.prepare('UPDATE job_titles SET min_salary=15000000,max_salary=25000000 WHERE id=?').run(job.id); }
+    } finally { (await db.prepare('UPDATE job_titles SET min_salary=15000000,max_salary=25000000 WHERE id=?').run(job.id)); }
   });
   await test('44 Legacy list access never exposes S2-10 data to roles without requisition.read', async () => {
     for (const role of ['interviewer', 'candidate']) {
@@ -313,10 +313,10 @@ async function main() {
     assert.equal((await api('GET', '/job-titles')).status, 403);
   });
   await test('47 Within-range preview and create return only the safe classification', async () => {
-    const before = db.prepare('SELECT COUNT(*) AS n FROM requisitions').get().n;
+    const before = (await db.prepare('SELECT COUNT(*) AS n FROM requisitions').get()).n;
     const res = await preview(18000000, 23000000); assert.equal(res.status, 200); assert.equal(res.data.salaryRangeStatus, 'WITHIN_STANDARD_RANGE');
     assert.deepEqual(Object.keys(res.data).sort(), ['success', 'statusCode', 'salaryRangeStatus'].sort()); assertNoStandardSalary(res.data);
-    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM requisitions').get().n, before);
+    assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM requisitions').get()).n, before);
     const saved = await create({}); assert.equal(saved.status, 201); assert.equal(saved.data.salaryRangeStatus, 'WITHIN_STANDARD_RANGE'); assertNoStandardSalary(saved.data);
     for (const path of ['/requisitions/' + saved.data.data.id, '/requisitions']) assertNoStandardSalary((await api('GET', path)).data);
   });
@@ -332,7 +332,7 @@ async function main() {
     const incomplete = await api('POST', '/requisitions', tokens.hiring, { status: 'DRAFT' });
     const update = await api('PUT', '/requisitions/' + incomplete.data.data.id, tokens.hiring, { ...valid, status: 'OPEN', proposedSalaryMax: 30000000 });
     assert.equal(update.status, 400); assert.equal(update.data.salaryRangeStatus, 'OUTSIDE_STANDARD_RANGE'); assertNoStandardSalary(update.data);
-    assert.equal(service.getRequisitionById(incomplete.data.data.id).status, 'DRAFT');
+    assert.equal((await service.getRequisitionById(incomplete.data.data.id)).status, 'DRAFT');
   });
   await test('50 Justified outside salary saves and completes a draft with safe status', async () => {
     const res = await create({ status: 'DRAFT', proposedSalaryMax: 30000000, salaryJustification: 'Kinh nghiệm chuyên sâu' }); assert.equal(res.status, 201);
@@ -341,42 +341,42 @@ async function main() {
     assert.equal(updated.data.salaryRangeStatus, 'OUTSIDE_STANDARD_RANGE'); assertNoStandardSalary(updated.data);
   });
   await test('51 HR sees standards only while holding the existing salary-range permission', async () => {
-    const row = db.prepare(`SELECT rp.role_id, rp.permission_id FROM role_permissions rp JOIN roles r ON r.id=rp.role_id JOIN permissions p ON p.id=rp.permission_id WHERE r.code='HR_MANAGER' AND p.code='salary_range.read'`).get(); assert.ok(row);
+    const row = (await db.prepare(`SELECT rp.role_id, rp.permission_id FROM role_permissions rp JOIN roles r ON r.id=rp.role_id JOIN permissions p ON p.id=rp.permission_id WHERE r.code='HR_MANAGER' AND p.code='salary_range.read'`).get()); assert.ok(row);
     let res = await api('GET', '/requisitions/options', tokens.hr); let title = res.data.jobTitles.find(item => item.id === job.id);
     assert.equal(title.minSalary, 15000000); assert.equal(title.maxSalary, 25000000);
-    db.prepare('DELETE FROM role_permissions WHERE role_id=? AND permission_id=?').run(row.role_id, row.permission_id);
+    (await db.prepare('DELETE FROM role_permissions WHERE role_id=? AND permission_id=?').run(row.role_id, row.permission_id));
     try {
       res = await api('GET', '/requisitions/options', tokens.hr); assertNoStandardSalary(res.data);
       const catalog = await api('GET', '/job-titles', tokens.hr); assertNoStandardSalary(catalog.data);
-    } finally { db.prepare('INSERT INTO role_permissions(role_id,permission_id) VALUES(?,?)').run(row.role_id, row.permission_id); }
+    } finally { (await db.prepare('INSERT INTO role_permissions(role_id,permission_id) VALUES(?,?)').run(row.role_id, row.permission_id)); }
     res = await api('GET', '/job-titles', tokens.hr); title = res.data.jobTitles.find(item => item.id === job.id); assert.equal(title.minSalary, 15000000); assert.equal(title.maxSalary, 25000000);
   });
   await test('52 Standard minimum NULL permits draft with no invented salary or justification', async () => {
-    db.prepare('UPDATE job_titles SET min_salary=NULL WHERE id=?').run(job.id);
+    (await db.prepare('UPDATE job_titles SET min_salary=NULL WHERE id=?').run(job.id));
     try {
       const res = await create({ status: 'DRAFT', proposedSalaryMin: 14000000, proposedSalaryMax: 30000000 }); assert.equal(res.status, 201); assertNoStandardSalary(res.data);
-      assert.equal(db.prepare('SELECT min_salary FROM job_titles WHERE id=?').get(job.id).min_salary, null);
-    } finally { db.prepare('UPDATE job_titles SET min_salary=15000000 WHERE id=?').run(job.id); }
+      assert.equal((await db.prepare('SELECT min_salary FROM job_titles WHERE id=?').get(job.id)).min_salary, null);
+    } finally { (await db.prepare('UPDATE job_titles SET min_salary=15000000 WHERE id=?').run(job.id)); }
   });
   await test('53 Standard maximum NULL permits draft even when proposal is below the remaining minimum', async () => {
-    db.prepare('UPDATE job_titles SET max_salary=NULL WHERE id=?').run(job.id);
+    (await db.prepare('UPDATE job_titles SET max_salary=NULL WHERE id=?').run(job.id));
     try {
       const res = await create({ status: 'DRAFT', proposedSalaryMin: 14000000 }); assert.equal(res.status, 201); assertNoStandardSalary(res.data);
-      assert.equal(db.prepare('SELECT max_salary FROM job_titles WHERE id=?').get(job.id).max_salary, null);
-    } finally { db.prepare('UPDATE job_titles SET max_salary=25000000 WHERE id=?').run(job.id); }
+      assert.equal((await db.prepare('SELECT max_salary FROM job_titles WHERE id=?').get(job.id)).max_salary, null);
+    } finally { (await db.prepare('UPDATE job_titles SET max_salary=25000000 WHERE id=?').run(job.id)); }
   });
   await test('54 Either missing standard bound returns 409 on create/complete with explicit HR guidance and no leak', async () => {
     for (const [min, max] of [[null, 25000000], [15000000, null], [null, null]]) {
-      db.prepare('UPDATE job_titles SET min_salary=?,max_salary=? WHERE id=?').run(min, max, job.id);
+      (await db.prepare('UPDATE job_titles SET min_salary=?,max_salary=? WHERE id=?').run(min, max, job.id));
       try {
         const created = await create({}); assert.equal(created.status, 409); assert.equal(created.data.code, 'JOB_TITLE_SALARY_RANGE_UNAVAILABLE');
         assert.match(created.data.message, /HR Manager/); assert.match(created.data.message, /thiết lập/); assertNoStandardSalary(created.data);
         assert.ok(!/15000000|25000000|15\.000\.000|25\.000\.000/.test(created.data.message));
         const partial = await create({ status: 'DRAFT' }); assert.equal(partial.status, 201);
         const completed = await api('PUT', '/requisitions/' + partial.data.data.id, tokens.hiring, { status: 'OPEN' }); assert.equal(completed.status, 409);
-        assert.equal(completed.data.code, 'JOB_TITLE_SALARY_RANGE_UNAVAILABLE'); assertNoStandardSalary(completed.data); assert.equal(service.getRequisitionById(partial.data.data.id).status, 'DRAFT');
+        assert.equal(completed.data.code, 'JOB_TITLE_SALARY_RANGE_UNAVAILABLE'); assertNoStandardSalary(completed.data); assert.equal((await service.getRequisitionById(partial.data.data.id)).status, 'DRAFT');
         const checked = await preview(18000000, 23000000); assert.equal(checked.status, 409); assertNoStandardSalary(checked.data);
-      } finally { db.prepare('UPDATE job_titles SET min_salary=15000000,max_salary=25000000 WHERE id=?').run(job.id); }
+      } finally { (await db.prepare('UPDATE job_titles SET min_salary=15000000,max_salary=25000000 WHERE id=?').run(job.id)); }
     }
     assert.equal((await create({})).status, 201);
   });

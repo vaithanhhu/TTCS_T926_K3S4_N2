@@ -189,11 +189,11 @@ async function runTests() {
     const tokenC = loginC.body.data.token;
 
     // Kiểm tra trong DB hiện có 3 phiên hoạt động
-    const activeSessionsBefore = db.prepare(`
+    const activeSessionsBefore = (await db.prepare(`
       SELECT count(*) AS total FROM sessions s
       JOIN users u ON s.user_id = u.id
       WHERE u.email = ?
-    `).get(targetEmail).total;
+    `).get(targetEmail)).total;
     assert.ok(activeSessionsBefore >= 3, 'Phải có ít nhất 3 phiên đăng nhập');
 
     // Thực hiện đổi mật khẩu từ Session A
@@ -214,8 +214,8 @@ async function runTests() {
     assert.strictEqual(changeSuccessRes.body.code, 'PASSWORD_CHANGED_SUCCESS');
 
     // Kiểm tra trong DB: Các phiên B và C phải bị XÓA KHỎI BẢNG SESSIONS (AC-03)
-    const checkB = db.prepare('SELECT * FROM sessions WHERE token = ?').get(tokenB);
-    const checkC = db.prepare('SELECT * FROM sessions WHERE token = ?').get(tokenC);
+    const checkB = (await db.prepare('SELECT * FROM sessions WHERE token = ?').get(tokenB));
+    const checkC = (await db.prepare('SELECT * FROM sessions WHERE token = ?').get(tokenC));
     assert.strictEqual(checkB, undefined, 'Session B phải bị thu hồi hoàn toàn khỏi DB');
     assert.strictEqual(checkC, undefined, 'Session C phải bị thu hồi hoàn toàn khỏi DB');
 
@@ -265,7 +265,7 @@ async function runTests() {
     assert.strictEqual(newLoginOk.status, 200, 'Đăng nhập thành công với mật khẩu mới');
 
     // Phục hồi lại mật khẩu mặc định Ats@123456 để bảo toàn dữ liệu cho các test sau
-    db.prepare('UPDATE users SET password_hash = ? WHERE email = ?').run(hashPassword('Ats@123456'), targetEmail);
+    (await db.prepare('UPDATE users SET password_hash = ? WHERE email = ?').run(hashPassword('Ats@123456'), targetEmail));
     recordPass('Bảo mật: Mật khẩu mới có hiệu lực ngay lập tức, mật khẩu cũ bị loại bỏ');
 
     // -------------------------------------------------------------

@@ -1,3 +1,4 @@
+(async () => {
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -24,7 +25,7 @@ const { verifyPassword } = require('../src/utils/password');
 // A transport factory that blocks networking even if the test is misconfigured.
 nodemailer.createTransport = () => { throw new Error('Network transport forbidden in automated tests'); };
 const db = getDatabase(':memory:');
-seedDatabase(db);
+(await seedDatabase(db));
 const auth = new AuthService(db);
 const controller = new AuthController(auth);
 const savedConfig = { ...config };
@@ -85,10 +86,10 @@ function oauthService(sendMail) {
   return new EmailService(db);
 }
 
-function issueOtp(at = realNow()) {
+async function issueOtp(at = realNow()) {
   Date.now = () => at;
-  auth.requestPasswordReset(email);
-  return db.prepare("SELECT * FROM otps WHERE email = ? AND used_at IS NULL").get(email);
+  (await auth.requestPasswordReset(email));
+  return (await db.prepare("SELECT * FROM otps WHERE email = ? AND used_at IS NULL").get(email));
 }
 
 async function publicRequest(method, address) {
@@ -133,7 +134,7 @@ async function run() {
     assert.equal(result.simulated, true);
     assert.equal(service.getLastSentEmail().delivered, false);
     assert.equal(service.getLastSentEmail().status, 'SENT_LOCAL');
-    assert.equal(db.prepare('SELECT status FROM email_logs ORDER BY rowid DESC LIMIT 1').get().status, 'SENT_LOCAL');
+    assert.equal((await db.prepare('SELECT status FROM email_logs ORDER BY rowid DESC LIMIT 1').get()).status, 'SENT_LOCAL');
   });
   await test('Missing real SMTP is FAILED, never simulated or delivered', async () => {
     config.EMAIL_MODE = 'smtp';
@@ -146,7 +147,7 @@ async function run() {
     assert.equal(result.error, 'SMTP_NOT_CONFIGURED');
     assert.equal(service.getLastSentEmail().status, 'FAILED');
     assert.equal(service.getLastSentEmail().content, undefined);
-    const audit = db.prepare('SELECT * FROM email_logs ORDER BY rowid DESC LIMIT 1').get();
+    const audit = (await db.prepare('SELECT * FROM email_logs ORDER BY rowid DESC LIMIT 1').get());
     assert.equal(audit.status, 'FAILED');
     assert.equal(audit.error_message, 'SMTP_NOT_CONFIGURED');
   });
@@ -169,7 +170,7 @@ async function run() {
     assert.equal(result.simulated, false);
     assert.equal(result.error, 'SMTP_SEND_FAILED');
     assert.equal(service.getLastSentEmail().status, 'FAILED');
-    const audit = db.prepare('SELECT * FROM email_logs ORDER BY rowid DESC LIMIT 1').get();
+    const audit = (await db.prepare('SELECT * FROM email_logs ORDER BY rowid DESC LIMIT 1').get());
     assert.equal(audit.error_message, 'SMTP_SEND_FAILED');
     assert.ok(!JSON.stringify(audit).includes('123456'));
   });
@@ -181,7 +182,7 @@ async function run() {
   await test('Pending cache is not evidence of real delivery; accepted SMTP updates it', async () => {
     let finish;
     const service = smtpService(() => new Promise(resolve => { finish = resolve; }));
-    const pending = service.sendOtpEmail(email, '123456');
+    const pending = (await service.sendOtpEmail(email, '123456'));
     assert.equal(service.getLastSentEmail().status, 'PENDING');
     assert.equal(service.getLastSentEmail().delivered, false);
     assert.equal(service.getLastSentEmail().content, undefined);
@@ -190,7 +191,7 @@ async function run() {
     assert.equal(result.delivered, true);
     assert.equal(result.simulated, false);
     assert.equal(service.getLastSentEmail().status, 'DELIVERED');
-    assert.equal(db.prepare('SELECT status FROM email_logs ORDER BY rowid DESC LIMIT 1').get().status, 'DELIVERED');
+    assert.equal((await db.prepare('SELECT status FROM email_logs ORDER BY rowid DESC LIMIT 1').get()).status, 'DELIVERED');
   });
   await test('Real SMTP retains certificate verification', () => {
     let options;
@@ -213,7 +214,7 @@ async function run() {
       await service.sendPasswordResetEmail(email, 'PRIVATE_RESET_TOKEN');
       await service.sendAccountActivationEmail(email, 'Fixture', 'PRIVATE_TEMP_PASSWORD', 'Fixture');
       const stored = captured.join(' ') + JSON.stringify(service.sentEmails) + JSON.stringify(
-        db.prepare('SELECT subject, error_message FROM email_logs ORDER BY rowid DESC LIMIT 3').all());
+        (await db.prepare('SELECT subject, error_message FROM email_logs ORDER BY rowid DESC LIMIT 3').all()));
       for (const secret of ['123456', 'PRIVATE_RESET_TOKEN', 'fake-test-credential', 'PRIVATE_TEMP_PASSWORD']) {
         assert.ok(!stored.includes(secret), `Must not retain secret: ${secret}`);
       }
@@ -230,96 +231,96 @@ async function run() {
     assert.ok(!record.content.includes('10 phút'));
     assert.ok(!record.subject.includes('123456'));
   });
-  await test('Issued PASSWORD_RESET OTP expires exactly 5 minutes after issuance', () => {
+  await test('Issued PASSWORD_RESET OTP expires exactly 5 minutes after issuance', async () => {
     const at = realNow();
-    const otp = issueOtp(at);
+    const otp = (await issueOtp(at));
     assert.equal(otp.purpose, 'PASSWORD_RESET');
     assert.equal(new Date(otp.expires_at).getTime() - at, ttl);
   });
-  await test('OTP is valid immediately before its 5-minute deadline', () => {
+  await test('OTP is valid immediately before its 5-minute deadline', async () => {
     const at = realNow();
-    const otp = issueOtp(at);
+    const otp = (await issueOtp(at));
     Date.now = () => at + ttl - 1;
-    assert.equal(auth.verifyOtp(email, otp.otp_code).valid, true);
+    assert.equal((await auth.verifyOtp(email, otp.otp_code)).valid, true);
   });
-  await test('OTP is rejected at the exact 5-minute deadline', () => {
+  await test('OTP is rejected at the exact 5-minute deadline', async () => {
     const at = realNow();
-    const otp = issueOtp(at);
+    const otp = (await issueOtp(at));
     Date.now = () => at + ttl;
-    const result = auth.verifyOtp(email, otp.otp_code);
+    const result = (await auth.verifyOtp(email, otp.otp_code));
     assert.equal(result.valid, false);
     assert.equal(result.statusCode, 400);
     assert.equal(result.code, 'OTP_EXPIRED');
     assert.ok(result.message.includes('5 phút'));
   });
-  await test('OTP is rejected after 5 minutes even though the old TTL was 10', () => {
+  await test('OTP is rejected after 5 minutes even though the old TTL was 10', async () => {
     const at = realNow();
-    const otp = issueOtp(at);
+    const otp = (await issueOtp(at));
     Date.now = () => at + ttl + 1;
-    assert.equal(auth.verifyOtp(email, otp.otp_code).code, 'OTP_EXPIRED');
+    assert.equal((await auth.verifyOtp(email, otp.otp_code)).code, 'OTP_EXPIRED');
   });
-  await test('Resend starts a new 5-minute TTL and invalidates the previous OTP', () => {
+  await test('Resend starts a new 5-minute TTL and invalidates the previous OTP', async () => {
     const at = realNow();
-    const old = issueOtp(at);
+    const old = (await issueOtp(at));
     const generateOtp = auth.generateOtp;
     try {
       auth.generateOtp = () => old.otp_code === '654321' ? '654322' : '654321';
       Date.now = () => at + 60000;
-      assert.equal(auth.resendOtp(email).success, true);
-      const current = db.prepare('SELECT * FROM otps WHERE email = ? AND used_at IS NULL').get(email);
+      assert.equal((await auth.resendOtp(email)).success, true);
+      const current = (await db.prepare('SELECT * FROM otps WHERE email = ? AND used_at IS NULL').get(email));
       assert.equal(new Date(current.expires_at).getTime(), at + 60000 + ttl);
-      assert.equal(db.prepare('SELECT id FROM otps WHERE id = ?').get(old.id), undefined);
-      assert.equal(auth.verifyOtp(email, old.otp_code).code, 'INVALID_OTP');
-      assert.equal(auth.verifyOtp(email, current.otp_code).valid, true);
+      assert.equal((await db.prepare('SELECT id FROM otps WHERE id = ?').get(old.id)), undefined);
+      assert.equal((await auth.verifyOtp(email, old.otp_code)).code, 'INVALID_OTP');
+      assert.equal((await auth.verifyOtp(email, current.otp_code)).valid, true);
     } finally { auth.generateOtp = generateOtp; }
   });
-  await test('New forgot request invalidates previous unused OTP and reset link', () => {
-    issueOtp();
-    const old = db.prepare('SELECT token FROM password_reset_tokens WHERE user_id = ? AND used_at IS NULL').get('usr-admin');
-    const oldOtp = db.prepare('SELECT id FROM otps WHERE email = ? AND used_at IS NULL').get(email);
-    issueOtp();
-    assert.equal(auth.verifyResetToken(old.token).valid, false);
-    assert.equal(db.prepare('SELECT id FROM otps WHERE id = ?').get(oldOtp.id), undefined);
+  await test('New forgot request invalidates previous unused OTP and reset link', async () => {
+    (await issueOtp());
+    const old = (await db.prepare('SELECT token FROM password_reset_tokens WHERE user_id = ? AND used_at IS NULL').get('usr-admin'));
+    const oldOtp = (await db.prepare('SELECT id FROM otps WHERE email = ? AND used_at IS NULL').get(email));
+    (await issueOtp());
+    assert.equal((await auth.verifyResetToken(old.token)).valid, false);
+    assert.equal((await db.prepare('SELECT id FROM otps WHERE id = ?').get(oldOtp.id)), undefined);
   });
-  await test('Forgot reset link retains 30-minute TTL, independent of OTP', () => {
+  await test('Forgot reset link retains 30-minute TTL, independent of OTP', async () => {
     const at = realNow();
-    issueOtp(at);
-    const row = db.prepare('SELECT * FROM password_reset_tokens WHERE user_id = ? AND used_at IS NULL').get('usr-admin');
+    (await issueOtp(at));
+    const row = (await db.prepare('SELECT * FROM password_reset_tokens WHERE user_id = ? AND used_at IS NULL').get('usr-admin'));
     assert.equal(new Date(row.expires_at).getTime() - at, 30 * 60000);
     Date.now = () => at + 6 * 60000;
-    assert.equal(auth.verifyResetToken(row.token).valid, true);
+    assert.equal((await auth.verifyResetToken(row.token)).valid, true);
   });
-  await test('Token issued by OTP verification also retains 30-minute TTL', () => {
+  await test('Token issued by OTP verification also retains 30-minute TTL', async () => {
     const at = realNow();
-    const otp = issueOtp(at);
+    const otp = (await issueOtp(at));
     Date.now = () => at + 60000;
-    const result = auth.verifyOtp(email, otp.otp_code);
-    const token = db.prepare('SELECT expires_at FROM password_reset_tokens WHERE token = ?').get(result.resetToken);
+    const result = (await auth.verifyOtp(email, otp.otp_code));
+    const token = (await db.prepare('SELECT expires_at FROM password_reset_tokens WHERE token = ?').get(result.resetToken));
     assert.equal(new Date(token.expires_at).getTime(), at + 60000 + 30 * 60000);
   });
-  await test('Expired 30-minute reset token is rejected', () => {
+  await test('Expired 30-minute reset token is rejected', async () => {
     const at = realNow();
-    issueOtp(at);
-    const token = db.prepare('SELECT token FROM password_reset_tokens WHERE user_id = ? AND used_at IS NULL').get('usr-admin').token;
+    (await issueOtp(at));
+    const token = (await db.prepare('SELECT token FROM password_reset_tokens WHERE user_id = ? AND used_at IS NULL').get('usr-admin')).token;
     Date.now = () => at + 30 * 60000 + 1;
-    assert.equal(auth.verifyResetToken(token).code, 'TOKEN_EXPIRED');
+    assert.equal((await auth.verifyResetToken(token)).code, 'TOKEN_EXPIRED');
   });
-  await test('Reset remains single-use and revokes the OTP and old password using Scrypt', () => {
-    const otp = issueOtp();
-    const token = auth.verifyOtp(email, otp.otp_code).resetToken;
+  await test('Reset remains single-use and revokes the OTP and old password using Scrypt', async () => {
+    const otp = (await issueOtp());
+    const token = (await auth.verifyOtp(email, otp.otp_code)).resetToken;
     const password = 'FixtureReset2026!';
-    const oldHash = db.prepare('SELECT password_hash FROM users WHERE id = ?').get('usr-admin').password_hash;
-    assert.equal(auth.resetPassword(token, password).success, true);
-    const hash = db.prepare('SELECT password_hash FROM users WHERE id = ?').get('usr-admin').password_hash;
+    const oldHash = (await db.prepare('SELECT password_hash FROM users WHERE id = ?').get('usr-admin')).password_hash;
+    assert.equal((await auth.resetPassword(token, password)).success, true);
+    const hash = (await db.prepare('SELECT password_hash FROM users WHERE id = ?').get('usr-admin')).password_hash;
     assert.notEqual(hash, oldHash);
     assert.notEqual(hash, password);
     assert.match(hash, /^[a-f0-9]{32}:[a-f0-9]{128}$/);
     assert.equal(verifyPassword(password, hash), true);
     assert.equal(verifyPassword('Ats@123456', hash), false);
-    assert.equal(auth.login(email, password).success, true);
-    assert.equal(auth.login(email, 'Ats@123456').statusCode, 401);
-    assert.equal(auth.resetPassword(token, 'AnotherFixture2026!').code, 'TOKEN_ALREADY_USED');
-    assert.equal(auth.verifyOtp(email, otp.otp_code).code, 'INVALID_OTP');
+    assert.equal((await auth.login(email, password)).success, true);
+    assert.equal((await auth.login(email, 'Ats@123456')).statusCode, 401);
+    assert.equal((await auth.resetPassword(token, 'AnotherFixture2026!')).code, 'TOKEN_ALREADY_USED');
+    assert.equal((await auth.verifyOtp(email, otp.otp_code)).code, 'INVALID_OTP');
   });
   await test('Forgot HTTP payload is identical for existing/nonexistent accounts in simulation', async () => {
     const existing = await publicRequest('handleForgotPassword', email);
@@ -351,25 +352,25 @@ async function run() {
     assert.ok(auth.emailService.sentEmails.every(record => !record.delivered && record.status === 'FAILED'));
   });
   await test('Unregistered address creates neither OTP nor token and never sends mail', async () => {
-    const before = db.prepare('SELECT COUNT(*) AS n FROM password_reset_tokens').get().n;
+    const before = (await db.prepare('SELECT COUNT(*) AS n FROM password_reset_tokens').get()).n;
     auth.emailService.sentEmails = [];
     await publicRequest('handleForgotPassword', missingEmail);
     await publicRequest('handleResendOtp', missingEmail);
     assert.equal(auth.emailService.sentEmails.length, 0);
-    assert.equal(db.prepare('SELECT id FROM otps WHERE email = ?').get(missingEmail), undefined);
-    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM password_reset_tokens').get().n, before);
+    assert.equal((await db.prepare('SELECT id FROM otps WHERE email = ?').get(missingEmail)), undefined);
+    assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM password_reset_tokens').get()).n, before);
   });
   await test('Inactive account keeps its existing no-token/no-mail business rule', async () => {
     const address = 'interviewer@company.com';
-    const user = db.prepare('SELECT id, status FROM users WHERE email = ?').get(address);
-    db.prepare("UPDATE users SET status = 'LOCKED' WHERE id = ?").run(user.id);
+    const user = (await db.prepare('SELECT id, status FROM users WHERE email = ?').get(address));
+    (await db.prepare("UPDATE users SET status = 'LOCKED' WHERE id = ?").run(user.id));
     try {
       auth.emailService.sentEmails = [];
       assert.deepEqual(await publicRequest('handleForgotPassword', address), await publicRequest('handleForgotPassword', missingEmail));
       assert.equal(auth.emailService.sentEmails.length, 0);
-      assert.equal(db.prepare('SELECT id FROM otps WHERE email = ?').get(address), undefined);
-      assert.equal(db.prepare('SELECT id FROM password_reset_tokens WHERE user_id = ?').get(user.id), undefined);
-    } finally { db.prepare('UPDATE users SET status = ? WHERE id = ?').run(user.status, user.id); }
+      assert.equal((await db.prepare('SELECT id FROM otps WHERE email = ?').get(address)), undefined);
+      assert.equal((await db.prepare('SELECT id FROM password_reset_tokens WHERE user_id = ?').get(user.id)), undefined);
+    } finally { (await db.prepare('UPDATE users SET status = ? WHERE id = ?').run(user.status, user.id)); }
   });
   await test('Forgot/resend send only to the stored account email, not a separate address', async () => {
     const address = 'interviewer@company.com';
@@ -565,14 +566,14 @@ async function run() {
       return { accepted: [message.to], messageId: 'fixture-message' };
     });
     const at = realNow();
-    const otp = issueOtp(at);
+    const otp = (await issueOtp(at));
     await new Promise(resolve => setImmediate(resolve));
     assert.equal(new Date(otp.expires_at).getTime() - at, 5 * 60000);
-    const link = db.prepare('SELECT * FROM password_reset_tokens WHERE user_id = ? AND used_at IS NULL').get('usr-admin');
+    const link = (await db.prepare('SELECT * FROM password_reset_tokens WHERE user_id = ? AND used_at IS NULL').get('usr-admin'));
     assert.equal(new Date(link.expires_at).getTime() - at, 30 * 60000);
-    const verified = auth.verifyOtp(email, otp.otp_code);
+    const verified = (await auth.verifyOtp(email, otp.otp_code));
     assert.equal(verified.valid, true);
-    const token = db.prepare('SELECT expires_at FROM password_reset_tokens WHERE token = ?').get(verified.resetToken);
+    const token = (await db.prepare('SELECT expires_at FROM password_reset_tokens WHERE token = ?').get(verified.resetToken));
     assert.equal(new Date(token.expires_at).getTime() - at, 30 * 60000);
     assert.ok(messages[0].text.includes('5 phút'));
     assert.ok(messages[1].text.includes('30 phút'));
@@ -588,7 +589,7 @@ async function run() {
       await service.sendOtpEmail(email, '123456');
       await service.sendPasswordResetEmail(email, 'PRIVATE_RESET_TOKEN');
       const stored = captured.join(' ') + JSON.stringify(service.sentEmails) + JSON.stringify(
-        db.prepare('SELECT subject, error_message FROM email_logs ORDER BY rowid DESC LIMIT 2').all());
+        (await db.prepare('SELECT subject, error_message FROM email_logs ORDER BY rowid DESC LIMIT 2').all()));
       for (const secret of ['fixture-client-secret', 'fixture-refresh-token', 'fixture-access-token', '123456', 'PRIVATE_RESET_TOKEN']) {
         assert.ok(!stored.includes(secret));
       }
@@ -632,3 +633,5 @@ run().catch(error => {
   console.error(error);
   process.exitCode = 1;
 }).finally(() => db.close());
+
+})().catch(error => { console.error(error.stack); process.exitCode = 1; });

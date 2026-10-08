@@ -14,8 +14,8 @@ class CareerPageService {
     this.mediaDir = path.join(config.STATIC_DIR, 'public', 'company');
   }
 
-  getSettings() {
-    const row = this.db.prepare(`
+  async getSettings() {
+    const row = (await this.db.prepare(`
       SELECT
         introduction,
         logo_url,
@@ -23,7 +23,7 @@ class CareerPageService {
         updated_at
       FROM career_page_settings
       WHERE id = 1
-    `).get();
+    `).get());
 
     if (!row) {
       return {
@@ -48,8 +48,8 @@ class CareerPageService {
     };
   }
 
-  saveSettings(data = {}) {
-    const current = this.getSettings().data;
+  async saveSettings(data = {}) {
+    const current = (await this.getSettings()).data;
     if (Object.hasOwn(data, 'introduction') && typeof data.introduction !== 'string') {
       return { success: false, statusCode: 400, code: 'INVALID_CAREER_INTRODUCTION', message: 'Nội dung giới thiệu phải là văn bản.' };
     }
@@ -66,7 +66,7 @@ class CareerPageService {
       return { success: false, statusCode: 400, code: 'INVALID_CAREER_MEDIA_URL', message: 'Đường dẫn ảnh giới thiệu không hợp lệ.' };
     }
 
-    this.db.prepare(`
+    (await this.db.prepare(`
       INSERT INTO career_page_settings (
         id,
         introduction,
@@ -84,14 +84,14 @@ class CareerPageService {
       introduction,
       logoUrl,
       heroImageUrl
-    );
+    ));
 
     return {
       success: true,
       statusCode: 200,
       code: 'CAREER_PAGE_UPDATED',
       message: 'Đã lưu cấu hình trang giới thiệu công ty.',
-      data: this.getSettings().data
+      data: (await this.getSettings()).data
     };
   }
 

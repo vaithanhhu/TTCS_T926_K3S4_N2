@@ -1,3 +1,4 @@
+(async () => {
 const assert = require('node:assert');
 const http = require('node:http');
 const { startServer, server } = require('../src/server');
@@ -366,4 +367,6 @@ async function runTests() {
   }
 }
 
-runTests();
+(await runTests());
+
+})().catch(error => { console.error(error.stack); process.exitCode = 1; });

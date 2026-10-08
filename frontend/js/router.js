@@ -1,6 +1,6 @@
 /** Clean URL routing, with browser dependencies injected for automated tests. */
 (function (root) {
-  function createRouter({ routes, history, location, events, authenticated, allowed, render, denied, home }) {
+  function createRouter({ routes, history, location, events, authenticated, allowed, render, denied, home, requiredPath = () => null }) {
     let pendingPath = null;
     let started = false;
     const normalize = path => path.length > 1 ? path.replace(/\/+$/, '') : path;
@@ -14,6 +14,11 @@
     }
     function dispatch() {
       const route = resolve(location.pathname);
+      const required = authenticated() && requiredPath();
+      if (required && resolveInternal(required)?.auth && location.pathname !== required) {
+        pendingPath = null;
+        return navigate(required, { replace: true });
+      }
       if (location.pathname === '/') {
         const query = new URLSearchParams(location.search);
         const target = query.has('token') || query.has('reset_token') ? '/reset-password' : (authenticated() ? home() : '/login');

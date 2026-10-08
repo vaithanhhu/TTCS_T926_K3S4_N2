@@ -18,7 +18,7 @@ class UserController {
    */
   async handleGetUsers(req, res, parsedUrl) {
     try {
-      const authorizedUser = this.rbacMiddleware.authorize(req, res, this.authService, 'user.read');
+      const authorizedUser = (await this.rbacMiddleware.authorize(req, res, this.authService, 'user.read'));
       if (!authorizedUser) return; // Đã xử lý 401 hoặc 403
 
       const page = parsedUrl.searchParams.get('page') || 1;
@@ -27,7 +27,7 @@ class UserController {
       const role = parsedUrl.searchParams.get('role') || '';
       const status = parsedUrl.searchParams.get('status') || '';
 
-      const result = this.userService.getUsers({ page, limit, search, role, status });
+      const result = (await this.userService.getUsers({ page, limit, search, role, status }));
       for (const user of result.data.items) {
         Object.assign(user, this.avatarService.getAvatarUrls(user.id, true));
       }
@@ -47,10 +47,10 @@ class UserController {
    */
   async handleGetUserById(req, res, id) {
     try {
-      const authorizedUser = this.rbacMiddleware.authorize(req, res, this.authService, 'user.read');
+      const authorizedUser = (await this.rbacMiddleware.authorize(req, res, this.authService, 'user.read'));
       if (!authorizedUser) return;
 
-      const user = this.userService.getUserById(id);
+      const user = (await this.userService.getUserById(id));
       if (!user) {
         res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ success: false, statusCode: 404, message: 'Không tìm thấy người dùng.', code: 'NOT_FOUND' }));
@@ -72,10 +72,10 @@ class UserController {
    */
   async handleCreateUser(req, res, body) {
     try {
-      const authorizedUser = this.rbacMiddleware.authorize(req, res, this.authService, 'user.create');
+      const authorizedUser = (await this.rbacMiddleware.authorize(req, res, this.authService, 'user.create'));
       if (!authorizedUser) return;
 
-      const result = this.userService.createUser(body, authorizedUser.id);
+      const result = (await this.userService.createUser(body, authorizedUser.id));
 
       res.writeHead(result.statusCode, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
@@ -92,10 +92,10 @@ class UserController {
    */
   async handleUpdateUser(req, res, id, body) {
     try {
-      const authorizedUser = this.rbacMiddleware.authorize(req, res, this.authService, 'user.update');
+      const authorizedUser = (await this.rbacMiddleware.authorize(req, res, this.authService, 'user.update'));
       if (!authorizedUser) return;
 
-      const result = this.userService.updateUser(id, body, authorizedUser.id);
+      const result = (await this.userService.updateUser(id, body, authorizedUser.id));
 
       res.writeHead(result.statusCode, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
@@ -112,10 +112,10 @@ class UserController {
    */
   async handleGetRoles(req, res) {
     try {
-      const authorizedUser = this.rbacMiddleware.authorize(req, res, this.authService, 'user.read');
+      const authorizedUser = (await this.rbacMiddleware.authorize(req, res, this.authService, 'user.read'));
       if (!authorizedUser) return;
 
-      const roles = this.userService.getRolesList();
+      const roles = (await this.userService.getRolesList());
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ success: true, data: roles }));
     } catch (err) {
@@ -132,10 +132,10 @@ class UserController {
    */
   async handleGetUserRoles(req, res, targetUserId) {
     try {
-      const authorizedUser = this.rbacMiddleware.authorize(req, res, this.authService, 'role.read');
+      const authorizedUser = (await this.rbacMiddleware.authorize(req, res, this.authService, 'role.read'));
       if (!authorizedUser) return;
 
-      const result = this.userService.getUserRoles(targetUserId);
+      const result = (await this.userService.getUserRoles(targetUserId));
       if (!result) {
         res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ success: false, statusCode: 404, message: 'Không tìm thấy người dùng.', code: 'NOT_FOUND' }));
@@ -158,11 +158,11 @@ class UserController {
    */
   async handleAssignUserRoles(req, res, targetUserId, body) {
     try {
-      const authorizedUser = this.rbacMiddleware.authorize(req, res, this.authService, 'role.assign');
+      const authorizedUser = (await this.rbacMiddleware.authorize(req, res, this.authService, 'role.assign'));
       if (!authorizedUser) return;
 
       const roleCodes = body.roles || body.roleCodes || [];
-      const result = this.userService.assignUserRoles(targetUserId, roleCodes, authorizedUser);
+      const result = (await this.userService.assignUserRoles(targetUserId, roleCodes, authorizedUser));
 
       res.writeHead(result.statusCode, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
@@ -180,11 +180,11 @@ class UserController {
    */
   async handleLockUser(req, res, targetUserId, body) {
     try {
-      const authorizedUser = this.rbacMiddleware.authorize(req, res, this.authService, 'account.lock');
+      const authorizedUser = (await this.rbacMiddleware.authorize(req, res, this.authService, 'account.lock'));
       if (!authorizedUser) return;
 
       const reason = (body && body.reason) || '';
-      const result = this.userService.lockUser(targetUserId, reason, authorizedUser);
+      const result = (await this.userService.lockUser(targetUserId, reason, authorizedUser));
 
       res.writeHead(result.statusCode, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
@@ -202,10 +202,10 @@ class UserController {
    */
   async handleUnlockUser(req, res, targetUserId) {
     try {
-      const authorizedUser = this.rbacMiddleware.authorize(req, res, this.authService, 'account.unlock');
+      const authorizedUser = (await this.rbacMiddleware.authorize(req, res, this.authService, 'account.unlock'));
       if (!authorizedUser) return;
 
-      const result = this.userService.unlockUser(targetUserId, authorizedUser);
+      const result = (await this.userService.unlockUser(targetUserId, authorizedUser));
 
       res.writeHead(result.statusCode, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
@@ -223,12 +223,12 @@ class UserController {
    */
   async handleImportBulkUsers(req, res, fileBuffer) {
     try {
-      const authorizedUser = this.rbacMiddleware.authorize(
+      const authorizedUser = (await this.rbacMiddleware.authorize(
         req,
         res,
         this.authService,
         'user.create'
-      );
+      ));
 
       if (!authorizedUser) return;
 
@@ -265,12 +265,12 @@ class UserController {
    */
   async handlePreviewBulkUserImport(req, res, fileBuffer) {
     try {
-      const authorizedUser = this.rbacMiddleware.authorize(
+      const authorizedUser = (await this.rbacMiddleware.authorize(
         req,
         res,
         this.authService,
         'user.create'
-      );
+      ));
 
       if (!authorizedUser) return;
 
@@ -303,12 +303,12 @@ class UserController {
    */
   async handleDownloadBulkUserTemplate(req, res) {
     try {
-      const authorizedUser = this.rbacMiddleware.authorize(
+      const authorizedUser = (await this.rbacMiddleware.authorize(
         req,
         res,
         this.authService,
         'user.create'
-      );
+      ));
 
       if (!authorizedUser) return;
 

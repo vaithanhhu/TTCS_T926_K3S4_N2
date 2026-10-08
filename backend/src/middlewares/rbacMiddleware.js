@@ -15,7 +15,7 @@ class RbacMiddleware {
    * @param {string} userId
    * @returns {Array<string>} Array of permission codes
    */
-  getUserPermissions(userId) {
+  async getUserPermissions(userId) {
     if (!userId) return [];
 
     const stmt = this.db.prepare(`
@@ -27,7 +27,7 @@ class RbacMiddleware {
       ORDER BY p.code ASC
     `);
 
-    const rows = stmt.all(userId);
+    const rows = (await stmt.all(userId));
     return rows.map(r => r.code);
   }
 
@@ -36,7 +36,7 @@ class RbacMiddleware {
    * @param {string} userId
    * @returns {Array<object>} Array of permission objects
    */
-  getUserPermissionDetails(userId) {
+  async getUserPermissionDetails(userId) {
     if (!userId) return [];
 
     const stmt = this.db.prepare(`
@@ -48,7 +48,7 @@ class RbacMiddleware {
       ORDER BY p.module ASC, p.code ASC
     `);
 
-    return stmt.all(userId);
+    return (await stmt.all(userId));
   }
 
   /**
@@ -58,7 +58,7 @@ class RbacMiddleware {
    * @param {string} requiredPermission
    * @returns {boolean}
    */
-  hasPermission(userId, requiredPermission) {
+  async hasPermission(userId, requiredPermission) {
     if (!userId || !requiredPermission) return false;
 
     const stmt = this.db.prepare(`
@@ -70,7 +70,7 @@ class RbacMiddleware {
       LIMIT 1
     `);
 
-    const result = stmt.get(userId, requiredPermission);
+    const result = (await stmt.get(userId, requiredPermission));
     return Boolean(result);
   }
 
@@ -78,9 +78,9 @@ class RbacMiddleware {
    * Get entire RBAC matrix for system inspection (AC-01)
    * @returns {object} Map of role code to array of permission codes
    */
-  getRbacMatrix() {
+  async getRbacMatrix() {
     const rolesStmt = this.db.prepare('SELECT id, code, name, default_path FROM roles ORDER BY code ASC');
-    const roles = rolesStmt.all();
+    const roles = (await rolesStmt.all());
 
     const permStmt = this.db.prepare(`
       SELECT p.code
@@ -96,7 +96,7 @@ class RbacMiddleware {
         roleId: role.id,
         roleName: role.name,
         defaultPath: role.default_path,
-        permissions: permStmt.all(role.id).map(r => r.code)
+        permissions: (await permStmt.all(role.id)).map(r => r.code)
       };
     }
 
@@ -111,7 +111,7 @@ class RbacMiddleware {
    * @param {string} requiredPermission Expected permission code
    * @returns {object|null} Returns user object if authorized, or null if denied/handled
    */
-  authorize(req, res, authService, requiredPermission) {
+  async authorize(req, res, authService, requiredPermission) {
     const authHeader = req.headers['authorization'] || '';
     if (!authHeader.startsWith('Bearer ')) {
       res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -130,7 +130,7 @@ class RbacMiddleware {
     }
 
     const token = authHeader.substring(7).trim();
-    const sessionResult = authService.validateSession(token, true);
+    const sessionResult = (await authService.validateSession(token, true));
 
     if (!sessionResult.valid) {
       res.writeHead(sessionResult.statusCode || 401, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -151,7 +151,7 @@ class RbacMiddleware {
     const user = sessionResult.user;
 
     // AC-02: Default Deny enforcement
-    const isAllowed = this.hasPermission(user.id, requiredPermission);
+    const isAllowed = (await this.hasPermission(user.id, requiredPermission));
     if (!isAllowed) {
       res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({

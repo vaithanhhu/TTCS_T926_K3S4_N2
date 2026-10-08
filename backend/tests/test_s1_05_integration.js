@@ -85,9 +85,9 @@ async function runTests() {
     }
 
     // Kiểm tra trực tiếp bảng role_permissions trong SQLite database
-    const dbRoleCount = db.prepare('SELECT count(*) as c FROM roles').get().c;
-    const dbPermCount = db.prepare('SELECT count(*) as c FROM permissions').get().c;
-    const dbRolePermCount = db.prepare('SELECT count(*) as c FROM role_permissions').get().c;
+    const dbRoleCount = (await db.prepare('SELECT count(*) as c FROM roles').get()).c;
+    const dbPermCount = (await db.prepare('SELECT count(*) as c FROM permissions').get()).c;
+    const dbRolePermCount = (await db.prepare('SELECT count(*) as c FROM role_permissions').get()).c;
 
     assert.strictEqual(dbRoleCount, 7, 'Phải có đúng 7 roles trong CSDL');
     assert.ok(dbPermCount >= 20, 'Phải có ít nhất 20 permissions chuẩn hóa trong CSDL');
@@ -233,8 +233,8 @@ async function runTests() {
     // -------------------------------------------------------------
     totalTests++;
     // Tạm thời cấp quyền 'interview.read' cho vai trò CANDIDATE trong CSDL
-    const candidateRoleId = db.prepare('SELECT id FROM roles WHERE code = ?').get('CANDIDATE').id;
-    const interviewPermId = db.prepare('SELECT id FROM permissions WHERE code = ?').get('interview.read').id;
+    const candidateRoleId = (await db.prepare('SELECT id FROM roles WHERE code = ?').get('CANDIDATE')).id;
+    const interviewPermId = (await db.prepare('SELECT id FROM permissions WHERE code = ?').get('interview.read')).id;
 
     // Trước khi cấp: Candidate bị 403
     const beforeGrant = await request({
@@ -247,7 +247,7 @@ async function runTests() {
     assert.strictEqual(beforeGrant.status, 403);
 
     // Cấp quyền trực tiếp trong SQLite DB
-    db.prepare('INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)').run(candidateRoleId, interviewPermId);
+    (await db.prepare('INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)').run(candidateRoleId, interviewPermId));
 
     // Sau khi cấp: Gọi API ngay lập tức thành công 200 mà không cần restart server
     const afterGrant = await request({
@@ -260,7 +260,7 @@ async function runTests() {
     assert.strictEqual(afterGrant.status, 200, 'Quyền mới cấp trong CSDL phải có hiệu lực ngay lập tức');
 
     // Thu hồi lại quyền khỏi CSDL
-    db.prepare('DELETE FROM role_permissions WHERE role_id = ? AND permission_id = ?').run(candidateRoleId, interviewPermId);
+    (await db.prepare('DELETE FROM role_permissions WHERE role_id = ? AND permission_id = ?').run(candidateRoleId, interviewPermId));
 
     // Sau khi thu hồi: Lập tức bị từ chối 403 trở lại
     const afterRevoke = await request({

@@ -70,6 +70,7 @@ function runMigrations(customPath) {
       status TEXT NOT NULL DEFAULT 'ACTIVE',
       lock_reason TEXT,
       failed_attempts INTEGER NOT NULL DEFAULT 0,
+      must_change_password INTEGER NOT NULL DEFAULT 0 CHECK (must_change_password IN (0, 1)),
       locked_until TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -216,6 +217,9 @@ function runMigrations(customPath) {
     CREATE INDEX IF NOT EXISTS idx_offers_candidate ON offers(candidate_id);
   `);
 
+  if (!db.prepare('PRAGMA table_info(users)').all().some(column => column.name === 'must_change_password')) {
+    db.exec('ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0 CHECK (must_change_password IN (0, 1))');
+  }
   console.log('[Migration] All tables and indexes migrated successfully.');
   return db;
 }

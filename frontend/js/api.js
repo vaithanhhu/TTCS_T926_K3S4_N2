@@ -1629,4 +1629,19 @@ window.ATS_API = {
   uploadAvatarApi
 };
 
+// Reuse the error page for server failures while preserving every API result contract.
+// Heartbeat/logout keep their existing lifecycle handling; stale sessions cannot render errors.
+for (const [name, request] of Object.entries(window.ATS_API)) {
+  if (['getMeApi', 'logoutApi'].includes(name)) continue;
+  window.ATS_API[name] = async (...args) => {
+    const token = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('ats_token') : null;
+    const result = await request(...args);
+    const currentToken = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('ats_token') : null;
+    if (result.status >= 500 && token === currentToken) {
+      window.ATS_APP_HELPERS?.showErrorView({ statusCode: result.status, code: 'INTERNAL_SERVER_ERROR' });
+    }
+    return result;
+  };
+}
+
 

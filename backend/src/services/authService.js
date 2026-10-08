@@ -8,6 +8,15 @@ const { getEmailService } = require('./emailService');
 const DUMMY_HASH = '0123456789abcdef0123456789abcdef:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 
 class AuthService {
+  async atomic(identity, action) {
+    return this.db.transaction(async () => {
+      if (this.db.provider === 'postgres') {
+        const key = crypto.createHash('sha256').update(String(identity)).digest('hex');
+        await this.db.prepare('SELECT pg_advisory_xact_lock(hashtext(?))').get(key);
+      }
+      return action();
+    });
+  }
   constructor(db) {
     this.db = db || getDatabase();
     this.emailService = getEmailService(this.db);
@@ -16,14 +25,14 @@ class AuthService {
   /**
    * Log an audit event
    */
-  logAudit(email, ip, status, reason) {
+  async logAudit(email, ip, status, reason) {
     try {
       const id = 'aud-' + crypto.randomUUID();
       const stmt = this.db.prepare(`
         INSERT INTO login_audit_logs (id, email, ip_address, status, reason, attempted_at)
         VALUES (?, ?, ?, ?, ?, datetime('now'))
       `);
-      stmt.run(id, email || 'unknown', ip || '127.0.0.1', status, reason || null);
+      (await stmt.run(id, email || 'unknown', ip || '127.0.0.1', status, reason || null));
     } catch (err) {
       console.error('[Audit Error]', err.message);
     }
@@ -36,7 +45,8 @@ class AuthService {
    * @param {string} ipAddress
    * @returns {object} Result with statusCode, success, message, and optional data
    */
-  login(email, password, ipAddress = '127.0.0.1') {
+  async login(email, password, ipAddress = '127.0.0.1') {
+    return this.atomic(String(email).trim().toLowerCase(), async () => {
     if (!email || !password || typeof email !== 'string' || typeof password !== 'string') {
       return {
         success: false,
@@ -50,38 +60,46 @@ class AuthService {
 
     // 1. Find user by email
     const getUserStmt = this.db.prepare(`
-      SELECT id, email, password_hash, full_name, job_title, department_id, department_name, phone_number, status, lock_reason, failed_attempts, locked_until
+      SELECT id, email, password_hash, full_name, job_title, department_id, department_name, phone_number, status, lock_reason, failed_attempts, locked_until, must_change_password
       FROM users
       WHERE email = ?
     `);
-    const user = getUserStmt.get(normalizedEmail);
+    const user = (await getUserStmt.get(normalizedEmail));
+    // Unknown identifiers receive the same server-owned attempt/lock response.
+    // Reuse durable login audit records; never create a user or a frontend counter.
+    const loginState = user || (await this.getUnknownLoginState(normalizedEmail));
 
     // 2. If user exists, check temporary lock (15 minutes after 5 failures)
-    if (user && user.locked_until) {
-      const lockedUntilTime = new Date(user.locked_until).getTime();
+    if (loginState.locked_until) {
+      const lockedUntilTime = new Date(loginState.locked_until).getTime();
       const now = Date.now();
 
       if (now < lockedUntilTime) {
         const remainingMinutes = Math.max(1, Math.ceil((lockedUntilTime - now) / 60000));
-        this.logAudit(normalizedEmail, ipAddress, 'LOCKED', `Tài khoản đang bị khóa tạm thời. Còn ${remainingMinutes} phút.`);
+        (await this.logAudit(normalizedEmail, ipAddress, 'LOCKED', `Tài khoản đang bị khóa tạm thời. Còn ${remainingMinutes} phút.`));
         return {
           success: false,
           statusCode: 423,
           message: 'Tài khoản tạm thời bị khóa 15 phút do nhập sai 5 lần liên tiếp. Vui lòng thử lại sau.',
           code: 'ACCOUNT_TEMPORARILY_LOCKED',
-          remainingMinutes
+          remainingMinutes,
+          remainingAttempts: 0
         };
       } else {
         // Lock period has expired, reset counter and lock
-        this.db.prepare('UPDATE users SET failed_attempts = 0, locked_until = NULL, updated_at = datetime(\'now\') WHERE id = ?').run(user.id);
-        user.failed_attempts = 0;
-        user.locked_until = null;
+        if (user) (await this.db.prepare('UPDATE users SET failed_attempts = 0, locked_until = NULL, updated_at = datetime(\'now\') WHERE id = ?').run(user.id));
+        loginState.failed_attempts = 0;
+        loginState.locked_until = null;
       }
     }
 
-    // 3. If user exists, check administrative account status
-    if (user && user.status === 'LOCKED') {
-      this.logAudit(normalizedEmail, ipAddress, 'FAILURE', 'Tài khoản đã bị quản trị viên khóa.');
+    // Verify once before revealing administrative state, including the dummy unknown-user path.
+    const isPasswordValid = user ? verifyPassword(password, user.password_hash) : false;
+    if (!user) verifyPassword(password, DUMMY_HASH);
+
+    // 3. If credentials are valid, check administrative account status
+    if (user && user.status === 'LOCKED' && isPasswordValid) {
+      (await this.logAudit(normalizedEmail, ipAddress, 'FAILURE', 'Tài khoản đã bị quản trị viên khóa.'));
       return {
         success: false,
         statusCode: 403,
@@ -90,8 +108,8 @@ class AuthService {
       };
     }
 
-    if (user && user.status === 'INACTIVE') {
-      this.logAudit(normalizedEmail, ipAddress, 'FAILURE', 'Tài khoản chưa được kích hoạt.');
+    if (user && user.status === 'INACTIVE' && isPasswordValid) {
+      (await this.logAudit(normalizedEmail, ipAddress, 'FAILURE', 'Tài khoản chưa được kích hoạt.'));
       return {
         success: false,
         statusCode: 403,
@@ -100,48 +118,47 @@ class AuthService {
       };
     }
 
-    // 4. Verify password (using constant-time scrypt verification)
-    let isPasswordValid = false;
-    if (user) {
-      isPasswordValid = verifyPassword(password, user.password_hash);
-    } else {
-      // Mitigate timing attacks by verifying dummy hash
-      verifyPassword(password, DUMMY_HASH);
-    }
-
     // 5. Handle authentication failure (AC-02: generic error message, no account leaking)
     if (!user || !isPasswordValid) {
+      const remainingAttempts = Math.max(0, config.MAX_FAILED_ATTEMPTS - (loginState.failed_attempts || 0) - 1);
       if (user) {
         const newFailedAttempts = (user.failed_attempts || 0) + 1;
 
         if (newFailedAttempts >= config.MAX_FAILED_ATTEMPTS) {
           // AC-03: Temporary lock for 15 minutes after 5 consecutive failures
           const lockTime = new Date(Date.now() + config.LOCK_TIME_MINUTES * 60 * 1000).toISOString();
-          this.db.prepare(`
+          (await this.db.prepare(`
             UPDATE users
             SET failed_attempts = ?, locked_until = ?, updated_at = datetime('now')
             WHERE id = ?
-          `).run(newFailedAttempts, lockTime, user.id);
+          `).run(newFailedAttempts, lockTime, user.id));
 
-          this.logAudit(normalizedEmail, ipAddress, 'LOCKED', 'Khóa tạm thời 15 phút do nhập sai 5 lần liên tiếp.');
+          (await this.logAudit(normalizedEmail, ipAddress, 'LOCKED', 'Khóa tạm thời 15 phút do nhập sai 5 lần liên tiếp.'));
           return {
             success: false,
             statusCode: 423,
             message: 'Tài khoản tạm thời bị khóa 15 phút do nhập sai 5 lần liên tiếp. Vui lòng thử lại sau.',
             code: 'ACCOUNT_TEMPORARILY_LOCKED',
-            remainingMinutes: config.LOCK_TIME_MINUTES
+            remainingMinutes: config.LOCK_TIME_MINUTES,
+            remainingAttempts: 0
           };
         } else {
-          this.db.prepare(`
+          (await this.db.prepare(`
             UPDATE users
             SET failed_attempts = ?, updated_at = datetime('now')
             WHERE id = ?
-          `).run(newFailedAttempts, user.id);
+          `).run(newFailedAttempts, user.id));
 
-          this.logAudit(normalizedEmail, ipAddress, 'FAILURE', `Sai mật khẩu lần ${newFailedAttempts}/5.`);
+          (await this.logAudit(normalizedEmail, ipAddress, 'FAILURE', `Sai mật khẩu lần ${newFailedAttempts}/5.`));
         }
       } else {
-        this.logAudit(normalizedEmail, ipAddress, 'FAILURE', 'Email không tồn tại trong hệ thống.');
+        const limited = remainingAttempts === 0;
+        (await this.logAudit(normalizedEmail, ipAddress, limited ? 'LOCKED' : 'FAILURE', limited ? 'LOGIN_ATTEMPTS_LIMIT' : 'LOGIN_INVALID_CREDENTIALS'));
+        if (limited) return {
+          success: false, statusCode: 423, code: 'ACCOUNT_TEMPORARILY_LOCKED',
+          message: 'Tài khoản tạm thời bị khóa 15 phút do nhập sai 5 lần liên tiếp. Vui lòng thử lại sau.',
+          remainingMinutes: config.LOCK_TIME_MINUTES, remainingAttempts: 0
+        };
       }
 
       // Generic error response per AC-02
@@ -149,17 +166,18 @@ class AuthService {
         success: false,
         statusCode: 401,
         message: 'Email hoặc mật khẩu không chính xác.',
-        code: 'INVALID_CREDENTIALS'
+        code: 'INVALID_CREDENTIALS',
+        remainingAttempts
       };
     }
 
     // 6. Handle successful login
     // Reset failed attempts & locks
-    this.db.prepare(`
+    (await this.db.prepare(`
       UPDATE users
       SET failed_attempts = 0, locked_until = NULL, updated_at = datetime('now')
       WHERE id = ?
-    `).run(user.id);
+    `).run(user.id));
 
     // Fetch user roles
     const rolesStmt = this.db.prepare(`
@@ -169,7 +187,7 @@ class AuthService {
       WHERE ur.user_id = ?
       ORDER BY r.code ASC
     `);
-    const userRoles = rolesStmt.all(user.id);
+    const userRoles = (await rolesStmt.all(user.id));
     const roleCodes = userRoles.map(r => r.code);
 
     // AC-01: Determine default home path for the role
@@ -184,19 +202,19 @@ class AuthService {
       WHERE ur.user_id = ?
       ORDER BY p.code ASC
     `);
-    const permissions = permsStmt.all(user.id).map(p => p.code);
+    const permissions = (await permsStmt.all(user.id)).map(p => p.code);
 
     // Create session token with configurable TTL (S1-02)
     const token = 'ats_sess_' + crypto.randomBytes(32).toString('hex');
     const sessionId = 'sess-' + crypto.randomUUID();
     const expiresAt = new Date(Date.now() + config.SESSION_TTL_MINUTES * 60 * 1000).toISOString();
 
-    this.db.prepare(`
+    (await this.db.prepare(`
       INSERT INTO sessions (id, user_id, token, expires_at, created_at, last_activity_at)
       VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
-    `).run(sessionId, user.id, token, expiresAt);
+    `).run(sessionId, user.id, token, expiresAt));
 
-    this.logAudit(normalizedEmail, ipAddress, 'SUCCESS', 'Đăng nhập thành công.');
+    (await this.logAudit(normalizedEmail, ipAddress, 'SUCCESS', 'Đăng nhập thành công.'));
 
     return {
       success: true,
@@ -211,12 +229,15 @@ class AuthService {
           departmentName: user.department_name,
           roles: roleCodes,
           permissions,
-          defaultHome
+          defaultHome,
+          mustChangePassword: Boolean(user.must_change_password)
         },
         token,
         expiresAt
       }
     };
+
+    });
   }
 
   /**
@@ -225,7 +246,20 @@ class AuthService {
    * @param {boolean} renew Whether to automatically extend expiry time
    * @returns {object} Validation result
    */
-  validateSession(token, renew = true) {
+  async getUnknownLoginState(email) {
+    const records = (await this.db.prepare(`SELECT rowid, reason, attempted_at FROM login_audit_logs
+      WHERE email = ? AND reason IN ('LOGIN_INVALID_CREDENTIALS', 'LOGIN_ATTEMPTS_LIMIT')
+      ORDER BY rowid DESC LIMIT ?`).all(email, config.MAX_FAILED_ATTEMPTS));
+    if (records[0]?.reason === 'LOGIN_ATTEMPTS_LIMIT') {
+      const issued = new Date(/[zZ]|[+-]\d{2}:\d{2}$/.test(records[0].attempted_at) ? records[0].attempted_at : records[0].attempted_at.replace(' ', 'T') + 'Z').getTime();
+      const until = issued + config.LOCK_TIME_MINUTES * 60000;
+      return until > Date.now() ? { failed_attempts: config.MAX_FAILED_ATTEMPTS, locked_until: new Date(until).toISOString() } : { failed_attempts: 0 };
+    }
+    return { failed_attempts: records.findIndex(record => record.reason === 'LOGIN_ATTEMPTS_LIMIT') < 0
+      ? records.length : records.findIndex(record => record.reason === 'LOGIN_ATTEMPTS_LIMIT') };
+  }
+
+  async validateSession(token, renew = true, allowPasswordChange = false) {
     if (!token || typeof token !== 'string') {
       return {
         valid: false,
@@ -237,12 +271,12 @@ class AuthService {
 
     const sessionStmt = this.db.prepare(`
       SELECT s.id AS session_id, s.user_id, s.token, s.expires_at, s.last_activity_at,
-             u.id, u.email, u.full_name, u.job_title, u.department_name, u.status, u.locked_until
+             u.id, u.email, u.full_name, u.job_title, u.department_name, u.status, u.locked_until, u.must_change_password
       FROM sessions s
       JOIN users u ON s.user_id = u.id
       WHERE s.token = ?
     `);
-    const session = sessionStmt.get(token);
+    const session = (await sessionStmt.get(token));
 
     if (!session) {
       return {
@@ -259,7 +293,7 @@ class AuthService {
 
     if (now > expiresAtTime) {
       // Invalidate expired session in DB
-      this.db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+      (await this.db.prepare('DELETE FROM sessions WHERE token = ?').run(token));
       return {
         valid: false,
         statusCode: 401,
@@ -270,7 +304,7 @@ class AuthService {
 
     // Check account status
     if (session.status === 'LOCKED' || (session.locked_until && new Date(session.locked_until).getTime() > now)) {
-      this.db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+      (await this.db.prepare('DELETE FROM sessions WHERE token = ?').run(token));
       return {
         valid: false,
         statusCode: 403,
@@ -280,7 +314,7 @@ class AuthService {
     }
 
     if (session.status === 'INACTIVE') {
-      this.db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+      (await this.db.prepare('DELETE FROM sessions WHERE token = ?').run(token));
       return {
         valid: false,
         statusCode: 403,
@@ -289,15 +323,20 @@ class AuthService {
       };
     }
 
+    if (session.must_change_password && !allowPasswordChange) return {
+      valid: false, statusCode: 403, code: 'MUST_CHANGE_PASSWORD',
+      message: 'Bạn cần đổi mật khẩu tạm thời trước khi sử dụng hệ thống.'
+    };
+
     // AC-01: Auto-renewal of session when active
     let currentExpiresAt = session.expires_at;
     if (renew) {
       currentExpiresAt = new Date(now + config.SESSION_TTL_MINUTES * 60 * 1000).toISOString();
-      this.db.prepare(`
+      (await this.db.prepare(`
         UPDATE sessions
         SET expires_at = ?, last_activity_at = datetime('now')
         WHERE token = ?
-      `).run(currentExpiresAt, token);
+      `).run(currentExpiresAt, token));
     }
 
     // Fetch user roles
@@ -308,7 +347,7 @@ class AuthService {
       WHERE ur.user_id = ?
       ORDER BY r.code ASC
     `);
-    const userRoles = rolesStmt.all(session.user_id);
+    const userRoles = (await rolesStmt.all(session.user_id));
     const roleCodes = userRoles.map(r => r.code);
     const defaultHome = this.determineDefaultHome(roleCodes, userRoles);
 
@@ -321,7 +360,7 @@ class AuthService {
       WHERE ur.user_id = ?
       ORDER BY p.code ASC
     `);
-    const permissions = permsStmt.all(session.user_id).map(p => p.code);
+    const permissions = (await permsStmt.all(session.user_id)).map(p => p.code);
 
     return {
       valid: true,
@@ -334,7 +373,8 @@ class AuthService {
         departmentName: session.department_name,
         roles: roleCodes,
         permissions,
-        defaultHome
+        defaultHome,
+        mustChangePassword: Boolean(session.must_change_password)
       },
       token,
       expiresAt: currentExpiresAt
@@ -347,7 +387,7 @@ class AuthService {
    * @param {string} ipAddress
    * @returns {object} Result
    */
-  logout(token, ipAddress = '127.0.0.1') {
+  async logout(token, ipAddress = '127.0.0.1') {
     if (!token || typeof token !== 'string') {
       return {
         success: true,
@@ -356,12 +396,12 @@ class AuthService {
       };
     }
 
-    const session = this.db.prepare('SELECT user_id FROM sessions WHERE token = ?').get(token);
+    const session = (await this.db.prepare('SELECT user_id FROM sessions WHERE token = ?').get(token));
     if (session) {
-      const user = this.db.prepare('SELECT email FROM users WHERE id = ?').get(session.user_id);
-      this.logAudit(user ? user.email : 'unknown', ipAddress, 'LOGOUT', 'Đăng xuất chủ động. Thu hồi phiên máy chủ.');
+      const user = (await this.db.prepare('SELECT email FROM users WHERE id = ?').get(session.user_id));
+      (await this.logAudit(user ? user.email : 'unknown', ipAddress, 'LOGOUT', 'Đăng xuất chủ động. Thu hồi phiên máy chủ.'));
       // AC-02: Revoke immediately on server
-      this.db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+      (await this.db.prepare('DELETE FROM sessions WHERE token = ?').run(token));
     }
 
     return {
@@ -402,7 +442,7 @@ class AuthService {
    * @param {string} ipAddress
    * @returns {object} Response
    */
-  requestPasswordReset(email, ipAddress = '127.0.0.1') {
+  async requestPasswordReset(email, ipAddress = '127.0.0.1') {
     if (!email || typeof email !== 'string' || !email.includes('@')) {
       return {
         success: false,
@@ -413,7 +453,7 @@ class AuthService {
     }
 
     const normalizedEmail = email.trim().toLowerCase();
-    const user = this.db.prepare('SELECT id, email, full_name, status FROM users WHERE email = ? COLLATE NOCASE').get(normalizedEmail);
+    const user = (await this.db.prepare('SELECT id, email, full_name, status FROM users WHERE email = ? COLLATE NOCASE').get(normalizedEmail));
 
     let resetToken = null;
     let resetExpiresAt = null;
@@ -428,30 +468,30 @@ class AuthService {
       const otpExpiresAt = new Date(Date.now() + config.PASSWORD_RESET_OTP_TTL_MINUTES * 60 * 1000).toISOString();
 
       // Invalidate previous unused reset tokens & OTPs for this user
-      this.db.prepare('DELETE FROM password_reset_tokens WHERE user_id = ? AND used_at IS NULL').run(user.id);
+      (await this.db.prepare('DELETE FROM password_reset_tokens WHERE user_id = ? AND used_at IS NULL').run(user.id));
       try {
-        this.db.prepare('DELETE FROM otps WHERE email = ? COLLATE NOCASE AND used_at IS NULL').run(normalizedEmail);
+        (await this.db.prepare('DELETE FROM otps WHERE email = ? COLLATE NOCASE AND used_at IS NULL').run(normalizedEmail));
       } catch (err) {
         // Table created if not exists
       }
 
       // Save token in DB (AC-01: valid for 30 minutes)
-      this.db.prepare(`
+      (await this.db.prepare(`
         INSERT INTO password_reset_tokens (id, user_id, token, expires_at, created_at)
         VALUES (?, ?, ?, ?, datetime('now'))
-      `).run(tokenId, user.id, resetToken, resetExpiresAt);
+      `).run(tokenId, user.id, resetToken, resetExpiresAt));
 
       // Save PASSWORD_RESET OTP using its own TTL, separate from reset tokens.
       try {
-        this.db.prepare(`
+        (await this.db.prepare(`
           INSERT INTO otps (id, email, otp_code, purpose, expires_at, created_at)
           VALUES (?, ?, ?, 'PASSWORD_RESET', ?, datetime('now'))
-        `).run(otpId, normalizedEmail, otpCode, otpExpiresAt);
+        `).run(otpId, normalizedEmail, otpCode, otpExpiresAt));
       } catch (err) {
         console.error('[AuthService] Could not insert password reset OTP.');
       }
 
-      this.logAudit(normalizedEmail, ipAddress, 'SUCCESS', 'Yêu cầu đặt lại mật khẩu. Đã tạo OTP 6 số và token 30 phút.');
+      (await this.logAudit(normalizedEmail, ipAddress, 'SUCCESS', 'Yêu cầu đặt lại mật khẩu. Đã tạo OTP 6 số và token 30 phút.'));
 
       // Dispatch real transactional emails to the EXACT user email
       if (this.emailService) {
@@ -464,7 +504,7 @@ class AuthService {
       }
     } else {
       // User not found or inactive: DO NOT send email per prompt requirement
-      this.logAudit(normalizedEmail, ipAddress, 'FAILURE', 'Yêu cầu đặt lại mật khẩu cho email không tồn tại hoặc tài khoản bị khóa.');
+      (await this.logAudit(normalizedEmail, ipAddress, 'FAILURE', 'Yêu cầu đặt lại mật khẩu cho email không tồn tại hoặc tài khoản bị khóa.'));
     }
 
     // AC-03: Return identical response message regardless of whether email exists or not
@@ -481,7 +521,7 @@ class AuthService {
   /**
    * Resend 6-digit OTP to user email
    */
-  resendOtp(email, ipAddress = '127.0.0.1') {
+  async resendOtp(email, ipAddress = '127.0.0.1') {
     if (!email || typeof email !== 'string' || !email.includes('@')) {
       return {
         success: false,
@@ -492,7 +532,7 @@ class AuthService {
     }
 
     const normalizedEmail = email.trim().toLowerCase();
-    const user = this.db.prepare('SELECT id, email, full_name, status FROM users WHERE email = ? COLLATE NOCASE').get(normalizedEmail);
+    const user = (await this.db.prepare('SELECT id, email, full_name, status FROM users WHERE email = ? COLLATE NOCASE').get(normalizedEmail));
 
     if (user && user.status === 'ACTIVE') {
       const otpCode = this.generateOtp();
@@ -501,16 +541,16 @@ class AuthService {
 
       // Invalidate previous OTPs
       try {
-        this.db.prepare('DELETE FROM otps WHERE email = ? COLLATE NOCASE AND used_at IS NULL').run(normalizedEmail);
-        this.db.prepare(`
+        (await this.db.prepare('DELETE FROM otps WHERE email = ? COLLATE NOCASE AND used_at IS NULL').run(normalizedEmail));
+        (await this.db.prepare(`
           INSERT INTO otps (id, email, otp_code, purpose, expires_at, created_at)
           VALUES (?, ?, ?, 'PASSWORD_RESET', ?, datetime('now'))
-        `).run(otpId, normalizedEmail, otpCode, otpExpiresAt);
+        `).run(otpId, normalizedEmail, otpCode, otpExpiresAt));
       } catch (err) {
         console.error('[AuthService] Could not resend password reset OTP.');
       }
 
-      this.logAudit(normalizedEmail, ipAddress, 'SUCCESS', 'Gửi lại mã OTP xác thực khôi phục mật khẩu.');
+      (await this.logAudit(normalizedEmail, ipAddress, 'SUCCESS', 'Gửi lại mã OTP xác thực khôi phục mật khẩu.'));
 
       if (this.emailService) {
         this.emailService.sendOtpEmail(user.email, otpCode, user.full_name).catch(() => {
@@ -530,7 +570,8 @@ class AuthService {
   /**
    * Verify 6-digit numeric OTP
    */
-  verifyOtp(email, otp) {
+  async verifyOtp(email, otp) {
+    return this.atomic(String(email).trim().toLowerCase(), async () => {
     if (!email || !otp) {
       return {
         valid: false,
@@ -545,11 +586,11 @@ class AuthService {
 
     let otpRow = null;
     try {
-      otpRow = this.db.prepare(`
-        SELECT * FROM otps 
+      otpRow = (await this.db.prepare(`
+        SELECT * FROM otps
         WHERE email = ? COLLATE NOCASE AND otp_code = ? AND used_at IS NULL
         ORDER BY created_at DESC LIMIT 1
-      `).get(normalizedEmail, cleanOtp);
+      `).get(normalizedEmail, cleanOtp));
     } catch (err) {
       console.error('[Verify OTP query error]', err.message);
     }
@@ -574,19 +615,19 @@ class AuthService {
 
     // Mark OTP as verified
     try {
-      this.db.prepare("UPDATE otps SET verified_at = datetime('now') WHERE id = ?").run(otpRow.id);
+      (await this.db.prepare("UPDATE otps SET verified_at = datetime('now') WHERE id = ?").run(otpRow.id));
     } catch (e) {}
 
     // Find or create resetToken to bind to user
-    const user = this.db.prepare('SELECT id FROM users WHERE email = ? COLLATE NOCASE').get(normalizedEmail);
+    const user = (await this.db.prepare('SELECT id FROM users WHERE email = ? COLLATE NOCASE').get(normalizedEmail));
     let resetToken = 'ats_reset_' + crypto.randomBytes(32).toString('hex');
     if (user) {
       const tokenId = 'rst-' + crypto.randomUUID();
       const resetExpiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
-      this.db.prepare(`
+      (await this.db.prepare(`
         INSERT INTO password_reset_tokens (id, user_id, token, expires_at, created_at)
         VALUES (?, ?, ?, ?, datetime('now'))
-      `).run(tokenId, user.id, resetToken, resetExpiresAt);
+      `).run(tokenId, user.id, resetToken, resetExpiresAt));
     }
 
     return {
@@ -596,6 +637,8 @@ class AuthService {
       code: 'OTP_VERIFIED',
       resetToken
     };
+
+    });
   }
 
   /**
@@ -603,17 +646,17 @@ class AuthService {
    * @param {string} token
    * @returns {object} Result
    */
-  verifyResetToken(token) {
+  async verifyResetToken(token) {
     if (!token || typeof token !== 'string') {
       return { valid: false, statusCode: 400, message: 'Mã xác thực không hợp lệ.', code: 'INVALID_TOKEN' };
     }
 
-    const row = this.db.prepare(`
+    const row = (await this.db.prepare(`
       SELECT prt.id, prt.user_id, prt.token, prt.expires_at, prt.used_at, u.email, u.status
       FROM password_reset_tokens prt
       JOIN users u ON prt.user_id = u.id
       WHERE prt.token = ?
-    `).get(token);
+    `).get(token));
 
     if (!row) {
       return { valid: false, statusCode: 400, message: 'Liên kết đặt lại mật khẩu không tồn tại hoặc không hợp lệ.', code: 'TOKEN_NOT_FOUND' };
@@ -645,10 +688,11 @@ class AuthService {
    * @param {string} otp
    * @returns {object} Result
    */
-  resetPassword(token, newPassword, ipAddress = '127.0.0.1', email = '', otp = '') {
+  async resetPassword(token, newPassword, ipAddress = '127.0.0.1', email = '', otp = '') {
+    return this.atomic(token || email, async () => {
     // If called with OTP and email
     if (otp && email && !token) {
-      const otpVerify = this.verifyOtp(email, otp);
+      const otpVerify = (await this.verifyOtp(email, otp));
       if (!otpVerify.valid) {
         return {
           success: false,
@@ -660,7 +704,7 @@ class AuthService {
       token = otpVerify.resetToken;
     }
 
-    const verifyResult = this.verifyResetToken(token);
+    const verifyResult = (await this.verifyResetToken(token));
     if (!verifyResult.valid) {
       return {
         success: false,
@@ -692,33 +736,38 @@ class AuthService {
       };
     }
 
+    const existing = (await this.db.prepare('SELECT password_hash, must_change_password FROM users WHERE id=?').get(userId));
+    if (existing?.must_change_password && verifyPassword(newPassword, existing.password_hash)) return {
+      success: false, statusCode: 400, code: 'SAME_PASSWORD',
+      message: 'Mật khẩu mới không được trùng với mật khẩu tạm thời.'
+    };
     const newHash = hashPassword(newPassword);
 
     // Update password in DB & reset failed attempts
-    this.db.prepare(`
+    (await this.db.prepare(`
       UPDATE users
-      SET password_hash = ?, failed_attempts = 0, locked_until = NULL, updated_at = datetime('now')
+      SET password_hash = ?, must_change_password = FALSE, failed_attempts = 0, locked_until = NULL, updated_at = datetime('now')
       WHERE id = ?
-    `).run(newHash, userId);
+    `).run(newHash, userId));
 
     // Invalidate the reset token
-    this.db.prepare("UPDATE password_reset_tokens SET used_at = datetime('now') WHERE token = ?").run(token);
+    (await this.db.prepare("UPDATE password_reset_tokens SET used_at = datetime('now') WHERE token = ?").run(token));
 
     // Invalidate all OTPs for this user's email
     try {
-      this.db.prepare("UPDATE otps SET used_at = datetime('now') WHERE email = ? COLLATE NOCASE AND used_at IS NULL").run(targetEmail);
+      (await this.db.prepare("UPDATE otps SET used_at = datetime('now') WHERE email = ? COLLATE NOCASE AND used_at IS NULL").run(targetEmail));
     } catch (e) {}
 
     // Revoke all existing sessions (S1-04 AC-03 & S1-02 AC-02)
-    this.db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
+    (await this.db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId));
 
-    this.logAudit(targetEmail, ipAddress, 'SUCCESS', 'Đặt lại mật khẩu thành công qua xác thực an toàn.');
+    (await this.logAudit(targetEmail, ipAddress, 'SUCCESS', 'Đặt lại mật khẩu thành công qua xác thực an toàn.'));
 
     // Dispatch confirmation email
     if (this.emailService && targetEmail) {
-      this.emailService.sendPasswordChangedEmail(targetEmail).catch(() => {
+      this.db.afterCommit(() => this.emailService.sendPasswordChangedEmail(targetEmail).catch(() => {
         console.error('[AuthService] Error dispatching password changed email.');
-      });
+      }));
     }
 
     return {
@@ -727,6 +776,8 @@ class AuthService {
       message: 'Đặt lại mật khẩu thành công. Bạn có thể đăng nhập bằng mật khẩu mới.',
       code: 'PASSWORD_RESET_SUCCESS'
     };
+
+    });
   }
 
   /**
@@ -737,9 +788,10 @@ class AuthService {
    * @param {string} ipAddress Client IP
    * @returns {object} Result
    */
-  changePassword(token, currentPassword, newPassword, ipAddress = '127.0.0.1') {
+  async changePassword(token, currentPassword, newPassword, ipAddress = '127.0.0.1') {
+    return this.atomic(token, async () => {
     // 1. Verify active session
-    const sessionResult = this.validateSession(token, false);
+    const sessionResult = (await this.validateSession(token, false, true));
     if (!sessionResult.valid) {
       return {
         success: false,
@@ -761,7 +813,7 @@ class AuthService {
       };
     }
 
-    const user = this.db.prepare('SELECT id, email, password_hash FROM users WHERE id = ?').get(userId);
+    const user = (await this.db.prepare('SELECT id, email, password_hash FROM users WHERE id = ?' + (this.db.provider === 'postgres' ? ' FOR UPDATE' : '')).get(userId));
     if (!user) {
       return {
         success: false,
@@ -774,7 +826,7 @@ class AuthService {
     // Verify current password with constant-time scrypt check
     const isCurrentPasswordCorrect = verifyPassword(currentPassword, user.password_hash);
     if (!isCurrentPasswordCorrect) {
-      this.logAudit(user.email, ipAddress, 'FAILURE', 'Đổi mật khẩu thất bại: Sai mật khẩu hiện tại.');
+      (await this.logAudit(user.email, ipAddress, 'FAILURE', 'Đổi mật khẩu thất bại: Sai mật khẩu hiện tại.'));
       return {
         success: false,
         statusCode: 400,
@@ -815,19 +867,19 @@ class AuthService {
     const { hashPassword } = require('../utils/password');
     const newHash = hashPassword(newPassword);
 
-    this.db.prepare(`
+    (await this.db.prepare(`
       UPDATE users
-      SET password_hash = ?, failed_attempts = 0, locked_until = NULL, updated_at = datetime('now')
+      SET password_hash = ?, must_change_password = FALSE, failed_attempts = 0, locked_until = NULL, updated_at = datetime('now')
       WHERE id = ?
-    `).run(newHash, userId);
+    `).run(newHash, userId));
 
     // 5. AC-03: Đổi xong thu hồi các phiên đăng nhập khác (giữ lại phiên hiện tại)
-    const revokeResult = this.db.prepare(`
+    const revokeResult = (await this.db.prepare(`
       DELETE FROM sessions
       WHERE user_id = ? AND token != ?
-    `).run(userId, token);
+    `).run(userId, token));
 
-    this.logAudit(user.email, ipAddress, 'SUCCESS', `Đổi mật khẩu thành công. Đã thu hồi ${revokeResult.changes} phiên khác.`);
+    (await this.logAudit(user.email, ipAddress, 'SUCCESS', `Đổi mật khẩu thành công. Đã thu hồi ${revokeResult.changes} phiên khác.`));
 
     return {
       success: true,
@@ -836,6 +888,8 @@ class AuthService {
       code: 'PASSWORD_CHANGED_SUCCESS',
       revokedSessionsCount: revokeResult.changes
     };
+
+    });
   }
 }
 

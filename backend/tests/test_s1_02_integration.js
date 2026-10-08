@@ -67,12 +67,12 @@ async function runTests() {
     assert.ok(token);
 
     // Lấy hạn ban đầu trong DB
-    const initialSession = db.prepare('SELECT expires_at, last_activity_at FROM sessions WHERE token = ?').get(token);
+    const initialSession = (await db.prepare('SELECT expires_at, last_activity_at FROM sessions WHERE token = ?').get(token));
     assert.ok(initialSession, 'Session record must exist in DB');
 
     // Giả lập lùi thời gian hết hạn còn 2 phút nữa hết hạn
     const nearExpiry = new Date(Date.now() + 2 * 60 * 1000).toISOString();
-    db.prepare('UPDATE sessions SET expires_at = ? WHERE token = ?').run(nearExpiry, token);
+    (await db.prepare('UPDATE sessions SET expires_at = ? WHERE token = ?').run(nearExpiry, token));
 
     // Người dùng thực hiện thao tác gọi protected endpoint (GET /api/v1/auth/me)
     const meRes = await request({
@@ -88,7 +88,7 @@ async function runTests() {
     assert.strictEqual(meRes.body.code, 'SESSION_VALID');
 
     // Kiểm tra DB: Thời gian hết hạn đã được tự động gia hạn lên 30 phút tính từ thời điểm hoạt động
-    const renewedSession = db.prepare('SELECT expires_at, last_activity_at FROM sessions WHERE token = ?').get(token);
+    const renewedSession = (await db.prepare('SELECT expires_at, last_activity_at FROM sessions WHERE token = ?').get(token));
     const renewedTime = new Date(renewedSession.expires_at).getTime();
     const now = Date.now();
     const diffMinutes = (renewedTime - now) / 60000;
@@ -117,7 +117,7 @@ async function runTests() {
     assert.strictEqual(logoutRes.body.code, 'LOGGED_OUT');
 
     // Kiểm tra DB: Bản ghi session trong bảng sessions phải bị XÓA HOÀN TOÀN
-    const sessionInDbAfterLogout = db.prepare('SELECT * FROM sessions WHERE token = ?').get(token);
+    const sessionInDbAfterLogout = (await db.prepare('SELECT * FROM sessions WHERE token = ?').get(token));
     assert.strictEqual(sessionInDbAfterLogout, undefined, 'Session must be permanently deleted from DB on logout');
 
     // Gọi lại protected endpoint với token cũ vừa đăng xuất -> phải bị từ chối 401
@@ -140,10 +140,10 @@ async function runTests() {
     // Tạo session hết hạn giả lập trong DB
     const expiredToken = 'ats_sess_expired_test_' + Date.now();
     const pastTime = new Date(Date.now() - 5 * 60 * 1000).toISOString(); // Hết hạn 5 phút trước
-    db.prepare(`
+    (await db.prepare(`
       INSERT INTO sessions (id, user_id, token, expires_at, created_at, last_activity_at)
       VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
-    `).run('sess-expired-test', 'usr-admin', expiredToken, pastTime);
+    `).run('sess-expired-test', 'usr-admin', expiredToken, pastTime));
 
     // Gọi API với token đã hết hạn
     const expiredRes = await request({
@@ -160,7 +160,7 @@ async function runTests() {
     assert.strictEqual(expiredRes.body.message, 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
 
     // Kiểm tra DB: Session hết hạn đã tự động bị dọn dẹp khỏi bảng sessions
-    const purgedCheck = db.prepare('SELECT * FROM sessions WHERE token = ?').get(expiredToken);
+    const purgedCheck = (await db.prepare('SELECT * FROM sessions WHERE token = ?').get(expiredToken));
     assert.strictEqual(purgedCheck, undefined, 'Expired session must be automatically cleaned up from DB');
     recordPass('AC-03: Phiên hết hạn trả về mã 401, thông báo rõ ràng "Phiên đăng nhập đã hết hạn" và dọn dẹp DB');
 
@@ -195,7 +195,7 @@ async function runTests() {
     const hrToken = hrLogin.body.data.token;
 
     // Giả lập tài khoản bị khóa trong DB
-    db.prepare("UPDATE users SET status = 'LOCKED', lock_reason = 'Tạm khóa an ninh' WHERE email = 'hrmanager@company.com'").run();
+    (await db.prepare("UPDATE users SET status = 'LOCKED', lock_reason = 'Tạm khóa an ninh' WHERE email = 'hrmanager@company.com'").run());
 
     // Gọi API với token của tài khoản vừa bị khóa
     const lockedAccessRes = await request({
@@ -210,7 +210,7 @@ async function runTests() {
     assert.strictEqual(lockedAccessRes.body.code, 'ACCOUNT_LOCKED');
 
     // Phục hồi lại trạng thái active sau test
-    db.prepare("UPDATE users SET status = 'ACTIVE', lock_reason = NULL WHERE email = 'hrmanager@company.com'").run();
+    (await db.prepare("UPDATE users SET status = 'ACTIVE', lock_reason = NULL WHERE email = 'hrmanager@company.com'").run());
     recordPass('Bảo mật: Tài khoản bị khóa lập tức làm mất hiệu lực phiên đang mở phía server (HTTP 403)');
 
     console.log('\n================================================================');
