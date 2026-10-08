@@ -50,7 +50,10 @@
     "test:reapproval": "node backend/tests/test_requisition_reapproval.js",
     "migrate:s3-04": "node backend/src/db/migrate-headcount-budgets.js",
     "test:s3-03": "node backend/tests/test_s3_03_04.js s3-03",
-    "test:s3-04": "node backend/tests/test_s3_03_04.js s3-04"
+    "test:s3-04": "node backend/tests/test_s3_03_04.js s3-04",
+    "migrate:s3-05-06": "node backend/src/db/migrate-requisition-operations.js",
+    "test:s3-05": "node backend/tests/test_s3_05_06.js s3-05",
+    "test:s3-06": "node backend/tests/test_s3_05_06.js s3-06"
   },
   "keywords": [
     "ats",

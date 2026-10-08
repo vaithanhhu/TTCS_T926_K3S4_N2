@@ -295,8 +295,9 @@ async function main() {
   });
   await test('45 Draft form retains stored selections missing from current dropdown choices', async () => {
     const selected = ui.nodes.get('create-req-recruiter-select'); selected.tagName = 'SELECT'; selected.options = [];
-    ui.storage.set('ats_token', tokens.hiring);
-    const res = await api('POST', '/requisitions', tokens.hiring, { status: 'DRAFT', recruiterId: 'usr-recruiter' }); assert.equal(res.status, 201);
+    assert.equal((await api('POST','/requisitions',tokens.hiring,{status:'DRAFT',recruiterId:'usr-recruiter'})).status,403);
+    ui.storage.set('ats_token', tokens.hr);
+    const res = await api('POST', '/requisitions', tokens.hr, { status: 'DRAFT', recruiterId: 'usr-recruiter' }); assert.equal(res.status, 201);
     await ui.context.window.__S210_TEST__.openCreateReqModal(res.data.data);
     assert.ok(selected.innerHTML.includes('value="usr-recruiter"')); assert.equal(selected.value, 'usr-recruiter');
   });

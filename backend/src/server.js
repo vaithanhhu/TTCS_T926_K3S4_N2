@@ -44,6 +44,7 @@ async function initializeApplication() {
   if (config.APPROVAL_CONFIGURATION_ENABLED) await require('./db/migrate-approval-configurations').verify(db);
   if (config.REQUISITION_APPROVAL_ENABLED) await require('./db/migrate-requisition-approvals').verify(db);
   if (config.HEADCOUNT_BUDGET_ENABLED) await require('./db/migrate-headcount-budgets').verify(db);
+  if (config.REQUISITION_OPERATIONS_ENABLED) await require('./db/migrate-requisition-operations').verify(db);
 }
 
 const avatarService = new AvatarService();
@@ -1651,7 +1652,7 @@ async function handleRequest(req, res) {
       res.writeHead(result.statusCode || 201, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
-      if(err instanceof require('./services/headcountBudgetService').HeadcountBudgetError){res.writeHead(err.statusCode,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,statusCode:err.statusCode,code:err.code,message:err.message}));return;}
+      if(err instanceof require('./services/headcountBudgetService').HeadcountBudgetError||err instanceof require('./services/requisitionOperationsService').RequisitionOperationsError){res.writeHead(err.statusCode,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,statusCode:err.statusCode,code:err.code,message:err.message}));return;}
       res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
     }
@@ -1718,7 +1719,7 @@ async function handleRequest(req, res) {
       res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
-      if(err instanceof require('./services/headcountBudgetService').HeadcountBudgetError){res.writeHead(err.statusCode,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,statusCode:err.statusCode,code:err.code,message:err.message}));return;}
+      if(err instanceof require('./services/headcountBudgetService').HeadcountBudgetError||err instanceof require('./services/requisitionOperationsService').RequisitionOperationsError){res.writeHead(err.statusCode,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,statusCode:err.statusCode,code:err.code,message:err.message}));return;}
       res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
     }
@@ -1841,6 +1842,10 @@ async function handleRequest(req, res) {
     return;
   }
 
+  if(pathname.startsWith('/api/v1/requisition-operations/')){if(!config.REQUISITION_OPERATIONS_ENABLED){res.writeHead(404,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:'S305_S306_DISABLED',message:'Chức năng sao chép/phân công chưa được bật.'}));return;}const {RequisitionOperationsService}=require('./services/requisitionOperationsService');await new(require('./controllers/requisitionOperationsController'))(new RequisitionOperationsService(db),rbacMiddleware,authController.authService).handle(req,res,parsedUrl,parseBody);return;}
+
+  if(req.method==='GET'&&/^\/(?:api\/v1\/)?candidates\/[^/]+$/.test(pathname)){const user=await rbacMiddleware.authorize(req,res,authController.authService,'candidate.read');if(!user)return;let candidateId;try{candidateId=decodeURIComponent(pathname.split('/').at(-1));}catch{res.writeHead(400,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:'BAD_REQUEST',message:'Mã hồ sơ không hợp lệ.'}));return;}const result=await requisitionService.getCandidateById(candidateId,user);res.writeHead(result.statusCode||200,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(result));return;}
+
   // 13.7 API: Candidates List (Real SQLite Data)
   if (req.method === 'GET' && (pathname === '/api/v1/candidates' || pathname === '/candidates')) {
     const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.read'));
@@ -1853,7 +1858,7 @@ async function handleRequest(req, res) {
     };
     if (isCandidateOnly(user)) options.candidateEmail = user.email;
     const result = (await requisitionService.getCandidates(options));
-    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.writeHead(result.statusCode||200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(result));
     return;
   }
@@ -1865,7 +1870,7 @@ async function handleRequest(req, res) {
     try {
       const body = await parseBody(req);
       if (isCandidateOnly(user)) Object.assign(body, { email: user.email, fullName: user.fullName, stage: 'NEW', notes: null, rejectionReasonId: null });
-      const result = (await requisitionService.createCandidate(body));
+      const result = (await requisitionService.createCandidate(body,user));
       res.writeHead(result.statusCode || 201, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
@@ -1884,7 +1889,7 @@ async function handleRequest(req, res) {
       const body = await parseBody(req);
       const isCatalogUpdate = Object.hasOwn(body, 'rejectionReasonId');
       if (isCatalogUpdate && !(await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.update'))) return;
-      const result = (await requisitionService.updateCandidateStage(candId, body.stage, isCatalogUpdate ? body.notes : undefined, isCatalogUpdate ? body.rejectionReasonId : undefined));
+      const result = (await requisitionService.updateCandidateStage(candId, body.stage, isCatalogUpdate ? body.notes : undefined, isCatalogUpdate ? body.rejectionReasonId : undefined,user));
       res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
@@ -1904,7 +1909,7 @@ async function handleRequest(req, res) {
         Object.assign(interview.interviewer, avatarService.getAvatarUrls(interview.interviewer.id));
       }
     }
-    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.writeHead(result.statusCode||200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(result));
     return;
   }
@@ -1965,7 +1970,7 @@ async function handleRequest(req, res) {
     const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'offer.read'));
     if (!user) return;
     const result = (await requisitionService.getOffers({viewer:user,...(isCandidateOnly(user) ? { candidateEmail: user.email } : {})}));
-    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.writeHead(result.statusCode||200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(result));
     return;
   }

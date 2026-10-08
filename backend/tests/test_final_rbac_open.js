@@ -29,7 +29,7 @@ async function storageCases(db,label){
   const hr=actor('HR_MANAGER'),hiring=actor('HIRING_MGR'),admin=actor('ADMIN');
   const title=await new (require('../src/services/competencyService'))(db).createJobTitle({code:'FINAL-'+label.replace(/\W/g,''),name:'Final title',level:'Senior',minSalary:10000000,maxSalary:50000000});assert.equal(title.success,true);
   const valid={formVersion:'S2-10',jobTitleId:title.data.id,departmentId:'dept-3',headcount:2,recruitmentReason:'REPLACEMENT',proposedSalaryMin:15000000,proposedSalaryMax:30000000,neededDate:service.businessDate(),jobDescription:'Original document',candidateRequirements:'Original requirements',recruiterId:'usr-recruiter'};
-  const request=await service.createRequisition(valid,hiring);assert.equal(request.success,true);const id=request.data.id;
+  const request=await service.createRequisition({...valid,recruiterId:null},hiring);assert.equal(request.success,true);const id=request.data.id;assert.equal((await service.updateRequisition(id,{recruiterId:'usr-recruiter'},hr)).success,true);
   await test(label+' OPEN operational note updates directly without altering significant content',async()=>{
     const before=await service.getRequisitionById(id);const result=await service.updateRequisition(id,{handoverNotes:'Operational note'},hiring);assert.equal(result.success,true);
     const after=await service.getRequisitionById(id);assert.equal(after.handoverNotes,'Operational note');for(const field of ['jobTitleId','departmentId','headcount','proposedSalaryMax','jobDescription'])assert.equal(after[field],before[field]);
@@ -56,7 +56,7 @@ async function storageCases(db,label){
     assert.equal((await service.updateRequisition(id,{handoverNotes:'Denied'},actor('APPROVER'))).statusCode,403);
   });
   await test(label+' DRAFT completion and creator-only protection remain unchanged',async()=>{
-    const draft=await service.createRequisition({...valid,status:'DRAFT'},hiring);assert.equal(draft.success,true);
+    const draft=await service.createRequisition({...valid,status:'DRAFT',recruiterId:null},hiring);assert.equal(draft.success,true);
     assert.equal((await service.updateRequisition(draft.data.id,{jobDescription:'Draft revision'},hiring)).success,true);
     assert.equal((await service.updateRequisition(draft.data.id,{jobDescription:'Denied'},hr)).code,'REQUISITION_DRAFT_FORBIDDEN');
     assert.equal((await service.updateRequisition(draft.data.id,{status:'OPEN'},hiring)).success,true);

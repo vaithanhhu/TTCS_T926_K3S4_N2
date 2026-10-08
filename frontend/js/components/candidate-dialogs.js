@@ -109,13 +109,15 @@
   const candDetailRejectionReasonGroup = document.getElementById('cand-detail-rejection-reason-group');
   const candDetailRejectionReasonSelect = document.getElementById('cand-detail-rejection-reason-select');
   let canEditCandidateRejectionReason = false;
+  let candidateDetailsGeneration=0;
+  window.ATS_CANDIDATE_DETAILS={leave(){candidateDetailsGeneration++;}};
 
   async function openCandidateDetails(id) {
-    let c = currentCandidatesList.find(x => x.id === id);
-    if (!c) {
-      showToast('warning', 'Hồ sơ', `Đang tải chi tiết hồ sơ ứng viên...`);
-      return;
-    }
+    const generation=++candidateDetailsGeneration,token=sessionStorage.getItem('ats_token'),view=currentActiveView;candidateDetailModal?.classList.add('hidden');
+    const result=await window.ATS_API.getCandidateByIdApi(token,id);
+    if(generation!==candidateDetailsGeneration||token!==sessionStorage.getItem('ats_token')||view!==currentActiveView)return;
+    if(!result.ok||!result.data?.success){showToast('danger','Không thể mở hồ sơ',result.data?.message||'Không thể tải hồ sơ ứng viên.');return;}
+    const c=result.data.data;
 
     const name = c.fullName || c.full_name || 'Ứng viên';
     const avatar = document.getElementById('cand-detail-avatar');
@@ -206,6 +208,7 @@
         }
       }
     }
+    if(generation!==candidateDetailsGeneration||token!==sessionStorage.getItem('ats_token')||view!==currentActiveView)return;
     if (candidateDetailModal) candidateDetailModal.classList.remove('hidden');
   }
 

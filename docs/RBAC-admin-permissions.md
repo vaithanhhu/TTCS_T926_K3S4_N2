@@ -1,5 +1,11 @@
 # RBAC — chính sách tái phê duyệt cuối, 08/10/2026
 
+## S3-05 / S3-06 — 09/10/2026
+
+Sao chép dùng requisition.create/read, actual ADMIN/HR_MANAGER/HIRING_MGR và source scope, tạo DRAFT creator mới. Phân công dùng requisition.assign, chỉ HR_MANAGER/ADMIN; Hiring đọc, Recruiter chỉ primary/support được giao. Đọc/ghi Candidate, Interview, Offer và báo cáo dùng DB scope; REC không còn global candidate read. Independent scope của HR/ADMIN/Hiring/Interviewer/Candidate và multi-role được giữ.
+
+Neon migration005 đồng bộ dependency grants additive theo ROLE_PERMISSIONS hiện hành, không xóa grant hoặc tự gán role. HIRING không được candidate.update, interview.create hoặc requisition.assign. Recruiter primary/support không trở thành approver và ADMIN vẫn chịu validation/state/cấm tự duyệt. Xem [bàn giao S3-05/S3-06](S3-05-S3-06-copy-recruiter-assignments.md).
+
 ## S3-03 / S3-04
 
 Tracking GET theo requisitionId dùng requisition.read và scope backend hiện hành. ADMIN/HR_MANAGER có scope quản trị; HIRING_MGR chỉ creator/assigned manager/department manager theo cơ chế requisition hiện có. APPROVER vẫn cần quyền đọc và phạm vi hợp lệ; không có API sửa/xóa lịch sử. Quyền đọc không cho phép xử lý bước của người khác.

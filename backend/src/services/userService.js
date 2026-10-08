@@ -1216,6 +1216,7 @@ class UserService {
         (await this.db.exec('ROLLBACK'));
         return { success: false, statusCode: 409, code: 'USER_IS_DEPARTMENT_MANAGER', message: 'Người dùng đang phụ trách phòng ban nên không thể xóa.' };
       }
+      if(require('../config/config').REQUISITION_OPERATIONS_ENABLED){if(this.db.provider==='postgres')await this.db.prepare('SELECT id FROM users WHERE id=? FOR UPDATE').get(targetUserId);await new(require('./requisitionOperationsService').RequisitionOperationsService)(this.db).detachDeletedAccount(targetUserId,requestingUser);}
       (await this.db.prepare('DELETE FROM sessions WHERE user_id = ?').run(targetUserId));
       (await this.db.prepare('DELETE FROM user_roles WHERE user_id = ?').run(targetUserId));
       (await this.db.prepare('DELETE FROM users WHERE id = ?').run(targetUserId));

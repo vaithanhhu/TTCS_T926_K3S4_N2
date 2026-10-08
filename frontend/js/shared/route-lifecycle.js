@@ -2,6 +2,8 @@
 function leaveActivePage() {
   window.ATS_REQUISITION_APPROVAL_UI?.leave();
   window.ATS_REQUISITION_TRACKING?.leave();
+  window.ATS_REQUISITION_OPERATIONS_UI?.leave();
+  window.ATS_CANDIDATE_DETAILS?.leave();
   window.ATS_HEADCOUNT_BUDGET_UI?.leave();
   if (currentActiveView === 'approval-configurations') window.ATS_APPROVAL_CONFIGURATION_PAGE?.leave();
   if (currentActiveView === 'change-password') {

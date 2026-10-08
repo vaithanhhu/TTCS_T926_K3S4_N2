@@ -112,6 +112,7 @@ class RequisitionService {
 
     return {
       success: true,
+      features:{requisitionOperations:require('../config/config').REQUISITION_OPERATIONS_ENABLED===true},
       total: rows.length,
       items: mapped,
       requisitions: mapped
@@ -126,6 +127,7 @@ class RequisitionService {
       if(actor){const fresh=await new (require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(actor.id,'requisition.create');if(!fresh)return{success:false,statusCode:403,code:'FORBIDDEN_PERMISSION_DENIED',message:'Bạn không có quyền tạo yêu cầu tuyển dụng.'};actor={...actor,...fresh};}
       if (this.db.provider === 'postgres') await this.db.prepare('SELECT pg_advisory_xact_lock(hashtext(?))').get('requisition-code');
     if (this.isS210Request(data)) return (await this.saveS210Requisition(null, data, actor));
+    if(actor&&(data.recruiterId||data.assignedRecruiterId)&&!actor.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role)))return{success:false,statusCode:403,code:'REQUISITION_ASSIGN_FORBIDDEN',message:'Bạn không có quyền phân công recruiter.'};
     const title = typeof data.title === 'string' ? data.title.trim() : '';
     const departmentId = typeof data.departmentId === 'string'
       ? data.departmentId.trim()
@@ -137,6 +139,7 @@ class RequisitionService {
 
     const headcount = parseInt(data.headcount, 10) || 1;
     const recruiterId = data.recruiterId || data.assignedRecruiterId || null;
+    if(actor&&recruiterId&&!await this.db.prepare("SELECT u.id FROM users u WHERE u.id=? AND u.status='ACTIVE' AND EXISTS(SELECT 1 FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE ur.user_id=u.id AND r.code='RECRUITER')").get(recruiterId))return{success:false,statusCode:400,code:'INVALID_RECRUITER',message:'Người phụ trách phải là Recruiter đang hoạt động.'};
     const workLocationId = data.workLocationId || null;
     const workModeId = data.workModeId || null;
 
@@ -283,6 +286,7 @@ class RequisitionService {
       actor?.id||null
     ));
 
+    if(actor&&recruiterId&&require('../config/config').REQUISITION_OPERATIONS_ENABLED){await this.db.prepare('UPDATE requisitions SET recruiter_id=NULL WHERE id=?').run(id);await this.synchronizePrimaryRecruiter(id,recruiterId,actor);}
     if(require('./headcountBudgetService').HeadcountBudgetService.enabled())await new (require('./headcountBudgetService').HeadcountBudgetService)(this.db).effective(id);
     return {
       success: true,
@@ -312,6 +316,7 @@ class RequisitionService {
       if(!current)return{success:false,statusCode:404,code:'REQUISITION_NOT_FOUND',message:'Không tìm thấy yêu cầu tuyển dụng.'};
       if(!['OPEN','IN_PROGRESS'].includes(current.status))return{success:false,statusCode:409,code:'REQUISITION_EDIT_STATE_FORBIDDEN',message:'Yêu cầu tuyển dụng đang ở trạng thái không cho phép chỉnh sửa.'};
       if(!await this.db.prepare("SELECT u.id FROM users u JOIN user_roles ur ON ur.user_id=u.id JOIN roles r ON r.id=ur.role_id WHERE u.id=? AND u.status='ACTIVE' AND r.code='RECRUITER'").get(newRecruiterId))return{success:false,statusCode:400,code:'INVALID_RECRUITER',message:'Người phụ trách phải là Recruiter đang hoạt động.'};
+      if(require('../config/config').REQUISITION_OPERATIONS_ENABLED){await this.synchronizePrimaryRecruiter(requisitionId,newRecruiterId,fresh,notes);await this.db.prepare("UPDATE requisitions SET handover_required=FALSE,handover_notes=?,updated_at=datetime('now') WHERE id=?").run(notes||'Đã bàn giao cho nhân sự mới',requisitionId);return{success:true,statusCode:200,message:'Phân công lại vị trí tuyển dụng và hoàn tất bàn giao thành công.'};}
       return this.reassignHandover(requisitionId,newRecruiterId,notes,null);
     });
     if (!requisitionId) {
@@ -681,7 +686,8 @@ class RequisitionService {
     if (department && actor && !actor.roles.some(role=>['HR_MANAGER','ADMIN'].includes(role)) && department.manager_id !== actor.id) return { success: false, statusCode: 403, code: 'REQUISITION_DEPARTMENT_FORBIDDEN', message: 'Bạn chỉ được tạo yêu cầu cho phòng ban mình phụ trách.' };
     const catalogResult = (await this.validateRequisitionCatalogs(values.workLocationId, values.workModeId));
     if (!catalogResult.success) return catalogResult;
-    if (values.recruiterId && !(await this.db.prepare('SELECT id FROM users WHERE id = ?').get(values.recruiterId))) return fail('INVALID_RECRUITER', 'Nhân sự phụ trách không tồn tại.');
+    if(actor&&Object.hasOwn(data,'recruiterId')&&(values.recruiterId||null)!==(current?.recruiterId||null)&&!actor.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role)))return{success:false,statusCode:403,code:'REQUISITION_ASSIGN_FORBIDDEN',message:'Bạn không có quyền phân công recruiter.'};
+    if(values.recruiterId&&(!current||values.recruiterId!==current.recruiterId)&&!await this.db.prepare("SELECT u.id FROM users u WHERE u.id=? AND u.status='ACTIVE' AND EXISTS(SELECT 1 FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE ur.user_id=u.id AND r.code='RECRUITER')").get(values.recruiterId))return fail('INVALID_RECRUITER','Người phụ trách phải là Recruiter đang hoạt động.');
     if (!draft) {
       for (const key of ['jobTitleId', 'departmentId', 'headcount', 'recruitmentReason', 'proposedSalaryMin', 'proposedSalaryMax', 'neededDate', 'jobDescription', 'candidateRequirements']) {
         if (values[key] === null || (typeof values[key] === 'string' && !values[key].trim())) return fail('MISSING_REQUISITION_FIELD', `Vui lòng nhập đầy đủ ${key} trước khi hoàn tất yêu cầu.`);
@@ -712,13 +718,14 @@ class RequisitionService {
     const id = current?.id || 'req-' + crypto.randomUUID();
     const createdBy = current?.createdBy || actor?.id || null;
     const manager = department?.manager_id || null;
+    const persistedRecruiterId=actor&&require('../config/config').REQUISITION_OPERATIONS_ENABLED?current?.recruiterId||null:v.recruiterId;
     if (current) {
       (await this.db.prepare(`UPDATE requisitions SET title=?, job_title_id=?, department_id=?, department_name=?,
         headcount=?, hiring_manager_id=?, recruiter_id=?, work_location_id=?, work_mode_id=?, status=?,
         s210_version=1, created_by=?, recruitment_reason=?, proposed_salary_min=?, proposed_salary_max=?,
         needed_date=?, job_description=?, candidate_requirements=?, salary_justification=?, updated_at=datetime('now') WHERE id=?`)
         .run(title, v.jobTitleId, v.departmentId, department?.name || '', headcount, manager,
-          v.recruiterId, v.workLocationId, v.workModeId, status, createdBy, v.recruitmentReason,
+          persistedRecruiterId, v.workLocationId, v.workModeId, status, createdBy, v.recruitmentReason,
           v.proposedSalaryMin, v.proposedSalaryMax, v.neededDate, v.jobDescription, v.candidateRequirements, v.salaryJustification, id));
     } else {
       let number = (await this.db.prepare('SELECT COUNT(*) AS count FROM requisitions').get()).count + 1;
@@ -729,9 +736,10 @@ class RequisitionService {
         proposed_salary_min,proposed_salary_max,needed_date,job_description,candidate_requirements,salary_justification)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1,?,?,?,?,?,?,?,?)`)
         .run(id, code, title, v.jobTitleId, v.departmentId, department?.name || '', headcount, manager,
-          v.recruiterId, v.workLocationId, v.workModeId, status, createdBy, v.recruitmentReason,
+          persistedRecruiterId, v.workLocationId, v.workModeId, status, createdBy, v.recruitmentReason,
           v.proposedSalaryMin, v.proposedSalaryMax, v.neededDate, v.jobDescription, v.candidateRequirements, v.salaryJustification));
     }
+    if(actor&&require('../config/config').REQUISITION_OPERATIONS_ENABLED&&(v.recruiterId||null)!==(current?.recruiterId||null)){await this.db.prepare('UPDATE requisitions SET recruiter_id=? WHERE id=?').run(current?.recruiterId||null,id);await this.synchronizePrimaryRecruiter(id,v.recruiterId,actor);}
     if(status==='OPEN'&&require('./headcountBudgetService').HeadcountBudgetService.enabled())await new (require('./headcountBudgetService').HeadcountBudgetService)(this.db).effective(id);
     return { success: true, statusCode: current ? 200 : 201, message: status === 'DRAFT' ? 'Đã lưu nháp yêu cầu tuyển dụng.' : 'Đã lưu yêu cầu tuyển dụng.',
       ...(validation.salaryRangeStatus ? { salaryRangeStatus: validation.salaryRangeStatus } : {}), data: (await this.getRequisitionById(id)) };
@@ -978,6 +986,7 @@ class RequisitionService {
       if (!access.operationalFields.includes('recruiterId')) return fail(403,'REQUISITION_EDIT_FIELD_FORBIDDEN','Bạn không có quyền phân công người phụ trách.');
       if (data.recruiterId && !await this.db.prepare("SELECT u.id FROM users u JOIN user_roles ur ON ur.user_id=u.id JOIN roles r ON r.id=ur.role_id WHERE u.id=? AND u.status='ACTIVE' AND r.code='RECRUITER'").get(data.recruiterId)) return fail(400,'INVALID_RECRUITER','Người phụ trách phải là Recruiter đang hoạt động.');
     }
+    if(Object.hasOwn(data,'recruiterId')&&(data.recruiterId||null)!==(current.recruiterId||null)&&require('../config/config').REQUISITION_OPERATIONS_ENABLED)await this.synchronizePrimaryRecruiter(current.id,data.recruiterId,actor,data.handoverNotes);
     await this.db.prepare("UPDATE requisitions SET handover_notes=?,recruiter_id=?,status=?,updated_at=datetime('now') WHERE id=?").run(Object.hasOwn(data,'handoverNotes')?data.handoverNotes:current.handoverNotes,Object.hasOwn(data,'recruiterId')?data.recruiterId||null:current.recruiterId,data.status||current.status,current.id);
     return {success:true,statusCode:200,message:'Đã cập nhật thông tin vận hành.',data:await this.getRequisitionById(current.id)};
   }
@@ -986,7 +995,7 @@ class RequisitionService {
     if (!viewer || viewer.roles?.some(role => ['ADMIN','HR_MANAGER'].includes(role))) return null;
     const conditions = [], params = [];
     if (viewer.roles?.includes('HIRING_MGR')) { conditions.push(this.hiringRequisitionScope()); params.push(viewer.id,viewer.id,viewer.id); }
-    if (viewer.roles?.includes('RECRUITER')) { conditions.push('r.recruiter_id=?'); params.push(viewer.id); }
+    if (viewer.roles?.includes('RECRUITER')) { const scope=this.recruiterScope('r',viewer.id);conditions.push(scope.condition);params.push(...scope.params); }
     if (approvalEnabled && viewer.roles?.includes('APPROVER')) {
       conditions.push('EXISTS (SELECT 1 FROM requisition_approval_workflows scope_workflow JOIN requisition_approval_steps scope_step ON scope_step.submission_id=scope_workflow.current_submission_id WHERE scope_workflow.requisition_id=r.id AND scope_step.approver_id=?)'); params.push(viewer.id);
     }
@@ -1021,9 +1030,27 @@ class RequisitionService {
     return crypto.createHash('sha256').update(JSON.stringify({...this.approvalContent(item),status:item.status,recruiterId:item.recruiterId,handoverNotes:item.handoverNotes})).digest('hex');
   }
 
+  recruiterScope(alias,userId){const supports=require('../config/config').REQUISITION_OPERATIONS_ENABLED===true;return{condition:'('+alias+'.recruiter_id=?'+(supports?' OR EXISTS (SELECT 1 FROM requisition_recruiter_supports recruiter_support WHERE recruiter_support.requisition_id='+alias+'.id AND recruiter_support.user_id=?)':'')+')',params:supports?[userId,userId]:[userId]};}
+
+  async synchronizePrimaryRecruiter(id,primary,actor,reason=null){const operations=new(require('./requisitionOperationsService').RequisitionOperationsService)(this.db),version=(await this.db.prepare('SELECT version FROM requisition_assignment_versions WHERE requisition_id=?').get(id))?.version||0,supports=await this.db.prepare('SELECT user_id FROM requisition_recruiter_supports WHERE requisition_id=? ORDER BY user_id').all(id);return operations.assign(id,{requestId:crypto.randomUUID(),expectedVersion:version,primaryRecruiterId:primary||null,supportRecruiterIds:supports.map(row=>row.user_id).filter(userId=>userId!==primary),reason},actor);}
+
+  async recruiterAssigned(requisitionId,userId){if(this.db.provider==='postgres')await this.db.prepare('SELECT id FROM requisitions WHERE id=? FOR SHARE').get(requisitionId);const scope=this.recruiterScope('r',userId);return !!await this.db.prepare('SELECT r.id FROM requisitions r WHERE r.id=? AND '+scope.condition).get(requisitionId,...scope.params);}
+
+  async candidateAccess(id,actor,permission='candidate.read'){
+    const fresh=await new (require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(actor?.id,permission);
+    if(!fresh)return{success:false,statusCode:403,code:'CANDIDATE_FORBIDDEN',message:'Bạn không có quyền thao tác hồ sơ ứng viên.'};
+    const row=await this.db.prepare('SELECT id,requisition_id FROM candidates WHERE id=?').get(id);
+    if(!row)return{success:false,statusCode:404,code:'CANDIDATE_NOT_FOUND',message:'Không tìm thấy hồ sơ ứng viên.'};
+    if(!fresh.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))&&(!fresh.roles.includes('RECRUITER')||!await this.recruiterAssigned(row.requisition_id,fresh.id)))return{success:false,statusCode:403,code:'CANDIDATE_OUT_OF_SCOPE',message:'Hồ sơ ứng viên không thuộc vị trí bạn đang được phân công.'};
+    return{success:true,actor:fresh,row};
+  }
+
+  async getCandidateById(id,viewer){const result=await this.getCandidates({viewer,candidateId:id});if(!result.success)return result;if(!result.candidates.length)return{success:false,statusCode:403,code:'CANDIDATE_OUT_OF_SCOPE',message:'Hồ sơ ứng viên không thuộc phạm vi truy cập của bạn.'};return{success:true,data:result.candidates[0]};}
+
   candidateVisibility(viewer) {
-    if (!viewer || viewer.roles?.some(role => ['ADMIN', 'HR_MANAGER', 'RECRUITER', 'APPROVER'].includes(role))) return null;
+    if (!viewer || viewer.roles?.some(role => ['ADMIN', 'HR_MANAGER', 'APPROVER'].includes(role))) return null;
     const conditions = [], params = [];
+    if(viewer.roles?.includes('RECRUITER')){const scope=this.recruiterScope('r',viewer.id);conditions.push(scope.condition);params.push(...scope.params);}
     if (viewer.roles?.includes('HIRING_MGR')) {
       conditions.push(this.hiringRequisitionScope());
       params.push(viewer.id, viewer.id, viewer.id);
@@ -1040,12 +1067,14 @@ class RequisitionService {
   }
 
   async getCandidates(options = {}) {
+    if(options.viewer){const fresh=await new (require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(options.viewer.id,'candidate.read');if(!fresh)return{success:false,statusCode:403,code:'CANDIDATE_FORBIDDEN',message:'Bạn không có quyền xem hồ sơ ứng viên.',candidates:[]};options={...options,viewer:fresh};}
     const search = typeof options.search === 'string' ? options.search.trim() : '';
     const stage = typeof options.stage === 'string' ? options.stage.trim() : 'ALL';
     const reqId = typeof options.requisitionId === 'string' ? options.requisitionId.trim() : 'ALL';
 
     const conditions = [];
     const params = [];
+    if(options.candidateId){conditions.push('c.id=?');params.push(options.candidateId);}
 
     const visibility = this.candidateVisibility(options.viewer);
     if (visibility) {
@@ -1149,12 +1178,14 @@ class RequisitionService {
    * Get interviews list
    */
   async getInterviews(options = {}) {
+    if(options.viewer){const fresh=await new(require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(options.viewer.id,options.evaluationsOnly?'interview.evaluation.read':'interview.read');if(!fresh)return{success:false,statusCode:403,code:'INTERVIEW_FORBIDDEN',message:'Bạn không có quyền xem lịch phỏng vấn.',interviews:[]};options={...options,viewer:fresh};}
     const conditions=[],params=[];
     if (options.candidateEmail) { conditions.push('LOWER(c.email)=LOWER(?)');params.push(options.candidateEmail); }
     const viewer=options.viewer;
-    if (viewer && !viewer.roles.some(role=>['ADMIN','HR_MANAGER','RECRUITER'].includes(role)) && !(options.evaluationsOnly && viewer.roles.includes('APPROVER'))) {
+    if (viewer && !viewer.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role)) && !(options.evaluationsOnly && viewer.roles.includes('APPROVER'))) {
       const scopes=[];
       if (viewer.roles.includes('HIRING_MGR')) {scopes.push(this.hiringRequisitionScope());params.push(viewer.id,viewer.id,viewer.id);}
+      if(viewer.roles.includes('RECRUITER')){const scope=this.recruiterScope('r',viewer.id),candidateScope=this.recruiterScope('candidate_position',viewer.id);scopes.push('('+scope.condition+' AND EXISTS(SELECT 1 FROM requisitions candidate_position WHERE candidate_position.id=c.requisition_id AND '+candidateScope.condition+'))');params.push(...scope.params,...candidateScope.params);}
       if (viewer.roles.includes('INTERVIEWER')) {scopes.push('i.interviewer_id=?');params.push(viewer.id);}
       if (viewer.roles.includes('CANDIDATE')) {scopes.push('LOWER(c.email)=LOWER(?)');params.push(viewer.email);}
       conditions.push(scopes.length?'('+scopes.join(' OR ')+')':'1=0');
@@ -1225,13 +1256,14 @@ class RequisitionService {
    * Get offers list
    */
   async getOffers(options = {}) {
+    if(options.viewer){const fresh=await new(require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(options.viewer.id,'offer.read');if(!fresh)return{success:false,statusCode:403,code:'OFFER_FORBIDDEN',message:'Bạn không có quyền xem Offer.',offers:[]};options={...options,viewer:fresh};}
     const conditions=[],params=[];
     if(options.candidateEmail){conditions.push('LOWER(c.email)=LOWER(?)');params.push(options.candidateEmail);}
     const viewer=options.viewer;
     if(viewer&&!viewer.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))){
       const scopes=[];
       if(viewer.roles.includes('HIRING_MGR')){scopes.push(this.hiringRequisitionScope());params.push(viewer.id,viewer.id,viewer.id);}
-      if(viewer.roles.includes('RECRUITER')){scopes.push('r.recruiter_id=?');params.push(viewer.id);}
+      if(viewer.roles.includes('RECRUITER')){const scope=this.recruiterScope('r',viewer.id),candidateScope=this.recruiterScope('candidate_position',viewer.id);scopes.push('('+scope.condition+' AND EXISTS(SELECT 1 FROM requisitions candidate_position WHERE candidate_position.id=c.requisition_id AND '+candidateScope.condition+'))');params.push(...scope.params,...candidateScope.params);}
       if(viewer.roles.includes('APPROVER')){scopes.push('o.approver_id=?');params.push(viewer.id);}
       if(viewer.roles.includes('CANDIDATE')){scopes.push('LOWER(c.email)=LOWER(?)');params.push(viewer.email);}
       conditions.push(scopes.length?'('+scopes.join(' OR ')+')':'1=0');
@@ -1243,6 +1275,7 @@ class RequisitionService {
         o.start_date,
         o.status,
         r.recruiter_id AS responsible_recruiter_id,
+        CASE WHEN ${viewer?.roles.includes('RECRUITER')?this.recruiterScope('r',viewer.id).condition:'1=0'} THEN 1 ELSE 0 END AS in_recruiter_scope,
         o.created_at,
         c.id AS candidate_id,
         c.full_name AS candidate_name,
@@ -1261,13 +1294,13 @@ class RequisitionService {
       ORDER BY o.created_at DESC
     `);
 
-    const rows = (await stmt.all(...params));
+    const rows = (await stmt.all(...(viewer?.roles.includes('RECRUITER')?this.recruiterScope('r',viewer.id).params:[]),...params));
     return {
       success: true,
       total: rows.length,
       offers: rows.map(r => ({
         id: r.id,
-        ...(viewer?{capabilities:{canApprove:viewer.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))||viewer.roles.includes('APPROVER')&&r.approver_id===viewer.id,canSend:viewer.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))||viewer.roles.includes('RECRUITER')&&r.responsible_recruiter_id===viewer.id,canAccept:viewer.roles.every(role=>role==='CANDIDATE')&&r.candidate_email.toLowerCase()===viewer.email.toLowerCase()}}:{}),
+        ...(viewer?{capabilities:{canApprove:viewer.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))||viewer.roles.includes('APPROVER')&&r.approver_id===viewer.id,canSend:viewer.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))||viewer.roles.includes('RECRUITER')&&r.in_recruiter_scope===1,canAccept:viewer.roles.every(role=>role==='CANDIDATE')&&r.candidate_email.toLowerCase()===viewer.email.toLowerCase()}}:{}),
         salaryMonthly: r.salary_monthly,
         startDate: r.start_date,
         status: r.status,
@@ -1357,7 +1390,8 @@ class RequisitionService {
   /**
    * Create candidate record
    */
-  async createCandidate(data = {}) {
+  async createCandidate(data = {},actor=null) {
+    if(actor)return this.db.transaction(async()=>{const fresh=await new(require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(actor.id,'candidate.create');if(!fresh)return{success:false,statusCode:403,code:'CANDIDATE_FORBIDDEN',message:'Bạn không có quyền tạo hồ sơ ứng viên.'};if(fresh.roles.every(role=>role==='CANDIDATE')||fresh.roles.includes('CANDIDATE')&&!fresh.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))&&typeof data.email==='string'&&data.email.trim().toLowerCase()===fresh.email.toLowerCase())data={...data,email:fresh.email,fullName:fresh.fullName,stage:'NEW',notes:null,rejectionReasonId:null};else if(!fresh.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))&&(!fresh.roles.includes('RECRUITER')||!await this.recruiterAssigned(data.requisitionId,fresh.id)))return{success:false,statusCode:403,code:'CANDIDATE_OUT_OF_SCOPE',message:'Chỉ được tạo ứng viên cho vị trí bạn đang được phân công.'};return this.createCandidate(data,null);});
     const fullName = typeof data.fullName === 'string' ? data.fullName.trim() : '';
     const email = typeof data.email === 'string' ? data.email.trim() : '';
     const phoneNumber = typeof data.phoneNumber === 'string' ? data.phoneNumber.trim() : '';
@@ -1401,7 +1435,8 @@ class RequisitionService {
   /**
    * Update candidate stage / pipeline status
    */
-  async updateCandidateStage(id, stage, notes, rejectionReasonId) {
+  async updateCandidateStage(id, stage, notes, rejectionReasonId,actor=null) {
+    if(actor)return this.db.transaction(async()=>{const access=await this.candidateAccess(id,actor,'candidate.update');if(!access.success)return access;await this.db.prepare('SELECT id FROM requisitions WHERE id=?'+(this.db.provider==='postgres'?' FOR SHARE':'')).get(access.row.requisition_id);const checked=await this.candidateAccess(id,actor,'candidate.update');if(!checked.success)return checked;return this.updateCandidateStage(id,stage,notes,rejectionReasonId,null);});
     if (!id) return { success: false, statusCode: 400, message: 'Thiếu mã ứng viên.' };
     const validStages = ['NEW', 'APPLIED', 'SCREENING', 'INTERVIEW', 'OFFER', 'HIRED', 'REJECTED'];
     if (!validStages.includes(stage)) {
@@ -1445,8 +1480,13 @@ class RequisitionService {
     if(actor)return this.db.transaction(async()=>{
       const rbac=new (require('../middlewares/rbacMiddleware'))(this.db);
       if(!await rbac.getAuthorizedActor(actor.id,'interview.create'))return{success:false,statusCode:403,code:'FORBIDDEN_PERMISSION_DENIED',message:'Bạn không có quyền tạo lịch phỏng vấn.'};
+      const candidate=await this.db.prepare('SELECT id,requisition_id FROM candidates WHERE id=?').get(data.candidateId);
+      if(!candidate)return{success:false,statusCode:404,code:'CANDIDATE_NOT_FOUND',message:'Không tìm thấy ứng viên.'};
+      if(candidate.requisition_id&&data.requisitionId&&candidate.requisition_id!==data.requisitionId)return{success:false,statusCode:400,code:'INTERVIEW_REQUISITION_MISMATCH',message:'Vị trí phỏng vấn không khớp hồ sơ ứng tuyển.'};
+      const fresh=await rbac.getAuthorizedActor(actor.id,'interview.create');
+      if(!fresh.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))){const access=await this.candidateAccess(data.candidateId,fresh);if(!access.success)return access;}
       if(data.interviewerId&&!await rbac.getAuthorizedActor(data.interviewerId,'interview.evaluate'))return{success:false,statusCode:400,code:'INTERVIEW_ASSIGNEE_INVALID',message:'Người phỏng vấn phải đang hoạt động và có quyền đánh giá.'};
-      return this.createInterview(data,null);
+      return this.createInterview({...data,requisitionId:data.requisitionId||candidate.requisition_id},null);
     });
     const candidateId = data.candidateId;
     const requisitionId = data.requisitionId || null;
@@ -1478,9 +1518,10 @@ class RequisitionService {
     if(actor)return this.db.transaction(async()=>{
       const fresh=await new (require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(actor.id,permission);
       if(!fresh)return{success:false,statusCode:403,code:'FORBIDDEN_PERMISSION_DENIED',message:'Bạn không có quyền cập nhật lịch hoặc đánh giá.'};
-      const row=await this.db.prepare('SELECT id,interviewer_id FROM interviews WHERE id=?'+(this.db.provider==='postgres'?' FOR UPDATE':'')).get(id);
+      const row=await this.db.prepare('SELECT id,interviewer_id,candidate_id,requisition_id FROM interviews WHERE id=?'+(this.db.provider==='postgres'?' FOR UPDATE':'')).get(id);
       if(!row)return{success:false,statusCode:404,code:'INTERVIEW_NOT_FOUND',message:'Không tìm thấy lịch phỏng vấn.'};
       if(permission==='interview.evaluate'&&!fresh.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))&&(!fresh.roles.includes('INTERVIEWER')||row.interviewer_id!==fresh.id))return{success:false,statusCode:403,code:'INTERVIEW_ASSIGNEE_REQUIRED',message:'Bạn chỉ được đánh giá vòng phỏng vấn được phân công.'};
+      if(permission==='interview.update'&&!fresh.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))){const access=await this.candidateAccess(row.candidate_id,fresh);if(!access.success)return access;if(!await this.recruiterAssigned(row.requisition_id||access.row.requisition_id,fresh.id))return{success:false,statusCode:403,code:'INTERVIEW_OUT_OF_SCOPE',message:'Lịch phỏng vấn không thuộc vị trí được giao.'};}
       return this.updateInterviewStatus(id,status,feedback,score,null);
     });
     if (!id) return { success: false, statusCode: 400, message: 'Thiếu mã phỏng vấn.' };
@@ -1506,7 +1547,8 @@ class RequisitionService {
       if(!candidate)return{success:false,statusCode:404,code:'CANDIDATE_NOT_FOUND',message:'Không tìm thấy ứng viên.'};
       if(candidate.requisition_id&&data.requisitionId&&candidate.requisition_id!==data.requisitionId)return{success:false,statusCode:400,code:'OFFER_REQUISITION_MISMATCH',message:'Vị trí của Offer không khớp hồ sơ ứng viên.'};
       const requisitionId=data.requisitionId||candidate.requisition_id||null;
-      if(!actor.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))&&!await this.db.prepare('SELECT id FROM requisitions WHERE id=? AND recruiter_id=?').get(requisitionId,actor.id))return{success:false,statusCode:403,code:'OFFER_OUT_OF_SCOPE',message:'Offer không thuộc vị trí được giao cho bạn.'};
+      if(!actor.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))){const access=await this.candidateAccess(data.candidateId,actor);if(!access.success)return access;}
+      if(!actor.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))&&!await this.recruiterAssigned(requisitionId,actor.id))return{success:false,statusCode:403,code:'OFFER_OUT_OF_SCOPE',message:'Offer không thuộc vị trí được giao cho bạn.'};
       return this.createOffer({...data,requisitionId},null);
     });
     const candidateId = data.candidateId;
@@ -1541,10 +1583,11 @@ class RequisitionService {
       const fresh=await new (require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(actor.id,permission);
       if(!fresh)return{success:false,statusCode:403,code:'FORBIDDEN_PERMISSION_DENIED',message:'Bạn không có quyền cập nhật Offer.'};
       actor={...actor,...fresh};
-      const row=await this.db.prepare('SELECT o.id,o.approver_id,c.email,r.recruiter_id FROM offers o JOIN candidates c ON c.id=o.candidate_id LEFT JOIN requisitions r ON r.id=COALESCE(o.requisition_id,c.requisition_id) WHERE o.id=?'+(this.db.provider==='postgres'?' FOR UPDATE OF o':'')).get(id);
+      const row=await this.db.prepare('SELECT o.id,o.approver_id,o.candidate_id,c.email,r.recruiter_id,r.id AS requisition_id FROM offers o JOIN candidates c ON c.id=o.candidate_id LEFT JOIN requisitions r ON r.id=COALESCE(o.requisition_id,c.requisition_id) WHERE o.id=?'+(this.db.provider==='postgres'?' FOR UPDATE OF o':'')).get(id);
       if(!row)return{success:false,statusCode:404,code:'OFFER_NOT_FOUND',message:'Không tìm thấy Offer.'};
       if(!actor.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))){
-        const allowed=candidateResponse?row.email.toLowerCase()===actor.email.toLowerCase():['APPROVED','REJECTED'].includes(status)?row.approver_id===actor.id:row.recruiter_id===actor.id;
+        if(!candidateResponse&&!['APPROVED','REJECTED'].includes(status)){const access=await this.candidateAccess(row.candidate_id,actor);if(!access.success)return access;}
+        const allowed=candidateResponse?row.email.toLowerCase()===actor.email.toLowerCase():['APPROVED','REJECTED'].includes(status)?row.approver_id===actor.id:await this.recruiterAssigned(row.requisition_id,actor.id);
         if(!allowed)return{success:false,statusCode:403,code:'OFFER_OUT_OF_SCOPE',message:'Offer không thuộc phạm vi xử lý của bạn.'};
       }
       return this.updateOfferStatus(id,status,null);

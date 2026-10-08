@@ -182,6 +182,7 @@
     "/js/services/requisition-approval-api.js",
     "/js/components/requisition-approval.js",
     "/js/components/requisition-tracking.js",
+    "/js/components/requisition-operations.js",
     "/js/pages/headcount-budgets.js",
     "/js/services/approval-configuration-api.js",
     "/js/pages/approval-configurations.js",

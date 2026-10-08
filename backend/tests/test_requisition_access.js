@@ -198,14 +198,17 @@ async function main() {
       assert.deepEqual(response.candidates.map(row => row.id), [b.data.id]);
     });
     await test('PostgreSQL Candidate visibility is case-insensitive own email only', async () => {
+      await pg.prepare('UPDATE users SET email=$1 WHERE id=$2').run('pg-own@example.test','usr-candidate');
+      await pg.prepare('UPDATE candidates SET email=$1 WHERE id=$2').run('PG-OWN@EXAMPLE.TEST',a.data.id);
       const response = await service.getCandidates({ search: 'PG scope', viewer: { id: 'usr-candidate', email: 'PG-OWN@EXAMPLE.TEST', roles: ['CANDIDATE'] } });
       assert.deepEqual(response.candidates.map(row => row.id), [a.data.id]);
     });
     await test('PostgreSQL visibility preserves role union and rejects unknown role scope', async () => {
       await service.createInterview({ candidateId: b.data.id, interviewerId: 'usr-hiring-mgr', scheduledTime: '2027-01-01T12:00:00Z' });
+      await pg.prepare("INSERT INTO user_roles(user_id,role_id) SELECT ?,id FROM roles WHERE code='INTERVIEWER' ON CONFLICT DO NOTHING").run('usr-hiring-mgr');
       const response = await service.getCandidates({ search: 'PG scope', viewer: { id: 'usr-hiring-mgr', roles: ['HIRING_MGR', 'INTERVIEWER'] } });
       assert.deepEqual(response.candidates.map(row => row.id).sort(), [a.data.id, b.data.id].sort());
-      assert.deepEqual((await service.getCandidates({ viewer: { id: 'usr-hiring-mgr', roles: ['UNRELATED_ROLE'] } })).candidates, []);
+      assert.deepEqual((await service.getCandidates({ viewer: { id: 'unknown-user', roles: ['UNRELATED_ROLE'] } })).candidates, []);
     });
   } finally { await pg.close(); }
   console.log('REQUISITION_ACCESS_RESULT ' + JSON.stringify({ passed, failed, total: passed + failed })); process.exitCode = failed ? 1 : 0;

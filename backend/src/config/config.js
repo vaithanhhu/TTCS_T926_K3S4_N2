@@ -36,6 +36,7 @@ module.exports = {
   PG_SSL_MODE: process.env.PG_SSL_MODE || 'url',
   APPROVAL_CONFIGURATION_ENABLED: process.env.APPROVAL_CONFIGURATION_ENABLED === 'true',
   HEADCOUNT_BUDGET_ENABLED: process.env.HEADCOUNT_BUDGET_ENABLED === 'true',
+  REQUISITION_OPERATIONS_ENABLED: process.env.REQUISITION_OPERATIONS_ENABLED === 'true',
   REQUISITION_APPROVAL_ENABLED: process.env.REQUISITION_APPROVAL_ENABLED === 'true',
   DB_PATH: isTestEnv
     ? path.join(__dirname, '..', '..', 'data', 'ats_test.db')

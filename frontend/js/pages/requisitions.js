@@ -59,6 +59,7 @@
                   <button type="button" class="btn btn-outline btn-xs btn-detail-req" data-id="${req.id}">
                     Chi tiết
                   </button>
+                  ${res.data.features?.requisitionOperations&&currentAuthenticatedUser?.roles?.some(role=>['ADMIN','HR_MANAGER','HIRING_MGR'].includes(role))?`<button type="button" class="btn btn-outline btn-xs btn-copy-req" data-id="${escapeDepartmentHtml(req.id)}">Sao chép</button>`:''}
                   <button type="button" class="btn btn-outline btn-xs btn-edit-req" data-id="${req.id}">
                     Sửa
                   </button>
@@ -83,6 +84,7 @@
             return openRequisitionDetails(reqId,true);
           });
         });
+        document.querySelectorAll('.btn-copy-req').forEach(btn=>btn.addEventListener('click',()=>window.ATS_REQUISITION_OPERATIONS_UI.openCopy(btn.getAttribute('data-id'))));
         document.querySelectorAll('.btn-detail-req').forEach(btn=>btn.addEventListener('click',()=>openRequisitionDetails(btn.getAttribute('data-id'),false)));
 
         document.querySelectorAll('.btn-reassign-req').forEach(btn => {

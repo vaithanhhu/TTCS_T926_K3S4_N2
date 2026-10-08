@@ -233,7 +233,7 @@ async function main() {
     assert.equal((await api('POST', '/recruitment-catalogs', tokens.recruiter, {})).status, 403);
   });
   await test('Catalog references block deletion and legacy stage calls preserve reasons/notes', async () => {
-    const created = (await requisitions.createCandidate({ fullName: 'Catalog candidate', email: 'candidate@test.example', sourceId: source.id })); assert.equal(created.success, true);
+    const created = (await requisitions.createCandidate({ fullName: 'Catalog candidate', email: 'candidate@test.example', sourceId: source.id, requisitionId:'req-001' })); assert.equal(created.success, true);
     assert.equal((await catalogs.deleteItem(source.id)).code, 'CATALOG_ITEM_IN_USE');
     let res = await api('PUT', '/candidates/' + created.data.id + '/stage', tokens.recruiter, { stage: 'REJECTED', notes: 'Reason note', rejectionReasonId: reason.id }); assert.equal(res.status, 200);
     assert.equal((await catalogs.deleteItem(reason.id)).code, 'CATALOG_ITEM_IN_USE');
@@ -253,7 +253,7 @@ async function main() {
     assert.equal((await api('POST', '/career-page/media?kind=logo', tokens.hr, Buffer.from('invalid'), 'image/png')).status, 400);
   });
   await test('Sprint 1 requisition payload/response and Hiring Manager are preserved', async () => {
-    const res = await api('POST', '/requisitions', tokens.hiring, { title: 'Legacy position', departmentName: 'Unregistered legacy department', hiringManagerId: 'usr-hiring-mgr', recruiterId: 'usr-recruiter', headcount: 2 });
+    const res = await api('POST', '/requisitions', tokens.hiring, { title: 'Legacy position', departmentName: 'Unregistered legacy department', hiringManagerId: 'usr-hiring-mgr', headcount: 2 });
     assert.equal(res.status, 201); assert.deepEqual(Object.keys(res.data.data).sort(), ['id','code','title','departmentName','headcount','status'].sort());
     let req = (await requisitions.getRequisitionById(res.data.data.id)); assert.equal(req.hiringManagerId, 'usr-hiring-mgr');
     const updated = (await requisitions.updateRequisition(req.id, { departmentName: 'Another legacy department' })); assert.equal(updated.success, true);

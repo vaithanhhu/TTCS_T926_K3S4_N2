@@ -1,0 +1,630 @@
+{
+  "date": "2026-10-09",
+  "branch": "feature/s2-bulk-user-import",
+  "headBefore": "65be119f513217bf5a66c0398c59c48d6911d5d4",
+  "environment": {
+    "sqlite": "fresh TEMP source/dependency copies",
+    "postgresEmbedded": "PGlite through project adapter; serialized embedded clients",
+    "browser": "NOT RUN: browser runtime returned no available browser",
+    "postgresIsolatedLive": "NOT RUN: no isolated pg-wire database configured",
+    "email": "simulated; no real SMTP/OAuth"
+  },
+  "suites": [
+    {
+      "script": "test:sprint1",
+      "status": "PASS",
+      "passed": 56,
+      "total": 56,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\final-regression\\test-sprint1.log"
+    },
+    {
+      "script": "test:final-rbac-open",
+      "status": "PASS",
+      "passed": 33,
+      "total": 33,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\final-regression\\test-final-rbac-open.log"
+    },
+    {
+      "script": "test:requisition-access",
+      "status": "PASS",
+      "passed": 16,
+      "total": 16,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\final-regression\\test-requisition-access.log"
+    },
+    {
+      "script": "test:ats-e2e",
+      "status": "PASS",
+      "passed": 51,
+      "total": 51,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\sealed-source\\test-ats-e2e.log"
+    },
+    {
+      "script": "test:rbac",
+      "status": "PASS",
+      "passed": 47,
+      "total": 47,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\deploy-tests\\test-rbac.log"
+    },
+    {
+      "script": "test:s3-02",
+      "status": "PASS",
+      "passed": 93,
+      "total": 93,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\final-regression\\test-s3-02.log"
+    },
+    {
+      "script": "test:s3-01",
+      "status": "PASS",
+      "passed": 108,
+      "total": 108,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\final-regression\\test-s3-01.log"
+    },
+    {
+      "script": "test:postgres",
+      "status": "PASS",
+      "passed": 15,
+      "total": 15,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\final-regression\\test-postgres.log"
+    },
+    {
+      "script": "test:postgres:live",
+      "status": "NOT RUN",
+      "passed": null,
+      "total": null,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\final-regression\\test-postgres-live.log"
+    },
+    {
+      "script": "test:review-updates",
+      "status": "PASS",
+      "passed": 22,
+      "total": 22,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\final-regression\\test-review-updates.log"
+    },
+    {
+      "script": "test:s1-01",
+      "status": "PASS",
+      "passed": 8,
+      "total": 8,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\final-regression\\test-s1-01.log"
+    },
+    {
+      "script": "test:s1-02",
+      "status": "PASS",
+      "passed": 5,
+      "total": 5,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\final-regression\\test-s1-02.log"
+    },
+    {
+      "script": "test:s1-03",
+      "status": "PASS",
+      "passed": 5,
+      "total": 5,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\final-regression\\test-s1-03.log"
+    },
+    {
+      "script": "test:s1-03:email",
+      "status": "PASS",
+      "passed": 49,
+      "total": 49,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\final-regression\\test-s1-03-email.log"
+    },
+    {
+      "script": "test:s1-04",
+      "status": "PASS",
+      "passed": 5,
+      "total": 5,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\final-regression\\test-s1-04.log"
+    },
+    {
+      "script": "test:s1-05",
+      "status": "PASS",
+      "passed": 6,
+      "total": 6,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\final-regression\\test-s1-05.log"
+    },
+    {
+      "script": "test:s1-06",
+      "status": "PASS",
+      "passed": 3,
+      "total": 3,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\final-regression\\test-s1-06.log"
+    },
+    {
+      "script": "test:s1-07",
+      "status": "PASS",
+      "passed": 4,
+      "total": 4,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\final-regression\\test-s1-07.log"
+    },
+    {
+      "script": "test:s1-08",
+      "status": "PASS",
+      "passed": 5,
+      "total": 5,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\final-regression\\test-s1-08.log"
+    },
+    {
+      "script": "test:s1-09",
+      "status": "PASS",
+      "passed": 7,
+      "total": 7,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\final-regression\\test-s1-09.log"
+    },
+    {
+      "script": "test:s1-10",
+      "status": "PASS",
+      "passed": 8,
+      "total": 8,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\final-regression\\test-s1-10.log"
+    },
+    {
+      "script": "test:otp",
+      "status": "PASS",
+      "passed": 8,
+      "total": 8,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\final-regression\\test-otp.log"
+    },
+    {
+      "script": "test:sprint2",
+      "status": "PASS",
+      "passed": 32,
+      "total": 32,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\deploy-tests\\test-sprint2.log"
+    },
+    {
+      "script": "test:s2-10",
+      "status": "PASS",
+      "passed": 59,
+      "total": 59,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\deploy-tests\\test-s2-10.log"
+    },
+    {
+      "script": "test:routing",
+      "status": "PASS",
+      "passed": 180,
+      "total": 180,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\final-regression\\test-routing.log"
+    },
+    {
+      "script": "test:user-ux",
+      "status": "PASS",
+      "passed": 87,
+      "total": 87,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\final-regression\\test-user-ux.log"
+    },
+    {
+      "script": "test:datetime-dashboard",
+      "status": "PASS",
+      "passed": 28,
+      "total": 28,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\final-regression\\test-datetime-dashboard.log"
+    },
+    {
+      "script": "test:avatar",
+      "status": "PASS",
+      "passed": 21,
+      "total": 21,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\final-regression\\test-avatar.log"
+    },
+    {
+      "script": "test:mobile-shell",
+      "status": "PASS",
+      "passed": 53,
+      "total": 53,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\final-regression\\test-mobile-shell.log"
+    },
+    {
+      "script": "test:layout",
+      "status": "PASS",
+      "passed": 45,
+      "total": 45,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\final-regression\\test-layout.log"
+    },
+    {
+      "script": "test:coverage:sprint1",
+      "status": "PASS",
+      "passed": 23,
+      "total": 23,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\final-regression\\test-coverage-sprint1.log"
+    },
+    {
+      "script": "test:coverage:sprint2",
+      "status": "PASS",
+      "passed": 25,
+      "total": 25,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\final-regression\\test-coverage-sprint2.log"
+    },
+    {
+      "script": "test:career-upload",
+      "status": "PASS",
+      "passed": 24,
+      "total": 24,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\final-regression\\test-career-upload.log"
+    },
+    {
+      "script": "test:user-roles-avatar",
+      "status": "PASS",
+      "passed": 17,
+      "total": 17,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\final-regression\\test-user-roles-avatar.log"
+    },
+    {
+      "script": "test:reapproval",
+      "status": "PASS",
+      "passed": 94,
+      "total": 94,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\sealed-source\\test-reapproval.log"
+    },
+    {
+      "script": "test:s3-03",
+      "status": "PASS",
+      "passed": 29,
+      "total": 29,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\final-regression\\test-s3-03.log"
+    },
+    {
+      "script": "test:s3-04",
+      "status": "PASS",
+      "passed": 55,
+      "total": 55,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\final-regression\\test-s3-04.log"
+    },
+    {
+      "script": "test:s3-05",
+      "status": "PASS",
+      "passed": 36,
+      "total": 36,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\deploy-tests\\test-s3-05.log"
+    },
+    {
+      "script": "test:s3-06",
+      "status": "PASS",
+      "passed": 46,
+      "total": 46,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\deploy-tests\\test-s3-06.log"
+    },
+    {
+      "script": "node backend/tests/test_postgres_startup.js",
+      "status": "PASS",
+      "passed": 11,
+      "total": 11,
+      "exitCode": 0,
+      "log": "C:\\Users\\Asus of Kien\\Documents\\Codex\\2026-10-04\\cd-a-projects-ttcs-t926-k3s4\\work\\ats-s305-s306\\startup\\file-postgres-startup.log"
+    }
+  ],
+  "total": 1419,
+  "withoutDuplicateAggregate": 1363,
+  "static": {
+    "syntax": {
+      "passed": 128,
+      "total": 128,
+      "failed": []
+    },
+    "comments": [],
+    "protected": [
+      {
+        "file": "backend/data/ats.db",
+        "before": "abd32cc663be58a45dec262bca0effb6bef1ce28a76a9d45523e7ca54d4e28df",
+        "after": "abd32cc663be58a45dec262bca0effb6bef1ce28a76a9d45523e7ca54d4e28df"
+      },
+      {
+        "file": "backend/data/ats.db-shm",
+        "before": "cecda1c8fa43f56a689bcbb27d85403ebfa92af7b06fdeb292ee671eb2a65b71",
+        "after": "cecda1c8fa43f56a689bcbb27d85403ebfa92af7b06fdeb292ee671eb2a65b71"
+      },
+      {
+        "file": "backend/data/ats.db-wal",
+        "before": "f4a470fe8d70acb02cafaf3d85412ac8c3bc44e2473b5d5f2f915af5207f1228",
+        "after": "f4a470fe8d70acb02cafaf3d85412ac8c3bc44e2473b5d5f2f915af5207f1228"
+      },
+      {
+        "file": "backend/data/ats_test.db",
+        "before": "67442a892d6f897d396d22a4007b6bddb525202db8c3bc46f072646f56dd722a",
+        "after": "67442a892d6f897d396d22a4007b6bddb525202db8c3bc46f072646f56dd722a"
+      },
+      {
+        "file": "backend/src/db/migrations/001_postgres.sql",
+        "before": "e9c5a6926c196c523d1ac4e8a808d467b37a85e15f17f8732746803c4dacab2b",
+        "after": "e9c5a6926c196c523d1ac4e8a808d467b37a85e15f17f8732746803c4dacab2b"
+      },
+      {
+        "file": "backend/src/db/migrations/002_approval_configurations_postgres.sql",
+        "before": "46f949e9d7d6a06316aa20ea62a9c0f45be29cd8f242c401d3925ff1c3f9b477",
+        "after": "46f949e9d7d6a06316aa20ea62a9c0f45be29cd8f242c401d3925ff1c3f9b477"
+      },
+      {
+        "file": "backend/src/db/migrations/002_approval_configurations_sqlite.sql",
+        "before": "33318e32b4c4ae377c555312050074377295db94682235a6f2d597ab9b57cee2",
+        "after": "33318e32b4c4ae377c555312050074377295db94682235a6f2d597ab9b57cee2"
+      },
+      {
+        "file": "backend/src/db/migrations/003_requisition_approvals_postgres.sql",
+        "before": "41c375f22d61439ddd61a18ca9adba1a8d3ceb31297c4c35a49c55d52797d0a7",
+        "after": "41c375f22d61439ddd61a18ca9adba1a8d3ceb31297c4c35a49c55d52797d0a7"
+      },
+      {
+        "file": "backend/src/db/migrations/003_requisition_approvals_sqlite.sql",
+        "before": "126d26d938aba06c01627a188b87f49536688d43439c2ac44b0b7963b3860296",
+        "after": "126d26d938aba06c01627a188b87f49536688d43439c2ac44b0b7963b3860296"
+      },
+      {
+        "file": "backend/src/db/migrations/004_headcount_budgets_postgres.sql",
+        "before": "ad3d7325abe16a58705ca4ceac6b55c65dd310ce0d7d17f2aa76d2c821852831",
+        "after": "ad3d7325abe16a58705ca4ceac6b55c65dd310ce0d7d17f2aa76d2c821852831"
+      },
+      {
+        "file": "backend/src/db/migrations/004_headcount_budgets_sqlite.sql",
+        "before": "d7e157a79ba0d566aeb189316120f24f626781a5442550c0764619cca770c9b3",
+        "after": "d7e157a79ba0d566aeb189316120f24f626781a5442550c0764619cca770c9b3"
+      }
+    ],
+    "protectedUnchanged": true,
+    "diffCheck": "PASS"
+  },
+  "neonMigration": {
+    "phase": "APPLY",
+    "counts": {
+      "approval_configuration_levels": 0,
+      "approval_configuration_versions": 0,
+      "approval_configurations": 0,
+      "ats_approval_configuration_migrations": 1,
+      "ats_headcount_budget_migrations": 1,
+      "ats_requisition_approval_migrations": 1,
+      "ats_schema_migrations": 1,
+      "candidates": 15,
+      "career_page_settings": 1,
+      "competency_criteria": 2,
+      "competency_frameworks": 1,
+      "departments": 9,
+      "email_logs": 65,
+      "headcount_budget_exceptions": 0,
+      "headcount_budget_participation": 0,
+      "headcount_budget_reservations": 0,
+      "headcount_budget_versions": 0,
+      "headcount_budgets": 0,
+      "interview_questions": 2,
+      "interviews": 11,
+      "job_titles": 1,
+      "login_audit_logs": 1908,
+      "offers": 11,
+      "otps": 5,
+      "password_reset_tokens": 37,
+      "permissions": 37,
+      "recruitment_catalog_items": 4,
+      "requisition_approval_events": 0,
+      "requisition_approval_snapshots": 0,
+      "requisition_approval_steps": 0,
+      "requisition_approval_submissions": 0,
+      "requisition_approval_workflows": 0,
+      "requisitions": 14,
+      "role_permissions": 80,
+      "roles": 7,
+      "sessions": 273,
+      "user_roles": 60,
+      "users": 59
+    },
+    "target": {
+      "database": "ats_staging",
+      "schema": "public"
+    },
+    "ledgerPresent": false,
+    "expected": "d09d66b45fb3be952a249c4e12e092d41062d994c25060dc2ff0f0d173f31f1c",
+    "grants": [
+      {
+        "role": "HIRING_MGR",
+        "permission": "candidate.read"
+      },
+      {
+        "role": "HIRING_MGR",
+        "permission": "interview.read"
+      },
+      {
+        "role": "HIRING_MGR",
+        "permission": "requisition.create"
+      },
+      {
+        "role": "HIRING_MGR",
+        "permission": "requisition.edit"
+      },
+      {
+        "role": "HIRING_MGR",
+        "permission": "requisition.read"
+      },
+      {
+        "role": "HR_MANAGER",
+        "permission": "candidate.read"
+      },
+      {
+        "role": "HR_MANAGER",
+        "permission": "candidate.update"
+      },
+      {
+        "role": "HR_MANAGER",
+        "permission": "interview.read"
+      },
+      {
+        "role": "HR_MANAGER",
+        "permission": "offer.create"
+      },
+      {
+        "role": "HR_MANAGER",
+        "permission": "offer.read"
+      },
+      {
+        "role": "HR_MANAGER",
+        "permission": "requisition.create"
+      },
+      {
+        "role": "HR_MANAGER",
+        "permission": "requisition.edit"
+      },
+      {
+        "role": "HR_MANAGER",
+        "permission": "requisition.read"
+      },
+      {
+        "role": "RECRUITER",
+        "permission": "candidate.create"
+      },
+      {
+        "role": "RECRUITER",
+        "permission": "candidate.read"
+      },
+      {
+        "role": "RECRUITER",
+        "permission": "candidate.update"
+      },
+      {
+        "role": "RECRUITER",
+        "permission": "interview.read"
+      },
+      {
+        "role": "RECRUITER",
+        "permission": "offer.create"
+      },
+      {
+        "role": "RECRUITER",
+        "permission": "offer.read"
+      },
+      {
+        "role": "RECRUITER",
+        "permission": "requisition.edit"
+      },
+      {
+        "role": "RECRUITER",
+        "permission": "requisition.read"
+      }
+    ],
+    "applied": "VERIFIED",
+    "ledger": [
+      {
+        "version": 1,
+        "checksum": "d09d66b45fb3be952a249c4e12e092d41062d994c25060dc2ff0f0d173f31f1c"
+      }
+    ],
+    "domainCountsChanged": [],
+    "newTables": {
+      "requisition_recruiter_supports": 0,
+      "requisition_assignment_versions": 0,
+      "requisition_recruiter_events": 0,
+      "requisition_operation_requests": 0
+    },
+    "triggers": [
+      {
+        "tgname": "operation_requests_immutable"
+      },
+      {
+        "tgname": "operation_requests_no_truncate"
+      },
+      {
+        "tgname": "recruiter_events_immutable"
+      },
+      {
+        "tgname": "recruiter_events_no_truncate"
+      },
+      {
+        "tgname": "recruiter_primary_not_support"
+      },
+      {
+        "tgname": "recruiter_support_not_primary"
+      }
+    ]
+  },
+  "neonSmoke": {
+    "transaction": "ROLLBACK_ONLY",
+    "passed": [
+      "copy-exact-content-draft",
+      "copy-idempotent-retry",
+      "copy-no-history-assignments-budget-original-mutation",
+      "copy-foreign-scope-denied",
+      "hr-primary-multiple-supports",
+      "assignment-retry-no-extra-history",
+      "duplicate-members-and-hiring-management-denied",
+      "canonical-candidate-create-grants",
+      "candidate-primary-support-scope-no-shared-email-leak",
+      "pipeline-assigned-only",
+      "interview-scope-and-mismatched-link-denied",
+      "support-recruiter-offer-operation",
+      "transfer-revokes-primary-and-support-access",
+      "stale-assignment-denied",
+      "database-history-delete-denied"
+    ],
+    "status": "PASS",
+    "cases": 15,
+    "fixtureCountAfter": 0,
+    "domainCountsUnchanged": true
+  },
+  "files": [
+    "backend/src/controllers/requisitionOperationsController.js",
+    "backend/src/db/migrate-requisition-operations.js",
+    "backend/src/db/migrations/005_requisition_operations_postgres.sql",
+    "backend/src/db/migrations/005_requisition_operations_sqlite.sql",
+    "backend/src/services/requisitionOperationsService.js",
+    "backend/tests/test_s3_05_06.js",
+    "docs/S3-05-S3-06-copy-recruiter-assignments.md",
+    "frontend/js/components/requisition-operations.js",
+    "backend/src/config/config.js",
+    "backend/src/db/sync-permissions.js",
+    "backend/src/server.js",
+    "backend/src/services/requisitionService.js",
+    "backend/src/services/userService.js",
+    "backend/tests/test_final_rbac_open.js",
+    "backend/tests/test_requisition_access.js",
+    "backend/tests/test_requisition_reapproval.js",
+    "backend/tests/test_s1_09_integration.js",
+    "backend/tests/test_s2_10_integration.js",
+    "backend/tests/test_s2_integration.js",
+    "docs/ATS-E2E-2026-10-08.md",
+    "docs/RBAC-admin-permissions.md",
+    "frontend/components/create-req-modal.html",
+    "frontend/components/requisition-detail-modal.html",
+    "frontend/js/api.js",
+    "frontend/js/components/candidate-dialogs.js",
+    "frontend/js/components/requisition-detail.js",
+    "frontend/js/components/requisition-form.js",
+    "frontend/js/pages/requisitions.js",
+    "frontend/js/shared/route-lifecycle.js",
+    "frontend/routes.json",
+    "package.json",
+    "docs/ATS-S3-05-S3-06-2026-10-09-evidence.json"
+  ]
+}

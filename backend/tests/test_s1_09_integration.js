@@ -168,6 +168,11 @@ async function runTests() {
       }
     }, { roles: ['INTERVIEWER', 'RECRUITER'] });
     assert.strictEqual(grantRoleRes.status, 200);
+    const deniedBeforeAssignment=await request({hostname:'localhost',port:TEST_PORT,path:'/api/v1/candidates/cand-001/stage',method:'PUT',headers:{Authorization:`Bearer ${devToken}`,'Content-Type':'application/json'}},{stage:'SCREENING'});
+    assert.strictEqual(deniedBeforeAssignment.status,403);
+    const assignedPosition=(await getDatabase().prepare('SELECT requisition_id FROM candidates WHERE id=?').get('cand-001')).requisition_id;
+    const assignment=await request({hostname:'localhost',port:TEST_PORT,path:'/api/v1/requisitions/'+assignedPosition+'/handover',method:'PUT',headers:{Authorization:`Bearer ${adminToken}`,'Content-Type':'application/json'}},{newRecruiterId:'usr-dev-01',notes:'Explicit assignment for role-refresh test'});
+    assert.strictEqual(assignment.status,200);
     console.log('   ✓ Admin đã gán thêm vai trò RECRUITER vào CSDL SQLite cho dev1.');
 
     // Thao tác 2 KẾ TIẾP NGAY LẬP TỨC: Dev1 gọi lại endpoint ứng viên VỚI CÙNG TOKEN ĐANG SỬ DỤNG
