@@ -1553,7 +1553,9 @@ async function updateInterviewQuestionApi(token, id, questionData) {
   }
 }
 
+async function headcountBudgetRequestApi(token,path='',method='GET',body){try{const response=await fetch(API_BASE+'/headcount-budgets'+path,{method,headers:{Authorization:token?'Bearer '+token:'',...(body!==undefined?{'Content-Type':'application/json'}:{})},...(body!==undefined?{body:JSON.stringify(body)}:{})});return{ok:response.ok,status:response.status,data:await response.json()};}catch{return{ok:false,status:0,data:{message:'Kh?ng th? k?t n?i ?? x? l? ng?n s?ch.'}};}}
 window.ATS_API = {
+  headcountBudgetRequestApi,
   getInterviewOptionsApi,
   loginApi,
   logoutApi,

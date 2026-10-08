@@ -7,6 +7,7 @@
       <p class="modal-desc">Khai báo nhu cầu tuyển dụng. Có thể lưu nháp và tiếp tục hoàn thiện sau.</p>
 
       <div class="modal-body">
+        <section id="s303-s210" class="panel-card hidden" aria-live="polite" style="padding:12px;margin-bottom:16px;min-width:0;"></section>
         <div id="create-req-alert" class="alert-box hidden" role="alert">
           <div class="alert-icon">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
@@ -16,7 +17,8 @@
           </div>
         </div>
 
-        <form id="create-req-form" novalidate>
+        <div id="s304-create-panel" class="alert-box hidden" style="margin-bottom:12px;" aria-live="polite"><div class="alert-content"><p id="s304-create-message"></p><div id="s304-create-override" class="hidden"><label for="s304-create-reason">Lý do xác nhận ngoại lệ</label><textarea id="s304-create-reason" class="form-input" maxlength="4000"></textarea><button id="s304-create-confirm" class="btn btn-outline" type="button">HR/Admin xác nhận ngoại lệ</button></div></div></div>
+<form id="create-req-form" novalidate>
           <p id="create-req-state" class="form-hint" aria-live="polite"></p>
           <div class="form-group">
             <label for="create-req-job-title-input" class="form-label">Chức danh <span class="required">*</span></label>

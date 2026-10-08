@@ -283,6 +283,7 @@ class RequisitionService {
       actor?.id||null
     ));
 
+    if(require('./headcountBudgetService').HeadcountBudgetService.enabled())await new (require('./headcountBudgetService').HeadcountBudgetService)(this.db).effective(id);
     return {
       success: true,
       statusCode: 201,
@@ -731,6 +732,7 @@ class RequisitionService {
           v.recruiterId, v.workLocationId, v.workModeId, status, createdBy, v.recruitmentReason,
           v.proposedSalaryMin, v.proposedSalaryMax, v.neededDate, v.jobDescription, v.candidateRequirements, v.salaryJustification));
     }
+    if(status==='OPEN'&&require('./headcountBudgetService').HeadcountBudgetService.enabled())await new (require('./headcountBudgetService').HeadcountBudgetService)(this.db).effective(id);
     return { success: true, statusCode: current ? 200 : 201, message: status === 'DRAFT' ? 'Đã lưu nháp yêu cầu tuyển dụng.' : 'Đã lưu yêu cầu tuyển dụng.',
       ...(validation.salaryRangeStatus ? { salaryRangeStatus: validation.salaryRangeStatus } : {}), data: (await this.getRequisitionById(id)) };
 

@@ -4,6 +4,7 @@
 
   const VIEW_TITLES = {
     'approval-configurations': 'Cấu hình luồng phê duyệt',
+    'headcount-budgets':'Chỉ tiêu & ngân sách',
     dashboard: 'Tổng quan Tuyển dụng',
     requisitions: 'Yêu cầu & Vị trí Tuyển dụng',
     candidates: 'Hồ sơ Ứng viên',
@@ -76,7 +77,8 @@
     const token = sessionStorage.getItem('ats_token');
     if (!token) return;
 
-    if (viewName === 'approval-configurations') {
+    if(viewName==='headcount-budgets'){window.ATS_HEADCOUNT_BUDGET_UI.load();}
+    else if (viewName === 'approval-configurations') {
       window.ATS_APPROVAL_CONFIGURATION_PAGE.load();
     } else if (viewName === 'dashboard') {
       loadDashboardData();

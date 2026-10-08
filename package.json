@@ -47,7 +47,10 @@
     "test:career-upload": "node backend/tests/test_career_page_upload_limits.js",
     "test:user-roles-avatar": "node backend/tests/test_user_roles_and_avatars.js",
     "test:sprint1": "node backend/tests/test_s1_01_integration.js && node backend/tests/test_s1_02_integration.js && node backend/tests/test_s1_03_integration.js && node backend/tests/test_s1_04_integration.js && node backend/tests/test_s1_05_integration.js && node backend/tests/test_s1_06_integration.js && node backend/tests/test_s1_07_integration.js && node backend/tests/test_s1_08_integration.js && node backend/tests/test_s1_09_integration.js && node backend/tests/test_s1_10_integration.js",
-    "test:reapproval": "node backend/tests/test_requisition_reapproval.js"
+    "test:reapproval": "node backend/tests/test_requisition_reapproval.js",
+    "migrate:s3-04": "node backend/src/db/migrate-headcount-budgets.js",
+    "test:s3-03": "node backend/tests/test_s3_03_04.js s3-03",
+    "test:s3-04": "node backend/tests/test_s3_03_04.js s3-04"
   },
   "keywords": [
     "ats",

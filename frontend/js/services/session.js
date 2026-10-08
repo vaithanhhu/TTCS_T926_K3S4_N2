@@ -85,6 +85,7 @@
         currentAllowedPaths = new Set(allowedPaths);
         const navItemMap = [
           { path: '/admin/approval-configurations', id: 'nav-item-approval-configurations' },
+          {path:'/admin/headcount-budgets',id:'nav-item-headcount-budgets'},
           { path: '/dashboard', id: 'nav-item-dashboard' },
           { path: '/requisitions', id: 'nav-item-requisitions' },
           { path: '/candidates', id: 'nav-item-candidates' },

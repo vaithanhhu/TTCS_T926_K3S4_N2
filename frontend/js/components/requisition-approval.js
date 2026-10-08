@@ -42,6 +42,7 @@
   if(current!==revision||token!==sessionStorage.getItem('ats_token'))return;
   if(proposal&&document.departmentName!==active.effectiveDocument?.departmentName&&document.departmentId===active.effectiveDocument?.departmentId){const matches=(results[0].data?.s210Departments||[]).filter(item=>item.name===document.departmentName?.trim());document.departmentId=matches.length===1?matches[0].id:'';if(matches.length!==1)error('Cần chọn phòng ban hợp lệ; không tự suy đoán từ tên phòng ban.');}
   for(const [id,items,field]of [['s302-department',results[0].data?.s210Departments||[],'departmentId'],['s302-job',results[0].data?.jobTitles||[],'jobTitleId'],['s302-location',results[1].data?.items||[],'workLocationId'],['s302-mode',results[2].data?.items||[],'workModeId']]){get(id).textContent='';const empty=element('option','Chọn giá trị');empty.value='';get(id).appendChild(empty);for(const item of items){const option=element('option',item.name);option.value=item.id;get(id).appendChild(option);}get(id).value=document[field]||'';}
+  window.ATS_HEADCOUNT_BUDGET_UI?.openRevision(active?.requisitionId);
  }
  async function propose(requisitionId,changes,expectedDocumentHash){
   if(busy)return;const current=++revision,token=sessionStorage.getItem('ats_token');const result=await window.ATS_REQUISITION_APPROVAL_API.request('/context/'+requisitionId);

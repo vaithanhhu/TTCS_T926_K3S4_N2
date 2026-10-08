@@ -1,11 +1,18 @@
 {
   "routes": [
     {
+      "path": "/admin/headcount-budgets",
+      "view": "headcount-budgets",
+      "auth": true,
+      "permission": "headcount_budget.read",
+      "menu": true
+    },
+    {
       "path": "/admin/approval-configurations",
-        "view": "approval-configurations",
-        "auth": true,
-        "menu": true,
-        "permission": "approval_configuration.manage"
+      "view": "approval-configurations",
+      "auth": true,
+      "menu": true,
+      "permission": "approval_configuration.manage"
     },
     {
       "path": "/change-password",
@@ -174,6 +181,8 @@
   "scripts": [
     "/js/services/requisition-approval-api.js",
     "/js/components/requisition-approval.js",
+    "/js/components/requisition-tracking.js",
+    "/js/pages/headcount-budgets.js",
     "/js/services/approval-configuration-api.js",
     "/js/pages/approval-configurations.js",
     "/js/shared/state.js",
@@ -216,6 +225,7 @@
     "/js/shared/route-lifecycle.js"
   ],
   "fragments": [
+    "/pages/headcount-budgets.html",
     "/components/requisition-approval-modal.html",
     "/pages/approval-configurations.html",
     "/pages/change-password.html",

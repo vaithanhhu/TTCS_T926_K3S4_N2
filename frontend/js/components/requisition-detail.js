@@ -22,6 +22,7 @@
   }
 
   async function openRequisitionDetails(id, edit = false) {
+    window.ATS_REQUISITION_TRACKING?.leave();
     pendingLegacyProposal=null;reapproveDetailBtn?.classList.add('hidden');
     const revision = ++requisitionDetailLoadRevision;
     const token = sessionStorage.getItem('ats_token');
@@ -163,6 +164,7 @@
     document.getElementById('submit-req-detail-btn').classList.toggle('hidden',!edit);
     if (reqDetailAlert) reqDetailAlert.classList.add('hidden');
     reqDetailModal.classList.remove('hidden');
+    window.ATS_REQUISITION_TRACKING?.load('s303-legacy',req.id,()=>isCurrentDetail()&&!reqDetailModal.classList.contains('hidden'));
   }
 
   if (closeReqDetailModal) closeReqDetailModal.addEventListener('click', () => reqDetailModal.classList.add('hidden'));

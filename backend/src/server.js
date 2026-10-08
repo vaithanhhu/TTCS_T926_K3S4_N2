@@ -43,6 +43,7 @@ async function initializeApplication() {
   }
   if (config.APPROVAL_CONFIGURATION_ENABLED) await require('./db/migrate-approval-configurations').verify(db);
   if (config.REQUISITION_APPROVAL_ENABLED) await require('./db/migrate-requisition-approvals').verify(db);
+  if (config.HEADCOUNT_BUDGET_ENABLED) await require('./db/migrate-headcount-budgets').verify(db);
 }
 
 const avatarService = new AvatarService();
@@ -247,6 +248,10 @@ async function handleRequest(req, res) {
         recovery: { action: 'CHANGE_PASSWORD', suggestedPath: '/change-password', label: 'Đổi mật khẩu' } }));
       return;
     }
+  }
+  if (pathname === '/api/v1/headcount-budgets' || pathname.startsWith('/api/v1/headcount-budgets/')) {
+    if(!config.HEADCOUNT_BUDGET_ENABLED){res.writeHead(404,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:'S304_DISABLED',message:'Ngân sách headcount chưa được bật.'}));return;}
+    const Budget=require('./services/headcountBudgetService').HeadcountBudgetService,Controller=require('./controllers/headcountBudgetController');await new Controller(new Budget(db),rbacMiddleware,authController.authService).handle(req,res,parsedUrl,parseBody);return;
   }
   if (pathname === '/api/v1/requisition-approvals' || pathname.startsWith('/api/v1/requisition-approvals/')) {
     if (!config.REQUISITION_APPROVAL_ENABLED) {
@@ -1646,6 +1651,7 @@ async function handleRequest(req, res) {
       res.writeHead(result.statusCode || 201, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
+      if(err instanceof require('./services/headcountBudgetService').HeadcountBudgetError){res.writeHead(err.statusCode,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,statusCode:err.statusCode,code:err.code,message:err.message}));return;}
       res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
     }
@@ -1712,6 +1718,7 @@ async function handleRequest(req, res) {
       res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
+      if(err instanceof require('./services/headcountBudgetService').HeadcountBudgetError){res.writeHead(err.statusCode,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,statusCode:err.statusCode,code:err.code,message:err.message}));return;}
       res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
     }
@@ -2091,6 +2098,7 @@ async function handleRequest(req, res) {
 
     // AC-01 & AC-02: Strictly filter menu items based on real database permissions
     // Items user has no permission for are COMPLETELY REMOVED from the payload (AC-02)
+    if(config.HEADCOUNT_BUDGET_ENABLED)ALL_NAVIGATION_ITEMS.push({id:'nav-headcount-budgets',label:'Chỉ tiêu và ngân sách',path:'/admin/headcount-budgets',requiredPermission:'headcount_budget.read',internalOnly:true});
     if (config.APPROVAL_CONFIGURATION_ENABLED) ALL_NAVIGATION_ITEMS.push({ id: 'nav-approval-configurations', label: 'Cấu hình phê duyệt', path: '/admin/approval-configurations', requiredPermission: 'approval_configuration.manage', internalOnly: true });
     ALL_NAVIGATION_ITEMS.push({ id: 'nav-reports', label: 'Báo cáo & Phân tích Tuyển dụng', path: '/reports', requiredPermission: 'report.read', internalOnly: true });
     const allowedMenuItems = ALL_NAVIGATION_ITEMS.filter(item => {

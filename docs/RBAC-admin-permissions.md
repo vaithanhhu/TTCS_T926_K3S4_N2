@@ -1,5 +1,13 @@
 # RBAC — chính sách tái phê duyệt cuối, 08/10/2026
 
+## S3-03 / S3-04
+
+Tracking GET theo requisitionId dùng requisition.read và scope backend hiện hành. ADMIN/HR_MANAGER có scope quản trị; HIRING_MGR chỉ creator/assigned manager/department manager theo cơ chế requisition hiện có. APPROVER vẫn cần quyền đọc và phạm vi hợp lệ; không có API sửa/xóa lịch sử. Quyền đọc không cho phép xử lý bước của người khác.
+
+Budget mới: HR_MANAGER read/manage/override; HIRING_MGR chỉ read department mình quản lý; các vai trò khác không được cấp. ADMIN toàn quyền RBAC nhưng vẫn bị kiểm tra lý do, tài chính, version, trạng thái, cấm tự duyệt và assignee. Ngân sách không mở quyền salary standard của Hiring Manager.
+
+Migration004 đồng bộ additive budget grants và prerequisite requisition.edit/draft.edit theo ma trận hiện hành. Không xóa grant/seed trên Neon. Test SQLite/PGlite chứng minh idempotency, không cấp edit cho APPROVER/INTERVIEWER/CANDIDATE và không cho HM override kể cả có grant thủ công sai. Neon thiếu prerequisite edit ở smoke đầu đã được đồng bộ an toàn, smoke rollback cuối12/12 PASS. Xem [bàn giao S3-03/S3-04](S3-03-S3-04-tracking-headcount.md).
+
 Tái phê duyệt và áp dụng revision đã hoàn thiện; phần BLOCKED ở các audit lịch sử dưới đây đã được thay thế bằng quyết định cuối và implementation hiện tại. Xem ATS-E2E-2026-10-08.md và evidence.openReapprovalFinal.
 
 | Thao tác | Actor | Kiểm tra độc lập |

@@ -128,6 +128,7 @@ class RequisitionApprovalService {
       await this.db.prepare('INSERT INTO requisition_approval_workflows(id,requisition_id,creator_id,status,version) VALUES (?,?,?,?,?)').run(workflow.id,requisitionId,original.createdBy,'PENDING',1);
       workflow.current_submission_id=await this.saveSubmission(workflow,document,chain,1);
       await this.db.prepare('UPDATE requisition_approval_workflows SET current_submission_id=? WHERE id=?').run(workflow.current_submission_id,workflow.id);
+      if(require('./headcountBudgetService').HeadcountBudgetService.enabled())await new (require('./headcountBudgetService').HeadcountBudgetService)(this.db).reserve(requisitionId,document,workflow.current_submission_id);
       return this.event(workflow,user,'SUBMIT',audit.reason||null,data,fingerprint);
     });
   }
@@ -161,6 +162,25 @@ class RequisitionApprovalService {
       FROM requisition_approval_workflows w LEFT JOIN requisition_approval_steps s ON s.submission_id=w.current_submission_id AND s.status='PENDING'
       LEFT JOIN requisitions r ON r.id=w.requisition_id WHERE (?=1) OR (?=1 AND w.creator_id=?) OR (?=1 AND s.approver_id=? AND w.status='PENDING') OR (?=1 AND ${scope}) ORDER BY w.created_at DESC,w.id`).all(supervisor?1:0,canRead?1:0,user.id,canApprove?1:0,user.id,canRead?1:0,...scopeParams);
   }
+  async tracking(requisitionId,user) {
+    return this.db.transaction(async()=>{
+      user=await this.transactionPermission(user,'requisition.read');
+      const item=await this.requisitions.getRequisitionById(requisitionId),access=await this.requisitions.requisitionAccess(item,user,false,true);
+      if(!access.success)throw new ApprovalConfigurationError(access.code,access.message,access.statusCode);
+      const workflow=await this.db.prepare('SELECT id,status,version,current_submission_id FROM requisition_approval_workflows WHERE requisition_id=?'+(this.db.provider==='postgres'?' FOR SHARE':'')).get(requisitionId);
+      if(!workflow)return {requisitionId,status:'NOT_SUBMITTED',workflowId:null,currentRevision:null,waitingFor:null,rounds:[]};
+      const submissions=await this.db.prepare('SELECT d.id,d.revision,d.created_at,d.document_json,s.configuration_version_id,s.snapshot_json FROM requisition_approval_submissions d JOIN requisition_approval_snapshots s ON s.workflow_id=d.approval_snapshot_id WHERE d.workflow_id=? ORDER BY d.revision').all(workflow.id);
+      const steps=await this.db.prepare('SELECT s.* FROM requisition_approval_steps s JOIN requisition_approval_submissions d ON d.id=s.submission_id WHERE d.workflow_id=? ORDER BY d.revision,s.level_order').all(workflow.id);
+      const events=await this.db.prepare('SELECT step_id,actor_id,actor_name,action,comment,created_at,workflow_version,response_json FROM requisition_approval_events WHERE workflow_id=? ORDER BY workflow_version').all(workflow.id);
+      const stepGroups=new Map(),decisions=new Map();let effectiveRevision=null;
+      for(const step of steps){const group=stepGroups.get(step.submission_id)||[];group.push(step);stepGroups.set(step.submission_id,group);}
+      for(const event of events){const applied=JSON.parse(event.response_json).appliedRevision;if(applied?.contentHash===this.requisitions.approvalContentHash(item))effectiveRevision=applied.revision;if(!event.step_id)continue;const group=decisions.get(event.step_id)||[];group.push({action:event.action,actor:{id:event.actor_id,name:event.actor_name},at:event.created_at,comment:event.comment||'',version:event.workflow_version});decisions.set(event.step_id,group);}
+      const rounds=submissions.map(submission=>{const snapshot=JSON.parse(submission.snapshot_json),document=JSON.parse(submission.document_json),audit=document.approvalRevision||document.submissionAudit;
+        return {submissionId:submission.id,revision:submission.revision,isCurrent:submission.id===workflow.current_submission_id,submittedAt:submission.created_at,submittedBy:audit?{id:audit.actorId,name:audit.actorName}:null,reason:audit?.reason||'',configurationVersionId:submission.configuration_version_id,configurationVersion:snapshot.version,steps:(stepGroups.get(submission.id)||[]).map(step=>({id:step.id,order:step.level_order,status:step.status,assignedApprover:{id:step.approver_id,name:step.approver_name},decisions:decisions.get(step.id)||[]}))};});
+      const current=rounds.find(round=>round.isCurrent),pending=workflow.status==='PENDING'?current?.steps.find(step=>step.status==='PENDING'):null;
+      return {requisitionId,workflowId:workflow.id,status:workflow.status,version:workflow.version,currentRevision:current?.revision||null,waitingFor:pending?{order:pending.order,...pending.assignedApprover}:null,effectiveRevision,rounds};
+    });
+  }
   async decide(id,data,user) {
     this.request(data);await this.permission(user,'requisition.approve');
     if(!['APPROVE','REJECT','REQUEST_INFO'].includes(data.action))this.fail('INVALID_APPROVAL_ACTION','Hành động phê duyệt không hợp lệ.',400);
@@ -176,13 +196,14 @@ class RequisitionApprovalService {
       if(step.approver_id!==user.id)this.fail('APPROVAL_ASSIGNEE_REQUIRED','Chỉ người được phân công ở cấp hiện tại được xử lý.',403);
       this.validateChain(workflow.creator_id,steps.map(item=>item.approver_id));
       const next=steps.find(item=>item.level_order===step.level_order+1);
-      if(data.action==='APPROVE'&&!next)workflow.appliedRevision=await this.applyRevision(workflow,await this.submission(workflow.current_submission_id));
+      if(data.action==='APPROVE'&&!next){const submission=await this.submission(workflow.current_submission_id);if(require('./headcountBudgetService').HeadcountBudgetService.enabled())await new (require('./headcountBudgetService').HeadcountBudgetService)(this.db).final(workflow.requisition_id,submission.document);workflow.appliedRevision=await this.applyRevision(workflow,submission);}
       const state=data.action==='APPROVE'?'APPROVED':data.action==='REJECT'?'REJECTED':'NEEDS_INFO';
       await this.db.prepare('UPDATE requisition_approval_steps SET status=? WHERE id=?').run(state,step.id);
       workflow.status=data.action==='APPROVE'?(next?'PENDING':'APPROVED'):state;
       if(data.action==='APPROVE'&&next)await this.db.prepare("UPDATE requisition_approval_steps SET status='PENDING' WHERE id=?").run(next.id);
       workflow.version++;
       await this.db.prepare('UPDATE requisition_approval_workflows SET status=?,version=? WHERE id=?').run(workflow.status,workflow.version,id);
+      if(require('./headcountBudgetService').HeadcountBudgetService.enabled()){const budget=new (require('./headcountBudgetService').HeadcountBudgetService)(this.db);if(workflow.status==='APPROVED')await budget.markApproved(workflow.requisition_id);else if(workflow.status!=='PENDING')await budget.release(workflow.requisition_id);}
       return this.event(workflow,user,data.action,comment.trim(),data,fingerprint,step.id);
     });
   }
@@ -202,6 +223,7 @@ class RequisitionApprovalService {
       const chain=await this.configurations.resolve(document.departmentId,document.proposedSalaryMax);
       workflow.current_submission_id=await this.saveSubmission(workflow,document,chain,previous.revision+1);workflow.status='PENDING';workflow.version++;
       await this.db.prepare('UPDATE requisition_approval_workflows SET current_submission_id=?,status=?,version=? WHERE id=?').run(workflow.current_submission_id,workflow.status,workflow.version,id);
+      if(require('./headcountBudgetService').HeadcountBudgetService.enabled())await new (require('./headcountBudgetService').HeadcountBudgetService)(this.db).reserve(workflow.requisition_id,document,workflow.current_submission_id);
       return this.event(workflow,user,'RESUBMIT',audit.reason||null,data,fingerprint);
     });
   }

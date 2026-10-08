@@ -18,6 +18,7 @@ class RequisitionApprovalController {
    if(req.method==='GET'&&!parts.length)result=await this.service.list(user);
    else if(req.method==='GET'&&parts[0]==='options'&&parts.length===1){await this.service.permission(user,'requisition.create');result=await this.service.db.prepare('SELECT id,code,title FROM requisitions WHERE created_by=? ORDER BY created_at DESC').all(user.id);}
    else if(req.method==='GET'&&parts[0]==='context'&&parts.length===2)result=await this.service.context(parts[1],user);
+   else if(req.method==='GET'&&parts[0]==='by-requisition'&&parts.length===2)result=await this.service.tracking(parts[1],user);
    else if(req.method==='GET'&&parts.length===1)result=await this.service.read(parts[0],user);
    else if(req.method==='POST'&&!parts.length){const data=await body(req);result=await this.service.submit(data?.requisitionId,data,user);status=201;}
    else if(req.method==='POST'&&parts.length===2&&parts[1]==='decisions')result=await this.service.decide(parts[0],await body(req),user);

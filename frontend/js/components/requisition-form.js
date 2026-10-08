@@ -95,6 +95,7 @@
 
   async function openCreateReqModal(request = null, access = null) {
     if (!createReqModal) return;
+    window.ATS_REQUISITION_TRACKING?.clear('s303-s210');
     const optionsRevision = ++requisitionOptionsRevision;
     editingS210Requisition = request?.formVersion === 'S2-10' ? request : null;
     requisitionEditAccess = access;
@@ -244,6 +245,8 @@
     document.getElementById('submit-create-req-btn').classList.toggle('hidden', !editable);
     updateRequisitionSalaryHint();
     createReqModal.classList.remove('hidden');
+    window.ATS_HEADCOUNT_BUDGET_UI?.openCreate(editingS210Requisition?.id);
+    window.ATS_REQUISITION_TRACKING?.load('s303-s210',editingS210Requisition?.id,()=>isCurrentSession()&&!createReqModal.classList.contains('hidden'));
     await refreshRequisitionSalaryCheck();
   }
 
