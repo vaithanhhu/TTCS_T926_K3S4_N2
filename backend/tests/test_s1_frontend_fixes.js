@@ -64,19 +64,37 @@ async function main() {
       });
     }
 
-    await test('S1-05', 'AC3', 'Real user.read denial ends loading, clears stale rows and renders exact Vietnamese message', async () => {
-      const grant = (await app.db.prepare("SELECT * FROM role_permissions WHERE role_id='role-admin' AND permission_id='perm-user-read'").get());
-      (await app.db.prepare('DELETE FROM role_permissions WHERE role_id=? AND permission_id=?').run(grant.role_id, grant.permission_id));
+    await test('S1-05', 'ADMIN policy', 'ADMIN retains user.read access after its explicit grant is revoked', async () => {
+      const grant = await app.db.prepare("SELECT * FROM role_permissions WHERE role_id='role-admin' AND permission_id='perm-user-read'").get();
+      assert.ok(grant);
+      await app.db.prepare('DELETE FROM role_permissions WHERE role_id=? AND permission_id=?').run(grant.role_id, grant.permission_id);
       try {
+        const response = await app.api('GET', '/admin/users?page=1&limit=20', f.storage.get('ats_token'));
+        assert.equal(response.status, 200);
         await f.nodes.get('users-search-btn').dispatch('click'); await f.settle();
-        const row = f.nodes.get('users-table-body').innerHTML;
-        assert.ok(row.includes('Bạn không có quyền thực hiện thao tác này (yêu cầu quyền: user.read).'));
-        assert.doesNotMatch(row, /Đang tải|data-user-id/);
-        assert.equal(f.nodes.get('users-prev-btn').disabled, true);
-        assert.equal(f.nodes.get('users-next-btn').disabled, true);
+        assert.doesNotMatch(f.nodes.get('users-table-body').innerHTML, /Đang tải|Bạn không có quyền/);
         assert.deepEqual(f.errors, []);
       } finally {
-        (await app.db.prepare('INSERT INTO role_permissions (role_id,permission_id) VALUES (?,?)').run(grant.role_id, grant.permission_id));
+        await app.db.prepare('INSERT INTO role_permissions (role_id,permission_id) VALUES (?,?)').run(grant.role_id, grant.permission_id);
+      }
+    });
+
+    await test('S1-05', 'AC3', 'Real HR_MANAGER user.read denial ends loading, clears stale rows and renders exact Vietnamese message', async () => {
+      const hr = await login(app, 'hrmanager@company.com');
+      const grant = await app.db.prepare("SELECT rp.* FROM role_permissions rp JOIN roles r ON r.id=rp.role_id JOIN permissions p ON p.id=rp.permission_id WHERE r.code='HR_MANAGER' AND p.code='user.read'").get();
+      assert.ok(grant);
+      await app.db.prepare('DELETE FROM role_permissions WHERE role_id=? AND permission_id=?').run(grant.role_id, grant.permission_id);
+      try {
+        assert.equal((await app.api('GET', '/admin/users?page=1&limit=20', hr.storage.get('ats_token'))).status, 403);
+        await hr.nodes.get('users-search-btn').dispatch('click'); await hr.settle();
+        const row = hr.nodes.get('users-table-body').innerHTML;
+        assert.ok(row.includes('Bạn không có quyền thực hiện thao tác này (yêu cầu quyền: user.read).'));
+        assert.doesNotMatch(row, /Đang tải|data-user-id/);
+        assert.equal(hr.nodes.get('users-prev-btn').disabled, true);
+        assert.equal(hr.nodes.get('users-next-btn').disabled, true);
+        assert.deepEqual(hr.errors, []);
+      } finally {
+        await app.db.prepare('INSERT INTO role_permissions (role_id,permission_id) VALUES (?,?)').run(grant.role_id, grant.permission_id);
       }
     });
 

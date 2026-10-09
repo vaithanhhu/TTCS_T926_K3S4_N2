@@ -1,0 +1,772 @@
+[
+  {
+    "file": "backend/src/config/config.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/config/local-demo.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/controllers/approvalConfigurationController.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/controllers/authController.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/controllers/headcountBudgetController.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/controllers/jobPostingDraftController.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/controllers/jobPostingPublicationController.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/controllers/requisitionApprovalController.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/controllers/requisitionLifecycleController.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/controllers/requisitionOperationsController.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/controllers/userController.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/db/database.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/db/import-sqlite.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/db/migrate-approval-configurations.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/db/migrate-headcount-budgets.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/db/migrate-job-publication.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/db/migrate-postgres.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/db/migrate-requisition-approvals.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/db/migrate-requisition-lifecycle.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/db/migrate-requisition-operations.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/db/migrate-requisition-tracking-job-drafts.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/db/migrate.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/db/postgres.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/db/seed-local-demo.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/db/seed.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/db/setup-local.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/db/sync-permissions.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/middlewares/rbacMiddleware.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/server.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/services/approvalConfigurationService.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/services/authService.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/services/avatarService.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/services/careerPageService.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/services/competencyService.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/services/departmentService.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/services/emailService.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/services/headcountBudgetService.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/services/jobPostingPublicationService.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/services/jobPostingService.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/services/questionBankService.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/services/recruitmentCatalogService.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/services/requisitionApprovalService.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/services/requisitionLifecycleService.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/services/requisitionOperationsService.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/services/requisitionService.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/services/requisitionTrackingService.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/services/userService.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/start-local.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/src/utils/password.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/helpers/coverageApplication.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/helpers/frontendFixture.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/helpers/frontendRuntime.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/helpers/visualAcceptance.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/run_browser_e2e.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/run_local_tests.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_ats_e2e.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_avatar_metadata.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_browser_e2e.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_candidate_stage.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_career_page_upload_limits.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_datetime_dashboard.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_email_otp_flow.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_final_rbac_open.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_frontend_routing.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_local_demo.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_mobile_shell.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_postgres_live.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_postgres_migration.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_postgres_startup.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_rbac_admin.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_requisition_access.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_requisition_reapproval.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_review_updates.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_s1_01_integration.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_s1_02_integration.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_s1_03_email_security.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_s1_03_integration.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_s1_04_integration.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_s1_05_integration.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_s1_06_integration.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_s1_07_integration.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_s1_08_integration.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_s1_09_integration.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_s1_10_integration.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_s1_coverage.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_s1_frontend_fixes.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_s2_10_integration.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_s2_coverage.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_s2_integration.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_s3_01_integration.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_s3_02_integration.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_s3_03_04.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_s3_05_06.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_s3_07.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_s3_08_09.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_s3_10.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_s3_10_pg_live.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_shared_layout.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_user_list_batch.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_user_management_ux.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "backend/tests/test_user_roles_and_avatars.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/api.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/app.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/components/action-menu.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/components/candidate-dialogs.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/components/change-password.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/components/handover.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/components/interview-dialogs.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/components/job-posting-drafts.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/components/job-posting-public-renderer.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/components/job-posting-publication.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/components/mobile-navigation.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/components/navigation.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/components/offer-dialogs.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/components/requisition-approval.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/components/requisition-detail.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/components/requisition-form.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/components/requisition-lifecycle.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/components/requisition-operations.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/components/requisition-tracking.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/components/user-dialogs.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/pages/approval-configurations.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/pages/approvals.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/pages/audit.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/pages/candidate-portal.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/pages/candidates.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/pages/career-page.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/pages/competencies.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/pages/dashboard.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/pages/departments.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/pages/error.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/pages/forgot-password.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/pages/headcount-budgets.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/pages/interviews.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/pages/login.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/pages/offers.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/pages/profile.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/pages/public-jobs.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/pages/question-bank.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/pages/recruitment-catalogs.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/pages/reports.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/pages/requisitions.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/pages/reset-password.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/pages/roles.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/pages/users.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/router.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/services/approval-configuration-api.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/services/requisition-approval-api.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/services/session.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/shared/datetime.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/shared/export.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/shared/page-lifecycle.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/shared/route-lifecycle.js",
+    "exitCode": 0,
+    "error": ""
+  },
+  {
+    "file": "frontend/js/shared/state.js",
+    "exitCode": 0,
+    "error": ""
+  }
+]

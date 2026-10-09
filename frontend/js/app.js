@@ -1,4 +1,7 @@
 /** Application bootstrap; page markup and behavior live in pages/ and components/. */
+document.addEventListener('submit', event => {
+  if (event.target?.id === 'login-form' && document.documentElement.dataset.appReady !== 'true') event.preventDefault();
+}, true);
 document.addEventListener('DOMContentLoaded', async () => {
   try {
     const response = await fetch('/routes.json');
@@ -43,6 +46,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     await checkExistingSession();
     loadPublicCareerPage();
     document.documentElement.dataset.appReady = 'true';
+    const loginSubmit = document.getElementById('submit-btn');
+    if (loginSubmit) loginSubmit.disabled = false;
   } catch (error) {
     console.error('[ATS Bootstrap]', error);
     document.body.textContent = 'Không thể tải ứng dụng. Vui lòng tải lại trang.';

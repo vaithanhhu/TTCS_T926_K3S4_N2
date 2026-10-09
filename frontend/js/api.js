@@ -541,6 +541,7 @@ async function getRequisitionsApi(token, params = {}) {
     if (params.search) query.append('search', params.search);
     if (params.status && params.status !== 'ALL') query.append('status', params.status);
     if (params.handoverOnly) query.append('handoverOnly', 'true');
+    for(const key of ['departmentId','recruiterId','createdFrom','createdTo','page','limit'])if(params[key]!=null&&params[key]!=='')query.append(key,params[key]);
     const qs = query.toString() ? `?${query.toString()}` : '';
 
     const response = await fetch(`${API_BASE}/requisitions${qs}`, {
@@ -1553,11 +1554,16 @@ async function updateInterviewQuestionApi(token, id, questionData) {
   }
 }
 
-async function headcountBudgetRequestApi(token,path='',method='GET',body){try{const response=await fetch(API_BASE+'/headcount-budgets'+path,{method,headers:{Authorization:token?'Bearer '+token:'',...(body!==undefined?{'Content-Type':'application/json'}:{})},...(body!==undefined?{body:JSON.stringify(body)}:{})});return{ok:response.ok,status:response.status,data:await response.json()};}catch{return{ok:false,status:0,data:{message:'Kh?ng th? k?t n?i ?? x? l? ng?n s?ch.'}};}}
+async function headcountBudgetRequestApi(token,path='',method='GET',body){try{const response=await fetch(API_BASE+'/headcount-budgets'+path,{method,headers:{Authorization:token?'Bearer '+token:'',...(body!==undefined?{'Content-Type':'application/json'}:{})},...(body!==undefined?{body:JSON.stringify(body)}:{})});return{ok:response.ok,status:response.status,data:await response.json()};}catch{return{ok:false,status:0,data:{message:'Không thể kết nối để xử lý ngân sách.'}};}}
+async function jobPublicationApi(token,path='',method='GET',body){try{const response=await fetch(API_BASE+'/job-posting-publication'+path,{method,cache:'no-store',headers:{Authorization:token?'Bearer '+token:'',...(body===undefined?{}:{'Content-Type':'application/json'})},...(body===undefined?{}:{body:JSON.stringify(body)})});return{ok:response.ok,status:response.status,data:await response.json()};}catch{return{ok:false,status:0,data:{message:'Không thể kết nối để xử lý duyệt/xuất bản tin.'}};}}
+async function publicJobsApi(id=null){try{const response=await fetch(API_BASE+'/public/job-postings'+(id?'/'+encodeURIComponent(id):''),{cache:'no-store'});return{ok:response.ok,status:response.status,data:await response.json()};}catch{return{ok:false,status:0,data:{message:'Không thể tải tin công khai.'}};}}
+async function jobPostingDraftApi(token,path,method='GET',body){try{const response=await fetch(API_BASE+'/job-posting-drafts/'+path,{method,cache:'no-store',headers:{Authorization:token?'Bearer '+token:'',...(body===undefined?{}:{'Content-Type':'application/json'})},...(body===undefined?{}:{body:JSON.stringify(body)})});return{ok:response.ok,status:response.status,data:await response.json()};}catch{return{ok:false,status:0,data:{message:'Không thể kết nối để xử lý tin tuyển dụng.'}};}}
+async function requisitionTrackingOptionsApi(token){try{const response=await fetch(API_BASE+'/requisition-tracking/options',{cache:'no-store',headers:{Authorization:token?'Bearer '+token:''}});return{ok:response.ok,status:response.status,data:await response.json()};}catch{return{ok:false,status:0,data:{message:'Không thể tải bộ lọc yêu cầu.'}};}}
+async function requisitionLifecycleApi(token,id,method='GET',body){try{const response=await fetch(API_BASE+'/requisition-lifecycles/'+encodeURIComponent(id),{method,cache:'no-store',headers:{Authorization:token?'Bearer '+token:'',...(body===undefined?{}:{'Content-Type':'application/json'})},...(body===undefined?{}:{body:JSON.stringify(body)})});return{ok:response.ok,status:response.status,data:await response.json()};}catch{return{ok:false,status:0,data:{message:'Không thể kết nối để xử lý vòng đời yêu cầu tuyển dụng.'}};}}
 async function requisitionOperationApi(token,id,action,method='GET',body){try{const response=await fetch(API_BASE+'/requisition-operations/'+encodeURIComponent(id)+'/'+action,{method,cache:'no-store',headers:{Authorization:token?'Bearer '+token:'',...(body===undefined?{}:{'Content-Type':'application/json'})},...(body===undefined?{}:{body:JSON.stringify(body)})});return{ok:response.ok,status:response.status,data:await response.json()};}catch{return{ok:false,status:0,data:{message:'Không thể kết nối để xử lý yêu cầu tuyển dụng.'}};}}
 async function getCandidateByIdApi(token,id){try{const response=await fetch(API_BASE+'/candidates/'+encodeURIComponent(id),{cache:'no-store',headers:{Authorization:token?'Bearer '+token:''}});return{ok:response.ok,status:response.status,data:await response.json()};}catch{return{ok:false,status:0,data:{message:'Không thể tải hồ sơ ứng viên. Vui lòng thử lại.'}};}}
 window.ATS_API = {
-  requisitionOperationApi,getCandidateByIdApi,
+  jobPublicationApi,publicJobsApi,jobPostingDraftApi,requisitionTrackingOptionsApi,requisitionLifecycleApi,requisitionOperationApi,getCandidateByIdApi,
   headcountBudgetRequestApi,
   getInterviewOptionsApi,
   loginApi,

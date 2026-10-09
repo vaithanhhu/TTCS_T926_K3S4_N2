@@ -52,3 +52,7 @@ __pycache__/
 frontend/public/avatars/
 # Runtime company career page media
 frontend/public/company/
+
+.local/
+test-artifacts/
+backend/data/*.db

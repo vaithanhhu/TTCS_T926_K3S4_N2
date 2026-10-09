@@ -45,6 +45,9 @@ async function initializeApplication() {
   if (config.REQUISITION_APPROVAL_ENABLED) await require('./db/migrate-requisition-approvals').verify(db);
   if (config.HEADCOUNT_BUDGET_ENABLED) await require('./db/migrate-headcount-budgets').verify(db);
   if (config.REQUISITION_OPERATIONS_ENABLED) await require('./db/migrate-requisition-operations').verify(db);
+  if (config.REQUISITION_LIFECYCLE_ENABLED) await require('./db/migrate-requisition-lifecycle').verify(db);
+  if (config.REQUISITION_TRACKING_ENABLED || config.JOB_POSTING_DRAFTS_ENABLED) await require('./db/migrate-requisition-tracking-job-drafts').verify(db);
+  if(config.JOB_POSTING_PUBLICATION_ENABLED)await require('./db/migrate-job-publication').verify(db);
 }
 
 const avatarService = new AvatarService();
@@ -1636,7 +1639,8 @@ async function handleRequest(req, res) {
       viewer: requisitionUser,
       approvalEnabled: config.REQUISITION_APPROVAL_ENABLED
     };
-    const result = (await requisitionService.getRequisitions(options));
+    if(config.REQUISITION_TRACKING_ENABLED)for(const key of ['departmentId','recruiterId','createdFrom','createdTo','page','limit'])if(parsedUrl.searchParams.has(key))options[key]=parsedUrl.searchParams.get(key);
+    let result;try{result=await requisitionService.getRequisitions(options);}catch(error){if(error instanceof require('./services/approvalConfigurationService').ApprovalConfigurationError){res.writeHead(error.statusCode,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:error.code,message:error.message}));return;}throw error;}
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(result));
     return;
@@ -1842,6 +1846,11 @@ async function handleRequest(req, res) {
     return;
   }
 
+  if(pathname==='/api/v1/requisition-tracking/options'&&req.method==='GET'){if(!config.REQUISITION_TRACKING_ENABLED){res.writeHead(404,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:'S308_DISABLED'}));return;}const actor=await rbacMiddleware.authorize(req,res,authController.authService,'requisition.read');if(!actor)return;const data=await new(require('./services/requisitionTrackingService'))(db).options(actor);res.writeHead(200,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify({success:true,data}));return;}
+  if(pathname==='/api/v1/job-posting-publication'||pathname.startsWith('/api/v1/job-posting-publication/')){if(!config.JOB_POSTING_PUBLICATION_ENABLED){res.writeHead(404,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:'S310_DISABLED'}));return;}await new(require('./controllers/jobPostingPublicationController'))(new(require('./services/jobPostingPublicationService'))(db),rbacMiddleware,authController.authService).handle(req,res,parsedUrl,parseBody);return;}
+  if(pathname.startsWith('/api/v1/job-posting-drafts/')){if(!config.JOB_POSTING_DRAFTS_ENABLED){res.writeHead(404,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:'S309_DISABLED'}));return;}await new(require('./controllers/jobPostingDraftController'))(new(require('./services/jobPostingService'))(db),rbacMiddleware,authController.authService).handle(req,res,parsedUrl,parseBody);return;}
+  if(pathname.startsWith('/api/v1/requisition-lifecycles/')){if(!config.REQUISITION_LIFECYCLE_ENABLED){res.writeHead(404,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:'S307_DISABLED',message:'Chức năng vòng đời chưa được bật.'}));return;}const {RequisitionLifecycleService}=require('./services/requisitionLifecycleService');await new(require('./controllers/requisitionLifecycleController'))(new RequisitionLifecycleService(db),rbacMiddleware,authController.authService).handle(req,res,parsedUrl,parseBody);return;}
+  if(pathname==='/api/v1/public/job-postings'||pathname.startsWith('/api/v1/public/job-postings/')){if(req.method!=='GET'||!(config.REQUISITION_LIFECYCLE_ENABLED||config.JOB_POSTING_PUBLICATION_ENABLED)){res.writeHead(404,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:'NOT_FOUND'}));return;}const tail=pathname.slice('/api/v1/public/job-postings'.length),items=await new(require('./services/jobPostingService'))(db).publicList(tail?decodeURIComponent(tail.slice(1)):null);res.writeHead(tail&&!items.length?404:200,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(tail?{success:!!items.length,data:items[0]||null}:{success:true,data:items}));return;}
   if(pathname.startsWith('/api/v1/requisition-operations/')){if(!config.REQUISITION_OPERATIONS_ENABLED){res.writeHead(404,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:'S305_S306_DISABLED',message:'Chức năng sao chép/phân công chưa được bật.'}));return;}const {RequisitionOperationsService}=require('./services/requisitionOperationsService');await new(require('./controllers/requisitionOperationsController'))(new RequisitionOperationsService(db),rbacMiddleware,authController.authService).handle(req,res,parsedUrl,parseBody);return;}
 
   if(req.method==='GET'&&/^\/(?:api\/v1\/)?candidates\/[^/]+$/.test(pathname)){const user=await rbacMiddleware.authorize(req,res,authController.authService,'candidate.read');if(!user)return;let candidateId;try{candidateId=decodeURIComponent(pathname.split('/').at(-1));}catch{res.writeHead(400,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:'BAD_REQUEST',message:'Mã hồ sơ không hợp lệ.'}));return;}const result=await requisitionService.getCandidateById(candidateId,user);res.writeHead(result.statusCode||200,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(result));return;}
@@ -2193,11 +2202,11 @@ const server = http.createServer((req, res) => {
   });
 });
 
-async function startServer(port = config.PORT) {
+async function startServer(port = config.PORT, host) {
   initialization ||= initializeApplication();
   await initialization;
   return new Promise(resolve => {
-    server.listen(port, () => {
+    server.listen(port, host, () => {
       console.log(`[ATS Server] Server listening on http://localhost:${port}`);
       resolve(server);
     });

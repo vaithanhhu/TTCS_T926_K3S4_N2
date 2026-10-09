@@ -479,16 +479,27 @@ class UserService {
     const users = (await dataStmt.all(...queryParams));
 
     // Lấy vai trò cho từng user
-    const rolesStmt = this.db.prepare(`
-      SELECT r.code, r.name, r.default_path
-      FROM roles r
-      JOIN user_roles ur ON r.id = ur.role_id
-      WHERE ur.user_id = ?
-      ORDER BY r.code ASC
-    `);
+    const rolesByUser = new Map();
+    if (users.length) {
+      const selectedUserIds = JSON.stringify(users.map(user => user.id));
+      const idQuery = this.db.provider === 'postgres'
+        ? 'SELECT jsonb_array_elements_text(?::jsonb)'
+        : 'SELECT value FROM json_each(?)';
+      const roles = await this.db.prepare(`
+        SELECT ur.user_id, r.code, r.name, r.default_path
+        FROM roles r
+        JOIN user_roles ur ON r.id = ur.role_id
+        WHERE ur.user_id IN (${idQuery})
+        ORDER BY ur.user_id ASC, r.code ASC
+      `).all(selectedUserIds);
+      for (const role of roles) {
+        if (!rolesByUser.has(role.user_id)) rolesByUser.set(role.user_id, []);
+        rolesByUser.get(role.user_id).push(role);
+      }
+    }
 
-    const items = (await Promise.all(users.map(async user => {
-      const userRoles = (await rolesStmt.all(user.id));
+    const items = users.map(user => {
+      const userRoles = rolesByUser.get(user.id) || [];
       return {
         id: user.id,
         email: user.email,
@@ -504,7 +515,7 @@ class UserService {
         createdAt: user.created_at,
         updatedAt: user.updated_at
       };
-    })));
+    });
 
     return {
       success: true,

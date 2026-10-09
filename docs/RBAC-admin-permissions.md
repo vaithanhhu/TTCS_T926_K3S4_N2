@@ -128,3 +128,26 @@ HIRING_MGR chỉ đọc ứng viên và yêu cầu thuộc vị trí/phòng ban 
 Thiếu requisition.edit vẫn bị backend chặn; UI edit feedback dùng chính requiredPermission từ response để hiển thị thông báo cụ thể. Quy tắc sửa OPEN/các trạng thái chưa được xác nhận nên chưa cấp grant hay bật form sửa. Không thay matrix seed/sync hoặc assertion cũ trong đợt này. Matrix hiện tại ở trên chưa phải matrix mục tiêu mới được áp dụng hoàn chỉnh; HIRING_MGR interview.evaluate, quyền catalog và một số legacy list còn đang chờ quyết định compatibility.
 
 `test:requisition-access` đã chạy16/16 trong bản sao TEMP:8luồng HTTP/frontend cơ bản,2điều khiển response chậm,2scope/permission và4PostgreSQL embedded. Browser E2E vẫnNOT RUN. Xem báo cáo ATS-E2E-2026-10-08.md và evidence.followUp để phân biệt testPASS, policyBLOCKED và phần chưa kiểm chứng.
+
+
+## S3-07 — 2026-10-09
+
+Permission mới requisition.lifecycle.manage: chỉ HR_MANAGER nhận grant chuẩn, ADMIN dùng toàn quyền RBAC tập trung. HIRING_MGR/RECRUITER/APPROVER/INTERVIEWER/CANDIDATE không được đóng/tạm dừng/huỷ dù giả mạo roles trong payload. Chỉ đọc vòng đời khi requisition.read và phạm vi Requisition hợp lệ; giữ nguyên bảo vệ DRAFT của người tạo. Seed/sync idempotent không làm mất grant.
+
+ADMIN không vượt qua lý do bắt buộc, quantity đã duyệt, pipeline chưa kết thúc, workflow/revision PENDING, giới hạn HIRED/quantity, expectedVersion hoặc immutable audit. APPROVER đang được phân công vẫn không quyết định khi main PAUSED/CANCELLED. Không thay đổi Offer approval hoặc quyền pipeline.
+
+Neon grant đã kiểm tra: HR_MANAGER → requisition.lifecycle.manage; không cấp cho các role khác. Migration 006 bổ sung đúng một permission và grant có kiểm soát, không chạy seed. Xem [báo cáo S3-07](S3-07-requisition-lifecycle.md) và [bằng chứng](evidence/S3-07-test-results.json).
+
+
+## S3-08/S3-09 — 2026-10-09
+
+S3-08 dùng requisition.read và scope hiện có; cả primary/support lọc qua EXISTS, không mở rộng dataset bằng bộ lọc. S3-09 job_posting.read cấp HR_MANAGER/RECRUITER/HIRING_MGR/APPROVER, job_posting.manage cấp HR_MANAGER/RECRUITER; ADMIN toàn quyền RBAC tập trung. Writer Recruiter phải đang được phân công primary/support và còn ACTIVE; cần source requisition.read, không dùng job permission để vượt source-read bị thu hồi. Hiring/Approver chỉ đọc theo scope; Interviewer/Candidate không đọc draft nội bộ, Candidate dùng public API.
+
+ADMIN vẫn phải có source APPROVED thực sự, đúng trạng thái, catalog/date hợp lệ, expectedVersion/hash; không có publish trong S3-09. Không lộ standard salary range qua job salary visibility. Scope/grant đọc trên Neon đúng sáu rows đã chốt, không seed. [Báo cáo](S3-08-S3-09-tracking-job-drafts.md).
+
+
+## S3-10 — 2026-10-09
+
+job_posting.approve/publish chỉ grant HR_MANAGER; ADMIN qua super RBAC tập trung. Recruiter primary/support giữ job.manage để submit/revise, không approve/publish. Mọi read/preview cần job.read + source requisition.read/scope. Creator/last editor không tự quyết định review kể cả ADMIN; publisher chỉ publish đúng approved content version/hash, actor/time do backend. Source/expiry/state/IDOR checks độc lập với RBAC. Public không trả salary nếu hide và không trả thông tin approval nội bộ. Scope cũ và numeric standard salary HR-only giữ nguyên. [S3-10](S3-10-job-publication.md).
+
+Tin PENDING_APPROVAL đã hết hạn hoặc có Requisition source thay đổi vẫn cho HR_MANAGER/ADMIN độc lập với tác giả từ chối có lý do để phục hồi về nháp. Ngoại lệ này chỉ áp dụng REJECT; không cho duyệt/xuất bản nội dung không còn hợp lệ, không bỏ qua scope hoặc cấm tự duyệt.

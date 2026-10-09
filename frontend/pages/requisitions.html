@@ -30,6 +30,13 @@
                   <option value="CLOSED">Đã đóng (CLOSED)</option>
                 </select>
               </div>
+              <div id="s308-filters" class="hidden" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;min-width:0;">
+                <select id="req-department-filter" class="form-input" aria-label="Lọc phòng ban"><option value="">Tất cả phòng ban</option></select>
+                <select id="req-recruiter-filter" class="form-input" aria-label="Lọc recruiter chính hoặc hỗ trợ"><option value="">Recruiter chính hoặc hỗ trợ</option></select>
+                <label class="form-label">Ngày tạo từ <input id="req-created-from" type="date" class="form-input" /></label>
+                <label class="form-label">Ngày tạo đến <input id="req-created-to" type="date" class="form-input" /></label>
+                <span id="req-tracking-options-message" role="alert"></span>
+              </div>
               <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.825rem; color: var(--color-warning); cursor: pointer; padding: 0 4px;">
                 <input type="checkbox" id="req-handover-only" style="accent-color: var(--color-warning); cursor: pointer;" />
                 <span>Chỉ hiện vị trí cần bàn giao</span>
@@ -57,6 +64,7 @@
                   <th style="text-align: center;">Chỉ tiêu</th>
                   <th>Recruiter phụ trách</th>
                   <th>Trạng thái</th>
+                  <th id="s308-age-head" class="hidden">Ngày mở / còn lại</th>
                   <th style="text-align: center;">Thao tác</th>
                 </tr>
               </thead>
@@ -65,4 +73,5 @@
               </tbody>
             </table>
           </div>
+          <div id="s308-pagination" class="hidden" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px;"><button id="req-prev-page" type="button" class="btn btn-outline btn-sm">Trang trước</button><span id="req-page-info"></span><button id="req-next-page" type="button" class="btn btn-outline btn-sm">Trang sau</button></div>
         </div>

@@ -99,6 +99,8 @@
     if (!createReqModal) return;
     window.ATS_REQUISITION_TRACKING?.clear('s303-s210');
     window.ATS_REQUISITION_OPERATIONS_UI?.clear('s306-s210');
+    window.ATS_REQUISITION_LIFECYCLE_UI?.leave();
+    window.ATS_JOB_POSTING_DRAFT_UI?.leave();
     requisitionCopyContext=copyContext;requisitionCopySaving=false;
     if(saveCreateReqDraftBtn)saveCreateReqDraftBtn.disabled=false;
     const optionsRevision = ++requisitionOptionsRevision;
@@ -255,6 +257,8 @@
     createReqModal.classList.remove('hidden');
     window.ATS_HEADCOUNT_BUDGET_UI?.openCreate(editingS210Requisition?.id);
     window.ATS_REQUISITION_TRACKING?.load('s303-s210',editingS210Requisition?.id,()=>isCurrentSession()&&!createReqModal.classList.contains('hidden'));
+    window.ATS_JOB_POSTING_DRAFT_UI?.load('s309-s210',editingS210Requisition?.id,()=>isCurrentSession()&&!createReqModal.classList.contains('hidden'));
+    window.ATS_REQUISITION_LIFECYCLE_UI?.load('s307-s210',editingS210Requisition?.id,()=>isCurrentSession()&&!createReqModal.classList.contains('hidden'));
     window.ATS_REQUISITION_OPERATIONS_UI?.load('s306-s210',editingS210Requisition?.id,()=>isCurrentSession()&&!createReqModal.classList.contains('hidden'));
     await refreshRequisitionSalaryCheck();
   }

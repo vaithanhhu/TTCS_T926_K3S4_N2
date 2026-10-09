@@ -24,6 +24,8 @@
   async function openRequisitionDetails(id, edit = false) {
     window.ATS_REQUISITION_TRACKING?.leave();
     window.ATS_REQUISITION_OPERATIONS_UI?.leave();
+    window.ATS_REQUISITION_LIFECYCLE_UI?.leave();
+    window.ATS_JOB_POSTING_DRAFT_UI?.leave();
     pendingLegacyProposal=null;reapproveDetailBtn?.classList.add('hidden');
     const revision = ++requisitionDetailLoadRevision;
     const token = sessionStorage.getItem('ats_token');
@@ -74,7 +76,7 @@
     const statusBadge = document.getElementById('req-detail-status-badge');
     if (statusBadge) {
       statusBadge.className = `badge ${req.status === 'OPEN' ? 'badge-primary' : (req.status === 'IN_PROGRESS' ? 'badge-warning' : 'badge-neutral')}`;
-      statusBadge.textContent = req.status === 'OPEN' ? 'Đang mở' : (req.status === 'IN_PROGRESS' ? 'Đang tuyển' : 'Đã đóng');
+      statusBadge.textContent = req.status === 'PAUSED' ? 'Tạm dừng' : req.status === 'CANCELLED' ? 'Huỷ' : req.status === 'OPEN' ? 'Đang mở' : (req.status === 'IN_PROGRESS' ? 'Đang tuyển' : 'Đã đóng');
     }
 
     if (token && reqDetailRecruiterSelect) {
@@ -166,6 +168,8 @@
     if (reqDetailAlert) reqDetailAlert.classList.add('hidden');
     reqDetailModal.classList.remove('hidden');
     window.ATS_REQUISITION_TRACKING?.load('s303-legacy',req.id,()=>isCurrentDetail()&&!reqDetailModal.classList.contains('hidden'));
+    window.ATS_JOB_POSTING_DRAFT_UI?.load('s309-legacy',req.id,()=>isCurrentDetail()&&!reqDetailModal.classList.contains('hidden'));
+    window.ATS_REQUISITION_LIFECYCLE_UI?.load('s307-legacy',req.id,()=>isCurrentDetail()&&!reqDetailModal.classList.contains('hidden'));
     window.ATS_REQUISITION_OPERATIONS_UI?.load('s306-legacy',req.id,()=>isCurrentDetail()&&!reqDetailModal.classList.contains('hidden'));
   }
 
