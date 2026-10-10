@@ -43,6 +43,7 @@
 
   let currentCompetencyFrameworks = [];
   let currentJobTitles = [];
+  let canManageCompetencies = true;
 
   function clearJobTitleSalaryState() {
     canViewJobTitleSalary = false;
@@ -175,7 +176,7 @@
 
               <button
                 type="button"
-                class="btn btn-outline btn-sm"
+                class="btn btn-outline btn-sm ${canManageCompetencies ? '' : 'hidden'}"
                 data-competency-edit="${escapeCompetencyHtml(framework.id)}"
               >
                 Sửa
@@ -244,7 +245,7 @@
 
             <button
               type="button"
-              class="btn btn-outline btn-sm"
+              class="btn btn-outline btn-sm ${canManageCompetencies ? '' : 'hidden'}"
               data-job-title-edit="${escapeCompetencyHtml(jobTitle.id)}"
             >
               Sửa
@@ -326,6 +327,8 @@
 
       currentJobTitles =
         jobTitleRes.data.jobTitles || [];
+      canManageCompetencies=jobTitleRes.data.canManage!==false;
+      for(const form of [competencyFrameworkForm,jobTitleForm])form?.querySelectorAll('input,select,textarea,button').forEach(node=>{node.disabled=!canManageCompetencies;});
       canViewJobTitleSalary = jobTitleRes.data.canViewSalary === true;
       if (jobTitleSalaryFields) {
         jobTitleSalaryFields.disabled = !canViewJobTitleSalary;

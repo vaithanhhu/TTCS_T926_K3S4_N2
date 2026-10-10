@@ -1,0 +1,13 @@
+{
+  "npmCiExitCode": 0,
+  "setupExitCode": 0,
+  "setupRepeatExitCode": 0,
+  "startLocal": "PASS",
+  "loopback": true,
+  "email": "simulated",
+  "provider": "sqlite",
+  "healthStatus": 200,
+  "publicStatus": 200,
+  "publicCount": 1,
+  "loginStatus": 200
+}

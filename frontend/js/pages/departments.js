@@ -304,11 +304,11 @@
     try {
       const [departmentsRes, usersRes, permissionsRes] = await Promise.all([
         window.ATS_API.getDepartmentsApi(token),
-        window.ATS_API.getUsersApi(token, {
+        currentAuthenticatedUser?.permissions?.includes('user.read') ? window.ATS_API.getUsersApi(token, {
           page: 1,
           limit: 100,
           status: 'ACTIVE'
-        }),
+        }) : Promise.resolve({ok:false}),
         window.ATS_API.getPermissionsApi(token)
       ]);
       if (version !== departmentsLoadVersion || token !== sessionStorage.getItem('ats_token')) return;

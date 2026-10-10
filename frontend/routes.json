@@ -1,6 +1,20 @@
 {
   "routes": [
     {
+      "path": "/admin/headcount-budgets",
+      "view": "headcount-budgets",
+      "auth": true,
+      "permission": "headcount_budget.read",
+      "menu": true
+    },
+    {
+      "path": "/admin/approval-configurations",
+      "view": "approval-configurations",
+      "auth": true,
+      "menu": true,
+      "permission": "approval_configuration.manage"
+    },
+    {
       "path": "/change-password",
       "view": "change-password",
       "auth": true
@@ -162,9 +176,25 @@
       "permission": "requisition.read",
       "menu": true,
       "menuPath": "/requisitions"
+    },
+    {
+      "path": "/careers/jobs",
+      "view": "public-jobs",
+      "auth": false
     }
   ],
   "scripts": [
+    "/js/services/requisition-approval-api.js",
+    "/js/components/requisition-approval.js",
+    "/js/components/requisition-tracking.js",
+    "/js/components/requisition-operations.js",
+    "/js/components/requisition-lifecycle.js",
+    "/js/components/job-posting-drafts.js",
+    "/js/components/job-posting-public-renderer.js",
+    "/js/components/job-posting-publication.js",
+    "/js/pages/headcount-budgets.js",
+    "/js/services/approval-configuration-api.js",
+    "/js/pages/approval-configurations.js",
     "/js/shared/state.js",
     "/js/shared/datetime.js",
     "/js/components/action-menu.js",
@@ -182,6 +212,7 @@
     "/js/pages/reports.js",
     "/js/pages/recruitment-catalogs.js",
     "/js/pages/career-page.js",
+    "/js/pages/public-jobs.js",
     "/js/pages/departments.js",
     "/js/pages/competencies.js",
     "/js/pages/users.js",
@@ -205,6 +236,9 @@
     "/js/shared/route-lifecycle.js"
   ],
   "fragments": [
+    "/pages/headcount-budgets.html",
+    "/components/requisition-approval-modal.html",
+    "/pages/approval-configurations.html",
     "/pages/change-password.html",
     "/pages/login.html",
     "/pages/dashboard.html",
@@ -247,6 +281,7 @@
     "/components/requisition-detail-modal.html",
     "/components/admin-reset-pwd-modal.html",
     "/components/edit-profile-modal.html",
-    "/components/audit-detail-modal.html"
+    "/components/audit-detail-modal.html",
+    "/pages/public-jobs.html"
   ]
 }

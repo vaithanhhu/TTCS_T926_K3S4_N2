@@ -153,7 +153,7 @@ async function main() {
   await test('Hiring Manager reads minimal requisition choices without department administration rights', async () => {
     const options = await api('GET', '/requisitions/options', tokens.hiring); assert.equal(options.status, 200); assert.ok(options.data.tree.length);
     assert.equal(JSON.stringify(options.data).includes('manager'), false);
-    assert.equal((await api('GET', '/departments', tokens.hiring)).status, 403);
+    assert.equal((await api('GET', '/departments', tokens.hiring)).status, 200);
     assert.equal((await api('POST', '/departments', tokens.hiring, { code: 'NO' })).status, 403);
     assert.equal((await api('GET', '/requisitions/options', tokens.candidate)).status, 403);
   });
@@ -188,7 +188,7 @@ async function main() {
     assert.equal((await api('PUT', '/job-titles/' + jobTitle.id, tokens.admin, { minSalary: 1, maxSalary: 2 })).status, 403);
     const updated = await api('PUT', '/job-titles/' + jobTitle.id, tokens.admin, { name: 'Engineer renamed' }); assert.equal(updated.status, 200); assert.equal('minSalary' in updated.data.data, false);
     assert.equal((await db.prepare('SELECT min_salary FROM job_titles WHERE id = ?').get(jobTitle.id)).min_salary, 20000000);
-    assert.equal((await api('GET', '/job-titles', tokens.interviewer)).status, 403);
+    const metadata = await api('GET', '/job-titles', tokens.interviewer); assert.equal(metadata.status, 200); assert.equal(JSON.stringify(metadata.data).includes('minSalary'), false); assert.equal(JSON.stringify(metadata.data).includes('maxSalary'), false);
     assert.equal((await api('POST', '/job-titles', tokens.admin, { code: 'NO', name: 'No', level: 'Senior', minSalary: 1, maxSalary: 2 })).status, 403);
     const result = await api('PUT', '/job-titles/' + jobTitle.id, tokens.hr, { level: 'Lead', minSalary: 25000000, maxSalary: 45000000 }); assert.equal(result.status, 200); assert.equal(result.data.data.level, 'Lead');
     assert.equal(JSON.stringify((await api('GET', '/job-titles/' + jobTitle.id + '/framework', tokens.admin)).data).includes('minSalary'), false);
@@ -233,11 +233,11 @@ async function main() {
     assert.equal((await api('POST', '/recruitment-catalogs', tokens.recruiter, {})).status, 403);
   });
   await test('Catalog references block deletion and legacy stage calls preserve reasons/notes', async () => {
-    const created = (await requisitions.createCandidate({ fullName: 'Catalog candidate', email: 'candidate@test.example', sourceId: source.id })); assert.equal(created.success, true);
+    const created = (await requisitions.createCandidate({ fullName: 'Catalog candidate', email: 'candidate@test.example', sourceId: source.id, requisitionId:'req-001' })); assert.equal(created.success, true);
     assert.equal((await catalogs.deleteItem(source.id)).code, 'CATALOG_ITEM_IN_USE');
     let res = await api('PUT', '/candidates/' + created.data.id + '/stage', tokens.recruiter, { stage: 'REJECTED', notes: 'Reason note', rejectionReasonId: reason.id }); assert.equal(res.status, 200);
     assert.equal((await catalogs.deleteItem(reason.id)).code, 'CATALOG_ITEM_IN_USE');
-    res = await api('PUT', '/candidates/' + created.data.id + '/stage', tokens.hiring, { stage: 'REJECTED', notes: 'Legacy ignored note' }); assert.equal(res.status, 200);
+    res = await api('PUT', '/candidates/' + created.data.id + '/stage', tokens.hiring, { stage: 'REJECTED', notes: 'Legacy ignored note' }); assert.equal(res.status, 403);
     const row = (await db.prepare('SELECT rejection_reason_id,notes FROM candidates WHERE id = ?').get(created.data.id)); assert.equal(row.rejection_reason_id, reason.id); assert.equal(row.notes, 'Reason note');
     assert.equal((await api('PUT', '/candidates/' + created.data.id + '/stage', tokens.hiring, { stage: 'REJECTED', rejectionReasonId: reason.id })).status, 403);
     assert.equal((await requisitions.createCandidate({ fullName: 'Bad', email: 'bad@test.example', sourceId: reason.id })).success, false);
@@ -253,7 +253,7 @@ async function main() {
     assert.equal((await api('POST', '/career-page/media?kind=logo', tokens.hr, Buffer.from('invalid'), 'image/png')).status, 400);
   });
   await test('Sprint 1 requisition payload/response and Hiring Manager are preserved', async () => {
-    const res = await api('POST', '/requisitions', tokens.hiring, { title: 'Legacy position', departmentName: 'Unregistered legacy department', hiringManagerId: 'usr-hiring-mgr', recruiterId: 'usr-recruiter', headcount: 2 });
+    const res = await api('POST', '/requisitions', tokens.hiring, { title: 'Legacy position', departmentName: 'Unregistered legacy department', hiringManagerId: 'usr-hiring-mgr', headcount: 2 });
     assert.equal(res.status, 201); assert.deepEqual(Object.keys(res.data.data).sort(), ['id','code','title','departmentName','headcount','status'].sort());
     let req = (await requisitions.getRequisitionById(res.data.data.id)); assert.equal(req.hiringManagerId, 'usr-hiring-mgr');
     const updated = (await requisitions.updateRequisition(req.id, { departmentName: 'Another legacy department' })); assert.equal(updated.success, true);

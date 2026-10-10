@@ -7,6 +7,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
 
 :root {
+  --company-public-background: linear-gradient(125deg, #253d47, #152128 65%, #0f172a);
   /* Brand & Primary Corporate Blue */
   --color-primary: #1e40af;
   --color-primary-hover: #1d4ed8;
@@ -261,7 +262,7 @@ button, input, select, textarea {
   padding: 0;
   gap: 0;
   align-items: stretch;
-  background: linear-gradient(125deg, #253d47, #152128 65%, #0f172a);
+  background: var(--company-public-background);
   color: #fff;
 }
 .login-background, .login-background-shade {
@@ -1751,5 +1752,31 @@ button, input, select, textarea {
   .view-header {
     flex-direction: column;
     align-items: flex-start;
+  }
+}
+
+@media (max-width: 1100px) {
+  #competencies-view > div[style*="grid-template-columns"],
+  #career-page-view > div[style*="grid-template-columns"] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  #competencies-view > div[style*="grid-template-columns"] > *,
+  #career-page-view > div[style*="grid-template-columns"] > * {
+    min-width: 0;
+  }
+  #job-title-list > div > div[style*="display:flex"] > div,
+  #competency-framework-list > div > div[style*="display:flex"] > div {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  #competencies-view .competency-criterion-row {
+    grid-template-columns: minmax(0, 1fr) 80px auto !important;
+  }
+  #competencies-view .competency-criterion-row > * {
+    min-width: 0;
+  }
+  #job-title-list [data-job-title-edit],
+  #competency-framework-list [data-competency-edit] {
+    flex-shrink: 0;
   }
 }

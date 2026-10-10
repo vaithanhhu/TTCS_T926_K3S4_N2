@@ -140,20 +140,30 @@
     wrapper.style.border = '1px solid var(--color-border)';
     wrapper.style.borderRadius = 'var(--radius-sm)';
     wrapper.style.overflow = 'hidden';
-    wrapper.style.background = '#ffffff';
+    wrapper.className = 'company-brand-preview';
+    wrapper.style.background = 'var(--company-public-background)';
+    wrapper.style.color = '#fff';
+    wrapper.style.position = 'relative';
+    wrapper.style.isolation = 'isolate';
+    wrapper.style.minHeight = '360px';
 
     if (heroImageUrl) {
       const hero = document.createElement('img');
       hero.src = heroImageUrl;
       hero.alt = 'Ảnh giới thiệu công ty';
+      hero.className = 'login-background';
       hero.style.display = 'block';
       hero.style.width = '100%';
-      hero.style.maxHeight = '320px';
+      hero.style.height = '100%';
+      hero.style.filter = 'brightness(0.64)';
       hero.style.objectFit = 'cover';
       wrapper.appendChild(hero);
     }
 
     const body = document.createElement('div');
+    body.className = 'login-introduction';
+    body.style.maxWidth = 'none';
+    body.style.position = 'relative';
     body.style.padding = '28px';
 
     if (logoUrl) {
@@ -162,26 +172,27 @@
       logo.alt = 'Logo công ty';
       logo.style.display = 'block';
       logo.style.maxWidth = '220px';
-      logo.style.maxHeight = '90px';
+      logo.style.height = 'clamp(38px, 3.2vw, 46px)';
+      logo.style.maxHeight = '46px';
       logo.style.objectFit = 'contain';
       logo.style.marginBottom = '20px';
       body.appendChild(logo);
     }
 
-    const heading = document.createElement('h2');
-    heading.textContent = 'Giới thiệu về công ty';
+    const heading = document.createElement('h1');
+    heading.textContent = 'HỆ THỐNG TUYỂN DỤNG NỘI BỘ';
     heading.style.margin = '0 0 14px';
-    heading.style.fontSize = '1.4rem';
-    heading.style.color = 'var(--color-text)';
+    heading.style.color = '#fff';
     body.appendChild(heading);
 
     const description = document.createElement('div');
-    description.textContent =
-      introduction || 'Thông tin giới thiệu công ty đang được cập nhật.';
-    description.style.whiteSpace = 'pre-line';
+    description.className = 'login-company-introduction';
+    description.textContent = introduction;
+    description.classList.toggle('hidden', !introduction);
+    description.style.whiteSpace = 'pre-wrap';
     description.style.lineHeight = '1.7';
-    description.style.color = 'var(--color-text-secondary)';
-    description.style.fontSize = '0.95rem';
+    description.style.color = 'rgba(255, 255, 255, .9)';
+    description.style.fontSize = '14px';
     body.appendChild(description);
 
     wrapper.appendChild(body);

@@ -211,6 +211,10 @@
           </div>
         </div>
 
+        <div class="nav-link hidden" style="display:none;" data-view="headcount-budgets" id="nav-item-headcount-budgets"><div class="nav-link-content"><span>Chỉ tiêu &amp; ngân sách</span></div></div>
+        <div class="nav-link hidden" style="display: none;" data-view="approval-configurations" id="nav-item-approval-configurations">
+          <div class="nav-link-content"><span>Cấu hình phê duyệt</span></div>
+        </div>
         <div class="nav-group-header">DÀNH CHO ỨNG VIÊN</div>
         <div class="nav-link" data-view="candidatePortal" id="nav-item-candidate-portal">
           <div class="nav-link-content">
@@ -309,6 +313,8 @@
 
       <!-- MAIN WORKSPACE -->
       <main class="app-main">
+  <template data-fragment="/pages/approval-configurations.html"></template>
+  <template data-fragment="/pages/headcount-budgets.html"></template>
   <template data-fragment="/pages/dashboard.html"></template>
   <template data-fragment="/pages/requisitions.html"></template>
   <template data-fragment="/pages/candidates.html"></template>
@@ -368,11 +374,14 @@
   <template data-fragment="/components/edit-profile-modal.html"></template>
   <template data-fragment="/components/audit-detail-modal.html"></template>
 
+  <template data-fragment="/pages/public-jobs.html"></template>
+
   <!-- TOAST NOTIFICATION CONTAINER -->
   <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
   <!-- Core Scripts -->
   <script src="/js/api.js"></script>
+  <template data-fragment="/components/requisition-approval-modal.html"></template>
   <script src="/js/router.js"></script>
   <script src="/js/app.js"></script>
 </body>

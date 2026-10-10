@@ -206,16 +206,7 @@
     document.getElementById('question-bank-form-save');
 
   function canManageQuestionBank() {
-    const roles =
-      currentAuthenticatedUser &&
-      Array.isArray(currentAuthenticatedUser.roles)
-        ? currentAuthenticatedUser.roles
-        : [];
-
-    return (
-      roles.includes('ADMIN') ||
-      roles.includes('HR_MANAGER')
-    );
+    return Array.isArray(currentAuthenticatedUser?.permissions) && currentAuthenticatedUser.permissions.includes('question_bank.manage');
   }
 
   function populateQuestionBankCriterionForm() {

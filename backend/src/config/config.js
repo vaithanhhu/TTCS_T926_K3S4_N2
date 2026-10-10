@@ -3,6 +3,7 @@ const path = require('node:path');
 
 // Auto-load .env file if present
 function loadEnv() {
+  if (process.env.ATS_LOCAL_DEMO === 'true') return;
   const envPath = path.join(__dirname, '..', '..', '..', '.env');
   if (fs.existsSync(envPath)) {
     try {
@@ -34,6 +35,14 @@ module.exports = {
   DB_PROVIDER: process.env.DB_PROVIDER || (process.env.DATABASE_URL ? 'postgres' : 'sqlite'),
   DATABASE_URL: process.env.DATABASE_URL || '',
   PG_SSL_MODE: process.env.PG_SSL_MODE || 'url',
+  APPROVAL_CONFIGURATION_ENABLED: process.env.APPROVAL_CONFIGURATION_ENABLED === 'true',
+  HEADCOUNT_BUDGET_ENABLED: process.env.HEADCOUNT_BUDGET_ENABLED === 'true',
+  REQUISITION_TRACKING_ENABLED: process.env.REQUISITION_TRACKING_ENABLED === 'true',
+  JOB_POSTING_PUBLICATION_ENABLED: process.env.JOB_POSTING_PUBLICATION_ENABLED === 'true',
+  JOB_POSTING_DRAFTS_ENABLED: process.env.JOB_POSTING_DRAFTS_ENABLED === 'true',
+  REQUISITION_LIFECYCLE_ENABLED: process.env.REQUISITION_LIFECYCLE_ENABLED === 'true',
+  REQUISITION_OPERATIONS_ENABLED: process.env.REQUISITION_OPERATIONS_ENABLED === 'true',
+  REQUISITION_APPROVAL_ENABLED: process.env.REQUISITION_APPROVAL_ENABLED === 'true',
   DB_PATH: isTestEnv
     ? path.join(__dirname, '..', '..', 'data', 'ats_test.db')
     : (process.env.DB_PATH ? path.resolve(process.env.DB_PATH) : path.join(__dirname, '..', '..', 'data', 'ats.db')),

@@ -4,6 +4,21 @@
   "description": "Hệ thống Tuyển dụng Nội bộ (ATS) - Sprint 1",
   "private": true,
   "scripts": {
+    "setup:local": "node backend/src/db/setup-local.js",
+    "start:local": "node backend/src/start-local.js",
+    "test:browser-e2e": "node backend/tests/run_browser_e2e.js",
+    "test:user-list-batch": "node backend/tests/test_user_list_batch.js",
+    "test:candidate-stage": "node backend/tests/test_candidate_stage.js",
+    "test:s1-frontend-fixes": "node backend/tests/test_s1_frontend_fixes.js",
+    "test:final-rbac-open": "node backend/tests/test_final_rbac_open.js",
+    "test:requisition-access": "node backend/tests/test_requisition_access.js",
+    "test:ats-e2e": "node backend/tests/test_ats_e2e.js",
+    "sync:permissions": "node backend/src/db/sync-permissions.js",
+    "test:rbac": "node backend/tests/test_rbac_admin.js",
+    "migrate:s3-02": "node backend/src/db/migrate-requisition-approvals.js",
+    "test:s3-02": "node backend/tests/test_s3_02_integration.js",
+    "migrate:s3-01": "node backend/src/db/migrate-approval-configurations.js",
+    "test:s3-01": "node backend/tests/test_s3_01_integration.js",
     "migrate:postgres": "node backend/src/db/migrate-postgres.js",
     "seed:postgres": "node backend/src/db/migrate-postgres.js --seed",
     "import:postgres": "node backend/src/db/import-sqlite.js",
@@ -37,7 +52,25 @@
     "test:coverage:sprint2": "node backend/tests/test_s2_coverage.js",
     "test:career-upload": "node backend/tests/test_career_page_upload_limits.js",
     "test:user-roles-avatar": "node backend/tests/test_user_roles_and_avatars.js",
-    "test:sprint1": "node backend/tests/test_s1_01_integration.js && node backend/tests/test_s1_02_integration.js && node backend/tests/test_s1_03_integration.js && node backend/tests/test_s1_04_integration.js && node backend/tests/test_s1_05_integration.js && node backend/tests/test_s1_06_integration.js && node backend/tests/test_s1_07_integration.js && node backend/tests/test_s1_08_integration.js && node backend/tests/test_s1_09_integration.js && node backend/tests/test_s1_10_integration.js"
+    "test:sprint1": "node backend/tests/test_s1_01_integration.js && node backend/tests/test_s1_02_integration.js && node backend/tests/test_s1_03_integration.js && node backend/tests/test_s1_04_integration.js && node backend/tests/test_s1_05_integration.js && node backend/tests/test_s1_06_integration.js && node backend/tests/test_s1_07_integration.js && node backend/tests/test_s1_08_integration.js && node backend/tests/test_s1_09_integration.js && node backend/tests/test_s1_10_integration.js",
+    "test:reapproval": "node backend/tests/test_requisition_reapproval.js",
+    "migrate:s3-04": "node backend/src/db/migrate-headcount-budgets.js",
+    "test:s3-03": "node backend/tests/test_s3_03_04.js s3-03",
+    "test:s3-04": "node backend/tests/test_s3_03_04.js s3-04",
+    "migrate:s3-05-06": "node backend/src/db/migrate-requisition-operations.js",
+    "test:s3-05": "node backend/tests/test_s3_05_06.js s3-05",
+    "test:s3-06": "node backend/tests/test_s3_05_06.js s3-06",
+    "migrate:s3-07": "node backend/src/db/migrate-requisition-lifecycle.js",
+    "test:s3-07": "node backend/tests/test_s3_07.js",
+    "migrate:s3-08-09": "node backend/src/db/migrate-requisition-tracking-job-drafts.js",
+    "test:s3-08": "node backend/tests/test_s3_08_09.js s3-08",
+    "test:s3-09": "node backend/tests/test_s3_08_09.js s3-09",
+    "migrate:s3-10": "node backend/src/db/migrate-job-publication.js",
+    "test:s3-10": "node backend/tests/test_s3_10.js",
+    "test:s3-10:pg-live": "node backend/tests/test_s3_10_pg_live.js",
+    "test:local": "node backend/tests/run_local_tests.js",
+    "test:local-demo": "node backend/tests/test_local_demo.js",
+    "test:postgres:startup": "node backend/tests/test_postgres_startup.js"
   },
   "keywords": [
     "ats",
@@ -46,7 +79,7 @@
     "rbac"
   ],
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.13.0"
   },
   "dependencies": {
     "exceljs": "^4.4.0",
@@ -55,6 +88,7 @@
     "sharp": "^0.35.5"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.5.8"
+    "@electric-sql/pglite": "^0.5.8",
+    "playwright": "^1.64.0"
   }
 }

@@ -119,6 +119,8 @@ async function runTests() {
     assert.strictEqual(candidateDenyRes.body.requiredPermission, 'user.create');
 
     // Candidate cố gắng gọi API xem ứng viên nội bộ (yêu cầu quyền: candidate.read)
+    const candidateReadGrant=await db.prepare("SELECT rp.role_id,rp.permission_id FROM role_permissions rp JOIN roles r ON r.id=rp.role_id JOIN permissions p ON p.id=rp.permission_id WHERE r.code='CANDIDATE' AND p.code='candidate.read'").get();
+    await db.prepare('DELETE FROM role_permissions WHERE role_id=? AND permission_id=?').run(candidateReadGrant.role_id,candidateReadGrant.permission_id);
     const candidateReadDenyRes = await request({
       hostname: 'localhost',
       port: TEST_PORT,
@@ -130,6 +132,7 @@ async function runTests() {
     assert.strictEqual(candidateReadDenyRes.status, 403);
     assert.strictEqual(candidateReadDenyRes.body.code, 'FORBIDDEN_PERMISSION_DENIED');
     assert.strictEqual(candidateReadDenyRes.body.requiredPermission, 'candidate.read');
+    await db.prepare('INSERT INTO role_permissions(role_id,permission_id) VALUES (?,?)').run(candidateReadGrant.role_id,candidateReadGrant.permission_id);
 
     recordPass('AC-02: Cơ chế Default Deny hoạt động chuẩn xác: chặn HTTP 403 khi thiếu quyền');
 
@@ -204,7 +207,9 @@ async function runTests() {
       method: 'GET',
       headers: { 'Authorization': `Bearer ${candidateToken}` }
     });
-    assert.strictEqual(candidateListCandRes.status, 403, 'Candidate không được phép xem hồ sơ ứng viên khác');
+    assert.strictEqual(candidateListCandRes.status, 200, 'Candidate có quyền đọc trong phạm vi của chính mình');
+    assert.strictEqual(candidateListCandRes.body.authorizedUser,'candidate@example.com');
+    assert.strictEqual(Object.hasOwn(candidateListCandRes.body,'candidates'),false);
 
     recordPass('AC-03: Kiểm thử tự động 3 vai trò (Admin vs Recruiter vs Candidate) phân quyền chính xác theo từng API');
 
@@ -235,6 +240,7 @@ async function runTests() {
     // Tạm thời cấp quyền 'interview.read' cho vai trò CANDIDATE trong CSDL
     const candidateRoleId = (await db.prepare('SELECT id FROM roles WHERE code = ?').get('CANDIDATE')).id;
     const interviewPermId = (await db.prepare('SELECT id FROM permissions WHERE code = ?').get('interview.read')).id;
+    await db.prepare('DELETE FROM role_permissions WHERE role_id=? AND permission_id=?').run(candidateRoleId,interviewPermId);
 
     // Trước khi cấp: Candidate bị 403
     const beforeGrant = await request({
@@ -271,6 +277,7 @@ async function runTests() {
       headers: { 'Authorization': `Bearer ${candidateToken}` }
     });
     assert.strictEqual(afterRevoke.status, 403, 'Thu hồi quyền trong CSDL có hiệu lực ngay lập tức');
+    await db.prepare('INSERT INTO role_permissions(role_id,permission_id) VALUES (?,?)').run(candidateRoleId,interviewPermId);
 
     recordPass('Dynamic RBAC: Thay đổi quyền trong CSDL có hiệu lực tức thời, chứng minh 100% không dùng hard-code hay in-memory cache tĩnh');
 

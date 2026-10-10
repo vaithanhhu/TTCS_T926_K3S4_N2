@@ -1,0 +1,20 @@
+<div id="approval-configurations-view" class="hidden">
+  <div class="view-header"><div class="view-title-group"><h2>Cấu hình luồng phê duyệt</h2><p>Hạn mức lương tối đa cho một người/tháng, đơn vị VND.</p></div><button type="button" id="s301-refresh" class="btn btn-outline">Tải lại</button></div>
+  <div id="s301-alert" class="alert alert-danger hidden" role="alert"><span id="s301-message"></span></div>
+  <div class="panel-card">
+    <div class="panel-header"><span class="panel-title">Cấu hình theo phòng ban</span><button type="button" id="s301-new" class="btn btn-outline btn-sm">Cấu hình mới</button></div>
+    <div class="table-wrapper"><table class="data-table"><thead><tr><th>Phòng ban</th><th>Phiên bản hiện hành</th><th>Phiên bản mới nhất</th><th>Thao tác</th></tr></thead><tbody id="s301-configurations"></tbody></table></div>
+  </div>
+  <div class="panel-card" style="margin-top: var(--space-6); padding: var(--space-6);">
+    <form id="s301-form">
+      <div class="form-group"><label class="form-label" for="s301-department">Phòng ban</label><select id="s301-department" class="form-select" required><option value="">Chọn phòng ban</option></select></div>
+      <div class="form-group"><label class="form-label" for="s301-version">Phiên bản</label><select id="s301-version" class="form-select"></select><p class="text-muted" id="s301-version-status">Thay đổi luôn được lưu thành phiên bản mới. Phiên bản đã công bố không bị ghi đè.</p></div>
+      <div id="s301-levels"></div>
+      <div style="display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-4);">
+        <button type="button" id="s301-add-level" class="btn btn-outline">Thêm cấp</button>
+        <button type="submit" id="s301-save" class="btn btn-primary">Lưu phiên bản mới</button>
+        <button type="button" id="s301-publish" class="btn btn-outline" disabled>Công bố phiên bản</button>
+      </div>
+    </form>
+  </div>
+</div>

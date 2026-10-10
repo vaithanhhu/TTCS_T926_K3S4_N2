@@ -39,6 +39,8 @@
 
   // View Containers
   const views = {
+    'approval-configurations': document.getElementById('approval-configurations-view'),
+    'headcount-budgets':document.getElementById('headcount-budgets-view'),
     dashboard: document.getElementById('dashboard-view'),
     requisitions: document.getElementById('requisitions-view'),
     candidates: document.getElementById('candidates-view'),

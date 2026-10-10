@@ -87,8 +87,8 @@ async function main() {
     });
 
     await test('S1-05', 'AC3', 'Real denied request is rendered as specific Vietnamese feedback', async () => {
-      const f = await frontend(app.base, 'admin@company.com');
-      const permission = (await app.db.prepare("SELECT * FROM role_permissions WHERE role_id='role-admin' AND permission_id='perm-user-read'").get());
+      const f = await frontend(app.base, 'hrmanager@company.com');
+      const permission = (await app.db.prepare("SELECT * FROM role_permissions WHERE role_id='role-hr-mgr' AND permission_id='perm-user-read'").get());
       assert.ok(permission);
       (await app.db.prepare('DELETE FROM role_permissions WHERE role_id=? AND permission_id=?').run(permission.role_id, permission.permission_id));
       try {
@@ -156,7 +156,7 @@ async function main() {
         const f = await frontend(app.base, 'hrmanager@company.com');
         const token = f.storage.get('ats_token');
         const response = status === 401 ? await app.api('GET', '/admin/users', 'invalid-coverage-token')
-          : status === 403 ? await app.api('GET', '/admin/audit-logs', token)
+          : status === 403 ? await app.api('POST', '/admin/users/test-create', token, {})
             : await app.api('GET', '/coverage-resource-does-not-exist', token);
         assert.equal(response.status, status); renderHttpError(f, response);
         await f.nodes.get('error-primary-btn').dispatch('click'); await f.settle();

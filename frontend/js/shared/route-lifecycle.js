@@ -1,5 +1,15 @@
 /** Navigation activates retained pages without rebinding their listeners. */
 function leaveActivePage() {
+  window.ATS_REQUISITION_APPROVAL_UI?.leave();
+  window.ATS_REQUISITION_TRACKING?.leave();
+  window.ATS_REQUISITION_OPERATIONS_UI?.leave();
+  window.ATS_REQUISITION_LIFECYCLE_UI?.leave();
+    window.ATS_JOB_POSTING_DRAFT_UI?.leave();
+  window.ATS_JOB_PUBLICATION_UI?.leave();
+  window.ATS_PUBLIC_JOBS_PAGE?.leave();
+  window.ATS_CANDIDATE_DETAILS?.leave();
+  window.ATS_HEADCOUNT_BUDGET_UI?.leave();
+  if (currentActiveView === 'approval-configurations') window.ATS_APPROVAL_CONFIGURATION_PAGE?.leave();
   if (currentActiveView === 'change-password') {
     document.body.appendChild(changePwdModal);
     changePwdModal.classList.remove('password-page-form');
@@ -16,6 +26,7 @@ function leaveActivePage() {
 function activateRoute(route) {
   leaveActivePage();
   Object.values(views).forEach(view => view?.classList.add('hidden'));
+  document.getElementById('public-jobs-view')?.classList.add('hidden');
   const publicPage = !route.auth;
   loginView.classList.toggle('hidden', !publicPage);
   appShell.classList.toggle('hidden', publicPage);
@@ -30,6 +41,7 @@ function activateRoute(route) {
   }
   if (publicPage) {
     currentActiveView = route.view;
+    if(route.view==='public-jobs'){loginView.classList.add('hidden');document.getElementById('public-jobs-view').classList.remove('hidden');window.ATS_PUBLIC_JOBS_PAGE.load();return;}
     if (route.view === 'forgot-password') {
       forgotModal.classList.remove('hidden');
       if (otpForm && !otpForm.classList.contains('hidden')) resumeResendCooldown();
@@ -45,4 +57,5 @@ function activateRoute(route) {
     return;
   }
   activateView(route.view);
+  if(route.view==='approvals')window.ATS_JOB_PUBLICATION_UI?.loadQueue();
 }
