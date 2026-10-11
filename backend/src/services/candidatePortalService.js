@@ -446,6 +446,157 @@ class CandidatePortalService {
     };
   }
 
+  // S4-07: Internal employee referral
+  async referCandidate(data, cvFileOrUser = null, currentUser = null) {
+    let cvFile = null;
+    let user = null;
+    if (currentUser) {
+      cvFile = cvFileOrUser;
+      user = currentUser;
+    } else if (cvFileOrUser && typeof cvFileOrUser === 'object' && cvFileOrUser.id) {
+      user = cvFileOrUser;
+      cvFile = data?.cvFile || null;
+    } else {
+      user = currentUser;
+      cvFile = data?.cvFile || null;
+    }
+    data.cvFile = cvFile;
+
+    if (!user || !user.id) {
+      return { success: false, statusCode: 401, code: 'UNAUTHORIZED', message: 'Yêu cầu đăng nhập.' };
+    }
+
+    const hasPerm = await this.rbac.hasPermission(user.id, 'candidate.refer');
+    if (!hasPerm && !user.roles?.some(r => ['ADMIN', 'HR_MANAGER', 'HIRING_MGR', 'RECRUITER', 'INTERVIEWER', 'APPROVER', 'EMPLOYEE'].includes(r))) {
+      return { success: false, statusCode: 403, code: 'FORBIDDEN', message: 'Bạn không có quyền giới thiệu ứng viên.' };
+    }
+
+    const fullName = typeof data.fullName === 'string' ? data.fullName.trim() : '';
+    const email = typeof data.email === 'string' ? data.email.trim().toLowerCase() : '';
+    const phoneNumber = typeof data.phoneNumber === 'string' ? data.phoneNumber.trim() : '';
+    const requisitionId = typeof data.requisitionId === 'string' ? data.requisitionId.trim() : '';
+    const referralNotes = typeof data.referralNotes === 'string' ? data.referralNotes.trim() : (typeof data.notes === 'string' ? data.notes.trim() : '');
+
+    if (!fullName || !email || !phoneNumber || !requisitionId) {
+      return { success: false, statusCode: 400, code: 'INVALID_FIELDS', message: 'Vui lòng điền đầy đủ họ tên, email, số điện thoại và chọn vị trí tuyển dụng.' };
+    }
+
+    // Verify requisition is accepting
+    const req = await this.db.prepare(
+      `SELECT id, title, department_name, status FROM requisitions WHERE id = ?`
+    ).get(requisitionId);
+
+    if (!req || !['OPEN', 'IN_PROGRESS'].includes(req.status)) {
+      return { success: false, statusCode: 409, code: 'REQUISITION_NOT_OPEN', message: 'Vị trí này hiện không mở nhận ứng viên.' };
+    }
+
+    // Check duplicate
+    const duplicate = await this.db.prepare(
+      `SELECT id FROM candidates WHERE requisition_id = ? AND LOWER(email) = ? AND stage <> 'WITHDRAWN'`
+    ).get(requisitionId, email);
+
+    if (duplicate) {
+      return { success: false, statusCode: 409, code: 'DUPLICATE_CANDIDATE', message: 'Ứng viên với email này đã có trong danh sách tuyển dụng của vị trí.' };
+    }
+
+    // Handle CV file if attached
+    let docId = null;
+    let storageFileName = null;
+    if (data.cvFile) {
+      const fileVal = this.validateCvFile(data.cvFile);
+      if (!fileVal.success) return fileVal;
+      storageFileName = 'cv-ref-' + crypto.randomUUID() + fileVal.ext;
+      fs.writeFileSync(path.join(UPLOADS_DIR, storageFileName), data.cvFile.buffer);
+      docId = 'doc-' + crypto.randomUUID();
+    }
+
+    const candidateId = 'cand-' + crypto.randomUUID();
+    const trackingCode = 'TRK-REF-' + new Date().getFullYear() + '-' + crypto.randomBytes(3).toString('hex').toUpperCase();
+
+    await this.db.transaction(async () => {
+      const insertSql = this.db.provider === 'postgres'
+        ? `INSERT INTO candidates (
+             id, full_name, email, phone_number, requisition_id, stage,
+             tracking_code, referrer_id, referrer_name, referral_notes, is_internal_referral, created_at
+           ) VALUES (?, ?, ?, ?, ?, 'NEW', ?, ?, ?, ?, TRUE, CURRENT_TIMESTAMP)`
+        : `INSERT INTO candidates (
+             id, full_name, email, phone_number, requisition_id, stage,
+             tracking_code, referrer_id, referrer_name, referral_notes, is_internal_referral, created_at
+           ) VALUES (?, ?, ?, ?, ?, 'NEW', ?, ?, ?, ?, 1, datetime('now'))`;
+
+      await this.db.prepare(insertSql).run(
+        candidateId, fullName, email, phoneNumber, requisitionId,
+        trackingCode, user.id, user.fullName || user.email, referralNotes
+      );
+
+      if (docId && data.cvFile) {
+        const fileHash = crypto.createHash('sha256').update(data.cvFile.buffer).digest('hex');
+        const docSql = this.db.provider === 'postgres'
+          ? `INSERT INTO candidate_documents (id, candidate_id, file_name, storage_path, mime_type, file_size, file_hash, document_type, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 'CV', CURRENT_TIMESTAMP)`
+          : `INSERT INTO candidate_documents (id, candidate_id, file_name, storage_path, mime_type, file_size, file_hash, document_type, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 'CV', datetime('now'))`;
+
+        await this.db.prepare(docSql).run(
+          docId, candidateId, data.cvFile.filename, storageFileName,
+          data.cvFile.mimeType || 'application/pdf', data.cvFile.buffer.length, fileHash
+        );
+      }
+
+      const histSql = this.db.provider === 'postgres'
+        ? `INSERT INTO candidate_status_history (id, candidate_id, before_stage, after_stage, actor_id, actor_name, action, notes, created_at)
+           VALUES (?, ?, NULL, 'NEW', ?, ?, 'INTERNAL_REFERRAL', ?, CURRENT_TIMESTAMP)`
+        : `INSERT INTO candidate_status_history (id, candidate_id, before_stage, after_stage, actor_id, actor_name, action, notes, created_at)
+           VALUES (?, ?, NULL, 'NEW', ?, ?, 'INTERNAL_REFERRAL', ?, datetime('now'))`;
+
+      await this.db.prepare(histSql).run(
+        'csh-' + crypto.randomUUID(), candidateId, user.id,
+        user.fullName || user.id, referralNotes
+      );
+    });
+
+    return {
+      success: true,
+      statusCode: 201,
+      message: 'Giới thiệu ứng viên thành công.',
+      data: {
+        candidateId,
+        trackingCode,
+        fullName,
+        email,
+        jobTitle: req.title,
+        isInternalReferral: true,
+        referrerId: user.id,
+        referrerName: user.fullName || user.email
+      }
+    };
+  }
+
+  // Get referrals submitted by currentUser (high-level view only)
+  async getMyReferrals(currentUser) {
+    if (!currentUser || !currentUser.id) return [];
+
+    const rows = await this.db.prepare(
+      `SELECT c.id, c.full_name, c.email, c.stage, c.created_at, r.title AS job_title, r.department_name
+       FROM candidates c
+       JOIN requisitions r ON r.id = c.requisition_id
+       WHERE c.referrer_id = ?
+       ORDER BY c.created_at DESC`
+    ).all(currentUser.id);
+
+    return rows.map(row => ({
+      id: row.id,
+      fullName: row.full_name,
+      candidateName: row.full_name,
+      email: row.email,
+      candidateEmail: row.email,
+      jobTitle: row.job_title,
+      departmentName: row.department_name,
+      createdAt: row.created_at,
+      status: CandidatePortalService.mapPublicStatus(row.stage).label
+    }));
+  }
+
   // S4-04: Parse CV PDF text for Recruiter (non-destructive)
   async parseCvPdf(candidateId, documentIdOrUser = null, currentUser = null) {
     let documentId = null;

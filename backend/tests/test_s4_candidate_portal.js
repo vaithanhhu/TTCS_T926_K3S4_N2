@@ -297,6 +297,36 @@ async function runSprint4Tests() {
     // =============================================================
     // TEST S4-07: NHÂN SỰ NỘI BỘ GIỚI THIỆU ỨNG VIÊN
     // =============================================================
+    console.log('\n--- Kiểm thử S4-07: Nhân sự nội bộ giới thiệu ứng viên ---');
+    const referralEmail = `referred.${Date.now()}@example.com`;
+    const referralCv = {
+      filename: 'referral_cv.pdf',
+      mimeType: 'application/pdf',
+      buffer: createSamplePdfBuffer('Lê Văn C - 0988776655')
+    };
+
+    const referRes = await portalService.referCandidate({
+      requisitionId: testReqId,
+      fullName: 'Lê Văn C',
+      email: referralEmail,
+      phoneNumber: '0988776655',
+      notes: 'Đồng nghiệp cũ tại công ty trước, rất giỏi về distributed systems.'
+    }, referralCv, employee);
+
+    assert.equal(referRes.success, true, 'Nhân viên giới thiệu ứng viên phải thành công');
+    assert.equal(referRes.data.isInternalReferral, true);
+    assert.equal(referRes.data.referrerId, employee.id);
+    console.log(`✓ Giới thiệu ứng viên thành công, gắn đúng referrerId: ${employee.id}`);
+
+    // Nhân viên xem danh sách các hồ sơ mình đã giới thiệu
+    const myReferrals = await portalService.getMyReferrals(employee);
+    assert.ok(Array.isArray(myReferrals), 'Phải trả về danh sách giới thiệu của nhân viên');
+    assert.ok(myReferrals.some(r => r.candidateEmail === referralEmail), 'Phải có hồ sơ vừa giới thiệu');
+    console.log(`✓ Người giới thiệu xem được danh sách (${myReferrals.length} hồ sơ) với trạng thái tổng quát`);
+
+    // =============================================================
+    // TEST S4-08: GỠ TIN VÀ TỰ ĐỘNG ẨN TIN HẾT HẠN
+    // =============================================================
   } finally {
     // cleanup test job if created
     if (testJobId && testJobId.startsWith('job-test-')) {

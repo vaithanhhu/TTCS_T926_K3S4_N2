@@ -99,6 +99,22 @@ class CandidatePortalController {
         return this.send(res, result.statusCode || (result.success ? 200 : 400), result);
       }
 
+      // 5. S4-07: Internal Candidate Referral (Employee actor)
+      if (pathname === '/api/v1/candidates/refer' && method === 'POST') {
+        const user = await this.rbac.authorize(req, res, this.auth, 'candidate.refer');
+        if (!user) return;
+        const { fields, file } = await parseMultipartOrJson(req);
+        const result = await this.service.referCandidate(fields, file, user);
+        return this.send(res, result.statusCode || (result.success ? 201 : 400), result);
+      }
+
+      if (pathname === '/api/v1/candidates/my-referrals' && method === 'GET') {
+        const user = await this.rbac.authorize(req, res, this.auth);
+        if (!user) return;
+        const result = await this.service.getMyReferrals(user);
+        return this.send(res, 200, { success: true, data: result });
+      }
+
       // 6. S4-04: Parse CV PDF (Recruiter only, non-destructive preview)
       if (/^\/api\/v1\/candidates\/[^/]+\/parse-cv$/.test(pathname) && method === 'POST') {
         const user = await this.rbac.authorize(req, res, this.auth, 'candidate.cv.parse');
