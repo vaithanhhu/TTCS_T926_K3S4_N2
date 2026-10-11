@@ -724,6 +724,39 @@ class CandidatePortalService {
     };
   }
 
+  // S4-08: Expire overdue jobs daily task
+  async expireOverdueJobs() {
+    const today = this.requisitions.businessDate();
+    const rows = await this.db.prepare(
+      `SELECT id, title, version, application_deadline
+       FROM job_postings
+       WHERE status = 'PUBLISHED' AND application_deadline < ?`
+    ).all(today);
+
+    if (!rows.length) return { expiredCount: 0, expiredJobs: [] };
+
+    const expiredJobs = [];
+    for (const job of rows) {
+      await this.db.prepare(
+        `UPDATE job_postings SET status = 'UNPUBLISHED', version = version + 1, updated_at = datetime('now') WHERE id = ?`
+      ).run(job.id);
+
+      const eventSql = `INSERT INTO job_posting_publication_events (
+        id, posting_id, event_version, content_version, action, before_status, after_status,
+        actor_id, actor_name, reason, response_json, created_at
+      ) VALUES (?, ?, ?, 0, 'AUTO_EXPIRE', 'PUBLISHED', 'UNPUBLISHED', 'SYSTEM', 'Hệ thống tự động', 'Quá hạn nhận hồ sơ', ?, datetime('now'))`;
+
+      await this.db.prepare(eventSql).run(
+        'jpe-' + crypto.randomUUID(), job.id, job.version + 1,
+        JSON.stringify({ id: job.id, status: 'UNPUBLISHED', reason: 'Quá hạn nhận hồ sơ' })
+      );
+
+      expiredJobs.push({ id: job.id, title: job.title });
+    }
+
+    return { expiredCount: expiredJobs.length, expiredJobs };
+  }
+
 }
 
 module.exports = CandidatePortalService;

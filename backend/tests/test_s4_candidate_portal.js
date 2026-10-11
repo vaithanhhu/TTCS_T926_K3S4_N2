@@ -327,6 +327,27 @@ async function runSprint4Tests() {
     // =============================================================
     // TEST S4-08: GỠ TIN VÀ TỰ ĐỘNG ẨN TIN HẾT HẠN
     // =============================================================
+    console.log('\n--- Kiểm thử S4-08: Gỡ tin và tự động ẩn tin hết hạn ---');
+    // Tạo 1 tin quá hạn
+    const expiredJobId = 'job-expired-' + crypto.randomUUID().slice(0, 8);
+    await db.prepare(`
+      INSERT INTO job_postings (id, requisition_id, title, job_description, candidate_requirements, status, application_deadline, version, created_by, updated_by)
+      VALUES (?, ?, 'Vị trí đã hết hạn', 'Mô tả', 'Yêu cầu', 'PUBLISHED', '2020-01-01', 1, ?, ?)
+    `).run(expiredJobId, testReqId, admin.id, admin.id);
+
+    // Chạy tác vụ quét tin hết hạn
+    const expireTaskRes = await portalService.expireOverdueJobs(admin);
+    assert.ok(expireTaskRes.expiredCount >= 1, 'Tác vụ phải phát hiện và gỡ ít nhất 1 tin quá hạn');
+    console.log(`✓ Tác vụ expireOverdueJobs đã ẩn thành công ${expireTaskRes.expiredCount} tin quá hạn`);
+
+    // Kiểm tra tin đã hết hạn không xuất hiện ở danh sách công khai
+    const checkPublic = await publicationService.publicList(expiredJobId);
+    assert.equal(checkPublic.length, 0, 'Tin hết hạn tuyệt đối không xuất hiện ở cổng công khai');
+    console.log('✓ Tin hết hạn biến mất khỏi cổng công khai ngay lập tức');
+
+    // =============================================================
+    // TEST S4-09: HỒ SƠ ỨNG VIÊN HỢP NHẤT & IDOR PERMISSION
+    // =============================================================
   } finally {
     // cleanup test job if created
     if (testJobId && testJobId.startsWith('job-test-')) {

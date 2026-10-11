@@ -125,6 +125,14 @@ class CandidatePortalController {
         return this.send(res, result.statusCode || (result.success ? 200 : 400), result);
       }
 
+      // 7. S4-08: Expire Overdue Jobs (Admin/Cron background task)
+      if (pathname === '/api/v1/admin/expire-overdue-jobs' && method === 'POST') {
+        const user = await this.rbac.authorize(req, res, this.auth, 'job_posting.manage');
+        if (!user) return;
+        const result = await this.service.expireOverdueJobs(user);
+        return this.send(res, 200, { success: true, data: result });
+      }
+
 
       return this.send(res, 404, { success: false, code: 'NOT_FOUND', message: 'Tài nguyên không tồn tại.' });
     } catch (err) {
