@@ -757,6 +757,233 @@ class CandidatePortalService {
     return { expiredCount: expiredJobs.length, expiredJobs };
   }
 
+  // S4-09: Unified Candidate Profile with strict IDOR RBAC
+  async getUnifiedProfile(candidateId, currentUser) {
+    if (!currentUser || !currentUser.id) {
+      return { success: false, statusCode: 401, code: 'UNAUTHORIZED', message: 'Yêu cầu đăng nhập.' };
+    }
+
+    const candidate = await this.db.prepare(
+      `SELECT c.*, r.title AS requisition_title, r.department_name, r.recruiter_id, r.hiring_manager_id
+       FROM candidates c
+       LEFT JOIN requisitions r ON r.id = c.requisition_id
+       WHERE c.id = ?`
+    ).get(candidateId);
+
+    if (!candidate) {
+      return { success: false, statusCode: 404, code: 'CANDIDATE_NOT_FOUND', message: 'Không tìm thấy hồ sơ ứng viên.' };
+    }
+
+    // RBAC IDOR check: Recruiter must be assigned or Hiring Manager must manage requisition
+    const isAdminOrHr = currentUser.roles?.some(r => ['ADMIN', 'HR_MANAGER'].includes(r));
+    let hasAccess = isAdminOrHr;
+
+    if (!hasAccess && currentUser.roles?.includes('RECRUITER')) {
+      hasAccess = await this.requisitions.recruiterAssigned(candidate.requisition_id, currentUser.id);
+    }
+    if (!hasAccess && currentUser.roles?.includes('HIRING_MGR')) {
+      hasAccess = await this.requisitions.canReadHiringRequisition(candidate.requisition_id, currentUser.id);
+    }
+
+    if (!hasAccess) {
+      return {
+        success: false,
+        statusCode: 403,
+        code: 'CANDIDATE_OUT_OF_SCOPE',
+        message: 'Hồ sơ ứng viên không thuộc vị trí bạn được phân công phụ trách.'
+      };
+    }
+
+    // Aggregate all applications by normalized email
+    const allApplications = await this.db.prepare(
+      `SELECT c.id, c.requisition_id, c.job_posting_id, c.stage, c.cover_letter, c.tracking_code,
+              c.created_at, c.withdrawn_at, c.withdrawn_reason, c.is_internal_referral, c.referrer_name,
+              r.code AS requisition_code, r.title AS requisition_title, r.department_name
+       FROM candidates c
+       LEFT JOIN requisitions r ON r.id = c.requisition_id
+       WHERE LOWER(c.email) = ?
+       ORDER BY c.created_at DESC`
+    ).all(candidate.email.toLowerCase());
+
+    const appIds = allApplications.map(a => a.id);
+
+    // Fetch documents
+    const docs = await this.db.prepare(
+      `SELECT id, candidate_id, file_name, storage_path, mime_type, file_size, document_type, parsed_data_json, created_at
+       FROM candidate_documents
+       WHERE candidate_id IN (${appIds.map(() => '?').join(',')})
+       ORDER BY created_at DESC`
+    ).all(...appIds);
+
+    // Fetch tags
+    const tags = await this.db.prepare(
+      `SELECT id, candidate_id, tag_name, created_by, created_at
+       FROM candidate_tags
+       WHERE candidate_id IN (${appIds.map(() => '?').join(',')})
+       ORDER BY created_at ASC`
+    ).all(...appIds);
+
+    // Fetch notes
+    const notes = await this.db.prepare(
+      `SELECT id, candidate_id, author_id, author_name, note_text, is_private, created_at
+       FROM candidate_notes
+       WHERE candidate_id IN (${appIds.map(() => '?').join(',')})
+       ORDER BY created_at DESC`
+    ).all(...appIds);
+
+    // Fetch status history
+    const history = await this.db.prepare(
+      `SELECT id, candidate_id, before_stage, after_stage, actor_name, action, reason, notes, created_at
+       FROM candidate_status_history
+       WHERE candidate_id IN (${appIds.map(() => '?').join(',')})
+       ORDER BY created_at DESC`
+    ).all(...appIds);
+
+    return {
+      success: true,
+      statusCode: 200,
+      data: {
+        candidate: {
+          id: candidate.id,
+          fullName: candidate.full_name,
+          email: candidate.email,
+          phoneNumber: candidate.phone_number,
+          currentCompany: candidate.current_company,
+          experienceYears: candidate.experience_years,
+          expectedSalary: candidate.expected_salary,
+          sourceName: candidate.source_id,
+          createdAt: candidate.created_at
+        },
+        applications: allApplications.map(app => ({
+          id: app.id,
+          requisitionId: app.requisition_id,
+          requisitionCode: app.requisition_code,
+          requisitionTitle: app.requisition_title,
+          departmentName: app.department_name,
+          stage: app.stage,
+          trackingCode: app.tracking_code,
+          coverLetter: app.cover_letter,
+          isInternalReferral: Boolean(app.is_internal_referral),
+          referrerName: app.referrer_name,
+          withdrawnAt: app.withdrawn_at,
+          withdrawnReason: app.withdrawn_reason,
+          createdAt: app.created_at
+        })),
+        documents: docs.map(d => ({
+          id: d.id,
+          candidateId: d.candidate_id,
+          fileName: d.file_name,
+          mimeType: d.mime_type,
+          fileSize: d.file_size,
+          parsedData: d.parsed_data_json ? JSON.parse(d.parsed_data_json) : null,
+          createdAt: d.created_at
+        })),
+        tags: tags.map(t => ({ id: t.id, candidateId: t.candidate_id, tagName: t.tag_name })),
+        notes: notes.map(n => ({ id: n.id, candidateId: n.candidate_id, authorName: n.author_name, text: n.note_text, createdAt: n.created_at })),
+        history: history.map(h => ({
+          id: h.id,
+          candidateId: h.candidate_id,
+          beforeStage: h.before_stage,
+          afterStage: h.after_stage,
+          actorName: h.actor_name,
+          action: h.action,
+          reason: h.reason,
+          createdAt: h.created_at
+        }))
+      }
+    };
+  }
+
+  // Add internal note to candidate profile
+  async addNote(candidateId, noteText, currentUser) {
+    if (!currentUser || !currentUser.id) return { success: false, statusCode: 401, message: 'Yêu cầu đăng nhập.' };
+    if (!noteText || typeof noteText !== 'string' || !noteText.trim()) {
+      return { success: false, statusCode: 400, message: 'Nội dung ghi chú không được để trống.' };
+    }
+
+    const noteId = 'cn-' + crypto.randomUUID();
+    const insertSql = this.db.provider === 'postgres'
+      ? `INSERT INTO candidate_notes (id, candidate_id, author_id, author_name, note_text, created_at)
+         VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
+      : `INSERT INTO candidate_notes (id, candidate_id, author_id, author_name, note_text, created_at)
+         VALUES (?, ?, ?, ?, ?, datetime('now'))`;
+
+    await this.db.prepare(insertSql).run(
+      noteId, candidateId, currentUser.id,
+      currentUser.fullName || currentUser.email, noteText.trim()
+    );
+
+    return { success: true, statusCode: 201, message: 'Đã thêm ghi chú.', data: { id: noteId, noteText: noteText.trim() } };
+  }
+
+  // Add tag to candidate profile
+  async addTag(candidateId, tagName, currentUser) {
+    if (!currentUser || !currentUser.id) return { success: false, statusCode: 401, message: 'Yêu cầu đăng nhập.' };
+    if (!tagName || typeof tagName !== 'string' || !tagName.trim()) {
+      return { success: false, statusCode: 400, message: 'Tên nhãn không được để trống.' };
+    }
+
+    const tagId = 'ct-' + crypto.randomUUID();
+    const insertSql = this.db.provider === 'postgres'
+      ? `INSERT INTO candidate_tags (id, candidate_id, tag_name, created_by, created_at)
+         VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)`
+      : `INSERT INTO candidate_tags (id, candidate_id, tag_name, created_by, created_at)
+         VALUES (?, ?, ?, ?, datetime('now'))`;
+
+    await this.db.prepare(insertSql).run(tagId, candidateId, tagName.trim(), currentUser.id);
+
+    return { success: true, statusCode: 201, message: 'Đã thêm nhãn.', data: { id: tagId, tagName: tagName.trim() } };
+  }
+
+  // Download CV document
+  async getCvDocument(documentId, currentUser) {
+    const doc = await this.db.prepare(
+      `SELECT d.*, c.requisition_id
+       FROM candidate_documents d
+       JOIN candidates c ON c.id = d.candidate_id
+       WHERE d.id = ?`
+    ).get(documentId);
+
+    if (!doc) {
+      return { success: false, statusCode: 404, message: 'Không tìm thấy tài liệu.' };
+    }
+
+    // If user is logged in, verify permissions
+    if (currentUser) {
+      const isAdminOrHr = currentUser.roles?.some(r => ['ADMIN', 'HR_MANAGER'].includes(r));
+      let hasAccess = isAdminOrHr;
+      if (!hasAccess && currentUser.roles?.includes('RECRUITER')) {
+        hasAccess = await this.requisitions.recruiterAssigned(doc.requisition_id, currentUser.id);
+      }
+      if (!hasAccess && currentUser.roles?.includes('HIRING_MGR')) {
+        hasAccess = await this.requisitions.canReadHiringRequisition(doc.requisition_id, currentUser.id);
+      }
+      if (!hasAccess) {
+        return { success: false, statusCode: 403, message: 'Bạn không có quyền truy cập tài liệu này.' };
+      }
+    }
+
+    const filePath = path.join(UPLOADS_DIR, doc.storage_path);
+    if (!fs.existsSync(filePath)) {
+      return { success: false, statusCode: 404, message: 'Tệp không tồn tại trên hệ thống lưu trữ.' };
+    }
+
+    return {
+      success: true,
+      statusCode: 200,
+      fileName: doc.file_name,
+      mimeType: doc.mime_type,
+      fileSize: doc.file_size,
+      filePath
+    };
+  }
+
+  // Remove tag from candidate profile
+  async removeTag(candidateId, tagName, currentUser) {
+    if (!currentUser || !currentUser.id) return { success: false, statusCode: 401, message: 'Yêu cầu đăng nhập.' };
+    await this.db.prepare('DELETE FROM candidate_tags WHERE candidate_id = ? AND tag_name = ?').run(candidateId, tagName);
+    return { success: true, statusCode: 200, message: 'Đã xóa nhãn.' };
+  }
 }
 
 module.exports = CandidatePortalService;

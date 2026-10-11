@@ -133,6 +133,60 @@ class CandidatePortalController {
         return this.send(res, 200, { success: true, data: result });
       }
 
+      // 8. S4-09: Unified Candidate Profile & Details (IDOR checked)
+      if (/^\/api\/v1\/candidates\/unified\/[^/]+$/.test(pathname) && method === 'GET') {
+        const user = await this.rbac.authorize(req, res, this.auth, 'candidate.read');
+        if (!user) return;
+        const candidateId = decodeURIComponent(pathname.split('/')[5]);
+        const result = await this.service.getUnifiedProfile(candidateId, user);
+        return this.send(res, result.statusCode || (result.success ? 200 : 403), result);
+      }
+
+      // 9. Notes & Tags on Candidate
+      if (/^\/api\/v1\/candidates\/[^/]+\/notes$/.test(pathname) && method === 'POST') {
+        const user = await this.rbac.authorize(req, res, this.auth, 'candidate.update');
+        if (!user) return;
+        const candidateId = decodeURIComponent(pathname.split('/')[4]);
+        const body = await parseBody(req);
+        const result = await this.service.addNote(candidateId, body?.noteText || body?.text, user);
+        return this.send(res, result.statusCode || (result.success ? 201 : 400), result);
+      }
+
+      if (/^\/api\/v1\/candidates\/[^/]+\/tags$/.test(pathname) && method === 'POST') {
+        const user = await this.rbac.authorize(req, res, this.auth, 'candidate.update');
+        if (!user) return;
+        const candidateId = decodeURIComponent(pathname.split('/')[4]);
+        const body = await parseBody(req);
+        const result = await this.service.addTag(candidateId, body?.tagName || body?.tag, user);
+        return this.send(res, result.statusCode || (result.success ? 200 : 400), result);
+      }
+
+      if (/^\/api\/v1\/candidates\/[^/]+\/tags\/[^/]+$/.test(pathname) && method === 'DELETE') {
+        const user = await this.rbac.authorize(req, res, this.auth, 'candidate.update');
+        if (!user) return;
+        const parts = pathname.split('/');
+        const candidateId = decodeURIComponent(parts[4]);
+        const tag = decodeURIComponent(parts[6]);
+        const result = await this.service.removeTag(candidateId, tag, user);
+        return this.send(res, result.statusCode || (result.success ? 200 : 400), result);
+      }
+
+      // 10. Document Download / Preview
+      if (/^\/api\/v1\/candidates\/documents\/[^/]+\/download$/.test(pathname) && method === 'GET') {
+        const user = await this.rbac.authorize(req, res, this.auth, 'candidate.read');
+        if (!user) return;
+        const docId = decodeURIComponent(pathname.split('/')[5]);
+        const docInfo = await this.service.getCvDocument(docId, user);
+        if (!docInfo.success) {
+          return this.send(res, docInfo.statusCode || 404, docInfo);
+        }
+        res.writeHead(200, {
+          'Content-Type': docInfo.mimeType || 'application/octet-stream',
+          'Content-Disposition': `inline; filename="${encodeURIComponent(docInfo.fileName)}"`
+        });
+        fs.createReadStream(docInfo.filePath).pipe(res);
+        return;
+      }
 
       return this.send(res, 404, { success: false, code: 'NOT_FOUND', message: 'Tài nguyên không tồn tại.' });
     } catch (err) {

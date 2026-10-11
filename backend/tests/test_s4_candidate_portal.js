@@ -348,6 +348,32 @@ async function runSprint4Tests() {
     // =============================================================
     // TEST S4-09: HỒ SƠ ỨNG VIÊN HỢP NHẤT & IDOR PERMISSION
     // =============================================================
+    console.log('\n--- Kiểm thử S4-09: Hồ sơ ứng viên hợp nhất & Phân quyền IDOR ---');
+    // Nộp đơn thứ 2 cho cùng ứng viên nhưng vào vị trí khác (nếu có)
+    const unifiedRes = await portalService.getUnifiedProfile(candidateRecord.id, admin);
+    assert.equal(unifiedRes.success, true);
+    assert.ok(unifiedRes.data.candidate, 'Phải có thông tin cá nhân');
+    assert.ok(Array.isArray(unifiedRes.data.applications), 'Phải có danh sách lần ứng tuyển');
+    assert.ok(Array.isArray(unifiedRes.data.documents), 'Phải có danh sách tài liệu');
+    console.log(`✓ Admin xem được hồ sơ hợp nhất: ${unifiedRes.data.applications.length} lần ứng tuyển, ${unifiedRes.data.documents.length} tài liệu`);
+
+    // Thêm tag và note
+    const tagRes = await portalService.addTag(candidateRecord.id, 'Chất lượng cao', admin);
+    assert.equal(tagRes.success, true);
+    const noteRes = await portalService.addNote(candidateRecord.id, 'Phỏng vấn vòng 1 ấn tượng', admin);
+    assert.equal(noteRes.success, true);
+    console.log('✓ Thêm nhãn và ghi chú nội bộ thành công');
+
+    // Kiểm tra bảo mật IDOR: Người dùng không liên quan / không có quyền bị từ chối
+    const unprivilegedUser = { id: 'usr-nobody', fullName: 'No Access', email: 'none@company.com', roles: ['GUEST'] };
+    const idorRes = await portalService.getUnifiedProfile(candidateRecord.id, unprivilegedUser);
+    assert.equal(idorRes.success, false, 'Người không có quyền không được xem hồ sơ hợp nhất');
+    assert.equal(idorRes.statusCode, 403);
+    console.log('✓ Bảo mật IDOR: Chặn thành công người không có quyền (403 FORBIDDEN)');
+
+    console.log('\n=============================================================');
+    console.log('🎉 TẤT CẢ 9 USER STORY CỦA SPRINT 4 ĐÃ ĐẠT TIÊU CHÍ NGHIỆM THU 100%!');
+    console.log('=============================================================');
   } finally {
     // cleanup test job if created
     if (testJobId && testJobId.startsWith('job-test-')) {

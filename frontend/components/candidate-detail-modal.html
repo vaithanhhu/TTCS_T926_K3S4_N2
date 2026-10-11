@@ -1,26 +1,27 @@
 <div id="candidate-detail-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="cand-detail-title">
-    <div class="modal-card" style="max-width: 620px;">
+    <div class="modal-card" style="max-width: 780px; max-height: 90vh; overflow-y: auto;">
       <div class="modal-header">
-        <h3 id="cand-detail-title" class="modal-title">Hồ Sơ Chi Tiết Ứng Viên</h3>
+        <h3 id="cand-detail-title" class="modal-title">Hồ Sơ Ứng Viên Hợp Nhất</h3>
         <button type="button" id="close-candidate-detail-modal" class="modal-close" aria-label="Đóng">&times;</button>
       </div>
-      <p class="modal-desc">Thông tin hồ sơ, vị trí ứng tuyển và điều chuyển vòng tuyển dụng.</p>
+      <p class="modal-desc">Tổng hợp thông tin ứng viên, các lần ứng tuyển đa vị trí, CV và ghi chú nội bộ.</p>
 
       <div class="modal-body">
+        <!-- Candidate Overview Box -->
         <div style="display: flex; gap: 16px; align-items: center; background: var(--color-bg-page); border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 14px; margin-bottom: 16px;">
-          <div class="user-avatar-circle" style="width: 48px; height: 48px; font-size: 1.25rem;" id="cand-detail-avatar">UV</div>
+          <div class="user-avatar-circle" style="width: 52px; height: 52px; font-size: 1.35rem;" id="cand-detail-avatar">UV</div>
           <div style="flex: 1;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-              <h4 id="cand-detail-name" style="margin: 0; font-size: 1.1rem; color: var(--color-text);">Nguyễn Văn An</h4>
+              <h4 id="cand-detail-name" style="margin: 0; font-size: 1.15rem; color: var(--color-text);">Nguyễn Văn An</h4>
               <span id="cand-detail-stage-badge" class="badge badge-primary">Sơ loại CV</span>
             </div>
-            <div style="font-size: 0.825rem; color: var(--color-text-secondary); margin-top: 4px;">
-              Mã: <code class="font-mono" id="cand-detail-code" style="color: var(--color-primary); font-weight: 600;">UV001</code> | Vị trí: <strong id="cand-detail-req-title">Senior Backend Engineer</strong>
+            <div style="font-size: 0.85rem; color: var(--color-text-secondary); margin-top: 4px;">
+              Mã: <code class="font-mono" id="cand-detail-code" style="color: var(--color-primary); font-weight: 600;">UV001</code> | Vị trí hiện tại: <strong id="cand-detail-req-title">Senior Backend Engineer</strong>
             </div>
-            <div style="font-size: 0.8rem; color: var(--color-text-muted); margin-top: 2px;">
+            <div style="font-size: 0.825rem; color: var(--color-text-muted); margin-top: 2px;">
               Email: <span id="cand-detail-email"></span> | SĐT: <span id="cand-detail-phone"></span>
             </div>
-            <div style="font-size: 0.8rem; color: var(--color-text-muted); margin-top: 2px;">
+            <div style="font-size: 0.825rem; color: var(--color-text-muted); margin-top: 2px;">
               Nguồn ứng viên: <strong id="cand-detail-source">Chưa xác định</strong>
             </div>
           </div>
@@ -54,6 +55,69 @@
             <select id="cand-detail-rejection-reason-select" class="form-input">
               <option value="">-- Chọn lý do loại --</option>
             </select>
+          </div>
+        </div>
+
+        <!-- S4-04 & S4-09: CV Document & Parse Section -->
+        <div class="panel-card" style="padding: 14px; margin-bottom: 14px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <span style="font-weight: 600; font-size: 0.875rem;">📄 Tệp CV & Bóc tách dữ liệu</span>
+            <button type="button" id="cand-detail-parse-cv-btn" class="btn btn-outline btn-xs" style="display: inline-flex; align-items: center; gap: 4px;">
+              🔍 Bóc tách thông tin từ CV (PDF)
+            </button>
+          </div>
+          <div id="cand-detail-documents-list" style="font-size: 0.85rem; color: var(--color-text-secondary);">
+            Chưa có tệp CV nào được tải lên.
+          </div>
+
+          <!-- Parsed Data Preview Panel (Non-destructive) -->
+          <div id="cand-detail-parsed-box" class="hidden" style="margin-top: 12px; padding: 12px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px;">
+            <div style="font-weight: 600; color: #166534; margin-bottom: 6px; font-size: 0.85rem;">
+              ✅ Kết quả bóc tách tự động (Chỉ để tham khảo, không tự động ghi đè):
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; font-size: 0.825rem;">
+              <div><strong>Họ tên:</strong> <span id="parsed-cand-name">—</span></div>
+              <div><strong>Email:</strong> <span id="parsed-cand-email">—</span></div>
+              <div><strong>SĐT:</strong> <span id="parsed-cand-phone">—</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- S4-09: Unified Applications History (Tất cả lần ứng tuyển đa vị trí) -->
+        <div class="panel-card" style="padding: 14px; margin-bottom: 14px;">
+          <div style="font-weight: 600; font-size: 0.875rem; margin-bottom: 8px;">
+            💼 Lịch sử các lần ứng tuyển đa vị trí
+          </div>
+          <div id="cand-detail-unified-apps" style="font-size: 0.85rem;">
+            Đang tải lịch sử ứng tuyển...
+          </div>
+        </div>
+
+        <!-- Candidate Tags Section -->
+        <div class="panel-card" style="padding: 14px; margin-bottom: 14px;">
+          <div style="font-weight: 600; font-size: 0.875rem; margin-bottom: 8px;">
+            🏷️ Nhãn ứng viên (Candidate Tags)
+          </div>
+          <div id="cand-detail-tags-list" style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px;">
+            <!-- Injected by JS -->
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <input type="text" id="cand-detail-new-tag-input" class="form-input form-input-sm" placeholder="Thêm nhãn mới (vd: Tiềm năng, Java Senior)..." style="flex: 1;" />
+            <button type="button" id="cand-detail-add-tag-btn" class="btn btn-outline btn-sm">Thêm nhãn</button>
+          </div>
+        </div>
+
+        <!-- Candidate Notes Section -->
+        <div class="panel-card" style="padding: 14px; margin-bottom: 14px;">
+          <div style="font-weight: 600; font-size: 0.875rem; margin-bottom: 8px;">
+            📝 Ghi chú nội bộ (Recruiter / Hiring Manager Notes)
+          </div>
+          <div id="cand-detail-notes-list" style="max-height: 160px; overflow-y: auto; margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px;">
+            <!-- Injected by JS -->
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <input type="text" id="cand-detail-new-note-input" class="form-input form-input-sm" placeholder="Nhập ghi chú nội bộ cho ứng viên..." style="flex: 1;" />
+            <button type="button" id="cand-detail-add-note-btn" class="btn btn-primary btn-sm">Thêm ghi chú</button>
           </div>
         </div>
 
