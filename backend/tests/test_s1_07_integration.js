@@ -129,13 +129,13 @@ async function runTests() {
     const candidateForbiddenRes = await request({
       hostname: 'localhost',
       port: TEST_PORT,
-      path: '/api/v1/recruitment/candidates/test-list',
+      path: '/api/v1/admin/users',
       method: 'GET',
       headers: { 'Authorization': `Bearer ${candidateToken}` }
     });
-    assert.strictEqual(candidateForbiddenRes.status, 403, 'Candidate xem pipeline phải bị từ chối 403');
+    assert.strictEqual(candidateForbiddenRes.status, 403, 'Candidate không được xem danh sách người dùng');
     assert.strictEqual(candidateForbiddenRes.body.code, 'FORBIDDEN_PERMISSION_DENIED');
-    assert.strictEqual(candidateForbiddenRes.body.requiredPermission, 'candidate.read');
+    assert.strictEqual(candidateForbiddenRes.body.requiredPermission, 'user.read');
     assert.strictEqual(candidateForbiddenRes.body.recovery.action, 'NAVIGATE_HOME');
     assert.strictEqual(candidateForbiddenRes.body.recovery.suggestedPath, '/candidate', 'suggestedPath phải là defaultHome của Candidate (/candidate)');
 

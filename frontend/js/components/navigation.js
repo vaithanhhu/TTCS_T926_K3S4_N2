@@ -3,6 +3,8 @@
   // ==============================================================================
 
   const VIEW_TITLES = {
+    'approval-configurations': 'Cấu hình luồng phê duyệt',
+    'headcount-budgets':'Chỉ tiêu & ngân sách',
     dashboard: 'Tổng quan Tuyển dụng',
     requisitions: 'Yêu cầu & Vị trí Tuyển dụng',
     candidates: 'Hồ sơ Ứng viên',
@@ -70,11 +72,15 @@
     // Scroll to top
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
+    if (viewName === 'requisitions' || viewName === 'approvals') window.ATS_REQUISITION_APPROVAL_UI?.load(viewName);
     // Load data for active view
     const token = sessionStorage.getItem('ats_token');
     if (!token) return;
 
-    if (viewName === 'dashboard') {
+    if(viewName==='headcount-budgets'){window.ATS_HEADCOUNT_BUDGET_UI.load();}
+    else if (viewName === 'approval-configurations') {
+      window.ATS_APPROVAL_CONFIGURATION_PAGE.load();
+    } else if (viewName === 'dashboard') {
       loadDashboardData();
     } else if (viewName === 'requisitions') {
       loadRequisitions();

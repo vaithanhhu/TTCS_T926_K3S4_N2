@@ -130,3 +130,147 @@
       if (e.key === 'Enter') loadCandidates();
     });
   }
+
+  // S4-07: Internal Candidate Referral Handling
+  const openReferralBtn = document.getElementById('open-referral-modal-btn');
+  const referralModal = document.getElementById('referral-modal');
+  const closeReferralBtn = document.getElementById('close-referral-modal');
+  const cancelReferralBtn = document.getElementById('btn-cancel-referral');
+  const referralForm = document.getElementById('referral-form');
+
+  if (openReferralBtn && referralModal) {
+    openReferralBtn.addEventListener('click', async () => {
+      const token = sessionStorage.getItem('ats_token');
+      if (!token) return;
+
+      const reqSelect = document.getElementById('referral-req-select');
+      const alert = document.getElementById('referral-alert');
+      if (alert) alert.classList.add('hidden');
+      if (referralForm) referralForm.reset();
+
+      // Populate open requisitions
+      if (reqSelect) {
+        reqSelect.innerHTML = '<option value="">-- Chọn vị trí đang tuyển dụng --</option>';
+        try {
+          const res = await window.ATS_API.getRequisitionsApi(token, { status: 'OPEN' });
+          const reqs = res.ok && res.data?.requisitions ? res.data.requisitions : (currentRequisitionsList || []);
+          const activeReqs = reqs.filter(r => ['OPEN', 'IN_PROGRESS'].includes(r.status));
+          activeReqs.forEach(r => {
+            const opt = document.createElement('option');
+            opt.value = r.id;
+            opt.textContent = `${r.code} - ${r.title} (${r.departmentName || r.department_name || ''})`;
+            reqSelect.appendChild(opt);
+          });
+        } catch {
+          // Fallback to currentRequisitionsList
+          (currentRequisitionsList || []).forEach(r => {
+            const opt = document.createElement('option');
+            opt.value = r.id;
+            opt.textContent = `${r.code} - ${r.title}`;
+            reqSelect.appendChild(opt);
+          });
+        }
+      }
+
+      referralModal.classList.remove('hidden');
+    });
+  }
+
+  function closeReferralModal() {
+    if (referralModal) referralModal.classList.add('hidden');
+  }
+
+  if (closeReferralBtn) closeReferralBtn.addEventListener('click', closeReferralModal);
+  if (cancelReferralBtn) cancelReferralBtn.addEventListener('click', closeReferralModal);
+
+  if (referralForm) {
+    referralForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const token = sessionStorage.getItem('ats_token');
+      const alert = document.getElementById('referral-alert');
+      if (alert) alert.classList.add('hidden');
+
+      const reqId = document.getElementById('referral-req-select')?.value;
+      const fullName = document.getElementById('referral-fullname')?.value.trim();
+      const email = document.getElementById('referral-email')?.value.trim();
+      const phone = document.getElementById('referral-phone')?.value.trim();
+      const notes = document.getElementById('referral-notes')?.value.trim();
+      const fileInput = document.getElementById('referral-cvfile');
+
+      if (!reqId) {
+        showToast('warning', 'Thiếu thông tin', 'Vui lòng chọn vị trí tuyển dụng.');
+        return;
+      }
+      if (!fullName) {
+        showToast('warning', 'Thiếu thông tin', 'Vui lòng nhập họ và tên ứng viên.');
+        return;
+      }
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        showToast('warning', 'Email không hợp lệ', 'Vui lòng nhập email hợp lệ.');
+        return;
+      }
+      if (!phone || phone.length < 8) {
+        showToast('warning', 'SĐT không hợp lệ', 'Vui lòng nhập số điện thoại hợp lệ.');
+        return;
+      }
+      if (!fileInput?.files?.length) {
+        showToast('warning', 'Thiếu CV', 'Vui lòng tải lên tệp CV đính kèm.');
+        return;
+      }
+
+      const file = fileInput.files[0];
+      const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
+      if (!['.pdf', '.docx'].includes(ext)) {
+        showToast('danger', 'Định dạng CV sai', 'Chỉ chấp nhận tệp định dạng PDF hoặc DOCX.');
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        showToast('danger', 'CV quá lớn', 'Dung lượng tệp CV không được vượt quá 10MB.');
+        return;
+      }
+
+      const submitBtn = document.getElementById('btn-submit-referral');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Đang gửi...';
+      }
+
+      try {
+        const formData = new FormData();
+        formData.append('requisitionId', reqId);
+        formData.append('fullName', fullName);
+        formData.append('email', email);
+        formData.append('phoneNumber', phone);
+        formData.append('notes', notes || '');
+        formData.append('cvFile', file);
+
+        const res = await window.ATS_API.referCandidateApi(token, formData);
+        if (res.ok && res.data?.success) {
+          showToast('success', 'Giới thiệu thành công', 'Đã lưu thông tin giới thiệu ứng viên nội bộ.');
+          closeReferralModal();
+          loadCandidates();
+        } else {
+          if (alert) {
+            alert.textContent = res.data?.message || 'Không thể gửi giới thiệu ứng viên.';
+            alert.className = 'alert alert-danger';
+            alert.style.background = '#fee2e2';
+            alert.style.color = '#991b1b';
+            alert.classList.remove('hidden');
+          }
+        }
+      } catch (err) {
+        if (alert) {
+          alert.textContent = 'Lỗi kết nối khi gửi giới thiệu.';
+          alert.className = 'alert alert-danger';
+          alert.style.background = '#fee2e2';
+          alert.style.color = '#991b1b';
+          alert.classList.remove('hidden');
+        }
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Gửi giới thiệu';
+        }
+      }
+    });
+  }

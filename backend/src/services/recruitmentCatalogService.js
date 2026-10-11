@@ -376,11 +376,12 @@ class RecruitmentCatalogService {
         ) AS work_mode_count
     `).get(id, id, id, id));
 
+    const jobRefs=require('../config/config').JOB_POSTING_DRAFTS_ENABLED?(await this.db.prepare('SELECT SUM(CASE WHEN work_location_id=? THEN 1 ELSE 0 END) AS location_count,SUM(CASE WHEN work_mode_id=? THEN 1 ELSE 0 END) AS mode_count FROM job_postings WHERE work_location_id=? OR work_mode_id=?').get(id,id,id,id)):null;
     return {
       candidateSource: Number(row.candidate_source_count || 0),
       rejectionReason: Number(row.rejection_reason_count || 0),
-      workLocation: Number(row.work_location_count || 0),
-      workMode: Number(row.work_mode_count || 0)
+      workLocation: Number(row.work_location_count || 0)+Number(jobRefs?.location_count||0),
+      workMode: Number(row.work_mode_count || 0)+Number(jobRefs?.mode_count||0)
     };
   }
 

@@ -97,73 +97,19 @@ async function seedDatabase(db, options = {}) {
   }
 
   // 3. Seed Role_Permissions (AC-01 RBAC Matrix for 7 roles)
-  const rolePermissionsMatrix = {
-    ADMIN: [
-      'user.read', 'user.create', 'user.update', 'user.delete',
-      'role.read', 'role.assign',
-      'account.lock', 'account.unlock',
-      'requisition.read',
-      'department.read', 'department.manage',
-      'competency.read', 'competency.manage',
-      'question_bank.read', 'question_bank.manage',
-      'recruitment_catalog.read', 'recruitment_catalog.manage',
-      'career_page.read', 'career_page.manage',
-      'candidate.read', 'candidate.create', 'candidate.update',
-      'interview.read',
-      'offer.read',
-      'audit.read'
-    ],
-    HR_MANAGER: [
-      'user.read',
-      'role.read',
-      'requisition.read', 'requisition.create', 'requisition.approve',
-      'department.read', 'department.manage',
-      'competency.read', 'competency.manage',
-      'question_bank.read', 'question_bank.manage',
-      'recruitment_catalog.read', 'recruitment_catalog.manage',
-      'career_page.read', 'career_page.manage',
-      'candidate.read', 'candidate.update',
-      'interview.read',
-      'offer.read', 'offer.create', 'offer.approve', 'salary_range.read'
-    ],
-    RECRUITER: [
-      'requisition.read',
-      'recruitment_catalog.read',
-      'candidate.read', 'candidate.create', 'candidate.update',
-      'interview.read',
-      'offer.read', 'offer.create'
-    ],
-    HIRING_MGR: [
-      'requisition.read', 'requisition.create',
-      'recruitment_catalog.read',
-      'candidate.read',
-      'interview.read', 'interview.evaluate'
-    ],
-    INTERVIEWER: [
-      'interview.read', 'interview.evaluate',
-      'question_bank.read'
-    ],
-    APPROVER: [
-      'requisition.read', 'requisition.approve',
-      'offer.read', 'offer.approve'
-    ],
-    CANDIDATE: [
-      'candidate.create', 'offer.read'
-    ]
-  };
+  await require('./sync-permissions').synchronizePermissions(database);
+  const rolePermissionsMatrix = require('./sync-permissions').ROLE_PERMISSIONS;
 
-  const deleteRolePerms = database.prepare('DELETE FROM role_permissions WHERE role_id = (SELECT id FROM roles WHERE code = ?)');
   const insertRolePerm = database.prepare(`
     INSERT INTO role_permissions (role_id, permission_id)
     VALUES (
       (SELECT id FROM roles WHERE code = ?),
       (SELECT id FROM permissions WHERE code = ?)
-    )
+    ) ON CONFLICT DO NOTHING
   `);
 
   let totalRolePerms = 0;
   for (const [roleCode, permCodes] of Object.entries(rolePermissionsMatrix)) {
-    (await deleteRolePerms.run(roleCode));
     for (const permCode of permCodes) {
       (await insertRolePerm.run(roleCode, permCode));
       totalRolePerms++;
@@ -634,6 +580,7 @@ async function seedDatabase(db, options = {}) {
   (await ensureDepartmentFeature(database));
   (await ensureCompetencyFeature(database));
   (await ensureRequisitionDraftFeature(database));
+  await require('./sync-permissions').synchronizePermissions(database);
 
   console.log(`[Seed] Seeded ${roles.length} roles, ${permissions.length} permissions, ${totalRolePerms} role-permissions mappings, ${users.length} users, ${requisitions.length} requisitions, ${candidates.length} candidates, ${interviews.length} interviews, and ${offers.length} offers successfully with secure password hashing.`);
 }

@@ -112,7 +112,7 @@ async function runTests() {
     assert.strictEqual(interviewerMenuRes.status, 200);
     const interviewerPaths = interviewerMenuRes.body.menuItems.map(m => m.path);
     assert.ok(interviewerPaths.includes('/interviews'), 'Interviewer phải có menu /interviews');
-    assert.ok(!interviewerPaths.includes('/candidates'), 'AC-02: Interviewer không có /candidates');
+    assert.ok(interviewerPaths.includes('/candidates'), 'AC-02: Interviewer được đọc ứng viên của vòng được phân công');
     assert.ok(!interviewerPaths.includes('/admin/users'), 'AC-02: Interviewer không có /admin/users');
 
     // 4. APPROVER
@@ -128,7 +128,7 @@ async function runTests() {
     const approverPaths = approverMenuRes.body.menuItems.map(m => m.path);
     assert.ok(approverPaths.includes('/approvals'), 'Approver phải có menu /approvals');
     assert.ok(!approverPaths.includes('/admin/users'), 'AC-02: Approver không có /admin/users');
-    assert.ok(!approverPaths.includes('/candidates'), 'AC-02: Approver không có /candidates');
+    assert.ok(approverPaths.includes('/candidates'), 'AC-02: Approver có quyền đọc hồ sơ ứng viên');
 
     // 5. CANDIDATE
     const candidateToken = await loginUser('candidate@example.com');

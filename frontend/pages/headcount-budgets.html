@@ -1,0 +1,28 @@
+<div id="headcount-budgets-view" class="hidden">
+ <div class="view-header"><div class="view-title-group"><h2>Chỉ tiêu &amp; ngân sách headcount</h2><p>Chỉ tiêu tuyển năm gồm tăng mới và thay thế. Lương dự kiến từ tháng cần người đến hết năm, VND.</p></div></div>
+ <div id="s304-alert" class="alert alert-danger hidden" role="alert"><span id="s304-message"></span></div>
+ <div class="panel-card" style="padding:var(--space-6);">
+  <label class="form-label" for="s304-year">Năm ngân sách</label><input id="s304-year" class="form-input" type="number" min="1000" max="9999" required>
+  <label class="form-label" for="s304-department">Phòng ban</label><select id="s304-department" class="form-select"></select>
+  <button id="s304-refresh" type="button" class="btn btn-outline">Tải lại</button>
+  <div class="table-wrapper"><table class="data-table"><thead><tr><th>Phòng ban</th><th>Phiên bản</th><th>Headcount</th><th>Ngân sách VND/năm</th></tr></thead><tbody id="s304-list"></tbody></table></div>
+  <p id="s304-usage" role="status"></p>
+ </div>
+ <form id="s304-form" class="panel-card hidden" style="padding:var(--space-6);margin-top:var(--space-6);">
+  <h3>Công bố chỉ tiêu / Phiên bản mới</h3>
+  <label class="form-label" for="s304-headcount">Chỉ tiêu tuyển trong năm</label><input id="s304-headcount" class="form-input" type="number" min="0" required>
+  <label class="form-label" for="s304-salary">Ngân sách lương VND/năm</label><input id="s304-salary" class="form-input" type="number" min="0" required>
+  <label class="form-label" for="s304-change-reason">Ghi chú thay đổi</label><textarea id="s304-change-reason" class="form-input"></textarea>
+  <button id="s304-save" type="submit" class="btn btn-primary">Lưu phiên bản mới</button>
+ </form>
+ <form id="s304-exception-form" class="panel-card hidden" style="padding:var(--space-6);margin-top:var(--space-6);">
+  <h3>Xác nhận ngoại lệ cho yêu cầu</h3><p>Chỉ xác nhận cho số lượng, ngày cần người và lương đề xuất cụ thể. Không tự gửi hoặc duyệt hồ sơ.</p>
+  <label class="form-label" for="s304-exception-id">Mã định danh yêu cầu tuyển dụng</label><input id="s304-exception-id" class="form-input" required>
+  <label class="form-label" for="s304-exception-count">Số lượng đề xuất</label><input id="s304-exception-count" class="form-input" type="number" min="1" required>
+  <label class="form-label" for="s304-exception-max">Lương tối đa đề xuất/người/tháng</label><input id="s304-exception-max" class="form-input" type="number" min="0" required>
+  <label class="form-label" for="s304-exception-date">Ngày cần người</label><input id="s304-exception-date" class="form-input" type="date" required>
+  <label class="form-label" for="s304-exception-reason">Lý do ngoại lệ</label><textarea id="s304-exception-reason" class="form-input" maxlength="4000" required></textarea>
+  <button id="s304-exception-save" type="submit" class="btn btn-primary">Xác nhận ngoại lệ</button>
+ </form>
+ <div class="panel-card" style="padding:var(--space-6);margin-top:var(--space-6);"><h3>Lịch sử chỉ tiêu và ngoại lệ</h3><div id="s304-history" style="white-space:pre-wrap;overflow-wrap:anywhere;"></div></div>
+</div>

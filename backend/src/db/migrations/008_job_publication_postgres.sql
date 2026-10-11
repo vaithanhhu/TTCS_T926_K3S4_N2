@@ -1,0 +1,16 @@
+ALTER TABLE job_postings DROP CONSTRAINT job_postings_status_check;
+ALTER TABLE job_postings ADD CONSTRAINT job_postings_status_check CHECK(status IN ('DRAFT','PENDING_APPROVAL','APPROVED','REJECTED','PUBLISHED','PAUSED','UNPUBLISHED'));
+ALTER TABLE job_postings ADD COLUMN content_version INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE job_postings ADD COLUMN approved_content_version INTEGER;
+ALTER TABLE job_postings ADD COLUMN approved_content_hash TEXT;
+ALTER TABLE job_postings ADD COLUMN approved_by TEXT;
+ALTER TABLE job_postings ADD COLUMN approved_at TIMESTAMPTZ;
+ALTER TABLE job_postings ADD COLUMN published_by TEXT;
+CREATE TABLE job_posting_content_versions(posting_id TEXT NOT NULL REFERENCES job_postings(id),content_version INTEGER NOT NULL CHECK(content_version>0),document_json TEXT NOT NULL,document_hash TEXT NOT NULL,content_hash TEXT NOT NULL,source_hash TEXT NOT NULL,source_submission_id TEXT NOT NULL REFERENCES requisition_approval_submissions(id),actor_id TEXT NOT NULL,actor_name TEXT NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(posting_id,content_version));
+CREATE TABLE job_posting_publication_events(id TEXT PRIMARY KEY,posting_id TEXT NOT NULL REFERENCES job_postings(id),event_version INTEGER NOT NULL,content_version INTEGER NOT NULL,action TEXT NOT NULL,before_status TEXT NOT NULL,after_status TEXT NOT NULL,actor_id TEXT NOT NULL,actor_name TEXT NOT NULL,reason TEXT,request_id TEXT,fingerprint TEXT,response_json TEXT NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(posting_id,event_version),UNIQUE(actor_id,request_id));
+CREATE INDEX job_publication_events_posting ON job_posting_publication_events(posting_id,event_version);
+CREATE FUNCTION job_publication_history_guard() RETURNS TRIGGER LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'JOB_PUBLICATION_HISTORY_IMMUTABLE';END;$$;
+CREATE TRIGGER job_posting_content_versions_immutable BEFORE UPDATE OR DELETE ON job_posting_content_versions FOR EACH ROW EXECUTE FUNCTION job_publication_history_guard();
+CREATE TRIGGER job_posting_content_versions_no_truncate BEFORE TRUNCATE ON job_posting_content_versions FOR EACH STATEMENT EXECUTE FUNCTION job_publication_history_guard();
+CREATE TRIGGER job_posting_publication_events_immutable BEFORE UPDATE OR DELETE ON job_posting_publication_events FOR EACH ROW EXECUTE FUNCTION job_publication_history_guard();
+CREATE TRIGGER job_posting_publication_events_no_truncate BEFORE TRUNCATE ON job_posting_publication_events FOR EACH STATEMENT EXECUTE FUNCTION job_publication_history_guard();

@@ -133,10 +133,11 @@ async function main() {
     assert.ok(options.data.jobTitles.some(row => row.id === job.id)); assert.ok(options.data.s210Departments.some(row => row.id === department.id));
     assert.ok(!options.data.s210Departments.some(row => row.id === foreignDepartment.id));
     assert.equal((await api('POST', '/requisitions', tokens.hiring, { ...valid, departmentId: foreignDepartment.id })).status, 403);
-    assert.equal((await api('GET', '/departments')).status, 403); assert.equal((await api('POST', '/job-titles', tokens.hiring, {})).status, 403);
+    assert.equal((await api('GET', '/departments')).status, 200); assert.equal((await api('POST', '/job-titles', tokens.hiring, {})).status, 403);
   });
   await test('26 Roles without create/draft-write permission get 403; unauthenticated gets 401', async () => {
-    for (const role of ['recruiter', 'interviewer', 'admin']) assert.equal((await api('POST', '/requisitions', tokens[role], valid)).status, 403);
+    assert.equal((await api('POST', '/requisitions', tokens.admin, valid)).status, 201);
+    for (const role of ['recruiter', 'interviewer']) assert.equal((await api('POST', '/requisitions', tokens[role], valid)).status, 403);
     assert.equal((await api('POST', '/requisitions', null, valid)).status, 401);
     const empty = await api('POST', '/requisitions', tokens.hiring, { status: 'DRAFT' });
     assert.equal((await api('PUT', '/requisitions/' + empty.data.data.id, tokens.recruiter, { title: 'No access' })).status, 403);
@@ -287,15 +288,16 @@ async function main() {
   });
   await test('44 Legacy list access never exposes S2-10 data to roles without requisition.read', async () => {
     for (const role of ['interviewer', 'candidate']) {
-      const res = await api('GET', '/requisitions', tokens[role]); assert.equal(res.status, 200);
-      assert.ok(res.data.items.every(row => row.formVersion !== 'S2-10'));
+      const res = await api('GET', '/requisitions', tokens[role]); assert.equal(res.status, 403);
+      assert.equal(Object.hasOwn(res.data,'items'), false);
       assert.equal((await api('GET', '/requisitions/' + draft.id, tokens[role])).status, 403);
     }
   });
   await test('45 Draft form retains stored selections missing from current dropdown choices', async () => {
     const selected = ui.nodes.get('create-req-recruiter-select'); selected.tagName = 'SELECT'; selected.options = [];
-    ui.storage.set('ats_token', tokens.hiring);
-    const res = await api('POST', '/requisitions', tokens.hiring, { status: 'DRAFT', recruiterId: 'usr-recruiter' }); assert.equal(res.status, 201);
+    assert.equal((await api('POST','/requisitions',tokens.hiring,{status:'DRAFT',recruiterId:'usr-recruiter'})).status,403);
+    ui.storage.set('ats_token', tokens.hr);
+    const res = await api('POST', '/requisitions', tokens.hr, { status: 'DRAFT', recruiterId: 'usr-recruiter' }); assert.equal(res.status, 201);
     await ui.context.window.__S210_TEST__.openCreateReqModal(res.data.data);
     assert.ok(selected.innerHTML.includes('value="usr-recruiter"')); assert.equal(selected.value, 'usr-recruiter');
   });
@@ -310,7 +312,7 @@ async function main() {
   await test('46 Hiring Manager receives no standard salary in options or salary permission', async () => {
     const options = await api('GET', '/requisitions/options'); assertNoStandardSalary(options.data);
     const perms = await api('GET', '/auth/permissions'); assert.ok(!perms.data.permissions.includes('salary_range.read'));
-    assert.equal((await api('GET', '/job-titles')).status, 403);
+    const metadata = await api('GET', '/job-titles'); assert.equal(metadata.status, 200); assertNoStandardSalary(metadata.data);
   });
   await test('47 Within-range preview and create return only the safe classification', async () => {
     const before = (await db.prepare('SELECT COUNT(*) AS n FROM requisitions').get()).n;
@@ -382,7 +384,9 @@ async function main() {
   });
   await test('55 Salary-check API retains default-deny and rejects invalid proposal inputs', async () => {
     assert.equal((await preview(18000000, 23000000, null)).status, 401);
-    for (const role of ['recruiter', 'interviewer', 'admin']) assert.equal((await preview(18000000, 23000000, tokens[role])).status, 403);
+    for (const role of ['recruiter', 'interviewer']) assert.equal((await preview(18000000, 23000000, tokens[role])).status, 403);
+    const adminPreview = await preview(18000000, 23000000, tokens.admin);
+    assert.equal(adminPreview.status, 200); assertNoStandardSalary(adminPreview.data);
     for (const [min, max] of [['bad', 23000000], [-1, 23000000], [24000000, 18000000], ['', 23000000]]) {
       const res = await preview(min, max); assert.equal(res.status, 400); assertNoStandardSalary(res.data);
     }

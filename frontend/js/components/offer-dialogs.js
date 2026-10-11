@@ -135,6 +135,7 @@
     if (startDateEl) startDateEl.textContent = startDateVal ? new Date(startDateVal).toLocaleDateString('vi-VN') : 'Thỏa thuận';
     if (approverEl) approverEl.textContent = approverName;
     if (idInput) idInput.value = o.id;
+    if(o.capabilities){btnActionApproveOffer?.classList.toggle('hidden',!o.capabilities.canApprove);btnActionRejectOffer?.classList.toggle('hidden',!o.capabilities.canApprove);btnActionSendOffer?.classList.toggle('hidden',!o.capabilities.canSend);}
 
     if (offerDetailModal) offerDetailModal.classList.remove('hidden');
   }

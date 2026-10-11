@@ -15,6 +15,16 @@
     clearJobTitleSalaryState();
     clearRequisitionSalaryState();
     currentAuthenticatedUser = user;
+    for (const [id, permission] of [
+      ['open-create-candidate-modal-btn', 'candidate.create'], ['cand-detail-save-stage-btn', 'candidate.update'],
+      ['open-create-interview-modal-btn', 'interview.create'], ['cand-detail-schedule-btn', 'interview.create'],
+      ['open-create-offer-modal-btn', 'offer.create'],
+      ['cand-detail-offer-btn', 'offer.create'], ['btn-action-send-offer', 'offer.create'],
+      ['btn-action-approve-offer', 'offer.approve'], ['btn-action-reject-offer', 'offer.approve'],
+      ['department-new-btn','department.manage'],['department-save-btn','department.manage'],
+      ['competency-framework-save-btn','competency.manage'],['competency-add-criterion-btn','competency.manage'],['job-title-save-btn','competency.manage']
+    ]) document.getElementById(id)?.classList.toggle('hidden', !user.permissions?.includes(permission));
+    document.getElementById('submit-interview-eval-btn')?.classList.toggle('hidden',!user.permissions?.some(permission=>['interview.update','interview.evaluate'].includes(permission)));
     currentAuthenticatedHome = window.ATS_ROUTER?.resolveInternal(defaultHome)?.auth ? defaultHome : null;
     window.ATS_MOBILE_NAVIGATION.updateActions();
     if (user.mustChangePassword) {
@@ -74,6 +84,8 @@
         const allowedPaths = res.data.menuItems.map(m => m.path);
         currentAllowedPaths = new Set(allowedPaths);
         const navItemMap = [
+          { path: '/admin/approval-configurations', id: 'nav-item-approval-configurations' },
+          {path:'/admin/headcount-budgets',id:'nav-item-headcount-budgets'},
           { path: '/dashboard', id: 'nav-item-dashboard' },
           { path: '/requisitions', id: 'nav-item-requisitions' },
           { path: '/candidates', id: 'nav-item-candidates' },
@@ -120,6 +132,12 @@
         if (token !== sessionStorage.getItem('ats_token')) return;
         if (res.ok && res.data && res.data.success) {
           sessionStorage.setItem('ats_expires_at', res.data.data.expiresAt);
+          const user = res.data.data.user;
+          const authorization = value => JSON.stringify([value?.roles, value?.permissions, value?.mustChangePassword]);
+          if (user && authorization(user) !== authorization(currentAuthenticatedUser)) {
+            sessionStorage.setItem('ats_user', JSON.stringify(user));
+            await setupAuthenticatedSession(user, user.defaultHome);
+          }
         } else if (res.data && res.data.code === 'SESSION_EXPIRED') {
           handleSessionExpired();
         }

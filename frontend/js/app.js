@@ -1,4 +1,7 @@
 /** Application bootstrap; page markup and behavior live in pages/ and components/. */
+document.addEventListener('submit', event => {
+  if (event.target?.id === 'login-form' && document.documentElement.dataset.appReady !== 'true') event.preventDefault();
+}, true);
 document.addEventListener('DOMContentLoaded', async () => {
   try {
     const response = await fetch('/routes.json');
@@ -27,7 +30,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       authenticated: () => !!currentAuthenticatedUser && !!sessionStorage.getItem('ats_token'),
       allowed: route => {
         if (route.menu) return currentAllowedPaths.has(route.menuPath || route.path);
-        if (route.view === 'reports') return !currentAuthenticatedUser.roles.includes('CANDIDATE');
+        if (route.view === 'reports') return currentAllowedPaths.has('/dashboard');
         return true;
       },
       home: getAuthenticatedHome,
@@ -43,6 +46,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     await checkExistingSession();
     loadPublicCareerPage();
     document.documentElement.dataset.appReady = 'true';
+    const loginSubmit = document.getElementById('submit-btn');
+    if (loginSubmit) loginSubmit.disabled = false;
   } catch (error) {
     console.error('[ATS Bootstrap]', error);
     document.body.textContent = 'Không thể tải ứng dụng. Vui lòng tải lại trang.';

@@ -7,7 +7,7 @@
   const scheduleInterviewAlert = document.getElementById('schedule-interview-alert');
   const scheduleInterviewAlertMsg = document.getElementById('schedule-interview-alert-msg');
 
-  function openScheduleInterviewForCandidate(preselectedCandidateId = '') {
+  async function openScheduleInterviewForCandidate(preselectedCandidateId = '') {
     if (scheduleInterviewModal) scheduleInterviewModal.classList.remove('hidden');
     if (scheduleInterviewForm) scheduleInterviewForm.reset();
     if (scheduleInterviewAlert) scheduleInterviewAlert.classList.add('hidden');
@@ -33,13 +33,11 @@
     // Populate interviewers
     const interviewerSelect = document.getElementById('schedule-interviewer-select');
     if (interviewerSelect) {
-      interviewerSelect.innerHTML = `
-        <option value="">-- Chọn cán bộ phỏng vấn --</option>
-        <option value="usr-interviewer">Nguyễn Văn D - Interviewer (Kỹ thuật)</option>
-        <option value="usr-hiring-mgr">Lê Thị C - Hiring Manager (Trưởng bộ phận)</option>
-        <option value="usr-recruiter">Trần Thị B - Recruiter (Tuyển dụng)</option>
-        <option value="usr-admin">Administrator - Quản trị viên</option>
-      `;
+      const token=sessionStorage.getItem('ats_token');
+      const options=await window.ATS_API.getInterviewOptionsApi(token);
+      if(token!==sessionStorage.getItem('ats_token'))return;
+      interviewerSelect.innerHTML='<option value="">-- Chọn cán bộ phỏng vấn --</option>'+(options.data?.interviewers||[]).map(user=>`<option value="${escapeDepartmentHtml(user.id)}">${escapeDepartmentHtml(user.fullName)}</option>`).join('');
+      if(!options.ok)showToast('danger','Người phỏng vấn',options.data?.message||'Không thể tải người phỏng vấn.');
     }
 
     // Pre-fill time with tomorrow 09:00 AM
@@ -56,7 +54,7 @@
 
   if (openCreateInterviewModalBtn) {
     openCreateInterviewModalBtn.addEventListener('click', () => {
-      openScheduleInterviewForCandidate();
+      return openScheduleInterviewForCandidate();
     });
   }
 
@@ -152,6 +150,13 @@
     if (statusSelect) statusSelect.value = iv.status || 'SCHEDULED';
     if (scoreSelect) scoreSelect.value = iv.score || 4;
     if (feedbackInput) feedbackInput.value = iv.feedback || '';
+    const permissions=currentAuthenticatedUser?.permissions||[];
+    const evaluate=permissions.includes('interview.evaluate')&&(currentAuthenticatedUser.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))||iv.interviewer?.id===currentAuthenticatedUser.id);
+    const operate=permissions.includes('interview.update');
+    if(scoreSelect)scoreSelect.disabled=!evaluate;
+    if(feedbackInput)feedbackInput.disabled=!evaluate;
+    if(statusSelect)statusSelect.disabled=!evaluate&&!operate;
+    const submit=document.getElementById('submit-interview-eval-btn');if(submit){submit.classList.toggle('hidden',!evaluate&&!operate);submit.textContent=evaluate?'Lưu đánh giá':'Cập nhật trạng thái';}
 
     if (interviewDetailModal) interviewDetailModal.classList.remove('hidden');
   }
@@ -173,7 +178,8 @@
       if (!token || !id) return;
 
       try {
-        const res = await window.ATS_API.updateInterviewStatusApi(token, id, status, feedback, score);
+        const canEvaluate=!document.getElementById('int-eval-feedback').disabled;
+        const res = await window.ATS_API.updateInterviewStatusApi(token, id, status, canEvaluate?feedback:undefined, canEvaluate?score:undefined);
         if (res.ok && res.data && res.data.success) {
           closeInterviewDetail();
           showToast('success', 'Đánh giá hoàn tất', 'Đã lưu biên bản và cập nhật kết quả phỏng vấn.');

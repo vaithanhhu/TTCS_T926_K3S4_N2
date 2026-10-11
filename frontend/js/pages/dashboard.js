@@ -81,7 +81,7 @@
           } else {
             recentReqsBody.innerHTML = reqs.map(r => {
               const statusBadge = r.status === 'OPEN' ? 'badge-primary' : (r.status === 'IN_PROGRESS' ? 'badge-warning' : 'badge-neutral');
-              const statusText = r.status === 'OPEN' ? 'Đang mở' : (r.status === 'IN_PROGRESS' ? 'Đang tuyển' : 'Đã đóng');
+              const statusText = r.status === 'PAUSED' ? 'Tạm dừng' : r.status === 'CANCELLED' ? 'Huỷ' : r.status === 'OPEN' ? 'Đang mở' : (r.status === 'IN_PROGRESS' ? 'Đang tuyển' : 'Đã đóng');
               const deptName = r.department || r.department_name || r.departmentName || '';
               return `
                 <tr>
