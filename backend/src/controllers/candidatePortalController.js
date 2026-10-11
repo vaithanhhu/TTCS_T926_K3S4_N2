@@ -76,6 +76,14 @@ class CandidatePortalController {
         return this.send(res, 200, { success: true, data: items[0] });
       }
 
+      // 2. S4-03: Apply Job (Upload CV, Honeypot, Rate Limit, Tracking Code, Email)
+      if (pathname === '/api/v1/public/applications' && method === 'POST') {
+        const ipAddress = this.getClientIp(req);
+        const { fields, file } = await parseMultipartOrJson(req);
+        const result = await this.service.submitApplication(fields, file, ipAddress);
+        return this.send(res, result.statusCode || (result.success ? 201 : 400), result);
+      }
+
 
       return this.send(res, 404, { success: false, code: 'NOT_FOUND', message: 'Tài nguyên không tồn tại.' });
     } catch (err) {

@@ -335,13 +335,133 @@
   }
 
   // --- Modal: Apply Job Logic ---
+  function openApplyModal(job) {
+    const modal = get('modal-apply-job');
+    const form = get('form-apply-job');
+    const successScreen = get('apply-success-screen');
+    const alert = get('apply-form-alert');
+
+    if (!modal) return;
+    get('apply-job-id').value = job.id;
+    get('apply-job-title').textContent = `Ứng tuyển: ${job.title}`;
+    get('apply-job-subtitle').textContent = [job.departmentName, job.workLocation].filter(Boolean).join(' • ');
+
+    // Reset Form
+    form.reset();
+    form.classList.remove('hidden');
+    if (successScreen) successScreen.classList.add('hidden');
+    if (alert) alert.classList.add('hidden');
+    clearFormErrors();
+
+    modal.classList.remove('hidden');
+  }
+
+  function closeApplyModal() {
+    get('modal-apply-job')?.classList.add('hidden');
+  }
+
+  function clearFormErrors() {
+    ['fullname', 'email', 'phone', 'cvfile'].forEach(k => {
+      const el = get(`err-apply-${k}`);
+      if (el) el.classList.add('hidden');
+    });
+  }
+
+  async function handleApplySubmit(e) {
+    e.preventDefault();
+    clearFormErrors();
+    const alert = get('apply-form-alert');
+    alert.classList.add('hidden');
+
+    const fullName = get('apply-fullname').value.trim();
+    const email = get('apply-email').value.trim();
+    const phone = get('apply-phone').value.trim();
+    const fileInput = get('apply-cvfile');
+    const honeypot = get('apply-honeypot').value.trim();
+
+    let hasError = false;
+    if (!fullName) {
+      showError('apply-fullname', 'Vui lòng nhập họ và tên.');
+      hasError = true;
+    }
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      showError('apply-email', 'Vui lòng nhập email hợp lệ.');
+      hasError = true;
+    }
+    if (!phone || phone.length < 8) {
+      showError('apply-phone', 'Vui lòng nhập số điện thoại hợp lệ.');
+      hasError = true;
+    }
+    if (!fileInput.files || !fileInput.files.length) {
+      showError('apply-cvfile', 'Vui lòng chọn tệp CV (.pdf hoặc .docx).');
+      hasError = true;
+    } else {
+      const file = fileInput.files[0];
+      const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
+      if (!['.pdf', '.docx'].includes(ext)) {
+        showError('apply-cvfile', 'Chỉ chấp nhận tệp định dạng PDF hoặc DOCX.');
+        hasError = true;
+      } else if (file.size > 10 * 1024 * 1024) {
+        showError('apply-cvfile', 'Dung lượng tệp CV không được vượt quá 10MB.');
+        hasError = true;
+      }
+    }
+
+    if (hasError) return;
+
+    const submitBtn = get('btn-submit-apply');
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span>Đang gửi hồ sơ...</span>';
+
+    try {
+      const formData = new FormData();
+      formData.append('jobPostingId', get('apply-job-id').value);
+      formData.append('fullName', fullName);
+      formData.append('email', email);
+      formData.append('phoneNumber', phone);
+      formData.append('source', get('apply-source').value);
+      formData.append('coverLetter', get('apply-coverletter').value);
+      formData.append('cvFile', fileInput.files[0]);
+      if (honeypot) formData.append('website', honeypot);
+
+      const res = await window.ATS_API.applyJobApi(formData);
+      if (res.ok && res.data?.data) {
+        // Show Success Screen
+        get('form-apply-job').classList.add('hidden');
+        get('apply-success-screen').classList.remove('hidden');
+        get('success-tracking-code').textContent = res.data.data.trackingCode;
+      } else {
+        alert.textContent = res.data?.message || 'Không thể gửi hồ sơ. Vui lòng kiểm tra lại thông tin.';
+        alert.className = 'alert alert-danger';
+        alert.style.background = '#fee2e2';
+        alert.style.color = '#991b1b';
+        alert.classList.remove('hidden');
+      }
+    } catch (err) {
+      alert.textContent = 'Lỗi kết nối khi gửi hồ sơ. Vui lòng thử lại sau.';
+      alert.className = 'alert alert-danger';
+      alert.style.background = '#fee2e2';
+      alert.style.color = '#991b1b';
+      alert.classList.remove('hidden');
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = '<span>Gửi hồ sơ ứng tuyển</span>';
+    }
+  }
+
+  function showError(fieldId, msg) {
+    const el = get(`err-${fieldId}`);
+    if (el) {
+      el.textContent = msg;
+      el.classList.remove('hidden');
+    }
+  }
+
+  // --- Modal: Status Lookup Logic ---
 
   function openLookupModal() {}
   function closeLookupModal() {}
   function handleLookupSubmit() {}
-  function openApplyModal() {}
-  function closeApplyModal() {}
-  function handleApplySubmit() {}
   function openWithdrawModal() {}
   function closeWithdrawModal() {}
   function handleConfirmWithdraw() {}

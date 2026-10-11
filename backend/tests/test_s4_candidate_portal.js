@@ -136,6 +136,102 @@ async function runSprint4Tests() {
     // =============================================================
     // TEST S4-03: NỘP HỒ SƠ ỨNG TUYỂN KÈM CV
     // =============================================================
+    console.log('\n--- Kiểm thử S4-03: Nộp hồ sơ ứng tuyển kèm CV ---');
+    const validCandidateEmail = `cand.test.${Date.now()}@example.com`;
+    const validPdfFile = {
+      filename: 'my_cv.pdf',
+      mimeType: 'application/pdf',
+      buffer: createSamplePdfBuffer('Nguyễn Văn An\nEmail: ' + validCandidateEmail + '\nPhone: 0912345678')
+    };
+
+    // 1. Nộp hồ sơ hợp lệ thành công
+    const applyRes = await portalService.submitApplication({
+      jobPostingId: testJobId,
+      fullName: 'Nguyễn Văn An',
+      email: validCandidateEmail,
+      phoneNumber: '0912345678',
+      source: 'WEBSITE',
+      coverLetter: 'Tôi mong muốn ứng tuyển vị trí này.'
+    }, validPdfFile, '127.0.0.1');
+
+    assert.equal(applyRes.success, true, 'Nộp hồ sơ hợp lệ phải thành công');
+    assert.ok(applyRes.data.trackingCode && applyRes.data.trackingCode.startsWith('TRK-'), 'Phải sinh mã tra cứu TRK- duy nhất');
+    const generatedTrackingCode = applyRes.data.trackingCode;
+    console.log(`✓ Nộp hồ sơ hợp lệ thành công với Mã tra cứu: ${generatedTrackingCode}`);
+
+    // 2. Từ chối nộp trùng cùng vị trí với cùng email
+    const duplicateRes = await portalService.submitApplication({
+      jobPostingId: testJobId,
+      fullName: 'Nguyễn Văn An',
+      email: validCandidateEmail,
+      phoneNumber: '0912345678'
+    }, validPdfFile, '127.0.0.1');
+    assert.equal(duplicateRes.success, false, 'Phải từ chối nộp trùng cùng email vào cùng vị trí');
+    assert.equal(duplicateRes.code, 'APPLICATION_DUPLICATE_JOB');
+    console.log('✓ Chống nộp trùng email cùng vị trí hoạt động chính xác (APPLICATION_DUPLICATE_JOB)');
+
+    // 3. Từ chối tệp sai định dạng (ví dụ file .exe)
+    const invalidExtFile = {
+      filename: 'malware.exe',
+      mimeType: 'application/x-msdownload',
+      buffer: Buffer.from('malicious content')
+    };
+    const invalidExtRes = await portalService.submitApplication({
+      jobPostingId: testJobId,
+      fullName: 'Hacker',
+      email: 'hacker@example.com',
+      phoneNumber: '0999999999'
+    }, invalidExtFile, '127.0.0.1');
+    assert.equal(invalidExtRes.success, false);
+    assert.equal(invalidExtRes.code, 'CV_FILE_INVALID_EXTENSION');
+    console.log('✓ Chặn tệp sai phần mở rộng không phải PDF/DOCX');
+
+    // 4. Từ chối tệp PDF giả mạo chữ ký magic bytes
+    const fakePdfFile = {
+      filename: 'fake.pdf',
+      mimeType: 'application/pdf',
+      buffer: Buffer.from('NOT_A_REAL_PDF_MAGIC_BYTES_HEADER')
+    };
+    const fakePdfRes = await portalService.submitApplication({
+      jobPostingId: testJobId,
+      fullName: 'Test Fake',
+      email: 'fake@example.com',
+      phoneNumber: '0988888888'
+    }, fakePdfFile, '127.0.0.1');
+    assert.equal(fakePdfRes.success, false);
+    assert.equal(fakePdfRes.code, 'CV_FILE_INVALID_SIGNATURE');
+    console.log('✓ Chặn tệp PDF giả mạo sai magic bytes %PDF');
+
+    // 5. Từ chối tệp vượt quá 10MB
+    const oversizedFile = {
+      filename: 'huge_cv.pdf',
+      mimeType: 'application/pdf',
+      buffer: Buffer.alloc(11 * 1024 * 1024) // 11MB
+    };
+    const oversizedRes = await portalService.submitApplication({
+      jobPostingId: testJobId,
+      fullName: 'Test Big',
+      email: 'big@example.com',
+      phoneNumber: '0977777777'
+    }, oversizedFile, '127.0.0.1');
+    assert.equal(oversizedRes.success, false);
+    assert.equal(oversizedRes.code, 'CV_FILE_TOO_LARGE');
+    console.log('✓ Chặn tệp vượt quá dung lượng tối đa 10MB');
+
+    // 6. Kiểm tra Anti-spam IP rate limiting
+    console.log('Kiểm tra IP rate limiting (tối đa 5 lần/giờ)...');
+    const testRateIp = '198.51.100.99';
+    for (let i = 0; i < 5; i++) {
+      await portalService.checkRateLimit(testRateIp, 'APPLY', 5);
+    }
+    const rateLimitCheck = await portalService.checkRateLimit(testRateIp, 'APPLY', 5);
+    assert.equal(rateLimitCheck.allowed, false, 'Lần thứ 6 từ cùng IP phải bị chặn');
+    assert.equal(rateLimitCheck.code, 'RATE_LIMIT_EXCEEDED');
+    console.log('✓ IP rate limiting chặn chính xác sau 5 lần yêu cầu trong 1 giờ');
+
+    // =============================================================
+    // TEST S4-04: BÓC TÁCH THÔNG TIN TỪ CV PDF
+    // =============================================================
   } finally {
     // cleanup test job if created
     if (testJobId && testJobId.startsWith('job-test-')) {

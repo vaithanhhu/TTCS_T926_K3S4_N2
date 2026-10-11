@@ -60,4 +60,93 @@
   <!-- Pagination Container -->
   <div id="public-jobs-pagination" style="display:flex;justify-content:center;gap:8px;margin-top:24px;" class="hidden"></div>
 
+  <!-- Modal: Apply Job Form (S4-03) -->
+  <div id="modal-apply-job" class="modal-backdrop hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;padding:16px;box-sizing:border-box;">
+    <div class="panel-card" style="width:100%;max-width:600px;max-height:90vh;overflow-y:auto;padding:24px;position:relative;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
+        <div>
+          <h2 id="apply-job-title" style="margin:0 0 4px 0;font-size:1.25rem;font-weight:700;">Nộp hồ sơ ứng tuyển</h2>
+          <p id="apply-job-subtitle" style="margin:0;font-size:0.875rem;color:var(--text-muted,#6b7280);"></p>
+        </div>
+        <button type="button" id="btn-close-apply-modal" class="btn btn-outline btn-sm" style="line-height:1;padding:4px 8px;">✕</button>
+      </div>
+
+      <form id="form-apply-job" novalidate>
+        <input type="hidden" id="apply-job-id" name="jobPostingId">
+        <!-- Anti-spam Honeypot field (hidden from legitimate users) -->
+        <div style="display:none;" aria-hidden="true">
+          <label for="apply-honeypot">Website</label>
+          <input type="text" id="apply-honeypot" name="website" tabindex="-1" autocomplete="off">
+        </div>
+
+        <div style="margin-bottom:12px;">
+          <label for="apply-fullname" class="form-label" style="display:block;margin-bottom:4px;font-weight:600;">Họ và tên <span style="color:#ef4444;">*</span></label>
+          <input type="text" id="apply-fullname" name="fullName" class="form-control" placeholder="Nguyễn Văn A" required style="width:100%;box-sizing:border-box;">
+          <small class="form-error hidden" id="err-apply-fullname" style="color:#ef4444;display:block;margin-top:2px;"></small>
+        </div>
+
+        <div style="margin-bottom:12px;">
+          <label for="apply-email" class="form-label" style="display:block;margin-bottom:4px;font-weight:600;">Email <span style="color:#ef4444;">*</span></label>
+          <input type="email" id="apply-email" name="email" class="form-control" placeholder="nguyenvana@example.com" required style="width:100%;box-sizing:border-box;">
+          <small class="form-error hidden" id="err-apply-email" style="color:#ef4444;display:block;margin-top:2px;"></small>
+        </div>
+
+        <div style="margin-bottom:12px;">
+          <label for="apply-phone" class="form-label" style="display:block;margin-bottom:4px;font-weight:600;">Số điện thoại <span style="color:#ef4444;">*</span></label>
+          <input type="tel" id="apply-phone" name="phoneNumber" class="form-control" placeholder="0912345678" required style="width:100%;box-sizing:border-box;">
+          <small class="form-error hidden" id="err-apply-phone" style="color:#ef4444;display:block;margin-top:2px;"></small>
+        </div>
+
+        <div style="margin-bottom:12px;">
+          <label for="apply-source" class="form-label" style="display:block;margin-bottom:4px;font-weight:600;">Nguồn biết đến tin tuyển dụng</label>
+          <select id="apply-source" name="source" class="form-control" style="width:100%;box-sizing:border-box;">
+            <option value="WEBSITE">Website công ty</option>
+            <option value="LINKEDIN">LinkedIn</option>
+            <option value="FACEBOOK">Facebook / Mạng xã hội</option>
+            <option value="TOPCV">TopCV / VietnamWorks</option>
+            <option value="FRIEND">Bạn bè giới thiệu</option>
+            <option value="OTHER">Khác</option>
+          </select>
+        </div>
+
+        <div style="margin-bottom:12px;">
+          <label for="apply-coverletter" class="form-label" style="display:block;margin-bottom:4px;font-weight:600;">Thư giới thiệu (Cover Letter)</label>
+          <textarea id="apply-coverletter" name="coverLetter" class="form-control" rows="3" placeholder="Tóm tắt lý do bạn phù hợp với vị trí này..." style="width:100%;box-sizing:border-box;"></textarea>
+        </div>
+
+        <div style="margin-bottom:16px;">
+          <label for="apply-cvfile" class="form-label" style="display:block;margin-bottom:4px;font-weight:600;">Tải lên CV (PDF hoặc DOCX, tối đa 10MB) <span style="color:#ef4444;">*</span></label>
+          <input type="file" id="apply-cvfile" name="cvFile" class="form-control" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required style="width:100%;box-sizing:border-box;">
+          <small class="form-error hidden" id="err-apply-cvfile" style="color:#ef4444;display:block;margin-top:2px;"></small>
+        </div>
+
+        <div id="apply-form-alert" class="alert hidden" style="margin-bottom:16px;padding:10px 14px;border-radius:6px;font-size:0.9rem;"></div>
+
+        <div style="display:flex;justify-content:flex-end;gap:8px;">
+          <button type="button" id="btn-cancel-apply" class="btn btn-outline">Hủy bỏ</button>
+          <button type="submit" id="btn-submit-apply" class="btn btn-primary" style="display:inline-flex;align-items:center;gap:6px;">
+            <span>Gửi hồ sơ ứng tuyển</span>
+          </button>
+        </div>
+      </form>
+
+      <!-- Application Success Screen -->
+      <div id="apply-success-screen" class="hidden" style="text-align:center;padding:16px 0;">
+        <div style="font-size:3rem;margin-bottom:8px;">🎉</div>
+        <h3 style="margin:0 0 8px 0;font-size:1.4rem;font-weight:700;color:#10b981;">Nộp hồ sơ thành công!</h3>
+        <p style="margin:0 0 16px 0;color:var(--text-muted,#4b5563);">Cảm ơn bạn đã quan tâm. Hồ sơ của bạn đã được chuyển đến bộ phận tuyển dụng.</p>
+
+        <div style="background:var(--bg-muted,#f3f4f6);padding:16px;border-radius:8px;margin-bottom:16px;text-align:left;">
+          <div style="font-size:0.875rem;color:var(--text-muted,#6b7280);margin-bottom:4px;">Mã tra cứu hồ sơ của bạn:</div>
+          <div id="success-tracking-code" style="font-size:1.25rem;font-weight:700;color:var(--primary-color,#2563eb);letter-spacing:1px;user-select:all;margin-bottom:8px;"></div>
+          <div style="font-size:0.825rem;color:#b45309;background:#fef3c7;padding:8px 10px;border-radius:4px;border-left:3px solid #f59e0b;">
+            ⚠️ <strong>Quan trọng:</strong> Vui lòng lưu lại mã tra cứu này cùng địa chỉ email để kiểm tra tiến độ xét duyệt. Chúng tôi cũng đã gửi email xác nhận kèm liên kết tra cứu tới hòm thư của bạn.
+          </div>
+        </div>
+
+        <button type="button" id="btn-finish-apply" class="btn btn-primary" style="width:100%;">Hoàn tất & Đóng</button>
+      </div>
+    </div>
+  </div>
+
 </main>
