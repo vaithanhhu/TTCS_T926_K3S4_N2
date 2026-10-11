@@ -122,6 +122,20 @@ async function runSprint4Tests() {
     // =============================================================
     // TEST S4-02: CHI TIẾT TIN TUYỂN DỤNG & CHECK HẾT HẠN
     // =============================================================
+    console.log('\n--- Kiểm thử S4-02: Chi tiết tin tuyển dụng & Kiểm tra hạn nộp ---');
+    const jobDetails = await publicationService.publicList(testJobId);
+    assert.ok(jobDetails.length > 0, 'Phải xem được chi tiết tin tuyển dụng còn hạn');
+    assert.equal(jobDetails[0].id, testJobId);
+    console.log('✓ Tin còn hạn trả về đầy đủ thông tin chi tiết');
+
+    // Tin không tồn tại
+    const nonExistent = await publicationService.publicList('job-fake-99999');
+    assert.equal(nonExistent.length, 0, 'Tin không tồn tại phải trả về mảng rỗng (404)');
+    console.log('✓ Tin không tồn tại trả về kết quả trống đúng chuẩn 404');
+
+    // =============================================================
+    // TEST S4-03: NỘP HỒ SƠ ỨNG TUYỂN KÈM CV
+    // =============================================================
   } finally {
     // cleanup test job if created
     if (testJobId && testJobId.startsWith('job-test-')) {

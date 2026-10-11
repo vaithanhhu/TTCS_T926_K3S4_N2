@@ -62,6 +62,20 @@ class CandidatePortalController {
         });
       }
 
+      if (pathname.startsWith('/api/v1/public/job-postings/') && method === 'GET') {
+        const id = decodeURIComponent(pathname.slice('/api/v1/public/job-postings/'.length));
+        const publicationService = new (require('../services/jobPostingPublicationService'))(this.service.db);
+        const items = await publicationService.publicList(id);
+        if (!items || !items.length) {
+          return this.send(res, 404, {
+            success: false,
+            code: 'JOB_POSTING_NOT_FOUND_OR_EXPIRED',
+            message: 'Tin tuyển dụng không tồn tại, đã hết hạn hoặc đã bị gỡ.'
+          });
+        }
+        return this.send(res, 200, { success: true, data: items[0] });
+      }
+
 
       return this.send(res, 404, { success: false, code: 'NOT_FOUND', message: 'Tài nguyên không tồn tại.' });
     } catch (err) {

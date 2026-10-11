@@ -242,8 +242,100 @@
     }
   }
 
+  function renderJobDetail(root, job) {
+    const card = node('article', null, 'panel-card');
+    card.style.padding = '32px';
 
-  function renderJobDetail() {}
+    const header = node('div', null, '');
+    header.style.borderBottom = '1px solid var(--border-color,#e5e7eb)';
+    header.style.paddingBottom = '20px';
+    header.style.marginBottom = '24px';
+
+    const title = node('h1', job.title);
+    title.style.margin = '0 0 8px 0';
+    title.style.fontSize = '1.75rem';
+    title.style.fontWeight = '700';
+    header.appendChild(title);
+
+    const meta = node('div', [job.departmentName, job.workLocation, job.workMode].filter(Boolean).join(' • '));
+    meta.style.fontSize = '1rem';
+    meta.style.color = 'var(--text-muted,#4b5563)';
+    meta.style.marginBottom = '12px';
+    header.appendChild(meta);
+
+    if (job.showSalary) {
+      const sal = node('div', `💰 Mức lương: ${Number(job.salaryMin).toLocaleString('vi-VN')} – ${Number(job.salaryMax).toLocaleString('vi-VN')} VNĐ/tháng`);
+      sal.style.fontWeight = '600';
+      sal.style.color = '#047857';
+      sal.style.marginBottom = '8px';
+      header.appendChild(sal);
+    }
+
+    if (job.applicationDeadline) {
+      const dl = node('div', `⏳ Hạn nộp hồ sơ: ${job.applicationDeadline.split('-').reverse().join('/')}`);
+      dl.style.fontSize = '0.9rem';
+      dl.style.color = '#b45309';
+      dl.style.marginBottom = '16px';
+      header.appendChild(dl);
+    }
+
+    const applyActionBtn = node('button', '🚀 Ứng tuyển ngay bây giờ', 'btn btn-primary');
+    applyActionBtn.style.padding = '10px 24px';
+    applyActionBtn.style.fontSize = '1rem';
+    applyActionBtn.style.fontWeight = '600';
+    applyActionBtn.addEventListener('click', () => openApplyModal(job));
+    header.appendChild(applyActionBtn);
+
+    card.appendChild(header);
+
+    // Job Description
+    if (job.jobDescription) {
+      card.appendChild(node('h2', 'Mô tả công việc', ''));
+      card.lastElementChild.style.fontSize = '1.25rem';
+      card.lastElementChild.style.margin = '16px 0 8px 0';
+      const desc = node('div', job.jobDescription);
+      desc.style.whiteSpace = 'pre-wrap';
+      desc.style.lineHeight = '1.6';
+      desc.style.color = 'var(--text-color,#374151)';
+      desc.style.marginBottom = '24px';
+      card.appendChild(desc);
+    }
+
+    // Candidate Requirements
+    if (job.candidateRequirements) {
+      card.appendChild(node('h2', 'Yêu cầu ứng viên', ''));
+      card.lastElementChild.style.fontSize = '1.25rem';
+      card.lastElementChild.style.margin = '16px 0 8px 0';
+      const req = node('div', job.candidateRequirements);
+      req.style.whiteSpace = 'pre-wrap';
+      req.style.lineHeight = '1.6';
+      req.style.color = 'var(--text-color,#374151)';
+      req.style.marginBottom = '24px';
+      card.appendChild(req);
+    }
+
+    // Bottom Action Bar
+    const btmBar = node('div', null, '');
+    btmBar.style.display = 'flex';
+    btmBar.style.justifyContent = 'space-between';
+    btmBar.style.alignItems = 'center';
+    btmBar.style.paddingTop = '20px';
+    btmBar.style.borderTop = '1px solid var(--border-color,#e5e7eb)';
+
+    const btmBack = node('button', '← Quay lại', 'btn btn-outline btn-sm');
+    btmBack.addEventListener('click', () => window.ATS_ROUTER.navigate('/careers/jobs'));
+    btmBar.appendChild(btmBack);
+
+    const btmApply = node('button', 'Ứng tuyển vị trí này', 'btn btn-primary');
+    btmApply.addEventListener('click', () => openApplyModal(job));
+    btmBar.appendChild(btmApply);
+
+    card.appendChild(btmBar);
+    root.appendChild(card);
+  }
+
+  // --- Modal: Apply Job Logic ---
+
   function openLookupModal() {}
   function closeLookupModal() {}
   function handleLookupSubmit() {}
