@@ -270,6 +270,33 @@ async function runSprint4Tests() {
     // =============================================================
     // TEST S4-06: ỨNG VIÊN RÚT HỒ SƠ
     // =============================================================
+    console.log('\n--- Kiểm thử S4-06: Ứng viên rút hồ sơ ---');
+    // Lấy token rút hồ sơ từ database
+    const tokenRow = await db.prepare('SELECT token_hash FROM application_tracking_tokens WHERE candidate_id=?').get(candidateRecord.id);
+    assert.ok(tokenRow, 'Phải có bản ghi token rút hồ sơ');
+
+    // Giả lập ứng viên rút hồ sơ bằng token hợp lệ
+    // Vì token_hash lưu hash SHA-256, hãy test rút hồ sơ qua token
+    const testRawToken = 'wtoken-' + crypto.randomUUID();
+    const testTokenHash = crypto.createHash('sha256').update(testRawToken).digest('hex');
+    await db.prepare('UPDATE application_tracking_tokens SET token_hash=? WHERE candidate_id=?').run(testTokenHash, candidateRecord.id);
+
+    const withdrawRes = await portalService.withdrawApplication({ withdrawToken: testRawToken });
+    assert.equal(withdrawRes.success, true, 'Rút hồ sơ bằng token hợp lệ phải thành công');
+    assert.equal(withdrawRes.data.stage, 'WITHDRAWN');
+    console.log('✓ Rút hồ sơ thành công, trạng thái chuyển sang WITHDRAWN');
+
+    // Kiểm tra trạng thái tra cứu sau khi rút
+    const lookupAfterWithdraw = await portalService.lookupStatus({
+      trackingCode: generatedTrackingCode,
+      email: validCandidateEmail
+    }, '127.0.0.1');
+    assert.equal(lookupAfterWithdraw.data.statusCode, 'WITHDRAWN');
+    console.log('✓ Trạng thái công khai cập nhật chính xác sang: "Ứng viên đã rút hồ sơ"');
+
+    // =============================================================
+    // TEST S4-07: NHÂN SỰ NỘI BỘ GIỚI THIỆU ỨNG VIÊN
+    // =============================================================
   } finally {
     // cleanup test job if created
     if (testJobId && testJobId.startsWith('job-test-')) {

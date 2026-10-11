@@ -536,11 +536,56 @@
   }
 
   // --- Modal: Withdraw Application Logic ---
+  function openWithdrawModal() {
+    const modal = get('modal-withdraw-job');
+    if (!modal) return;
+    get('withdraw-alert').classList.add('hidden');
+    modal.classList.remove('hidden');
+  }
 
-  function openWithdrawModal() {}
-  function closeWithdrawModal() {}
-  function handleConfirmWithdraw() {}
+  function closeWithdrawModal() {
+    get('modal-withdraw-job')?.classList.add('hidden');
+  }
 
+  async function handleConfirmWithdraw() {
+    if (!currentWithdrawToken) return;
+    const btn = get('btn-confirm-withdraw');
+    const alert = get('withdraw-alert');
+    btn.disabled = true;
+    btn.textContent = 'Đang xử lý...';
+
+    try {
+      const res = await window.ATS_API.withdrawApplicationApi({ withdrawToken: currentWithdrawToken });
+      if (res.ok) {
+        alert.textContent = 'Đã rút hồ sơ thành công. Quá trình xét duyệt đã kết thúc.';
+        alert.className = 'alert alert-success';
+        alert.style.background = '#dcfce7';
+        alert.style.color = '#15803d';
+        alert.classList.remove('hidden');
+        setTimeout(() => {
+          closeWithdrawModal();
+          window.ATS_ROUTER.navigate('/careers/jobs');
+        }, 2000);
+      } else {
+        alert.textContent = res.data?.message || 'Liên kết rút hồ sơ không hợp lệ hoặc đã hết hạn.';
+        alert.className = 'alert alert-danger';
+        alert.style.background = '#fee2e2';
+        alert.style.color = '#991b1b';
+        alert.classList.remove('hidden');
+      }
+    } catch {
+      alert.textContent = 'Lỗi kết nối khi rút hồ sơ.';
+      alert.className = 'alert alert-danger';
+      alert.style.background = '#fee2e2';
+      alert.style.color = '#991b1b';
+      alert.classList.remove('hidden');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Đồng ý rút hồ sơ';
+    }
+  }
+
+  // --- Event Listeners Init ---
   function initEvents() {
     get('public-jobs-back')?.addEventListener('click', () => window.ATS_ROUTER.navigate('/careers/jobs'));
     get('public-jobs-filter-form')?.addEventListener('submit', e => {

@@ -359,6 +359,93 @@ class CandidatePortalService {
     };
   }
 
+  // S4-06: Candidate withdraws application via secure token
+  async withdrawApplication(tokenOrData, reason = '') {
+    let token = null;
+    let withdrawReason = reason;
+    if (tokenOrData && typeof tokenOrData === 'object') {
+      token = tokenOrData.withdrawToken || tokenOrData.token;
+      withdrawReason = tokenOrData.reason || reason;
+    } else {
+      token = tokenOrData;
+    }
+
+    if (!token || typeof token !== 'string' || !token.trim()) {
+      return { success: false, statusCode: 400, code: 'TOKEN_REQUIRED', message: 'Mã xác thực rút hồ sơ là bắt buộc.' };
+    }
+
+    const tokenHash = crypto.createHash('sha256').update(token.trim()).digest('hex');
+
+    const candidate = await this.db.prepare(
+      `SELECT c.id, c.full_name, c.email, c.stage, c.requisition_id, r.title AS job_title, r.recruiter_id, u.email AS recruiter_email
+       FROM candidates c
+       LEFT JOIN requisitions r ON r.id = c.requisition_id
+       LEFT JOIN users u ON u.id = r.recruiter_id
+       WHERE c.withdraw_token_hash = ?
+          OR c.id IN (SELECT candidate_id FROM application_tracking_tokens WHERE token_hash = ?)`
+    ).get(tokenHash, tokenHash);
+
+    if (!candidate) {
+      return {
+        success: false,
+        statusCode: 404,
+        code: 'INVALID_WITHDRAW_TOKEN',
+        message: 'Liên kết rút hồ sơ không hợp lệ hoặc đã được sử dụng.'
+      };
+    }
+
+    if (candidate.stage === 'WITHDRAWN') {
+      return { success: false, statusCode: 409, code: 'ALREADY_WITHDRAWN', message: 'Hồ sơ này đã được rút trước đó.' };
+    }
+
+    const beforeStage = candidate.stage;
+
+    await this.db.transaction(async () => {
+      const updateSql = this.db.provider === 'postgres'
+        ? `UPDATE candidates
+           SET stage = 'WITHDRAWN', withdrawn_at = CURRENT_TIMESTAMP, withdrawn_reason = ?, withdraw_token_hash = NULL
+           WHERE id = ?`
+        : `UPDATE candidates
+           SET stage = 'WITHDRAWN', withdrawn_at = datetime('now'), withdrawn_reason = ?, withdraw_token_hash = NULL
+           WHERE id = ?`;
+
+      await this.db.prepare(updateSql).run(withdrawReason || 'Ứng viên chủ động rút qua email', candidate.id);
+      await this.db.prepare("DELETE FROM application_tracking_tokens WHERE candidate_id = ?").run(candidate.id);
+
+      const histSql = this.db.provider === 'postgres'
+        ? `INSERT INTO candidate_status_history (
+             id, candidate_id, before_stage, after_stage, actor_id, actor_name, action, reason, created_at
+           ) VALUES (?, ?, ?, 'WITHDRAWN', NULL, 'Ứng viên', 'WITHDRAW', ?, CURRENT_TIMESTAMP)`
+        : `INSERT INTO candidate_status_history (
+             id, candidate_id, before_stage, after_stage, actor_id, actor_name, action, reason, created_at
+           ) VALUES (?, ?, ?, 'WITHDRAWN', NULL, 'Ứng viên', 'WITHDRAW', ?, datetime('now'))`;
+
+      await this.db.prepare(histSql).run('csh-' + crypto.randomUUID(), candidate.id, beforeStage, withdrawReason || null);
+    });
+
+    // Notify recruiter if assigned
+    if (candidate.recruiter_email) {
+      try {
+        await this.emailService.sendMail({
+          to: candidate.recruiter_email,
+          subject: `[ATS Thông báo] Ứng viên ${candidate.full_name} đã rút hồ sơ vị trí ${candidate.job_title}`,
+          html: `<p>Ứng viên <strong>${candidate.full_name}</strong> (${candidate.email}) đã rút hồ sơ vị trí <strong>${candidate.job_title}</strong>.</p><p>Lý do: ${withdrawReason || 'Không cung cấp'}</p>`,
+          text: `Ứng viên ${candidate.full_name} đã rút hồ sơ vị trí ${candidate.job_title}.`,
+          templateName: 'CANDIDATE_WITHDRAW_NOTIFICATION'
+        });
+      } catch (err) {
+        console.warn('[CandidatePortalService] Notify recruiter failed:', err.message);
+      }
+    }
+
+    return {
+      success: true,
+      statusCode: 200,
+      message: 'Đã rút hồ sơ ứng tuyển thành công.',
+      data: { candidateId: candidate.id, fullName: candidate.full_name, stage: 'WITHDRAWN' }
+    };
+  }
+
   // S4-04: Parse CV PDF text for Recruiter (non-destructive)
   async parseCvPdf(candidateId, documentIdOrUser = null, currentUser = null) {
     let documentId = null;

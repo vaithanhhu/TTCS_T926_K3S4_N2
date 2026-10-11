@@ -191,4 +191,23 @@
     </div>
   </div>
 
+  <!-- Modal: Withdraw Confirmation (S4-06) -->
+  <div id="modal-withdraw-job" class="modal-backdrop hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;padding:16px;box-sizing:border-box;">
+    <div class="panel-card" style="width:100%;max-width:480px;padding:24px;text-align:center;">
+      <div style="font-size:2.5rem;margin-bottom:8px;">⚠️</div>
+      <h2 style="margin:0 0 8px 0;font-size:1.25rem;font-weight:700;color:#dc2626;">Xác nhận rút hồ sơ ứng tuyển</h2>
+      <p style="margin:0 0 16px 0;font-size:0.9rem;color:var(--text-muted,#4b5563);">
+        Bạn có chắc chắn muốn rút hồ sơ cho vị trí ứng tuyển này? Thao tác này sẽ dừng toàn bộ quá trình xét duyệt và không thể hoàn tác.
+      </p>
+
+      <div id="withdraw-alert" class="alert hidden" style="margin-bottom:16px;padding:10px 14px;border-radius:6px;font-size:0.9rem;"></div>
+
+      <div style="display:flex;justify-content:center;gap:12px;">
+        <button type="button" id="btn-cancel-withdraw" class="btn btn-outline">Không, giữ hồ sơ</button>
+        <button type="button" id="btn-confirm-withdraw" class="btn btn-danger" style="background:#dc2626;color:#fff;border:none;">
+          Đồng ý rút hồ sơ
+        </button>
+      </div>
+    </div>
+  </div>
 </main>

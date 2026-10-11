@@ -92,6 +92,13 @@ class CandidatePortalController {
         return this.send(res, result.statusCode || (result.success ? 200 : 400), result);
       }
 
+      // 4. S4-06: Withdraw Application (Secure Token)
+      if (pathname === '/api/v1/public/applications/withdraw' && method === 'POST') {
+        const body = await parseBody(req);
+        const result = await this.service.withdrawApplication(body);
+        return this.send(res, result.statusCode || (result.success ? 200 : 400), result);
+      }
+
       // 6. S4-04: Parse CV PDF (Recruiter only, non-destructive preview)
       if (/^\/api\/v1\/candidates\/[^/]+\/parse-cv$/.test(pathname) && method === 'POST') {
         const user = await this.rbac.authorize(req, res, this.auth, 'candidate.cv.parse');
