@@ -70,7 +70,9 @@
     "test:s3-10:pg-live": "node backend/tests/test_s3_10_pg_live.js",
     "test:local": "node backend/tests/run_local_tests.js",
     "test:local-demo": "node backend/tests/test_local_demo.js",
-    "test:postgres:startup": "node backend/tests/test_postgres_startup.js"
+    "test:postgres:startup": "node backend/tests/test_postgres_startup.js",
+    "migrate:s4": "node backend/src/db/migrate-candidate-portal.js",
+    "test:s4": "node backend/tests/test_s4_candidate_portal.js"
   },
   "keywords": [
     "ats",
@@ -84,6 +86,7 @@
   "dependencies": {
     "exceljs": "^4.4.0",
     "nodemailer": "^10.0.12",
+    "pdf-parse": "^2.4.5",
     "pg": "^8.23.1",
     "sharp": "^0.35.5"
   },

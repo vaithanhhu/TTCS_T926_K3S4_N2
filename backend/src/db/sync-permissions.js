@@ -47,6 +47,25 @@ async function synchronizeJobPostingPermissions(db){return db.transaction(async(
 
 async function synchronizeJobPublicationPermissions(db){return db.transaction(async()=>{for(const permission of EXTRA_PERMISSIONS.filter(row=>['job_posting.approve','job_posting.publish'].includes(row[1])))await db.prepare('INSERT INTO permissions(id,code,name,module,description) VALUES (?,?,?,?,?) ON CONFLICT(code) DO NOTHING').run(...permission,permission[2]);for(const code of ['job_posting.approve','job_posting.publish'])await db.prepare("INSERT INTO role_permissions(role_id,permission_id) SELECT r.id,p.id FROM roles r JOIN permissions p ON p.code=? WHERE r.code='HR_MANAGER' ON CONFLICT DO NOTHING").run(code);});}
 
+async function synchronizeCandidatePortalPermissions(db) {
+  return db.transaction(async () => {
+    const portalPermissions = [
+      ['perm-cand-refer', 'candidate.refer', 'Giới thiệu ứng viên nội bộ', 'CANDIDATES', 'Nhân sự nội bộ giới thiệu ứng viên cho vị trí tuyển dụng'],
+      ['perm-cand-parse', 'candidate.cv.parse', 'Bóc tách thông tin CV PDF', 'CANDIDATES', 'Trích xuất thông tin liên hệ từ CV PDF']
+    ];
+    for (const p of portalPermissions) {
+      await db.prepare('INSERT INTO permissions(id, code, name, module, description) VALUES (?, ?, ?, ?, ?) ON CONFLICT(code) DO NOTHING').run(...p);
+    }
+    const internalRoles = ['ADMIN', 'HR_MANAGER', 'HIRING_MGR', 'RECRUITER', 'INTERVIEWER', 'APPROVER'];
+    for (const role of internalRoles) {
+      await db.prepare("INSERT INTO role_permissions(role_id, permission_id) SELECT r.id, p.id FROM roles r JOIN permissions p ON p.code='candidate.refer' WHERE r.code=? ON CONFLICT DO NOTHING").run(role);
+    }
+    for (const role of ['ADMIN', 'HR_MANAGER', 'RECRUITER']) {
+      await db.prepare("INSERT INTO role_permissions(role_id, permission_id) SELECT r.id, p.id FROM roles r JOIN permissions p ON p.code='candidate.cv.parse' WHERE r.code=? ON CONFLICT DO NOTHING").run(role);
+    }
+  });
+}
+
 async function main() {
   const db=require('./database').getDatabase();
   try {
@@ -57,4 +76,5 @@ async function main() {
 }
 
 if(require.main===module)main().catch(()=>{console.error('[Permissions] SYNC_FAILED');process.exitCode=1;});
-module.exports={synchronizeJobPublicationPermissions,synchronizeJobPostingPermissions,synchronizeLifecyclePermissions,synchronizePermissions,synchronizeBudgetPermissions,synchronizeRecruiterPermissions,ROLE_PERMISSIONS};
+module.exports={synchronizeCandidatePortalPermissions,synchronizeJobPublicationPermissions,synchronizeJobPostingPermissions,synchronizeLifecyclePermissions,synchronizePermissions,synchronizeBudgetPermissions,synchronizeRecruiterPermissions,ROLE_PERMISSIONS};
+
