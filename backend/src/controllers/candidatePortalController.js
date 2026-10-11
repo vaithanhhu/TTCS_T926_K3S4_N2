@@ -84,6 +84,16 @@ class CandidatePortalController {
         return this.send(res, result.statusCode || (result.success ? 201 : 400), result);
       }
 
+      // 6. S4-04: Parse CV PDF (Recruiter only, non-destructive preview)
+      if (/^\/api\/v1\/candidates\/[^/]+\/parse-cv$/.test(pathname) && method === 'POST') {
+        const user = await this.rbac.authorize(req, res, this.auth, 'candidate.cv.parse');
+        if (!user) return;
+        const candidateId = decodeURIComponent(pathname.split('/')[4]);
+        const body = await parseBody(req).catch(() => ({}));
+        const result = await this.service.parseCvPdf(candidateId, body?.documentId, user);
+        return this.send(res, result.statusCode || (result.success ? 200 : 400), result);
+      }
+
 
       return this.send(res, 404, { success: false, code: 'NOT_FOUND', message: 'Tài nguyên không tồn tại.' });
     } catch (err) {

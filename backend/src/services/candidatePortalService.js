@@ -282,6 +282,133 @@ class CandidatePortalService {
     };
   }
 
+  // S4-04: Parse CV PDF text for Recruiter (non-destructive)
+  async parseCvPdf(candidateId, documentIdOrUser = null, currentUser = null) {
+    let documentId = null;
+    let user = null;
+    if (currentUser) {
+      documentId = documentIdOrUser;
+      user = currentUser;
+    } else if (documentIdOrUser && typeof documentIdOrUser === 'object' && documentIdOrUser.id) {
+      user = documentIdOrUser;
+      documentId = null;
+    } else {
+      user = currentUser;
+    }
+
+    if (!user) {
+      return { success: false, statusCode: 401, code: 'UNAUTHORIZED', message: 'Yêu cầu đăng nhập.' };
+    }
+
+    const hasPerm = await this.rbac.hasPermission(user.id, 'candidate.cv.parse');
+    if (!hasPerm && !user.roles?.some(r => ['ADMIN', 'HR_MANAGER', 'RECRUITER'].includes(r))) {
+      return { success: false, statusCode: 403, code: 'FORBIDDEN', message: 'Bạn không có quyền trích xuất CV.' };
+    }
+
+    const doc = documentId
+      ? await this.db.prepare(
+          `SELECT id, file_name, storage_path, mime_type, parsed_text, parsed_data_json
+           FROM candidate_documents
+           WHERE id = ? AND candidate_id = ? AND document_type = 'CV'`
+        ).get(documentId, candidateId)
+      : await this.db.prepare(
+          `SELECT id, file_name, storage_path, mime_type, parsed_text, parsed_data_json
+           FROM candidate_documents
+           WHERE candidate_id = ? AND document_type = 'CV'
+           ORDER BY created_at DESC LIMIT 1`
+        ).get(candidateId);
+
+    if (!doc) {
+      return { success: false, statusCode: 404, code: 'CV_NOT_FOUND', message: 'Không tìm thấy tệp CV của ứng viên này.' };
+    }
+
+    const filePath = path.join(UPLOADS_DIR, doc.storage_path);
+    if (!fs.existsSync(filePath)) {
+      return { success: false, statusCode: 404, code: 'CV_FILE_NOT_FOUND', message: 'Tệp CV không tồn tại trên hệ thống lưu trữ.' };
+    }
+
+    const buffer = fs.readFileSync(filePath);
+    let extractedText = '';
+
+    try {
+      if (doc.mime_type === 'application/pdf' || filePath.endsWith('.pdf')) {
+        try {
+          if (typeof pdfParse === 'function') {
+            const parsed = await pdfParse(buffer);
+            extractedText = parsed.text || '';
+          } else if (pdfParse?.PDFParse) {
+            const parser = new pdfParse.PDFParse({ data: buffer });
+            const result = await parser.getText();
+            extractedText = result?.text || '';
+          }
+        } catch {
+          // Library may throw on minimal/handcrafted or unusual PDFs
+        }
+
+        if (!extractedText || !extractedText.trim()) {
+          const rawStr = buffer.toString('utf8');
+          const streams = [...rawStr.matchAll(/stream[\r\n]+([\s\S]*?)[\r\n]+endstream/g)].map(x => x[1]).join('\n');
+          if (streams.trim()) {
+            extractedText = streams;
+          } else {
+            const textBlocks = [...rawStr.matchAll(/\(([^()]+)\)/g)].map(x => x[1]).join(' ');
+            if (textBlocks.trim()) extractedText = textBlocks;
+          }
+        }
+      }
+    } catch (parseErr) {
+      console.warn('[CandidatePortalService] PDF parse error:', parseErr.message);
+      return {
+        success: false,
+        statusCode: 422,
+        code: 'PDF_PARSE_FAILED',
+        message: 'Không thể đọc văn bản từ tệp PDF (có thể là dạng scan hoặc được mã hóa). Bạn có thể xem CV và nhập thủ công.'
+      };
+    }
+
+    if (!extractedText.trim()) {
+      return {
+        success: false,
+        statusCode: 422,
+        code: 'NO_TEXT_FOUND',
+        message: 'Không tìm thấy văn bản trong tệp CV này (CV có thể là ảnh scan). Bạn có thể xem CV và nhập thủ công.'
+      };
+    }
+
+    // Regex extraction
+    const emailMatch = extractedText.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+    const phoneMatch = extractedText.match(/(?:(?:\+?84|0)[3|5|7|8|9]\d{8})/);
+
+    // Heuristic for name: Look at non-empty lines near top
+    const lines = extractedText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    let candidateName = '';
+    for (const line of lines.slice(0, 10)) {
+      if (line.length >= 3 && line.length <= 40 && !line.includes('@') && !/\d{4}/.test(line) && !/^(curriculum|vitae|resume|cv|hồ sơ|thông tin)/i.test(line)) {
+        candidateName = line;
+        break;
+      }
+    }
+
+    const parsedData = {
+      fullName: candidateName || null,
+      email: emailMatch ? emailMatch[0] : null,
+      phoneNumber: phoneMatch ? phoneMatch[0] : null
+    };
+
+    // Update document record with parsed data (never auto-overwriting candidate table!)
+    await this.db.prepare(
+      `UPDATE candidate_documents SET parsed_text = ?, parsed_data_json = ? WHERE id = ?`
+    ).run(extractedText.slice(0, 5000), JSON.stringify(parsedData), doc.id);
+
+    return {
+      success: true,
+      statusCode: 200,
+      message: 'Trích xuất thông tin CV thành công.',
+      data: parsedData,
+      parsedData
+    };
+  }
+
 }
 
 module.exports = CandidatePortalService;

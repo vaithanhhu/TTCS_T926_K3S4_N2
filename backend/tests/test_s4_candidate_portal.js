@@ -232,6 +232,19 @@ async function runSprint4Tests() {
     // =============================================================
     // TEST S4-04: BÓC TÁCH THÔNG TIN TỪ CV PDF
     // =============================================================
+    console.log('\n--- Kiểm thử S4-04: Bóc tách thông tin từ CV PDF (pdf-parse) ---');
+    const candidateRecord = await db.prepare('SELECT id FROM candidates WHERE email=?').get(validCandidateEmail);
+    assert.ok(candidateRecord, 'Ứng viên vừa tạo phải tồn tại trong DB');
+
+    const parseRes = await portalService.parseCvPdf(candidateRecord.id, null, recruiter);
+    assert.equal(parseRes.success, true, 'Bóc tách PDF có text phải thành công');
+    assert.ok(parseRes.parsedData, 'Phải có dữ liệu trích xuất');
+    console.log('✓ Bóc tách CV thành công, dữ liệu trích xuất:', parseRes.parsedData);
+    assert.ok(parseRes.parsedData.email.includes('@'), 'Phải trích xuất được email từ CV');
+
+    // =============================================================
+    // TEST S4-05: TRA CỨU TRẠNG THÁI HỒ SƠ
+    // =============================================================
   } finally {
     // cleanup test job if created
     if (testJobId && testJobId.startsWith('job-test-')) {
