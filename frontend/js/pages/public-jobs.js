@@ -458,10 +458,85 @@
   }
 
   // --- Modal: Status Lookup Logic ---
+  function openLookupModal() {
+    const modal = get('modal-status-lookup');
+    if (!modal) return;
+    get('form-status-lookup').reset();
+    get('lookup-alert').classList.add('hidden');
+    get('lookup-result-box').classList.add('hidden');
+    modal.classList.remove('hidden');
+  }
 
-  function openLookupModal() {}
-  function closeLookupModal() {}
-  function handleLookupSubmit() {}
+  function closeLookupModal() {
+    get('modal-status-lookup')?.classList.add('hidden');
+  }
+
+  async function handleLookupSubmit(e) {
+    e.preventDefault();
+    const code = get('lookup-code').value.trim();
+    const email = get('lookup-email').value.trim();
+    const alert = get('lookup-alert');
+    const resultBox = get('lookup-result-box');
+    alert.classList.add('hidden');
+    resultBox.classList.add('hidden');
+
+    if (!code || !email) {
+      alert.textContent = 'Vui lòng nhập cả mã tra cứu và email.';
+      alert.className = 'alert alert-danger';
+      alert.style.background = '#fee2e2';
+      alert.style.color = '#991b1b';
+      alert.classList.remove('hidden');
+      return;
+    }
+
+    const btn = get('btn-submit-lookup');
+    btn.disabled = true;
+    btn.textContent = 'Đang tra cứu...';
+
+    try {
+      const res = await window.ATS_API.lookupApplicationStatusApi({ trackingCode: code, email });
+      if (res.ok && res.data?.data) {
+        const d = res.data.data;
+        get('result-job-title').textContent = d.jobTitle || 'Vị trí đã ứng tuyển';
+        const badge = get('result-status-badge');
+        badge.textContent = d.statusLabel;
+
+        // Badge styling based on status code
+        if (d.statusCode === 'RECEIVED') {
+          badge.style.background = '#e0f2fe'; badge.style.color = '#0369a1';
+        } else if (d.statusCode === 'IN_REVIEW') {
+          badge.style.background = '#fef3c7'; badge.style.color = '#b45309';
+        } else if (d.statusCode === 'INTERVIEWING') {
+          badge.style.background = '#dcfce7'; badge.style.color = '#15803d';
+        } else if (d.statusCode === 'WITHDRAWN') {
+          badge.style.background = '#f3f4f6'; badge.style.color = '#4b5563';
+        } else {
+          badge.style.background = '#f1f5f9'; badge.style.color = '#475569';
+        }
+
+        get('result-status-desc').textContent = d.description || '';
+        resultBox.classList.remove('hidden');
+      } else {
+        alert.textContent = res.data?.message || 'Thông tin tra cứu không chính xác hoặc hồ sơ không tồn tại.';
+        alert.className = 'alert alert-danger';
+        alert.style.background = '#fee2e2';
+        alert.style.color = '#991b1b';
+        alert.classList.remove('hidden');
+      }
+    } catch {
+      alert.textContent = 'Không thể kết nối đến máy chủ tra cứu.';
+      alert.className = 'alert alert-danger';
+      alert.style.background = '#fee2e2';
+      alert.style.color = '#991b1b';
+      alert.classList.remove('hidden');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Tra cứu ngay';
+    }
+  }
+
+  // --- Modal: Withdraw Application Logic ---
+
   function openWithdrawModal() {}
   function closeWithdrawModal() {}
   function handleConfirmWithdraw() {}

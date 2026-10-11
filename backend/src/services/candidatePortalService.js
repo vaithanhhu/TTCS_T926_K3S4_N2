@@ -24,6 +24,26 @@ class CandidatePortalService {
     ensureUploadsDir();
   }
 
+  // S4-05: Map internal stages to exactly 4 generic public statuses
+  static mapPublicStatus(internalStage) {
+    switch (internalStage) {
+      case 'NEW':
+      case 'APPLIED':
+        return { code: 'RECEIVED', label: 'Đã nhận hồ sơ' };
+      case 'SCREENING':
+        return { code: 'IN_REVIEW', label: 'Đang xem xét' };
+      case 'INTERVIEW':
+        return { code: 'INTERVIEWING', label: 'Mời phỏng vấn' };
+      case 'WITHDRAWN':
+        return { code: 'WITHDRAWN', label: 'Ứng viên đã rút hồ sơ' };
+      case 'OFFER':
+      case 'HIRED':
+      case 'REJECTED':
+      default:
+        return { code: 'CLOSED', label: 'Kết thúc quá trình xét duyệt' };
+    }
+  }
+
   // Anti-spam IP rate limiting: max 5 requests per hour per action
   async checkRateLimit(ipAddress, action = 'APPLY', maxAttempts = 5) {
     if (!ipAddress) return { allowed: true };
@@ -278,6 +298,63 @@ class CandidatePortalService {
         email,
         jobTitle: posting.title,
         departmentName: posting.department_name
+      }
+    };
+  }
+
+  // S4-05: Lookup application status (generic 4 states, secure against probing)
+  async lookupStatus(trackingCodeOrData, emailOrIp = null, ipAddress = null) {
+    let trackingCode = null;
+    let email = null;
+    let clientIp = null;
+    if (trackingCodeOrData && typeof trackingCodeOrData === 'object') {
+      trackingCode = trackingCodeOrData.trackingCode;
+      email = trackingCodeOrData.email;
+      clientIp = emailOrIp;
+    } else {
+      trackingCode = trackingCodeOrData;
+      email = emailOrIp;
+      clientIp = ipAddress;
+    }
+
+    const rateCheck = await this.checkRateLimit(clientIp, 'LOOKUP', 10);
+    if (!rateCheck.allowed) return rateCheck;
+
+    if (!trackingCode || typeof trackingCode !== 'string' || !email || typeof email !== 'string') {
+      return { success: false, statusCode: 400, code: 'INVALID_CREDENTIALS', message: 'Vui lòng nhập đầy đủ mã tra cứu và email.' };
+    }
+
+    const row = await this.db.prepare(
+      `SELECT c.id, c.full_name, c.email, c.stage, c.created_at, c.withdrawn_at, r.title AS job_title, r.department_name
+       FROM candidates c
+       LEFT JOIN requisitions r ON r.id = c.requisition_id
+       WHERE c.tracking_code = ? AND LOWER(c.email) = ?`
+    ).get(trackingCode.trim().toUpperCase(), email.trim().toLowerCase());
+
+    if (!row) {
+      return {
+        success: false,
+        statusCode: 404,
+        code: 'LOOKUP_INVALID_CREDENTIALS',
+        message: 'Mã tra cứu hoặc email không khớp. Vui lòng kiểm tra lại.'
+      };
+    }
+
+    const publicStatus = CandidatePortalService.mapPublicStatus(row.stage);
+
+    return {
+      success: true,
+      statusCode: 200,
+      data: {
+        trackingCode: trackingCode.trim().toUpperCase(),
+        candidateName: row.full_name,
+        jobTitle: row.job_title || 'Vị trí tuyển dụng',
+        departmentName: row.department_name || '',
+        appliedAt: row.created_at,
+        withdrawnAt: row.withdrawn_at || null,
+        status: publicStatus.code,
+        statusCode: publicStatus.code,
+        statusLabel: publicStatus.label
       }
     };
   }

@@ -245,6 +245,31 @@ async function runSprint4Tests() {
     // =============================================================
     // TEST S4-05: TRA CỨU TRẠNG THÁI HỒ SƠ
     // =============================================================
+    console.log('\n--- Kiểm thử S4-05: Tra cứu trạng thái hồ sơ ---');
+    // 1. Tra cứu đúng mã và đúng email
+    const lookupSuccess = await portalService.lookupStatus({
+      trackingCode: generatedTrackingCode,
+      email: validCandidateEmail
+    }, '127.0.0.1');
+    assert.equal(lookupSuccess.success, true);
+    assert.equal(lookupSuccess.data.statusCode, 'RECEIVED');
+    assert.equal(lookupSuccess.data.statusLabel, 'Đã nhận hồ sơ');
+    assert.strictEqual(lookupSuccess.data.internalNotes, undefined, 'Không được để lộ internal notes');
+    assert.strictEqual(lookupSuccess.data.interviewer, undefined, 'Không được để lộ interviewer');
+    console.log(`✓ Tra cứu đúng trả về trạng thái tổng quát: "${lookupSuccess.data.statusLabel}"`);
+
+    // 2. Tra cứu sai email hoặc sai mã không tiết lộ thông tin
+    const lookupFail = await portalService.lookupStatus({
+      trackingCode: generatedTrackingCode,
+      email: 'wrong.email@company.com'
+    }, '127.0.0.1');
+    assert.equal(lookupFail.success, false);
+    assert.equal(lookupFail.code, 'LOOKUP_INVALID_CREDENTIALS');
+    console.log('✓ Sai email trả về thông báo an toàn, không rò rỉ dữ liệu');
+
+    // =============================================================
+    // TEST S4-06: ỨNG VIÊN RÚT HỒ SƠ
+    // =============================================================
   } finally {
     // cleanup test job if created
     if (testJobId && testJobId.startsWith('job-test-')) {

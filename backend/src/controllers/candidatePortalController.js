@@ -84,6 +84,14 @@ class CandidatePortalController {
         return this.send(res, result.statusCode || (result.success ? 201 : 400), result);
       }
 
+      // 3. S4-05: Lookup Application Status (Tracking Code + Email, Rate Limited, 4 mapped stages)
+      if (pathname === '/api/v1/public/applications/status' && method === 'POST') {
+        const ipAddress = this.getClientIp(req);
+        const body = await parseBody(req);
+        const result = await this.service.lookupStatus(body, ipAddress);
+        return this.send(res, result.statusCode || (result.success ? 200 : 400), result);
+      }
+
       // 6. S4-04: Parse CV PDF (Recruiter only, non-destructive preview)
       if (/^\/api\/v1\/candidates\/[^/]+\/parse-cv$/.test(pathname) && method === 'POST') {
         const user = await this.rbac.authorize(req, res, this.auth, 'candidate.cv.parse');

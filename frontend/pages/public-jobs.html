@@ -149,4 +149,46 @@
     </div>
   </div>
 
+  <!-- Modal: Status Lookup Form (S4-05) -->
+  <div id="modal-status-lookup" class="modal-backdrop hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;padding:16px;box-sizing:border-box;">
+    <div class="panel-card" style="width:100%;max-width:500px;padding:24px;position:relative;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <h2 style="margin:0;font-size:1.25rem;font-weight:700;">Tra cứu trạng thái hồ sơ</h2>
+        <button type="button" id="btn-close-lookup-modal" class="btn btn-outline btn-sm" style="line-height:1;padding:4px 8px;">✕</button>
+      </div>
+
+      <form id="form-status-lookup" novalidate>
+        <div style="margin-bottom:12px;">
+          <label for="lookup-code" class="form-label" style="display:block;margin-bottom:4px;font-weight:600;">Mã tra cứu <span style="color:#ef4444;">*</span></label>
+          <input type="text" id="lookup-code" class="form-control" placeholder="Ví dụ: TRK-A1B2C3D4E5" required style="width:100%;box-sizing:border-box;text-transform:uppercase;">
+        </div>
+        <div style="margin-bottom:16px;">
+          <label for="lookup-email" class="form-label" style="display:block;margin-bottom:4px;font-weight:600;">Email đã đăng ký ứng tuyển <span style="color:#ef4444;">*</span></label>
+          <input type="email" id="lookup-email" class="form-control" placeholder="nguyenvana@example.com" required style="width:100%;box-sizing:border-box;">
+        </div>
+
+        <div id="lookup-alert" class="alert hidden" style="margin-bottom:16px;padding:10px 14px;border-radius:6px;font-size:0.9rem;"></div>
+
+        <div style="display:flex;justify-content:flex-end;gap:8px;">
+          <button type="button" id="btn-cancel-lookup" class="btn btn-outline">Đóng</button>
+          <button type="submit" id="btn-submit-lookup" class="btn btn-primary">Tra cứu ngay</button>
+        </div>
+      </form>
+
+      <!-- Status Result Box -->
+      <div id="lookup-result-box" class="hidden" style="margin-top:16px;padding:16px;background:var(--bg-muted,#f9fafb);border-radius:8px;border:1px solid var(--border-color,#e5e7eb);">
+        <h4 style="margin:0 0 8px 0;font-size:0.95rem;color:var(--text-muted,#4b5563);">Kết quả tra cứu:</h4>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <span style="font-weight:600;">Vị trí ứng tuyển:</span>
+          <span id="result-job-title" style="font-weight:700;"></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <span style="font-weight:600;">Trạng thái hiện tại:</span>
+          <span id="result-status-badge" class="badge" style="padding:4px 8px;border-radius:4px;font-size:0.875rem;font-weight:600;"></span>
+        </div>
+        <p id="result-status-desc" style="margin:4px 0 0 0;font-size:0.85rem;color:var(--text-muted,#6b7280);"></p>
+      </div>
+    </div>
+  </div>
+
 </main>
