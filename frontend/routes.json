@@ -282,6 +282,7 @@
     "/components/admin-reset-pwd-modal.html",
     "/components/edit-profile-modal.html",
     "/components/audit-detail-modal.html",
+    "/components/referral-modal.html",
     "/pages/public-jobs.html"
   ]
 }

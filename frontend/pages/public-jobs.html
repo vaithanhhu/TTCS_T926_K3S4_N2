@@ -1,5 +1,63 @@
-<main id="public-jobs-view" class="hidden" style="max-width:1000px;margin:0 auto;padding:24px;min-width:0;">
- <header class="view-header"><h1>Cơ hội nghề nghiệp</h1><a href="/login" class="btn btn-outline btn-sm">Đăng nhập</a></header>
- <button id="public-jobs-back" type="button" class="btn btn-outline btn-sm hidden">Danh sách việc làm</button>
- <div id="public-jobs-content" aria-live="polite"></div>
+<main id="public-jobs-view" class="hidden" style="max-width:1100px;margin:0 auto;padding:24px 16px;min-width:0;">
+  <!-- Public Header -->
+  <header class="view-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:24px;">
+    <div>
+      <h1 style="margin:0 0 4px 0;font-size:1.75rem;font-weight:700;">Cơ hội nghề nghiệp</h1>
+      <p style="margin:0;color:var(--text-muted,#6b7280);font-size:0.95rem;">Khám phá các vị trí tuyển dụng hấp dẫn và nộp CV ngay hôm nay</p>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button id="btn-public-lookup" type="button" class="btn btn-outline btn-sm" style="display:inline-flex;align-items:center;gap:6px;">
+        🔍 Tra cứu hồ sơ
+      </button>
+      <a href="/login" class="btn btn-primary btn-sm" style="display:inline-flex;align-items:center;gap:6px;">
+        Đăng nhập nội bộ
+      </a>
+    </div>
+  </header>
+
+  <!-- Navigation bar (Back button) -->
+  <div style="margin-bottom:16px;">
+    <button id="public-jobs-back" type="button" class="btn btn-outline btn-sm hidden" style="display:inline-flex;align-items:center;gap:6px;">
+      ← Quay lại danh sách việc làm
+    </button>
+  </div>
+
+  <!-- Search & Filter Bar (Shown in List View) -->
+  <section id="public-jobs-filter-section" class="panel-card" style="padding:16px;margin-bottom:24px;">
+    <form id="public-jobs-filter-form" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:12px;align-items:flex-end;">
+      <div>
+        <label for="filter-search" class="form-label" style="display:block;margin-bottom:4px;font-size:0.875rem;font-weight:600;">Tìm kiếm từ khóa</label>
+        <input type="text" id="filter-search" class="form-control" placeholder="Tiêu đề, kỹ năng, mô tả..." style="width:100%;box-sizing:border-box;">
+      </div>
+      <div>
+        <label for="filter-department" class="form-label" style="display:block;margin-bottom:4px;font-size:0.875rem;font-weight:600;">Phòng ban</label>
+        <select id="filter-department" class="form-control" style="width:100%;box-sizing:border-box;">
+          <option value="">Tất cả phòng ban</option>
+        </select>
+      </div>
+      <div>
+        <label for="filter-location" class="form-label" style="display:block;margin-bottom:4px;font-size:0.875rem;font-weight:600;">Địa điểm</label>
+        <select id="filter-location" class="form-control" style="width:100%;box-sizing:border-box;">
+          <option value="">Tất cả địa điểm</option>
+        </select>
+      </div>
+      <div>
+        <label for="filter-mode" class="form-label" style="display:block;margin-bottom:4px;font-size:0.875rem;font-weight:600;">Hình thức</label>
+        <select id="filter-mode" class="form-control" style="width:100%;box-sizing:border-box;">
+          <option value="">Tất cả hình thức</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button type="submit" id="btn-filter-apply" class="btn btn-primary" style="flex:1;">Lọc</button>
+        <button type="button" id="btn-filter-reset" class="btn btn-outline" style="flex:1;">Đặt lại</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- Main Content Container (List or Detail) -->
+  <div id="public-jobs-content" aria-live="polite"></div>
+
+  <!-- Pagination Container -->
+  <div id="public-jobs-pagination" style="display:flex;justify-content:center;gap:8px;margin-top:24px;" class="hidden"></div>
+
 </main>
