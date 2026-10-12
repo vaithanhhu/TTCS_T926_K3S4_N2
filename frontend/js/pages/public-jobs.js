@@ -66,6 +66,8 @@
     const backBtn = get('public-jobs-back');
     const pagination = get('public-jobs-pagination');
     const current = ++generation;
+    root.style.display = '';
+    root.style.flexDirection = '';
 
     const urlParams = new URLSearchParams(window.location.search);
     const jobId = urlParams.get('id');
@@ -88,7 +90,7 @@
       const result = await window.ATS_API.publicJobsApi(jobId);
       if (current !== generation || typeof currentActiveView !== 'undefined' && currentActiveView !== 'public-jobs') return;
 
-      root.innerHTML = '';
+      root.textContent = '';
       if (!result.ok || !result.data?.data) {
         const errorCard = node('div', null, 'panel-card');
         errorCard.style.padding = '32px';
@@ -117,7 +119,7 @@
     const result = await window.ATS_API.publicJobsSearchApi(query);
 
     if (current !== generation || typeof currentActiveView !== 'undefined' && currentActiveView !== 'public-jobs') return;
-    root.innerHTML = '';
+    root.textContent = '';
 
     if (!result.ok) {
       const errBox = node('div', null, 'panel-card');
@@ -136,8 +138,9 @@
       const emptyCard = node('div', null, 'panel-card');
       emptyCard.style.padding = '48px 24px';
       emptyCard.style.textAlign = 'center';
-      emptyCard.appendChild(node('div', '🔍', ''));
-      emptyCard.firstElementChild.style.fontSize = '2.5rem';
+      const emptyIcon = node('div', '🔍', '');
+      emptyIcon.style.fontSize = '2.5rem';
+      emptyCard.appendChild(emptyIcon);
       emptyCard.appendChild(node('h3', 'Không tìm thấy việc làm phù hợp'));
       emptyCard.appendChild(node('p', 'Hãy thử tìm kiếm với từ khóa khác hoặc bỏ bớt các điều kiện lọc.'));
       root.appendChild(emptyCard);
@@ -212,6 +215,7 @@
 
       const detailBtn = node('button', 'Xem chi tiết', 'btn btn-outline btn-sm');
       detailBtn.type = 'button';
+      detailBtn.setAttribute('data-public-job-id', job.id);
       detailBtn.addEventListener('click', () => window.ATS_ROUTER.navigate('/careers/jobs?id=' + encodeURIComponent(job.id)));
       btnGroup.appendChild(detailBtn);
 
@@ -243,78 +247,20 @@
   }
 
   function renderJobDetail(root, job) {
-    const card = node('article', null, 'panel-card');
-    card.style.padding = '32px';
-
+    window.ATS_PUBLIC_JOB_RENDERER.render(root, job);
+    root.style.display = 'flex';
+    root.style.flexDirection = 'column';
     const header = node('div', null, '');
-    header.style.borderBottom = '1px solid var(--border-color,#e5e7eb)';
-    header.style.paddingBottom = '20px';
+    header.style.order = '-1';
     header.style.marginBottom = '24px';
-
-    const title = node('h1', job.title);
-    title.style.margin = '0 0 8px 0';
-    title.style.fontSize = '1.75rem';
-    title.style.fontWeight = '700';
-    header.appendChild(title);
-
-    const meta = node('div', [job.departmentName, job.workLocation, job.workMode].filter(Boolean).join(' • '));
-    meta.style.fontSize = '1rem';
-    meta.style.color = 'var(--text-muted,#4b5563)';
-    meta.style.marginBottom = '12px';
-    header.appendChild(meta);
-
-    if (job.showSalary) {
-      const sal = node('div', `💰 Mức lương: ${Number(job.salaryMin).toLocaleString('vi-VN')} – ${Number(job.salaryMax).toLocaleString('vi-VN')} VNĐ/tháng`);
-      sal.style.fontWeight = '600';
-      sal.style.color = '#047857';
-      sal.style.marginBottom = '8px';
-      header.appendChild(sal);
-    }
-
-    if (job.applicationDeadline) {
-      const dl = node('div', `⏳ Hạn nộp hồ sơ: ${job.applicationDeadline.split('-').reverse().join('/')}`);
-      dl.style.fontSize = '0.9rem';
-      dl.style.color = '#b45309';
-      dl.style.marginBottom = '16px';
-      header.appendChild(dl);
-    }
-
     const applyActionBtn = node('button', '🚀 Ứng tuyển ngay bây giờ', 'btn btn-primary');
     applyActionBtn.style.padding = '10px 24px';
     applyActionBtn.style.fontSize = '1rem';
     applyActionBtn.style.fontWeight = '600';
     applyActionBtn.addEventListener('click', () => openApplyModal(job));
     header.appendChild(applyActionBtn);
+    root.appendChild(header);
 
-    card.appendChild(header);
-
-    // Job Description
-    if (job.jobDescription) {
-      card.appendChild(node('h2', 'Mô tả công việc', ''));
-      card.lastElementChild.style.fontSize = '1.25rem';
-      card.lastElementChild.style.margin = '16px 0 8px 0';
-      const desc = node('div', job.jobDescription);
-      desc.style.whiteSpace = 'pre-wrap';
-      desc.style.lineHeight = '1.6';
-      desc.style.color = 'var(--text-color,#374151)';
-      desc.style.marginBottom = '24px';
-      card.appendChild(desc);
-    }
-
-    // Candidate Requirements
-    if (job.candidateRequirements) {
-      card.appendChild(node('h2', 'Yêu cầu ứng viên', ''));
-      card.lastElementChild.style.fontSize = '1.25rem';
-      card.lastElementChild.style.margin = '16px 0 8px 0';
-      const req = node('div', job.candidateRequirements);
-      req.style.whiteSpace = 'pre-wrap';
-      req.style.lineHeight = '1.6';
-      req.style.color = 'var(--text-color,#374151)';
-      req.style.marginBottom = '24px';
-      card.appendChild(req);
-    }
-
-    // Bottom Action Bar
     const btmBar = node('div', null, '');
     btmBar.style.display = 'flex';
     btmBar.style.justifyContent = 'space-between';
@@ -330,8 +276,7 @@
     btmApply.addEventListener('click', () => openApplyModal(job));
     btmBar.appendChild(btmApply);
 
-    card.appendChild(btmBar);
-    root.appendChild(card);
+    root.appendChild(btmBar);
   }
 
   // --- Modal: Apply Job Logic ---
