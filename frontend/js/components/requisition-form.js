@@ -18,8 +18,34 @@
   let pendingOpenProposal=null;
   let requisitionFormBusy=false;
   let requisitionSubmitRetry=null;
+  let requisitionReturnFocus = null, requisitionBodyOverflow = null;
+  function closeRequisitionForm() {
+    const visible = createReqModal && !createReqModal.classList.contains('hidden');
+    createReqModal?.classList.add('hidden');
+    if (requisitionBodyOverflow !== null) { document.body.style.overflow = requisitionBodyOverflow; requisitionBodyOverflow = null; }
+    if (visible && requisitionReturnFocus?.isConnected !== false) requisitionReturnFocus?.focus?.();
+    requisitionReturnFocus = null;
+  }
+  function revealRequisitionError() {
+    createReqAlert?.scrollIntoView?.({ block: 'nearest' });
+    createReqAlert?.focus?.({ preventScroll: true });
+  }
+  window.ATS_REQUISITION_FORM_UI = { leave: closeRequisitionForm };
+  createReqModal?.addEventListener('click', event => { if (event.target === createReqModal) closeRequisitionForm(); });
+  document.addEventListener('keydown', event => {
+    if (!createReqModal || createReqModal.classList.contains('hidden')) return;
+    if ([...document.querySelectorAll('.modal-overlay')].some(modal => modal !== createReqModal && !modal.classList.contains('hidden'))) return;
+    if (event.key === 'Escape') { event.preventDefault(); closeRequisitionForm(); }
+    if (event.key === 'Tab') {
+      const controls = [...createReqModal.querySelectorAll('button,input,select,textarea,a[href],[tabindex]')].filter(node => !node.disabled && node.getAttribute('tabindex') !== '-1' && node.getClientRects().length);
+      const first = controls[0], last = controls.at(-1);
+      if (event.shiftKey && (document.activeElement === first || !createReqModal.contains(document.activeElement))) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && (document.activeElement === last || !createReqModal.contains(document.activeElement))) { event.preventDefault(); first?.focus(); }
+    }
+  });
+
   const reapproveCreateReqBtn=document.getElementById('create-req-reapprove');
-  if(reapproveCreateReqBtn)reapproveCreateReqBtn.addEventListener('click',()=>{if(!pendingOpenProposal)return;createReqModal.classList.add('hidden');return window.ATS_REQUISITION_APPROVAL_UI.propose(editingS210Requisition.id,pendingOpenProposal,requisitionEditAccess?.editVersion);});
+  if(reapproveCreateReqBtn)reapproveCreateReqBtn.addEventListener('click',()=>{if(!pendingOpenProposal)return;closeRequisitionForm();return window.ATS_REQUISITION_APPROVAL_UI.propose(editingS210Requisition.id,pendingOpenProposal,requisitionEditAccess?.editVersion);});
   let requisitionSalaryCheck = { key: null, status: null, message: '' };
   let requisitionSalaryCheckRevision = 0;
   let requisitionOptionsRevision = 0;
@@ -50,7 +76,7 @@
     for (const id of ['create-req-standard-salary', 'create-req-salary-warning']) {
       const node = document.getElementById(id); if (node) node.textContent = '';
     }
-    if (createReqModal) createReqModal.classList.add('hidden');
+    if (createReqModal) closeRequisitionForm();
   }
 
   function updateRequisitionSalaryHint() {
@@ -99,6 +125,7 @@
 
   async function openCreateReqModal(request = null, access = null, copyContext = null) {
     if (!createReqModal) return;
+    if (createReqModal.classList.contains('hidden')) requisitionReturnFocus = document.activeElement;
     window.ATS_REQUISITION_TRACKING?.clear('s303-s210');
     window.ATS_REQUISITION_OPERATIONS_UI?.clear('s306-s210');
     window.ATS_REQUISITION_LIFECYCLE_UI?.leave();
@@ -256,9 +283,13 @@
     if(saveCreateReqDraftBtn)saveCreateReqDraftBtn.textContent=copyContext?'Lưu bản sao nháp':'Lưu nháp';
     document.getElementById('submit-create-req-btn').classList.toggle('hidden', !editable);
     const canAssign=currentAuthenticatedUser?.roles?.some(role=>['ADMIN','HR_MANAGER'].includes(role));if(createReqRecruiterSelect&&!canAssign)createReqRecruiterSelect.disabled=true;
-    if(copyContext){document.getElementById('submit-create-req-btn').classList.add('hidden');if(createReqRecruiterSelect){createReqRecruiterSelect.value='';createReqRecruiterSelect.disabled=true;}document.getElementById('create-req-state').textContent='Sao chép '+copyContext.sourceCode+' → Nháp mới';if(copyContext.requiresNewNeededDate){document.getElementById('create-req-needed-date-input').value='';createReqAlertMsg.textContent='Ngày cần người của yêu cầu gốc đã qua. Vui lòng nhập ngày mới hợp lệ.';createReqAlert.classList.remove('hidden');}}
+    if(copyContext){document.getElementById('submit-create-req-btn').classList.add('hidden');if(createReqRecruiterSelect){createReqRecruiterSelect.value='';createReqRecruiterSelect.disabled=true;}document.getElementById('create-req-state').textContent='Sao chép '+copyContext.sourceCode+' → Nháp mới';if(copyContext.requiresNewNeededDate){document.getElementById('create-req-needed-date-input').value='';createReqAlertMsg.textContent='Ngày cần người của yêu cầu gốc đã qua. Vui lòng nhập ngày mới hợp lệ.';createReqAlert.classList.remove('hidden'); revealRequisitionError();}}
     updateRequisitionSalaryHint();
+    if (requisitionBodyOverflow === null) requisitionBodyOverflow = document.body.style.overflow || '';
+    document.body.style.overflow = 'hidden';
     createReqModal.classList.remove('hidden');
+    createReqModal.querySelector('.modal-body')?.scrollTo?.({ top: 0 });
+    closeCreateReqModal?.focus?.();
     window.ATS_HEADCOUNT_BUDGET_UI?.openCreate(editingS210Requisition?.id);
     window.ATS_REQUISITION_TRACKING?.load('s303-s210',editingS210Requisition?.id,()=>isCurrentSession()&&!createReqModal.classList.contains('hidden'));
     window.ATS_JOB_POSTING_DRAFT_UI?.load('s309-s210',editingS210Requisition?.id,()=>isCurrentSession()&&!createReqModal.classList.contains('hidden'));
@@ -268,8 +299,8 @@
   }
 
   if (openCreateReqModalBtn) openCreateReqModalBtn.addEventListener('click', openCreateReqModal);
-  if (closeCreateReqModal) closeCreateReqModal.addEventListener('click', () => createReqModal.classList.add('hidden'));
-  if (cancelCreateReqBtn) cancelCreateReqBtn.addEventListener('click', () => createReqModal.classList.add('hidden'));
+  if (closeCreateReqModal) closeCreateReqModal.addEventListener('click', () => closeRequisitionForm());
+  if (cancelCreateReqBtn) cancelCreateReqBtn.addEventListener('click', () => closeRequisitionForm());
 
   async function saveRequisitionForm(status) {
       const token = sessionStorage.getItem('ats_token');
@@ -316,8 +347,8 @@
           const changes=Object.fromEntries(Object.entries(payload).filter(([key,value])=>!['status','formVersion'].includes(key)&&(value??'')!==(editingS210Requisition[key]??'')));
           const result=await window.ATS_API.updateRequisitionApi(token,editorId,{...changes,expectedOperationVersion:requisitionEditAccess?.operationVersion});
           if(token!==sessionStorage.getItem('ats_token')||editorRevision!==requisitionOptionsRevision||editorId!==editingS210Requisition?.id||createReqModal.classList.contains('hidden'))return;
-          if(result.ok&&result.data?.success){createReqModal.classList.add('hidden');showToast('success','Đã cập nhật','Thông tin vận hành đã được lưu.');loadRequisitions();}
-          else{createReqAlertMsg.textContent=requisitionFailureMessage(result,'Không thể cập nhật yêu cầu tuyển dụng.');createReqAlert.classList.remove('hidden');if(result.data?.code==='REQUISITION_REAPPROVAL_REQUIRED'&&result.data.approvalEnabled){pendingOpenProposal=Object.fromEntries(Object.entries(changes).filter(([key])=>requisitionEditAccess?.significantFields?.includes(key)));reapproveCreateReqBtn?.classList.remove('hidden');}}
+          if(result.ok&&result.data?.success){closeRequisitionForm();showToast('success','Đã cập nhật','Thông tin vận hành đã được lưu.');loadRequisitions();}
+          else{createReqAlertMsg.textContent=requisitionFailureMessage(result,'Không thể cập nhật yêu cầu tuyển dụng.');createReqAlert.classList.remove('hidden'); revealRequisitionError();if(result.data?.code==='REQUISITION_REAPPROVAL_REQUIRED'&&result.data.approvalEnabled){pendingOpenProposal=Object.fromEntries(Object.entries(changes).filter(([key])=>requisitionEditAccess?.significantFields?.includes(key)));reapproveCreateReqBtn?.classList.remove('hidden');}}
           return;
         }
         if (headcount !== null && (!Number.isSafeInteger(headcount) || headcount <= 0)) throw new Error('Số lượng cần tuyển phải là số nguyên lớn hơn 0.');
@@ -330,7 +361,7 @@
         if(copyAtStart&&(copyAtStart!==requisitionCopyContext||copyGeneration!==requisitionOptionsRevision||token!==sessionStorage.getItem('ats_token')||createReqModal.classList.contains('hidden')||copyAtStart.isCurrent?.()===false))return;
         if (updateRequisitionSalaryHint() && !payload.salaryJustification.trim()) throw new Error('Dải lương ngoài chuẩn bắt buộc nhập giải trình.');
         if (status !== 'DRAFT' && ['jobTitleId', 'departmentId', 'headcount', 'recruitmentReason', 'proposedSalaryMin', 'proposedSalaryMax', 'neededDate', 'jobDescription', 'candidateRequirements'].some(key => payload[key] === null || payload[key] === '' || (typeof payload[key] === 'string' && !payload[key].trim()))) throw new Error('Vui lòng nhập đầy đủ thông tin bắt buộc trước khi hoàn tất.');
-        if(requisitionCopyContext){if(requisitionCopySaving)return;const context=requisitionCopyContext,generation=requisitionOptionsRevision;requisitionCopySaving=true;saveCreateReqDraftBtn.disabled=true;const document=Object.fromEntries(Object.entries(payload).filter(([key])=>!['formVersion','status','recruiterId'].includes(key)));const copied=await window.ATS_API.requisitionOperationApi(token,context.sourceId,'copy','POST',{requestId:context.requestId,expectedSourceVersion:context.sourceVersion,document});if(generation!==requisitionOptionsRevision||token!==sessionStorage.getItem('ats_token')||requisitionCopyContext!==context||createReqModal.classList.contains('hidden'))return;requisitionCopySaving=false;saveCreateReqDraftBtn.disabled=false;if(copied.ok&&copied.data?.success){createReqModal.classList.add('hidden');showToast('success','Đã sao chép yêu cầu','Bản sao đã được lưu ở trạng thái Nháp, chưa phân công hoặc gửi duyệt.');await loadRequisitions();}else{createReqAlertMsg.textContent=copied.data?.message||'Không thể sao chép yêu cầu.';createReqAlert.classList.remove('hidden');}return;}
+        if(requisitionCopyContext){if(requisitionCopySaving)return;const context=requisitionCopyContext,generation=requisitionOptionsRevision;requisitionCopySaving=true;saveCreateReqDraftBtn.disabled=true;const document=Object.fromEntries(Object.entries(payload).filter(([key])=>!['formVersion','status','recruiterId'].includes(key)));const copied=await window.ATS_API.requisitionOperationApi(token,context.sourceId,'copy','POST',{requestId:context.requestId,expectedSourceVersion:context.sourceVersion,document});if(generation!==requisitionOptionsRevision||token!==sessionStorage.getItem('ats_token')||requisitionCopyContext!==context||createReqModal.classList.contains('hidden'))return;requisitionCopySaving=false;saveCreateReqDraftBtn.disabled=false;if(copied.ok&&copied.data?.success){closeRequisitionForm();showToast('success','Đã sao chép yêu cầu','Bản sao đã được lưu ở trạng thái Nháp, chưa phân công hoặc gửi duyệt.');await loadRequisitions();}else{createReqAlertMsg.textContent=copied.data?.message||'Không thể sao chép yêu cầu.';createReqAlert.classList.remove('hidden'); revealRequisitionError();}return;}
         if(editingS210Requisition)payload.expectedDraftVersion=editingS210Requisition.draftVersion;
         const command={...(editingS210Requisition?{requisitionId:editingS210Requisition.id,expectedDraftVersion:editingS210Requisition.draftVersion,expectedWorkflowVersion:editingS210Requisition.approvalVersion}:{}),document:Object.fromEntries(Object.entries(payload).filter(([key])=>!['status','formVersion','expectedDraftVersion'].includes(key)))};
         const retryKey=JSON.stringify({actor:currentAuthenticatedUser?.id,command});
@@ -342,20 +373,20 @@
         if(token!==sessionStorage.getItem('ats_token')||copyGeneration!==requisitionOptionsRevision)return;
         if (res.ok && res.data && res.data.success) {
           requisitionSubmitRetry=null;
-          createReqModal.classList.add('hidden');
+          closeRequisitionForm();
           showToast('success', status === 'DRAFT' ? 'Đã lưu nháp' : 'Đã hoàn tất', status === 'DRAFT' ? 'Có thể mở nháp từ danh sách để tiếp tục chỉnh sửa.' : 'Hồ sơ đang chờ phê duyệt. Chưa mở tuyển dụng.');
           loadRequisitions();
           loadDashboardData();
         } else {
           if (createReqAlert && createReqAlertMsg) {
             createReqAlertMsg.textContent = editingS210Requisition ? requisitionFailureMessage(res, 'Không thể cập nhật yêu cầu tuyển dụng. Vui lòng thử lại.') : res.data?.message || 'Không thể tạo vị trí tuyển dụng.';
-            createReqAlert.classList.remove('hidden');
+            createReqAlert.classList.remove('hidden'); revealRequisitionError();
           }
         }
       } catch (err) {
         if (createReqAlert && createReqAlertMsg) {
           createReqAlertMsg.textContent = err.message;
-          createReqAlert.classList.remove('hidden');
+          createReqAlert.classList.remove('hidden'); revealRequisitionError();
         }
       } finally {requisitionFormBusy=false;document.getElementById('submit-create-req-btn').disabled=false;if(saveCreateReqDraftBtn)saveCreateReqDraftBtn.disabled=false;}
   }
