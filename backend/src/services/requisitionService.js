@@ -5,6 +5,7 @@ const candidateStages = Object.freeze(['NEW', 'APPLIED', 'SCREENING', 'INTERVIEW
 class RequisitionService {
   constructor(db) {
     this.db = db || getDatabase();
+    this.openPolicy = new (require('./requisitionOpenPolicyService'))(this.db);
   }
 
   /**
@@ -87,6 +88,8 @@ class RequisitionService {
     const total=tracking&&options.limit?(await this.db.prepare('SELECT COUNT(*) AS n FROM requisitions r '+whereClause).get(...params)).n:null;
     const rows = (await stmt.all(...params,...(tracking&&options.limit?[options.limit,(options.page-1)*options.limit]:[])));
     const supports=tracking?await tracker.supports(rows.map(row=>row.id)):null;
+    const approvalRows=require('../config/config').REQUISITION_APPROVAL_ENABLED&&rows.length?await this.db.prepare('SELECT w.requisition_id,w.status,w.version,s.approver_name FROM requisition_approval_workflows w LEFT JOIN requisition_approval_steps s ON s.submission_id=w.current_submission_id AND s.status=\'PENDING\' WHERE w.requisition_id IN ('+rows.map(()=>'?').join(',')+')').all(...rows.map(row=>row.id)):[];
+    const approvalById=new Map(approvalRows.map(row=>[row.requisition_id,row]));
     const trackingNow=tracking?new Date():null;
     const mapped = rows.map(r => ({
       id: r.id,
@@ -101,6 +104,7 @@ class RequisitionService {
       ...this.s210Fields(r),
       ...(tracking?{...tracker.metrics(r,trackingNow),supportRecruiters:supports.get(r.id)||[]}:{}),
       status: r.status,
+      ...(require('../config/config').REQUISITION_APPROVAL_ENABLED?{approvalStatus:approvalById.get(r.id)?.status||'NOT_SUBMITTED',approvalVersion:approvalById.get(r.id)?.version||null,waitingFor:approvalById.get(r.id)?.approver_name||null}:{}),
       handoverRequired: Boolean(r.handover_required),
       handoverNotes: r.handover_notes || null,
       createdAt: r.created_at,
@@ -136,8 +140,14 @@ class RequisitionService {
     if(require('../config/config').REQUISITION_LIFECYCLE_ENABLED&&['CLOSED','PAUSED','CANCELLED'].includes(typeof data.status==='string'?data.status.trim().toUpperCase():data.status))return{success:false,statusCode:409,code:'REQUISITION_LIFECYCLE_ACTION_REQUIRED',message:'Vui lòng tạo Nháp/OPEN và dùng thao tác vòng đời với lý do phù hợp.'};
     return this.db.transaction(async () => {
       if(actor){const fresh=await new (require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(actor.id,'requisition.create');if(!fresh)return{success:false,statusCode:403,code:'FORBIDDEN_PERMISSION_DENIED',message:'Bạn không có quyền tạo yêu cầu tuyển dụng.'};actor={...actor,...fresh};}
+      const legacyBody=!this.isS210Request(data);
+      this.openPolicy.client(data);
+      if(data.status&&data.status!=='DRAFT'){this.openPolicy.enabled();this.openPolicy.fail('REQUISITION_APPROVAL_REQUIRED','Hãy lưu nháp hoặc Lưu và Gửi phê duyệt. Chỉ cấp cuối được mở tuyển dụng.');}
+      if(!await this.openPolicy.available())this.openPolicy.fail('OPEN_POLICY_MIGRATION_REQUIRED','Cần áp dụng migration chính sách mở tuyển dụng.');
+      data={...data,status:'DRAFT'};
+      if(!data.departmentId&&typeof(data.departmentName||data.department)==='string'){const matches=await this.db.prepare("SELECT id FROM departments WHERE name=? AND status='ACTIVE'").all((data.departmentName||data.department).trim());if(matches.length===1)data.departmentId=matches[0].id;}
       if (this.db.provider === 'postgres') await this.db.prepare('SELECT pg_advisory_xact_lock(hashtext(?))').get('requisition-code');
-    if (this.isS210Request(data)) return (await this.saveS210Requisition(null, data, actor));
+    if (this.isS210Request(data)){const result=await this.saveS210Requisition(null,data,actor);if(result.success&&legacyBody)result.data=Object.fromEntries(['id','code','title','departmentName','headcount','status','draftVersion'].map(key=>[key,result.data[key]]));return result;}
     if(actor&&(data.recruiterId||data.assignedRecruiterId)&&!actor.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role)))return{success:false,statusCode:403,code:'REQUISITION_ASSIGN_FORBIDDEN',message:'Bạn không có quyền phân công recruiter.'};
     const title = typeof data.title === 'string' ? data.title.trim() : '';
     const departmentId = typeof data.departmentId === 'string'
@@ -355,6 +365,10 @@ class RequisitionService {
   /**
    * Get single requisition by ID
    */
+  async approvalState(id) {
+    const workflow=await this.db.prepare('SELECT id,status,version FROM requisition_approval_workflows WHERE requisition_id=?').get(id);
+    return {approvalStatus:workflow?.status||'NOT_SUBMITTED',approvalVersion:workflow?.version||null,approvalWorkflowId:workflow?.id||null};
+  }
   async getRequisitionById(id) {
     if (!id) return null;
     const stmt = this.db.prepare(`
@@ -384,6 +398,8 @@ class RequisitionService {
       workModeId: r.work_mode_id || null,
       headcount: r.s210_version && r.headcount === 0 ? null : r.headcount,
       ...this.s210Fields(r),
+      draftVersion: await this.openPolicy.version(r.id),
+      ...(require('../config/config').REQUISITION_APPROVAL_ENABLED?await this.approvalState(r.id):{}),
       status: r.status,
       handoverRequired: Boolean(r.handover_required),
       handoverNotes: r.handover_notes,
@@ -400,6 +416,8 @@ class RequisitionService {
    * Update requisition details and status
    */
   async updateRequisition(id, data = {}, actor = null, options = {}) {
+    if(['createdBy','created_by'].some(key=>Object.hasOwn(data,key)))return{success:false,statusCode:403,code:'REQUISITION_PROTECTED_FIELD',message:'Không được thay đổi người tạo yêu cầu.'};
+    this.openPolicy.client(data);
     if(require('../config/config').REQUISITION_LIFECYCLE_ENABLED&&['CLOSED','PAUSED','CANCELLED'].includes(typeof data.status==='string'?data.status.trim().toUpperCase():data.status))return{success:false,statusCode:409,code:'REQUISITION_LIFECYCLE_ACTION_REQUIRED',message:'Vui lòng dùng thao tác vòng đời với lý do và kiểm tra pipeline.'};
     if (actor) return this.db.transaction(async () => {
       const initial = await this.getRequisitionById(id);
@@ -718,6 +736,8 @@ class RequisitionService {
 
   async saveS210Requisition(current, data, actor) {
     return this.db.transaction(async () => {
+      if(current?.status==='DRAFT')await this.openPolicy.editable(current,data.expectedDraftVersion);
+      if((!current||current.status==='DRAFT')&&data.status&&data.status!=='DRAFT'){this.openPolicy.enabled();this.openPolicy.fail('REQUISITION_APPROVAL_REQUIRED','Hồ sơ chỉ được OPEN sau phê duyệt cấp cuối.');}
       if (this.db.provider === 'postgres') await this.db.prepare('SELECT pg_advisory_xact_lock(hashtext(?))').get('requisition-code');
     if (current?.status === 'DRAFT' && actor && current.createdBy !== actor.id) {
       return { success: false, statusCode: 403, code: 'REQUISITION_DRAFT_FORBIDDEN', message: 'Bạn chỉ được sửa nháp do mình tạo.' };
@@ -729,14 +749,14 @@ class RequisitionService {
     const headcount = v.headcount ?? 0; // Existing NOT NULL column: zero denotes an unentered draft quantity only.
     const id = current?.id || 'req-' + crypto.randomUUID();
     const createdBy = current?.createdBy || actor?.id || null;
-    const manager = department?.manager_id || null;
+    const manager = department?.manager_id || (actor?.roles?.includes('HIRING_MGR')?actor.id:current?.hiringManagerId||null);
     const persistedRecruiterId=actor&&require('../config/config').REQUISITION_OPERATIONS_ENABLED?current?.recruiterId||null:v.recruiterId;
     if (current) {
       (await this.db.prepare(`UPDATE requisitions SET title=?, job_title_id=?, department_id=?, department_name=?,
         headcount=?, hiring_manager_id=?, recruiter_id=?, work_location_id=?, work_mode_id=?, status=?,
         s210_version=1, created_by=?, recruitment_reason=?, proposed_salary_min=?, proposed_salary_max=?,
         needed_date=?, job_description=?, candidate_requirements=?, salary_justification=?, updated_at=datetime('now') WHERE id=?`)
-        .run(title, v.jobTitleId, v.departmentId, department?.name || '', headcount, manager,
+        .run(title, v.jobTitleId, v.departmentId, department?.name || (status==='DRAFT'?String(data.departmentName||data.department||current?.departmentName||'').trim():''), headcount, manager,
           persistedRecruiterId, v.workLocationId, v.workModeId, status, createdBy, v.recruitmentReason,
           v.proposedSalaryMin, v.proposedSalaryMax, v.neededDate, v.jobDescription, v.candidateRequirements, v.salaryJustification, id));
     } else {
@@ -747,7 +767,7 @@ class RequisitionService {
         hiring_manager_id,recruiter_id,work_location_id,work_mode_id,status,s210_version,created_by,recruitment_reason,
         proposed_salary_min,proposed_salary_max,needed_date,job_description,candidate_requirements,salary_justification)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1,?,?,?,?,?,?,?,?)`)
-        .run(id, code, title, v.jobTitleId, v.departmentId, department?.name || '', headcount, manager,
+        .run(id, code, title, v.jobTitleId, v.departmentId, department?.name || (status==='DRAFT'?String(data.departmentName||data.department||current?.departmentName||'').trim():''), headcount, manager,
           persistedRecruiterId, v.workLocationId, v.workModeId, status, createdBy, v.recruitmentReason,
           v.proposedSalaryMin, v.proposedSalaryMax, v.neededDate, v.jobDescription, v.candidateRequirements, v.salaryJustification));
     }
@@ -1024,6 +1044,7 @@ class RequisitionService {
     if (!edit) return {success:true};
     if (!await new (require('../middlewares/rbacMiddleware'))(this.db).hasPermission(user.id,item.status==='DRAFT'?'requisition.draft.edit':'requisition.edit')) return fail(403,'REQUISITION_EDIT_FORBIDDEN','Bạn không có quyền chỉnh sửa yêu cầu tuyển dụng này.');
     if (!['DRAFT','OPEN'].includes(item.status)) return fail(409,'REQUISITION_EDIT_STATE_FORBIDDEN','Yêu cầu tuyển dụng đang ở trạng thái không cho phép chỉnh sửa.');
+    if(item.status==='DRAFT'&&item.approvalStatus==='PENDING')return fail(409,'APPROVAL_PENDING_EDIT_FORBIDDEN','Hồ sơ đang chờ duyệt; chưa được chỉnh sửa nội dung.');
     return {success:true,editVersion:this.approvalContentHash(item),operationVersion:this.operationContentHash(item),canEdit:true,canChangeSignificant:user.roles.some(role=>['ADMIN','HR_MANAGER','HIRING_MGR'].includes(role)),operationalFields:user.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))?['handoverNotes','recruiterId','status']:['handoverNotes'],significantFields:['title','jobTitleId','departmentId','departmentName','headcount','recruitmentReason','proposedSalaryMin','proposedSalaryMax','salaryJustification','neededDate','jobDescription','candidateRequirements','workLocationId','workModeId']};
   }
 
@@ -1419,7 +1440,7 @@ class RequisitionService {
     const email = typeof data.email === 'string' ? data.email.trim() : '';
     const phoneNumber = typeof data.phoneNumber === 'string' ? data.phoneNumber.trim() : '';
     const requisitionId = data.requisitionId || null;
-    if(requisitionId){const position=await this.db.prepare('SELECT status FROM requisitions WHERE id=?'+(this.db.provider==='postgres'?' FOR SHARE':'')).get(requisitionId);if(position&&(['PAUSED','CANCELLED'].includes(position.status)||require('../config/config').REQUISITION_LIFECYCLE_ENABLED&&!['OPEN','IN_PROGRESS'].includes(position.status)))return{success:false,statusCode:409,code:'REQUISITION_NOT_ACCEPTING_APPLICATIONS',message:'Yêu cầu tuyển dụng hiện không nhận ứng tuyển mới.'};}
+    if(requisitionId){const position=await this.db.prepare('SELECT status FROM requisitions WHERE id=?'+(this.db.provider==='postgres'?' FOR SHARE':'')).get(requisitionId);if(position&&(['PAUSED','CANCELLED'].includes(position.status)||require('../config/config').REQUISITION_LIFECYCLE_ENABLED&&!['OPEN','IN_PROGRESS'].includes(position.status)))return{success:false,statusCode:409,code:'REQUISITION_NOT_ACCEPTING_APPLICATIONS',message:'Yêu cầu tuyển dụng hiện không nhận ứng tuyển mới.'};await this.openPolicy.recruiting(requisitionId);}
     const sourceId = data.sourceId || null;
 
     const sourceValidation = (await this.validateCandidateCatalog(
@@ -1460,6 +1481,7 @@ class RequisitionService {
    */
   async updateCandidateStage(id, stage, notes, rejectionReasonId,actor=null) {
     if(actor)return this.db.transaction(async()=>{const access=await this.candidateAccess(id,actor,'candidate.update');if(!access.success)return access;await this.db.prepare('SELECT id FROM requisitions WHERE id=?'+(this.db.provider==='postgres'?' FOR SHARE':'')).get(access.row.requisition_id);const checked=await this.candidateAccess(id,actor,'candidate.update');if(!checked.success)return checked;return this.updateCandidateStage(id,stage,notes,rejectionReasonId,null);});
+    await this.openPolicy.notDraft((await this.db.prepare('SELECT requisition_id FROM candidates WHERE id=?').get(id))?.requisition_id);
     if (!id) return { success: false, statusCode: 400, message: 'Thiếu mã ứng viên.' };
     const stageValidation = this.validateCandidateStage(stage);
     if (!stageValidation.success) return stageValidation;
@@ -1509,6 +1531,8 @@ class RequisitionService {
       if(data.interviewerId&&!await rbac.getAuthorizedActor(data.interviewerId,'interview.evaluate'))return{success:false,statusCode:400,code:'INTERVIEW_ASSIGNEE_INVALID',message:'Người phỏng vấn phải đang hoạt động và có quyền đánh giá.'};
       return this.createInterview({...data,requisitionId:data.requisitionId||candidate.requisition_id},null);
     });
+    const policyRequisitionId=data.requisitionId||(await this.db.prepare('SELECT requisition_id FROM candidates WHERE id=?').get(data.candidateId))?.requisition_id;
+    if(policyRequisitionId)await this.openPolicy.notDraft(policyRequisitionId);
     const candidateId = data.candidateId;
     const requisitionId = data.requisitionId || null;
     const interviewerId = data.interviewerId || null;
@@ -1545,6 +1569,7 @@ class RequisitionService {
       if(permission==='interview.update'&&!fresh.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))){const access=await this.candidateAccess(row.candidate_id,fresh);if(!access.success)return access;if(!await this.recruiterAssigned(row.requisition_id||access.row.requisition_id,fresh.id))return{success:false,statusCode:403,code:'INTERVIEW_OUT_OF_SCOPE',message:'Lịch phỏng vấn không thuộc vị trí được giao.'};}
       return this.updateInterviewStatus(id,status,feedback,score,null);
     });
+    await this.openPolicy.notDraft((await this.db.prepare('SELECT COALESCE(x.requisition_id,c.requisition_id) AS requisition_id FROM interviews x LEFT JOIN candidates c ON c.id=x.candidate_id WHERE x.id=?').get(id))?.requisition_id);
     if (!id) return { success: false, statusCode: 400, message: 'Thiếu mã phỏng vấn.' };
     const stmt = this.db.prepare(`
       UPDATE interviews
@@ -1572,6 +1597,8 @@ class RequisitionService {
       if(!actor.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))&&!await this.recruiterAssigned(requisitionId,actor.id))return{success:false,statusCode:403,code:'OFFER_OUT_OF_SCOPE',message:'Offer không thuộc vị trí được giao cho bạn.'};
       return this.createOffer({...data,requisitionId},null);
     });
+    const policyRequisitionId=data.requisitionId||(await this.db.prepare('SELECT requisition_id FROM candidates WHERE id=?').get(data.candidateId))?.requisition_id;
+    if(policyRequisitionId)await this.openPolicy.notDraft(policyRequisitionId);
     const candidateId = data.candidateId;
     const requisitionId = data.requisitionId || null;
     const salaryMonthly = parseInt(data.salaryMonthly, 10) || 0;
@@ -1613,6 +1640,7 @@ class RequisitionService {
       }
       return this.updateOfferStatus(id,status,null);
     });
+    await this.openPolicy.notDraft((await this.db.prepare('SELECT COALESCE(x.requisition_id,c.requisition_id) AS requisition_id FROM offers x LEFT JOIN candidates c ON c.id=x.candidate_id WHERE x.id=?').get(id))?.requisition_id);
     if (!id) return { success: false, statusCode: 400, message: 'Thiếu mã offer.' };
     const stmt = this.db.prepare(`UPDATE offers SET status = ? WHERE id = ?`);
     const res = (await stmt.run(status, id));

@@ -72,7 +72,11 @@
     "test:local-demo": "node backend/tests/test_local_demo.js",
     "test:postgres:startup": "node backend/tests/test_postgres_startup.js",
     "migrate:s4": "node backend/src/db/migrate-candidate-portal.js",
-    "test:s4": "node backend/tests/test_s4_candidate_portal.js"
+    "test:s4": "node backend/tests/test_s4_candidate_portal.js",
+    "test:qa-s3-06": "node backend/tests/test_qa_s3_06.js",
+    "migrate:qa-s3-06": "node backend/src/db/migrate-requisition-open-policy.js",
+    "test": "node backend/tests/run_local_tests.js",
+    "test:qa-s3-06:pg-live": "node backend/tests/test_qa_s3_06_pg_live.js"
   },
   "keywords": [
     "ats",

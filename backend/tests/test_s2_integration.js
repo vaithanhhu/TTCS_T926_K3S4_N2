@@ -254,17 +254,16 @@ async function main() {
   });
   await test('Sprint 1 requisition payload/response and Hiring Manager are preserved', async () => {
     const res = await api('POST', '/requisitions', tokens.hiring, { title: 'Legacy position', departmentName: 'Unregistered legacy department', hiringManagerId: 'usr-hiring-mgr', headcount: 2 });
-    assert.equal(res.status, 201); assert.deepEqual(Object.keys(res.data.data).sort(), ['id','code','title','departmentName','headcount','status'].sort());
+    assert.equal(res.status, 201); assert.deepEqual(Object.keys(res.data.data).sort(),['id','code','title','departmentName','headcount','status','draftVersion'].sort());assert.equal(res.data.data.status,'DRAFT');
     let req = (await requisitions.getRequisitionById(res.data.data.id)); assert.equal(req.hiringManagerId, 'usr-hiring-mgr');
-    const updated = (await requisitions.updateRequisition(req.id, { departmentName: 'Another legacy department' })); assert.equal(updated.success, true);
+    const updated = (await requisitions.updateRequisition(req.id, { departmentName: 'Another legacy department',expectedDraftVersion:req.draftVersion })); assert.equal(updated.success, true);
     req = (await requisitions.getRequisitionById(req.id)); assert.equal(req.hiringManagerId, 'usr-hiring-mgr'); assert.equal(req.departmentName, 'Another legacy department');
-    assert.equal((await requisitions.reassignHandover(req.id, 'usr-recruiter-2', 'Legacy handover')).success, true);
-    assert.equal((await requisitions.getRequisitionById(req.id)).recruiterId, 'usr-recruiter-2');
+    assert.equal((await requisitions.reassignHandover(req.id, 'usr-recruiter-2', 'Legacy handover')).success,true);assert.equal((await requisitions.getRequisitionById(req.id)).status,'DRAFT');assert.equal((await requisitions.getRequisitionById(req.id)).recruiterId,'usr-recruiter-2');
   });
   await test('Sprint 2 requisition references coexist with old requests and block department deletion', async () => {
     const res = await api('POST', '/requisitions', tokens.hiring, { title: 'New references', departmentId: department.id, jobTitleId: jobTitle.id }); assert.equal(res.status, 201);
     assert.equal((await requisitions.getRequisitionById(res.data.data.id)).jobTitleId, jobTitle.id);
-    assert.equal((await departments.deleteDepartment(department.id)).code, 'DEPARTMENT_HAS_OPEN_REQUISITIONS');
+    await db.prepare("UPDATE requisitions SET department_id=? WHERE id='req-001'").run(department.id);assert.equal((await departments.deleteDepartment(department.id)).code, 'DEPARTMENT_HAS_OPEN_REQUISITIONS');
     assert.equal((await departments.deactivateDepartment(department.id)).success, true);
     assert.equal((await api('POST', '/requisitions', tokens.hiring, { title: 'Inactive', departmentId: department.id })).status, 400);
     assert.equal((await api('POST', '/requisitions', tokens.hiring, { title: 'Legacy still works', departmentName: department.name })).status, 201);
