@@ -6,6 +6,7 @@ function leaveActivePage() {
   window.ATS_REQUISITION_LIFECYCLE_UI?.leave();
     window.ATS_JOB_POSTING_DRAFT_UI?.leave();
   window.ATS_JOB_PUBLICATION_UI?.leave();
+  window.ATS_REQUISITION_FORM_UI?.leave();
   window.ATS_PUBLIC_JOBS_PAGE?.leave();
   window.ATS_CANDIDATE_DETAILS?.leave();
   window.ATS_HEADCOUNT_BUDGET_UI?.leave();
