@@ -29,7 +29,8 @@ async function runSprint4Tests() {
     'migrate-requisition-lifecycle',
     'migrate-requisition-tracking-job-drafts',
     'migrate-job-publication',
-    'migrate-candidate-portal'
+    'migrate-candidate-portal',
+    'migrate-requisition-open-policy'
   ];
   for (const m of migrations) {
     await require(`../src/db/${m}`).migrate(db);

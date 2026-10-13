@@ -44,10 +44,10 @@ async function main(){
   const config=require('../src/config/config');config.DB_PROVIDER='postgres';config.EMAIL_MODE='simulated';
   const {PostgresDatabase}=require('../src/db/postgres');const database=require('../src/db/database');
   const original=database.getDatabase,queries=[];
-  const pool={on(){},async query(sql){queries.push(sql);if(sql.includes('ats_schema_migrations'))return {rows:[{checksum:expected}]};if(sql.includes('COUNT(*) AS c FROM users'))return {rows:[{c:59}]};throw new Error('Unexpected startup SQL');},async end(){}};
+  const pool={on(){},async query(sql){queries.push(sql);if(sql.includes('ats_schema_migrations'))return {rows:[{checksum:expected}]};if(sql.includes('ats_requisition_open_policy_migrations'))return {rows:[{checksum:digest(fs.readFileSync(path.join(root,'backend/src/db/migrations/010_requisition_open_policy_postgres.sql'),'utf8').replace(/\r\n/g,'\n'))}]};if(sql.includes('COUNT(*) AS c FROM users'))return {rows:[{c:59}]};throw new Error('Unexpected startup SQL');},async end(){}};
   const db=new PostgresDatabase({},pool);database.getDatabase=()=>db;
   const {startServer,server}=require('../src/server');
-  try{await startServer(0);const response=await fetch('http://127.0.0.1:'+server.address().port+'/api/v1/health');assert.equal(response.status,200);assert.equal((await response.json()).status,'ok');assert.equal(queries.length,2);assert.ok(queries.every(query=>/^SELECT\b/.test(query)));}
+  try{await startServer(0);const response=await fetch('http://127.0.0.1:'+server.address().port+'/api/v1/health');assert.equal(response.status,200);assert.equal((await response.json()).status,'ok');assert.equal(queries.length,3);assert.ok(queries.every(query=>/^SELECT\b/.test(query)));}
   finally{database.getDatabase=original;server.closeAllConnections();await new Promise(resolve=>server.close(resolve));await db.close();}
  });
  console.log('POSTGRES_STARTUP_RESULT '+JSON.stringify({passed,failed,total:passed+failed}));process.exitCode=failed?1:0;

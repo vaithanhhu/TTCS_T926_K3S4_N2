@@ -140,6 +140,14 @@ async function main() {
       await wait(async () => (await s.configurations.list()).find(item => item.id === configuration.id).publishedVersion === 2);
       await hr.screenshot({ path: path.join(output, 'configuration-version2.png'), fullPage: true });
     });
+    await check('QA-S3-06 approver markup renders as text without executing handlers',owner,async()=>{
+      const routePattern='**/api/v1/requisitions*',payload='<img src=x onerror="window.__qaReviewXss=1">';let waitingName=payload;
+      await owner.route(routePattern,async route=>{if(new URL(route.request().url()).pathname!=='/api/v1/requisitions')return route.continue();const response=await route.fetch(),data=await response.json();const list=data.requisitions||data.items;assert.ok(list.length);const first={...list[0],approvalStatus:'PENDING',waitingFor:waitingName,...(waitingName===payload?{title:'" onmouseover="window.__qaReviewTitleXss=1',departmentName:'<b>QA department</b>',handoverRequired:true}:{})};if(data.requisitions)data.requisitions=[first,...data.requisitions.slice(1)];if(data.items)data.items=[first,...data.items.slice(1)];await route.fulfill({response,json:data});});
+      try{
+        await owner.goto(app.base+'/requisitions');const table=owner.locator('#requisitions-table-body');await table.locator('tr').first().waitFor();await wait(async()=>(await table.textContent()).includes(payload));assert.ok((await table.textContent()).includes(payload));assert.equal(await table.locator('img').count(),0);assert.equal(await table.locator('[onerror]').count(),0);assert.equal(await table.locator('[onmouseover]').count(),0);assert.equal(await table.locator('b').count(),0);assert.equal(await owner.evaluate(()=>window.__qaReviewTitleXss),undefined);assert.equal(await owner.evaluate(()=>window.__qaReviewXss),undefined);
+        waitingName='Người duyệt Nguyễn Văn An';await owner.locator('#req-refresh-btn').click();await wait(async()=>(await table.textContent()).includes(waitingName));assert.ok((await table.textContent()).includes('Chờ phê duyệt'));assert.equal(await table.locator('img').count(),0);assert.equal(await owner.evaluate(()=>window.__qaReviewXss),undefined);await owner.screenshot({path:path.join(output,'qa-s3-06-xss-safe.png'),fullPage:true});
+      }finally{await owner.unroute(routePattern);}
+    });
     const create = async label => {
       await owner.goto(app.base + '/requisitions');
       await owner.locator('#open-create-req-modal-btn').click();
@@ -156,12 +164,12 @@ async function main() {
       await owner.locator('#create-req-requirements-input').fill('Browser requirements: experience and teamwork.');
       await owner.locator('#create-req-work-location-select').selectOption('s309-location');
       await owner.locator('#create-req-work-mode-select').selectOption('s309-mode');
-      const response = owner.waitForResponse(r => r.url() === app.base + '/api/v1/requisitions' && r.request().method() === 'POST');
+      const response = owner.waitForResponse(r => r.url() === app.base + '/api/v1/requisition-approvals/save-and-submit' && r.request().method() === 'POST');
       await owner.locator('#submit-create-req-btn').click();
       const result = await (await response).json();
       assert.equal(result.success, true);
       await owner.locator('#create-req-modal').waitFor({ state: 'hidden' });
-      return result.data.id;
+      return result.data.requisitionId;
     };
     const detail = async (page, id) => {
       await page.goto(app.base + '/requisitions');
@@ -169,10 +177,13 @@ async function main() {
       await page.locator('#create-req-modal').waitFor({ state: 'visible' });
     };
     const approve = async id => {
-      await owner.goto(app.base + '/requisitions');
-      await owner.getByLabel('Yêu cầu gửi phê duyệt').first().selectOption(id);
-      await owner.getByRole('button', { name: 'Gửi phê duyệt', exact: true }).first().click();
-      await owner.locator('#s302-modal').waitFor({ state: 'visible' });
+      const existing=await app.db.prepare('SELECT id FROM requisition_approval_workflows WHERE requisition_id=?').get(id);
+      if(!existing){
+        await owner.goto(app.base + '/requisitions');
+        await owner.getByLabel('Yêu cầu gửi phê duyệt').first().selectOption(id);
+        await owner.getByRole('button', { name: 'Gửi phê duyệt', exact: true }).first().click();
+        await owner.locator('#s302-modal').waitFor({ state: 'visible' });
+      }
       const row = await app.db.prepare('SELECT id FROM requisition_approval_workflows WHERE requisition_id=?').get(id);
       for (const page of [hr, admin]) {
         await page.goto(app.base + '/approvals');
@@ -234,10 +245,10 @@ async function main() {
       assert.equal((await app.db.prepare('SELECT COUNT(*) AS n FROM requisitions').get()).n, count);
       await owner.locator('#close-create-req-modal').click();
     });
-    await check('S2-10 real UI creates OPEN without auto approval', owner, async () => {
+    await check('QA-S3-06 real UI saves DRAFT and creates pending approval atomically', owner, async () => {
       mainId = await create('Browser main position');
-      assert.equal((await s.service.getRequisitionById(mainId)).status, 'OPEN');
-      assert.equal(await app.db.prepare('SELECT id FROM requisition_approval_workflows WHERE requisition_id=?').get(mainId), undefined);
+      assert.equal((await s.service.getRequisitionById(mainId)).status, 'DRAFT');
+      assert.equal((await app.db.prepare('SELECT status FROM requisition_approval_workflows WHERE requisition_id=?').get(mainId)).status,'PENDING');
     });
     if (mainId) {
       await check('S3-02 two assigned approval levels through real UI', hr, () => approve(mainId));

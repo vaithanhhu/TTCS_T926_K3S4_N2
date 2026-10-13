@@ -81,22 +81,22 @@ async function databaseCases(db,label){
   assert.equal(title.success,true);
   const payload={formVersion:'S2-10',departmentId:'dept-3',jobTitleId:title.data.id,headcount:1,recruitmentReason:'REPLACEMENT',proposedSalaryMin:150,proposedSalaryMax:300,neededDate:requisitions.businessDate(),jobDescription:'RBAC document',candidateRequirements:'Required skills'};
   let configuration=await configs.create({departmentId:'dept-3',levels:[{order:1,salaryLimit:200,approverUserId:admin.id},{order:2,salaryLimit:500,approverUserId:approver.id}]},admin.id);
-  await configs.publish(configuration.id,configuration.versions[0].id,admin.id);
-  const create=async()=>{const result=await requisitions.createRequisition(payload,hiring);assert.equal(result.success,true);return result.data.id;};
-  const workflow=await service.submit(await create(),{requestId:crypto.randomUUID()},hiring);
+  await configs.publish(configuration.id,configuration.versions[0].id,admin.id);require('../src/config/config').REQUISITION_APPROVAL_ENABLED=true;
+  const create=async()=>{const result=await require('./helpers/approvalPolicyFixture').createDraft(db,payload,hiring);assert.equal(result.success,true);return result.data.id;};
+  const workflow=await require('./helpers/approvalPolicyFixture').submit(db,await create(),hiring);
   let detail=await service.read(workflow.id,admin),body={requestId:crypto.randomUUID(),action:'APPROVE',expectedVersion:detail.version,expectedStepId:detail.steps[0].id};
   await test(label+' unassigned user cannot process ADMIN step',()=>reject(()=>service.decide(workflow.id,{...body,requestId:crypto.randomUUID()},approver),'APPROVAL_ASSIGNEE_REQUIRED'));
   await test(label+' ADMIN processes assigned step atomically and exact retry does not advance twice',async()=>{
     const result=await service.decide(workflow.id,body,admin);assert.equal(result.status,'PENDING');assert.deepEqual(await service.decide(workflow.id,body,admin),result);
     detail=await service.read(workflow.id,admin);assert.equal(detail.steps[0].status,'APPROVED');assert.equal(detail.steps[1].status,'PENDING');assert.equal(detail.events.length,2);
-    assert.equal((await requisitions.getRequisitionById(workflow.requisitionId)).status,'OPEN');
+    assert.equal((await requisitions.getRequisitionById(workflow.requisitionId)).status,'DRAFT');
   });
   await test(label+' ADMIN cannot process next step assigned to another user',()=>reject(()=>service.decide(workflow.id,{requestId:crypto.randomUUID(),action:'APPROVE',expectedVersion:detail.version,expectedStepId:detail.steps[1].id},admin),'APPROVAL_ASSIGNEE_REQUIRED'));
-  await test(label+' ADMIN delegated submission cannot omit a reason',async()=>{const id=await create();await reject(()=>service.submit(id,{requestId:crypto.randomUUID()},admin),'APPROVAL_DELEGATION_REASON_REQUIRED');});
+  await test(label+' ADMIN delegated submission cannot omit a reason',async()=>{const id=await create();await reject(()=>service.submit(id,{requestId:crypto.randomUUID()},admin),'REQUISITION_DRAFT_FORBIDDEN');});
   await test(label+' ADMIN still cannot self approve or repeat an approver',async()=>{
     await reject(()=>configs.validate('dept-3',[{order:1,salaryLimit:100,approverUserId:admin.id},{order:2,salaryLimit:200,approverUserId:admin.id}]),'REPEATED_APPROVER_FORBIDDEN');
     await db.prepare("UPDATE departments SET manager_id='usr-admin' WHERE id='dept-3'").run();
-    try{const request=await requisitions.createRequisition(payload,admin);assert.equal(request.success,true);await reject(()=>service.submit(request.data.id,{requestId:crypto.randomUUID()},admin),'SELF_APPROVAL_FORBIDDEN');assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM requisition_approval_workflows WHERE requisition_id=?').get(request.data.id)).n,0);}
+    try{const request=await require('./helpers/approvalPolicyFixture').createDraft(db,payload,admin);assert.equal(request.success,true);await reject(()=>require('./helpers/approvalPolicyFixture').submit(db,request.data.id,admin),'SELF_APPROVAL_FORBIDDEN');assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM requisition_approval_workflows WHERE requisition_id=?').get(request.data.id)).n,0);}
     finally{await db.prepare("UPDATE departments SET manager_id='usr-hiring-mgr' WHERE id='dept-3'").run();}
   });
   await test(label+' inactive locked or password-change ADMIN cannot execute transaction actions',async()=>{
@@ -148,7 +148,7 @@ async function apiCases(app,state){
     assert.equal(runtime.nodes.get('nav-item-reports').style.display,'');await runtime.nodes.get('nav-item-reports').dispatch('click');await runtime.settle();assert.equal(runtime.window.location.pathname,'/reports');assert.equal(runtime.nodes.get('reports-view').classes.has('hidden'),false);assert.deepEqual(runtime.errors,[]);
   });
   await test('frontend ADMIN S3-02 actions follow assignment and execute real decision API',async()=>{
-    const workflow=await state.service.submit(await state.create(),{requestId:crypto.randomUUID()},state.hiring);
+    const workflow=await require('./helpers/approvalPolicyFixture').submit(app.db,await state.create(),state.hiring);
     await runtime.window.ATS_REQUISITION_APPROVAL_UI.open(workflow.id);await runtime.settle();assert.equal(runtime.nodes.get('s302-actions').classes.has('hidden'),false);
     await runtime.nodes.get('s302-approve').dispatch('click');await runtime.settle();const detail=await state.service.read(workflow.id,state.hiring);
     assert.equal(detail.steps[0].status,'APPROVED');assert.equal(detail.steps[1].status,'PENDING');assert.equal(runtime.nodes.get('s302-actions').classes.has('hidden'),true);

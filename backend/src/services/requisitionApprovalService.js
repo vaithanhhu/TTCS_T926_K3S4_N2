@@ -4,7 +4,7 @@ const Requisitions = require('./requisitionService');
 const { ApprovalConfigurationService, ApprovalConfigurationError } = require('./approvalConfigurationService');
 
 class RequisitionApprovalService {
-  constructor(db) { this.db=db; this.rbac=new Rbac(db); this.requisitions=new Requisitions(db); this.configurations=new ApprovalConfigurationService(db); }
+  constructor(db) { this.db=db; this.rbac=new Rbac(db); this.requisitions=new Requisitions(db); this.configurations=new ApprovalConfigurationService(db); this.policy=this.requisitions.openPolicy; }
   fail(code,message,status=409) { throw new ApprovalConfigurationError(code,message,status); }
   async permission(user,permission) { if(!user?.id||!await this.rbac.hasPermission(user.id,permission))this.fail('APPROVAL_FORBIDDEN','Bạn không có quyền thực hiện thao tác này.',403); }
   async transactionPermission(user,permission) {
@@ -22,18 +22,18 @@ class RequisitionApprovalService {
   async workflow(id) { const row=await this.db.prepare('SELECT * FROM requisition_approval_workflows WHERE id=?').get(id);if(!row)this.fail('APPROVAL_WORKFLOW_NOT_FOUND','Không tìm thấy hồ sơ phê duyệt.',404);return row; }
   async submission(id) { const row=await this.db.prepare('SELECT * FROM requisition_approval_submissions WHERE id=?').get(id);return {...row,document:JSON.parse(row.document_json)}; }
   async steps(submissionId) { return this.db.prepare('SELECT * FROM requisition_approval_steps WHERE submission_id=? ORDER BY level_order').all(submissionId); }
-  summary(workflow) { return {id:workflow.id,requisitionId:workflow.requisition_id,status:workflow.status,version:workflow.version,submissionId:workflow.current_submission_id,...(workflow.appliedRevision?{appliedRevision:workflow.appliedRevision}: {})}; }
-  async event(workflow,user,action,comment,data,fingerprint,stepId=null) {
+  summary(workflow) { return {id:workflow.id,requisitionId:workflow.requisition_id,status:workflow.status,version:workflow.version,submissionId:workflow.current_submission_id,...(workflow.salaryRangeStatus?{salaryRangeStatus:workflow.salaryRangeStatus}:{}),...(workflow.appliedRevision?{appliedRevision:workflow.appliedRevision}: {}),...(workflow.recruitmentTransition?{recruitmentTransition:workflow.recruitmentTransition}:{})}; }
+  async event(workflow,user,action,comment,data,fingerprint,stepId=null,eventId='ape-'+crypto.randomUUID()) {
     const response=this.summary(workflow);
     await this.db.prepare('INSERT INTO requisition_approval_events(id,workflow_id,submission_id,step_id,workflow_version,actor_id,actor_name,action,comment,request_id,fingerprint,response_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
-      .run('ape-'+crypto.randomUUID(),workflow.id,workflow.current_submission_id,stepId,workflow.version,user.id,user.fullName||user.id,action,comment||null,data.requestId,fingerprint,JSON.stringify(response));return response;
+      .run(eventId,workflow.id,workflow.current_submission_id,stepId,workflow.version,user.id,user.fullName||user.id,action,comment||null,data.requestId,fingerprint,JSON.stringify(response));return response;
   }
   async validateDocument(previous,changes,user) {
     if(!changes||typeof changes!=='object'||Array.isArray(changes))this.fail('INVALID_APPROVAL_DOCUMENT','Nội dung bổ sung phải là đối tượng hợp lệ.',400);
     const allowed=['title','jobTitleId','departmentId','headcount','recruitmentReason','proposedSalaryMin','proposedSalaryMax','neededDate','jobDescription','candidateRequirements','salaryJustification','recruiterId','workLocationId','workModeId'];
     if(Object.keys(changes).some(key=>!allowed.includes(key)))this.fail('INVALID_APPROVAL_DOCUMENT_FIELD','Nội dung bổ sung chứa trường không được phép.',400);
     const validation=await this.requisitions.validateS210({...changes,status:'OPEN'},{...previous,status:previous.status||'OPEN'},user);
-    if(!validation.success)throw new ApprovalConfigurationError(validation.code,validation.message,validation.statusCode||400);
+    if(!validation.success){const error=new ApprovalConfigurationError(validation.code,validation.message,validation.statusCode||400);if(validation.salaryRangeStatus)error.salaryRangeStatus=validation.salaryRangeStatus;throw error;}
     return {...validation.values,title:validation.values.title||validation.jobTitle.name,departmentName:validation.department.name,createdBy:previous.createdBy,code:previous.code,requisitionId:previous.requisitionId||previous.id,recruitmentStatus:previous.recruitmentStatus||previous.status};
   }
   validateChain(creatorId,approverIds) {
@@ -50,7 +50,7 @@ class RequisitionApprovalService {
     if(!original.createdBy)this.fail('APPROVAL_CREATOR_UNAVAILABLE','Yêu cầu chưa có người tạo xác thực; không thể gửi duyệt.');
     const access=await this.requisitions.requisitionAccess(original,user,true,true);
     if(!access.success)throw new ApprovalConfigurationError(access.code,access.message,access.statusCode);
-    if(original.status!=='OPEN')this.fail('REQUISITION_EDIT_STATE_FORBIDDEN','Yêu cầu tuyển dụng đang ở trạng thái không cho phép chỉnh sửa.');
+    if(!['DRAFT','OPEN'].includes(original.status))this.fail('REQUISITION_EDIT_STATE_FORBIDDEN','Yêu cầu tuyển dụng đang ở trạng thái không cho phép chỉnh sửa.');
     const onBehalf=original.createdBy!==user.id;
     if(onBehalf&&!user.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role)))this.fail('APPROVAL_OWNER_REQUIRED','Chỉ người tạo hoặc HR Manager/Admin trong phạm vi được gửi hồ sơ.',403);
     const reason=data.reason==null?'':data.reason;
@@ -83,14 +83,30 @@ class RequisitionApprovalService {
     return document;
   }
   async applyRevision(workflow,submission,actor) {
+    if(submission.document.initialApproval){
+      const original=await this.lockedRequisition(workflow.requisition_id),initial=submission.document.initialApproval;
+      if(original.status!=='DRAFT'||original.draftVersion!==initial.draftVersion||this.requisitions.approvalContentHash(original)!==initial.baseHash)this.fail('REQUISITION_REVISION_STALE','Nháp khác với phiên bản đã gửi; không thể mở tuyển dụng.');
+      const document=Object.fromEntries(Object.entries(submission.document).filter(([key])=>['title','jobTitleId','departmentId','headcount','recruitmentReason','proposedSalaryMin','proposedSalaryMax','neededDate','jobDescription','candidateRequirements','salaryJustification','workLocationId','workModeId'].includes(key)));
+      const validation=await this.requisitions.validateS210({...document,status:'OPEN'},original,null);
+      if(!validation.success){const error=new ApprovalConfigurationError(validation.code,validation.message,validation.statusCode||400);if(validation.salaryRangeStatus)error.salaryRangeStatus=validation.salaryRangeStatus;throw error;}
+      return {revision:submission.revision,submissionId:submission.id,contentHash:initial.baseHash,initialActivation:true};
+    }
     const revision=submission.document.approvalRevision;
-    if(!revision?.applyToMain)return;
+    if(!revision?.applyToMain){
+      const original=await this.lockedRequisition(workflow.requisition_id);
+      const normalized=value=>Object.fromEntries(Object.entries(this.requisitions.approvalContent(value)).map(([key,v])=>[key,v===''?null:v]));
+      if(JSON.stringify(normalized(original))!==JSON.stringify(normalized(submission.document)))this.fail('REQUISITION_REVISION_STALE','Nội dung đang có hiệu lực khác snapshot đã gửi.');
+      const fields=Object.fromEntries(Object.entries(submission.document).filter(([key])=>['title','jobTitleId','departmentId','headcount','recruitmentReason','proposedSalaryMin','proposedSalaryMax','neededDate','jobDescription','candidateRequirements','salaryJustification','workLocationId','workModeId'].includes(key)));
+      const validation=await this.requisitions.validateS210({...fields,status:'OPEN'},original,null);
+      if(!validation.success){const error=new ApprovalConfigurationError(validation.code,validation.message,validation.statusCode||400);if(validation.salaryRangeStatus)error.salaryRangeStatus=validation.salaryRangeStatus;throw error;}
+      return;
+    }
     const original=await this.lockedRequisition(workflow.requisition_id);
     if(original.status!=='OPEN')this.fail('REQUISITION_EDIT_STATE_FORBIDDEN','Yêu cầu tuyển dụng đang ở trạng thái không cho phép áp dụng thay đổi.');
     if(this.requisitions.approvalContentHash(original)!==revision.baseHash)this.fail('REQUISITION_REVISION_STALE','Dữ liệu nền của revision đã thay đổi; không thể ghi đè.');
     const document=submission.document;
     const validation=await this.requisitions.validateS210({...document,recruiterId:original.recruiterId,status:'OPEN'},original,null);
-    if(!validation.success)throw new ApprovalConfigurationError(validation.code,validation.message,validation.statusCode||400);
+    if(!validation.success){const error=new ApprovalConfigurationError(validation.code,validation.message,validation.statusCode||400);if(validation.salaryRangeStatus)error.salaryRangeStatus=validation.salaryRangeStatus;throw error;}
     const v=validation.values;
     await this.db.prepare(`UPDATE requisitions SET title=?,job_title_id=?,department_id=?,department_name=?,headcount=?,hiring_manager_id=?,
       recruitment_reason=?,proposed_salary_min=?,proposed_salary_max=?,needed_date=?,job_description=?,candidate_requirements=?,salary_justification=?,
@@ -109,8 +125,28 @@ class RequisitionApprovalService {
     for(const level of chain.levels)await this.db.prepare('INSERT INTO requisition_approval_steps(id,submission_id,level_order,approver_id,approver_name,status) VALUES (?,?,?,?,?,?)').run('ast-'+crypto.randomUUID(),id,level.order,level.approverUserId,level.approverName,level.order===1?'PENDING':'WAITING');
     return id;
   }
-  async submit(requisitionId,data,user) {
-    this.request(data);await this.permission(user,'requisition.create');if(typeof requisitionId!=='string'||!requisitionId.trim())this.fail('INVALID_APPROVAL_REQUISITION','Thiếu mã yêu cầu tuyển dụng hợp lệ.',400);const fingerprint=this.fingerprint('SUBMIT',requisitionId,data);
+  async saveAndSubmit(data,user) {
+    this.request(data);this.policy.enabled();
+    if(!data.document||typeof data.document!=='object'||Array.isArray(data.document)||Object.keys(data).some(key=>!['requestId','requisitionId','expectedDraftVersion','expectedWorkflowVersion','document','reason'].includes(key)))this.fail('INVALID_APPROVAL_DOCUMENT','Lệnh lưu và gửi chứa trường không hợp lệ.',400);
+    this.policy.client(data.document);
+    const fingerprint=this.fingerprint('SAVE_AND_SUBMIT',data.requisitionId||null,data);
+    return this.db.transaction(async()=>{
+      user=await this.transactionPermission(user,'requisition.create');
+      await this.lock('request:'+user.id+':'+data.requestId);
+      const replay=await this.replay(user,data,fingerprint);if(replay)return replay;
+      let original=null,workflow=null;
+      if(data.requisitionId){await this.lock('requisition:'+data.requisitionId);original=await this.lockedRequisition(data.requisitionId);if(original.status!=='DRAFT')this.fail('APPROVAL_DRAFT_REQUIRED','Dùng thao tác tái phê duyệt riêng cho hồ sơ đang OPEN.');const access=await this.requisitions.requisitionAccess(original,user,false,true);if(!access.success)throw new ApprovalConfigurationError(access.code,access.message,access.statusCode);workflow=await this.db.prepare('SELECT id,status,version FROM requisition_approval_workflows WHERE requisition_id=?').get(original.id);if(workflow&&(!['REJECTED','NEEDS_INFO'].includes(workflow.status)||workflow.version!==data.expectedWorkflowVersion))this.fail('APPROVAL_STALE_STEP','Phiên bản workflow đã thay đổi.');await this.policy.editable(original,data.expectedDraftVersion);}
+      const validation=await this.requisitions.validateS210({...data.document,status:'OPEN'},original,user);
+      if(!validation.success){const error=new ApprovalConfigurationError(validation.code,validation.message,validation.statusCode||400);if(validation.salaryRangeStatus)error.salaryRangeStatus=validation.salaryRangeStatus;throw error;}
+      const document={...data.document,formVersion:'S2-10',status:'DRAFT',expectedDraftVersion:data.expectedDraftVersion};
+      const saved=original?await this.requisitions.updateRequisition(original.id,document,user,{approvalEnabled:true}):await this.requisitions.createRequisition(document,user);
+      if(!saved.success)throw new ApprovalConfigurationError(saved.code,saved.message,saved.statusCode||400);
+      const command={fingerprint,salaryRangeStatus:validation.salaryRangeStatus};
+      const result=workflow?await this.resubmit(workflow.id,{requestId:data.requestId,expectedVersion:workflow.version,expectedDraftVersion:saved.data.draftVersion,document:{},reason:data.reason},user,command):await this.submit(saved.data.id,{requestId:data.requestId,reason:data.reason,expectedDraftVersion:saved.data.draftVersion},user,command);return result;
+    });
+  }
+  async submit(requisitionId,data,user,command=null) {
+    this.request(data);this.policy.enabled();await this.permission(user,'requisition.create');if(typeof requisitionId!=='string'||!requisitionId.trim())this.fail('INVALID_APPROVAL_REQUISITION','Thiếu mã yêu cầu tuyển dụng hợp lệ.',400);const fingerprint=command?.fingerprint||this.fingerprint('SUBMIT',requisitionId,data);
     return this.db.transaction(async()=>{
       user=await this.transactionPermission(user,'requisition.create');
       await this.lock('request:'+user.id+':'+data.requestId);const replay=await this.replay(user,data,fingerprint);if(replay)return replay;
@@ -118,11 +154,15 @@ class RequisitionApprovalService {
       await this.db.prepare('SELECT id FROM requisitions WHERE id=?'+(this.db.provider==='postgres'?' FOR UPDATE':'')).get(requisitionId);
       const original=await this.requisitions.getRequisitionById(requisitionId);if(!original)this.fail('REQUISITION_NOT_FOUND','Không tìm thấy yêu cầu tuyển dụng.',404);
       if(!original.createdBy)this.fail('APPROVAL_CREATOR_UNAVAILABLE','Yêu cầu chưa có thông tin người tạo xác thực; không thể gửi duyệt.');
-      const audit=await this.submissionActor(original,user,data);
+      const access=await this.requisitions.requisitionAccess(original,user,false,true);
+      if(!access.success)throw new ApprovalConfigurationError(access.code,access.message,access.statusCode);
       if(await this.db.prepare('SELECT id FROM requisition_approval_workflows WHERE requisition_id=?').get(requisitionId))this.fail('APPROVAL_WORKFLOW_EXISTS','Yêu cầu đã có workflow. Hãy mở hồ sơ để theo dõi hoặc gửi lại.');
+      const audit=await this.submissionActor(original,user,data);
       if(data.document&&typeof data.expectedDocumentHash!=='string')this.fail('APPROVAL_EXPECTATION_REQUIRED','Thiếu phiên bản dữ liệu đang có hiệu lực.',400);
       const document=data.document?await this.revisionDocument(original,original,data.document,user,data,audit):await this.validateDocument(original,{},user);
       if(!data.document)document.submissionAudit=audit;
+      if(original.status==='DRAFT'){if(original.draftVersion!==data.expectedDraftVersion)this.fail('REQUISITION_DRAFT_STALE','Nháp đã thay đổi trước khi gửi duyệt.');if(data.document)this.fail('APPROVAL_DRAFT_COMMAND_REQUIRED','Dùng Lưu và Gửi phê duyệt để lưu nội dung nháp.');document.initialApproval={draftVersion:original.draftVersion,baseHash:this.requisitions.approvalContentHash(original)};}
+      else if(!await this.policy.effective(original.id))this.fail('REQUISITION_APPROVAL_REQUIRED','Hồ sơ OPEN không có bằng chứng hoặc ngoại lệ hợp lệ.');
       const workflow={id:'apw-'+crypto.randomUUID(),requisition_id:requisitionId,creator_id:original.createdBy,status:'PENDING',version:1};
       let chain;
       if(data.document){await this.configurations.lock(document.departmentId);chain=await this.configurations.resolve(document.departmentId,document.proposedSalaryMax);this.validateChain(original.createdBy,chain.levels.map(level=>level.approverUserId));await this.db.prepare('INSERT INTO requisition_approval_snapshots(workflow_id,requisition_id,configuration_version_id,snapshot_json) VALUES (?,?,?,?)').run(workflow.id,requisitionId,chain.configurationVersionId,JSON.stringify({...chain,workflowId:workflow.id,requisitionId}));}
@@ -131,8 +171,14 @@ class RequisitionApprovalService {
       workflow.current_submission_id=await this.saveSubmission(workflow,document,chain,1);
       await this.db.prepare('UPDATE requisition_approval_workflows SET current_submission_id=? WHERE id=?').run(workflow.current_submission_id,workflow.id);
       if(require('./headcountBudgetService').HeadcountBudgetService.enabled())await new (require('./headcountBudgetService').HeadcountBudgetService)(this.db).reserve(requisitionId,document,workflow.current_submission_id);
-      return this.event(workflow,user,'SUBMIT',audit.reason||null,data,fingerprint);
+      workflow.salaryRangeStatus=command?.salaryRangeStatus;return this.event(workflow,user,'SUBMIT',audit.reason||null,data,fingerprint);
     });
+  }
+  async snapshotRead(item,user) {
+    if(!await this.rbac.hasPermission(user.id,'requisition.read'))return false;
+    if(user.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role)))return true;
+    const scope=this.requisitions.requisitionVisibility(user,true);
+    return Boolean(scope&&await this.db.prepare('SELECT r.id FROM requisitions r WHERE r.id=? AND '+scope.condition).get(item.id,...scope.params));
   }
   async read(id,user) {
     const actor=await this.rbac.getAuthorizedActor(user.id,'requisition.read')||await this.rbac.getAuthorizedActor(user.id,'requisition.approve');
@@ -142,14 +188,14 @@ class RequisitionApprovalService {
     if(workflow.creator_id===user.id||user.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role)))await this.permission(user,'requisition.read');
     else {
       const scopedRead=await this.rbac.hasPermission(user.id,'requisition.read')&&(await this.requisitions.requisitionAccess(effectiveDocument,user,false,true)).success;
-      if(!scopedRead){await this.permission(user,'requisition.approve');if(!steps.some(step=>step.approver_id===user.id))this.fail('APPROVAL_FORBIDDEN','Bạn không được phân công trong hồ sơ này.',403);}
+      if(!scopedRead&&!await this.snapshotRead(effectiveDocument,user)){await this.permission(user,'requisition.approve');if(!steps.some(step=>step.approver_id===user.id))this.fail('APPROVAL_FORBIDDEN','Bạn không được phân công trong hồ sơ này.',403);}
     }
     const submissions=await this.db.prepare('SELECT id,revision,document_json,created_at FROM requisition_approval_submissions WHERE workflow_id=? ORDER BY revision').all(id);
     const historicalSteps=await this.db.prepare('SELECT s.* FROM requisition_approval_steps s JOIN requisition_approval_submissions d ON d.id=s.submission_id WHERE d.workflow_id=? ORDER BY d.revision,s.level_order').all(id);
     const events=await this.db.prepare('SELECT workflow_version,submission_id,step_id,actor_id,actor_name,action,comment,created_at,response_json FROM requisition_approval_events WHERE workflow_id=? ORDER BY workflow_version').all(id);
     const history=events.map(({response_json,...event})=>({...event,...(JSON.parse(response_json).appliedRevision?{appliedRevision:JSON.parse(response_json).appliedRevision}:{})}));
     const effectiveRevision=history.filter(event=>event.appliedRevision?.contentHash===this.requisitions.approvalContentHash(effectiveDocument)).at(-1)?.appliedRevision||null;
-    return {...this.summary(workflow),creatorId:workflow.creator_id,effectiveDocument,effectiveRevision,editVersion:this.requisitions.approvalContentHash(effectiveDocument),canResubmit:['APPROVED','NEEDS_INFO','REJECTED'].includes(workflow.status)&&effectiveDocument.status==='OPEN'&&(workflow.creator_id===user.id||user.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role)))&&await this.rbac.hasPermission(user.id,'requisition.create')&&(await this.requisitions.requisitionAccess(effectiveDocument,user,true,true)).success,onBehalf:workflow.creator_id!==user.id,recruitmentStatus:effectiveDocument.status,steps,submissions:submissions.map(row=>({...row,document_json:undefined,document:JSON.parse(row.document_json),steps:historicalSteps.filter(step=>step.submission_id===row.id)})),events:history};
+    return {...this.summary(workflow),creatorId:workflow.creator_id,effectiveDocument:effectiveDocument.status==='DRAFT'&&workflow.creator_id!==user.id?null:effectiveDocument,effectiveRevision,editVersion:effectiveDocument.status==='DRAFT'&&workflow.creator_id!==user.id?null:this.requisitions.approvalContentHash(effectiveDocument),canResubmit:['APPROVED','NEEDS_INFO','REJECTED'].includes(workflow.status)&&['DRAFT','OPEN'].includes(effectiveDocument.status)&&(workflow.creator_id===user.id||user.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role)))&&await this.rbac.hasPermission(user.id,'requisition.create')&&(await this.requisitions.requisitionAccess(effectiveDocument,user,true,true)).success,onBehalf:workflow.creator_id!==user.id,recruitmentStatus:effectiveDocument.status,steps,submissions:submissions.map(row=>({...row,document_json:undefined,document:JSON.parse(row.document_json),steps:historicalSteps.filter(step=>step.submission_id===row.id)})),events:history};
   }
   async list(user) {
     const actor=await this.rbac.getAuthorizedActor(user.id,'requisition.read')||await this.rbac.getAuthorizedActor(user.id,'requisition.approve');
@@ -160,16 +206,16 @@ class RequisitionApprovalService {
     const supervisor=user.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role));
     const visibility=this.requisitions.requisitionVisibility(user,true);
     const scope=visibility?visibility.condition:'1=0',scopeParams=visibility?.params||[];
-    return this.db.prepare(`SELECT w.id,w.requisition_id AS "requisitionId",w.status,w.version,w.creator_id AS "creatorId",s.id AS "expectedStepId",s.approver_name AS "waitingFor",s.approver_id AS "waitingUserId",r.code,r.title,r.status AS "recruitmentStatus"
+    return this.db.prepare(`SELECT w.id,w.requisition_id AS "requisitionId",w.status,w.version,w.creator_id AS "creatorId",s.id AS "expectedStepId",s.approver_name AS "waitingFor",s.approver_id AS "waitingUserId",r.code,${this.db.provider==='postgres'?"CASE WHEN r.status='DRAFT' THEN d.document_json::jsonb->>'title' ELSE r.title END":"CASE WHEN r.status='DRAFT' THEN json_extract(d.document_json,'$.title') ELSE r.title END"} AS title,r.status AS "recruitmentStatus"
       FROM requisition_approval_workflows w LEFT JOIN requisition_approval_steps s ON s.submission_id=w.current_submission_id AND s.status='PENDING'
-      LEFT JOIN requisitions r ON r.id=w.requisition_id WHERE (?=1) OR (?=1 AND w.creator_id=?) OR (?=1 AND s.approver_id=? AND w.status='PENDING') OR (?=1 AND ${scope}) ORDER BY w.created_at DESC,w.id`).all(supervisor?1:0,canRead?1:0,user.id,canApprove?1:0,user.id,canRead?1:0,...scopeParams);
+      LEFT JOIN requisitions r ON r.id=w.requisition_id LEFT JOIN requisition_approval_submissions d ON d.id=w.current_submission_id WHERE (?=1) OR (?=1 AND w.creator_id=?) OR (?=1 AND s.approver_id=? AND w.status='PENDING') OR (?=1 AND ${scope}) ORDER BY w.created_at DESC,w.id`).all(supervisor?1:0,canRead?1:0,user.id,canApprove?1:0,user.id,canRead?1:0,...scopeParams);
   }
   async tracking(requisitionId,user) {
     return this.db.transaction(async()=>{
       user=await this.transactionPermission(user,'requisition.read');
-      const item=await this.requisitions.getRequisitionById(requisitionId),access=await this.requisitions.requisitionAccess(item,user,false,true);
-      if(!access.success)throw new ApprovalConfigurationError(access.code,access.message,access.statusCode);
-      const workflow=await this.db.prepare('SELECT id,status,version,current_submission_id FROM requisition_approval_workflows WHERE requisition_id=?'+(this.db.provider==='postgres'?' FOR SHARE':'')).get(requisitionId);
+      const item=await this.requisitions.getRequisitionById(requisitionId),workflow=await this.db.prepare('SELECT id,status,version,current_submission_id FROM requisition_approval_workflows WHERE requisition_id=?'+(this.db.provider==='postgres'?' FOR SHARE':'')).get(requisitionId);
+      const access=await this.requisitions.requisitionAccess(item,user,false,true);
+      if(!access.success&&!(workflow&&await this.snapshotRead(item,user)))throw new ApprovalConfigurationError(access.code,access.message,access.statusCode);
       if(!workflow)return {requisitionId,status:'NOT_SUBMITTED',workflowId:null,currentRevision:null,waitingFor:null,rounds:[]};
       const submissions=await this.db.prepare('SELECT d.id,d.revision,d.created_at,d.document_json,s.configuration_version_id,s.snapshot_json FROM requisition_approval_submissions d JOIN requisition_approval_snapshots s ON s.workflow_id=d.approval_snapshot_id WHERE d.workflow_id=? ORDER BY d.revision').all(workflow.id);
       const steps=await this.db.prepare('SELECT s.* FROM requisition_approval_steps s JOIN requisition_approval_submissions d ON d.id=s.submission_id WHERE d.workflow_id=? ORDER BY d.revision,s.level_order').all(workflow.id);
@@ -184,7 +230,7 @@ class RequisitionApprovalService {
     });
   }
   async decide(id,data,user) {
-    this.request(data);await this.permission(user,'requisition.approve');
+    this.request(data);this.policy.enabled();await this.permission(user,'requisition.approve');
     if(!['APPROVE','REJECT','REQUEST_INFO'].includes(data.action))this.fail('INVALID_APPROVAL_ACTION','Hành động phê duyệt không hợp lệ.',400);
     const comment=data.comment==null?'':data.comment;
     if(typeof comment!=='string'||comment.length>4000||(['REJECT','REQUEST_INFO'].includes(data.action)&&!comment.trim()))this.fail('APPROVAL_COMMENT_REQUIRED','Từ chối và Yêu cầu bổ sung cần ý kiến không rỗng, tối đa 4000 ký tự.',400);
@@ -192,8 +238,8 @@ class RequisitionApprovalService {
     const fingerprint=this.fingerprint('DECISION',id,data);
     return this.db.transaction(async()=>{
       user=await this.transactionPermission(user,'requisition.approve');
-      await this.lock('request:'+user.id+':'+data.requestId);const replay=await this.replay(user,data,fingerprint);if(replay)return replay;await this.lock('workflow:'+id);
-      const workflow=await this.workflow(id);await this.db.prepare('SELECT id FROM requisitions WHERE id=?'+(this.db.provider==='postgres'?' FOR SHARE':'')).get(workflow.requisition_id);const position=await this.requisitions.getRequisitionById(workflow.requisition_id);if(['PAUSED','CANCELLED'].includes(position?.status))this.fail('APPROVAL_LIFECYCLE_FROZEN','Yêu cầu đang tạm dừng hoặc đã huỷ; không thể xử lý phê duyệt.');const steps=await this.steps(workflow.current_submission_id),step=steps.find(item=>item.status==='PENDING');
+      await this.lock('request:'+user.id+':'+data.requestId);const replay=await this.replay(user,data,fingerprint);if(replay)return replay;
+      const reference=await this.db.prepare('SELECT requisition_id FROM requisition_approval_workflows WHERE id=?').get(id);if(!reference)this.fail('APPROVAL_WORKFLOW_NOT_FOUND','Không tìm thấy hồ sơ phê duyệt.',404);await this.lock('requisition:'+reference.requisition_id);const position=await this.lockedRequisition(reference.requisition_id);await this.lock('workflow:'+id);const workflow=await this.workflow(id);if(['PAUSED','CANCELLED'].includes(position?.status))this.fail('APPROVAL_LIFECYCLE_FROZEN','Yêu cầu đang tạm dừng hoặc đã huỷ; không thể xử lý phê duyệt.');const steps=await this.steps(workflow.current_submission_id),step=steps.find(item=>item.status==='PENDING');
       if(workflow.status!=='PENDING'||workflow.version!==data.expectedVersion||step?.id!==data.expectedStepId)this.fail('APPROVAL_STALE_STEP','Hồ sơ hoặc cấp duyệt đã thay đổi. Vui lòng tải lại.');
       if(step.approver_id!==user.id)this.fail('APPROVAL_ASSIGNEE_REQUIRED','Chỉ người được phân công ở cấp hiện tại được xử lý.',403);
       this.validateChain(workflow.creator_id,steps.map(item=>item.approver_id));
@@ -206,27 +252,42 @@ class RequisitionApprovalService {
       workflow.version++;
       await this.db.prepare('UPDATE requisition_approval_workflows SET status=?,version=? WHERE id=?').run(workflow.status,workflow.version,id);
       if(require('./headcountBudgetService').HeadcountBudgetService.enabled()){const budget=new (require('./headcountBudgetService').HeadcountBudgetService)(this.db);if(workflow.status==='APPROVED')await budget.markApproved(workflow.requisition_id);else if(workflow.status!=='PENDING')await budget.release(workflow.requisition_id);}
-      return this.event(workflow,user,data.action,comment.trim(),data,fingerprint,step.id);
+      if(workflow.status==='APPROVED')workflow.recruitmentTransition={before:position.status,after:position.status==='DRAFT'?'OPEN':position.status,submissionId:workflow.current_submission_id};
+      const eventId='ape-'+crypto.randomUUID();
+      const result=await this.event(workflow,user,data.action,comment.trim(),data,fingerprint,step.id,eventId);
+      if(workflow.status==='APPROVED'){
+        const item=await this.requisitions.getRequisitionById(workflow.requisition_id),hash=this.requisitions.approvalContentHash(item);
+        await this.policy.record(item.id,workflow.current_submission_id,eventId,hash);
+        if(item.status==='DRAFT')await this.db.prepare("UPDATE requisitions SET status='OPEN',updated_at=datetime('now') WHERE id=? AND status='DRAFT'").run(item.id);
+      }
+      return result;
     });
   }
-  async resubmit(id,data,user) {
-    this.request(data);await this.permission(user,'requisition.create');if(!Number.isSafeInteger(data.expectedVersion)||data.expectedVersion<1)this.fail('APPROVAL_EXPECTATION_REQUIRED','Thiếu phiên bản hồ sơ cần gửi lại.',400);const fingerprint=this.fingerprint('RESUBMIT',id,data);
+  async resubmit(id,data,user,command=null) {
+    this.request(data);this.policy.enabled();await this.permission(user,'requisition.create');if(!Number.isSafeInteger(data.expectedVersion)||data.expectedVersion<1)this.fail('APPROVAL_EXPECTATION_REQUIRED','Thiếu phiên bản hồ sơ cần gửi lại.',400);const fingerprint=command?.fingerprint||this.fingerprint('RESUBMIT',id,data);
     return this.db.transaction(async()=>{
       user=await this.transactionPermission(user,'requisition.create');
-      await this.lock('request:'+user.id+':'+data.requestId);const replay=await this.replay(user,data,fingerprint);if(replay)return replay;await this.lock('workflow:'+id);
+      await this.lock('request:'+user.id+':'+data.requestId);const replay=await this.replay(user,data,fingerprint);if(replay)return replay;
+      const reference=await this.db.prepare('SELECT requisition_id FROM requisition_approval_workflows WHERE id=?').get(id);if(!reference)this.fail('APPROVAL_WORKFLOW_NOT_FOUND','Không tìm thấy hồ sơ phê duyệt.',404);
+      await this.lock('requisition:'+reference.requisition_id);await this.lockedRequisition(reference.requisition_id);await this.lock('workflow:'+id);
       const workflow=await this.workflow(id);
       if(!['NEEDS_INFO','APPROVED','REJECTED'].includes(workflow.status)||workflow.version!==data.expectedVersion)this.fail('APPROVAL_STALE_STEP','Hồ sơ hoặc phiên bản đã thay đổi; vui lòng tải lại.');
       const original=await this.lockedRequisition(workflow.requisition_id),audit=await this.submissionActor(original,user,data);
       if(workflow.status==='APPROVED'&&typeof data.expectedDocumentHash!=='string')this.fail('APPROVAL_EXPECTATION_REQUIRED','Thiếu phiên bản dữ liệu đang có hiệu lực.',400);
       const previous=await this.submission(workflow.current_submission_id);
-      const baseline=workflow.status==='APPROVED'?original:previous.document;
-      const document=await this.revisionDocument(original,baseline,data.document,user,data,audit);
+      const baseline=original.status==='DRAFT'||workflow.status==='APPROVED'?original:previous.document;
+      let document;
+      if(original.status==='DRAFT'){
+        if(original.draftVersion!==data.expectedDraftVersion)this.fail('REQUISITION_DRAFT_STALE','Nháp đã thay đổi trước khi gửi lại.');
+        document=await this.validateDocument(original,data.document||{},user);document.initialApproval={draftVersion:original.draftVersion,baseHash:this.requisitions.approvalContentHash(original)};document.submissionAudit=audit;
+        if(this.requisitions.approvalContentHash({...original,...document})!==this.requisitions.approvalContentHash(original))this.fail('APPROVAL_DRAFT_COMMAND_REQUIRED','Lưu thay đổi nháp trước khi gửi lại hoặc dùng Lưu và Gửi phê duyệt.');
+      }else document=await this.revisionDocument(original,baseline,data.document,user,data,audit);
       await this.configurations.lock(document.departmentId);
       const chain=await this.configurations.resolve(document.departmentId,document.proposedSalaryMax);
       workflow.current_submission_id=await this.saveSubmission(workflow,document,chain,previous.revision+1);workflow.status='PENDING';workflow.version++;
       await this.db.prepare('UPDATE requisition_approval_workflows SET current_submission_id=?,status=?,version=? WHERE id=?').run(workflow.current_submission_id,workflow.status,workflow.version,id);
       if(require('./headcountBudgetService').HeadcountBudgetService.enabled())await new (require('./headcountBudgetService').HeadcountBudgetService)(this.db).reserve(workflow.requisition_id,document,workflow.current_submission_id);
-      return this.event(workflow,user,'RESUBMIT',audit.reason||null,data,fingerprint);
+      workflow.salaryRangeStatus=command?.salaryRangeStatus;return this.event(workflow,user,'RESUBMIT',audit.reason||null,data,fingerprint);
     });
   }
 }
