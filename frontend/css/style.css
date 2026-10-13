@@ -1780,3 +1780,8 @@ button, input, select, textarea {
     flex-shrink: 0;
   }
 }
+
+#s302-modal .modal-card { overflow-y: auto; overscroll-behavior: contain; }
+#s302-modal .modal-header { position: sticky; top: 0; background: #fff; z-index: 1; flex-shrink: 0; }
+#s310-modal { z-index: 110; }
+#s310-body { overscroll-behavior: contain; }
