@@ -259,11 +259,26 @@ async function main() {
       await service.createInterview({ candidateId: created.data.id, interviewerId: 'usr-interviewer', scheduledTime: '2027-01-01T12:00:00Z' });
       await service.createOffer({ candidateId: created.data.id, salaryMonthly: 18000000, startDate: '2027-01-01' });
     }
+    const candidateViewer = await rbac.getAuthorizedActor('usr-admin', 'candidate.read');
+    assert.ok(candidateViewer);
+    assert.equal(candidateViewer.id, 'usr-admin');
+    assert.ok(candidateViewer.roles.includes('ADMIN'));
+    await test('PostgreSQL embedded getCandidates rejects missing actor without returning data', async () => {
+      const denied = await service.getCandidates();
+      assert.equal(denied.success, false);
+      assert.equal(denied.statusCode, 403);
+      assert.equal(denied.code, 'CANDIDATE_FORBIDDEN');
+      assert.deepEqual(denied.candidates, []);
+      assert.equal(Object.hasOwn(denied, 'total'), false);
+      assert.equal(Object.hasOwn(denied, 'data'), false);
+    });
     for (const [method, field] of [['getCandidates', 'candidates'], ['getInterviews', 'interviews'], ['getOffers', 'offers']]) await test('PostgreSQL embedded ' + method + ' enforces candidate scope with case-insensitive matching', async () => {
-      const own = await service[method]({ candidateEmail: 'CANDIDATE@EXAMPLE.COM' }); assert.ok(own[field].length > 0);
+      const viewerOptions = method === 'getCandidates' ? { viewer: candidateViewer } : {};
+      const own = await service[method]({ ...viewerOptions, candidateEmail: 'CANDIDATE@EXAMPLE.COM' }); assert.ok(own[field].length > 0);
       assert.ok(own[field].every(row => (field === 'candidates' ? row.email : row.candidate.email).toLowerCase() === 'candidate@example.com'));
-      assert.deepEqual((await service[method]({ candidateEmail: 'absent@example.test' }))[field], []);
-      assert.ok((await service[method]())[field].length > own[field].length);
+      assert.deepEqual((await service[method]({ ...viewerOptions, candidateEmail: 'absent@example.test' }))[field], []);
+      const all = method === 'getCandidates' ? await service.getCandidates(viewerOptions) : await service[method]();
+      assert.ok(all[field].length > own[field].length);
     });
   } finally { await pg.close(); }
   const report = { provider: 'sqlite', database: config.DB_PATH, browser: 'NOT_RUN', smtp: 'simulated', accounts, requests, results, passed: results.filter(row => row.status === 'PASS').length, failed: results.filter(row => row.status === 'FAIL').length, total: results.length };

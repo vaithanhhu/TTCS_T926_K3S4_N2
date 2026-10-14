@@ -1,4 +1,4 @@
-# PostgreSQL / Neon migration
+# PostgreSQL migration and Azure development
 
 ## Scope and current verification
 
@@ -6,35 +6,19 @@ The serving application remains Node HTTP/CommonJS and vanilla frontend. Postgre
 
 The authoritative DDL is `backend/src/db/migrations/001_postgres.sql`, built from the complete `database.js` schema and an isolated snapshot of the runtime SQLite schema. The old SQLite migration and docker SQL files are not PostgreSQL schema sources.
 
-`test:postgres` uses PostgreSQL compiled to WASM (PGlite), not SQL result mocks, for DDL and service tests. Pool isolation is separately tested with controlled clients. This does not verify Neon connectivity, TLS, pg-wire integration, production permissions or multi-process concurrency. Live testing is opt-in with a separate disposable database URL and an isolated source copy.
+`test:postgres` uses PostgreSQL compiled to WASM (PGlite), not SQL result mocks, for DDL and service tests. Pool isolation is separately tested with controlled clients. This does not verify remote connectivity, TLS, pg-wire integration, production permissions or multi-process concurrency. Live testing is opt-in with a separate disposable database URL and an isolated source copy.
 
-## Configuration (set locally; never share or commit secrets)
+## Current development connection
 
-- `DATABASE_URL`: your own PostgreSQL/Neon connection URL.
-- `DB_PROVIDER=postgres`: explicit provider; if unset a nonempty DATABASE_URL selects PostgreSQL, otherwise SQLite.
-- `PG_SSL_MODE=url`: default, honors the connection URL TLS parameters.
-- `PG_SSL_MODE=verify`: certificate validation option. URL `sslmode/sslcert/sslkey/sslrootcert` parameters can override the pg SSL object; use `sslmode=verify-full` in the URL when requiring full certificate/hostname verification.
-- `PG_SSL_MODE=disable`: local disposable development servers only.
-- Existing SMTP/OAuth settings stay unchanged. Automated tests never use them.
+`npm start` invokes `backend/src/start-azure.js` and the existing external profile `%LOCALAPPDATA%\ATS\AzureStaging`. Default writable target: `ats_migration_validation_9ed91916`; explicitly read-only target: `ats_migration_validation_7cd908a1` via `npm run start:azure:readonly`. Stop the current profile before switching modes.
 
-The PostgreSQL server startup verifies the migration checksum. It does not automatically create PostgreSQL tables or demo accounts. A missing DATABASE_URL with an explicit postgres provider fails clearly; no silent SQLite fallback occurs.
+The private launcher supplies `DB_PROVIDER=postgres` and an in-memory `DATABASE_URL` through a loopback SSH tunnel, validates the CA and PostgreSQL hostname, and uses the existing SCRAM credential. No credential is stored in this repository. Missing profile, target mismatch or failed connection fails startup; it never falls back to SQLite or another remote provider. `ats_db` is excluded.
 
-## Commands the operator runs
+Use `npm run status:azure`, `npm run test:azure` and `npm run stop:azure` for operations. Read the profile's private operating guide for tunnel-only startup and reconnect tests. SQLite remains available explicitly through `start:local` for isolated demos/tests.
 
-1. Configure Neon database/role/schema permissions and DATABASE_URL yourself.
-2. Install dependencies with `npm ci`.
-3. Run `npm run migrate:postgres`. The migration uses an advisory lock and an atomic version/checksum ledger.
-4. Choose **existing data import** or **empty demo database seed**, never both:
-   - Existing data: stop writers, make a consistent SQLite backup/copy outside `backend/data` (include WAL if applicable; do not delete original WAL/SHM), then dry-run:
-     `npm run import:postgres -- --source <absolute-path-to-isolated-copy>`
-   - Resolve reported ambiguous departments using a local JSON file mapping user IDs to real department IDs. Explicit JSON null means unassigned. No mapping is guessed from approximate names.
-   - Apply only after review:
-     `npm run import:postgres -- --source <copy> --department-map <local-json-file> --apply`
-   - `--allow-unassigned` explicitly clears unresolved department IDs to NULL while keeping legacy display names. Use only after deciding this is correct for those records.
-   - For an empty disposable/demo database only: `npm run seed:postgres -- --demo`. It refuses populated domain tables and retains the project's known demo account behavior. Do not use demo credentials for production.
-5. Run `npm start`, then manually verify browser/API flows on the configured PostgreSQL environment.
+Startup verifies existing schema and checksums. It does not run migration, seed, import or grant synchronization. Do not run the old migration runners against the accepted staging or development database: their RBAC side effects are not authorized. See [preserve-grants executor](POSTGRESQL_PRESERVE_GRANTS.md) for separately approved rebuilds. `ats_schema_execution` tracks applied DDL; `ats_rbac_reconciliation` remains PENDING. Preserve all 72 source grants; the 62 proposed grants remain unapproved.
 
-The importer refuses the repository runtime data directory and a nonempty destination. It imports all tables on one transaction/client with deferred foreign keys. Existing IDs and password hashes are retained. No original SQLite data is updated or deleted.
+Generic PostgreSQL adapter variables remain available for separately approved test/operations commands. They are not a replacement for the Azure development profile, and an explicit PostgreSQL provider without a connection URL must fail.
 
 ## Data/type decisions
 

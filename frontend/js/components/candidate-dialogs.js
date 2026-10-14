@@ -118,6 +118,7 @@
     if(generation!==candidateDetailsGeneration||token!==sessionStorage.getItem('ats_token')||view!==currentActiveView)return;
     if(!result.ok||!result.data?.success){showToast('danger','Không thể mở hồ sơ',result.data?.message||'Không thể tải hồ sơ ứng viên.');return;}
     const c=result.data.data;
+    const publicProfile = Boolean(c.status && !c.stage);
 
     const name = c.fullName || c.full_name || 'Ứng viên';
     const avatar = document.getElementById('cand-detail-avatar');
@@ -143,11 +144,12 @@
     }
     if (stageBadge) {
       stageBadge.className = `badge ${STAGE_BADGES[c.stage] || 'badge-neutral'}`;
-      stageBadge.textContent = STAGE_LABELS[c.stage] || c.stage;
+      stageBadge.textContent = c.statusLabel || STAGE_LABELS[c.stage] || c.stage || '—';
     }
     if (idInput) idInput.value = c.id;
-    if (stageSelect) stageSelect.value = c.stage;
-    if (ratingEl) ratingEl.textContent = '★'.repeat(c.rating || 4) + '☆'.repeat(5 - (c.rating || 4));
+    if (stageSelect) { stageSelect.value = c.stage || ''; stageSelect.disabled = publicProfile; }
+    if (candDetailSaveStageBtn) candDetailSaveStageBtn.disabled = publicProfile;
+    if (ratingEl) ratingEl.textContent = publicProfile ? '—' : '★'.repeat(c.rating || 4) + '☆'.repeat(5 - (c.rating || 4));
 
     canEditCandidateRejectionReason = false;
     if (candDetailRejectionReasonSelect) candDetailRejectionReasonSelect.disabled = true;
@@ -158,7 +160,7 @@
       );
     }
 
-    if (candDetailRejectionReasonSelect) {
+    if (candDetailRejectionReasonSelect && !publicProfile) {
       const token = sessionStorage.getItem('ats_token');
 
       candDetailRejectionReasonSelect.innerHTML =
@@ -209,13 +211,57 @@
       }
     }
     // S4-09: Load Unified Profile & Multi-Application History
-    loadCandidateUnifiedProfile(id, token);
+    if (publicProfile) {
+      for (const id of ['cand-detail-documents-list','cand-detail-unified-apps','cand-detail-tags-list','cand-detail-notes-list']) {
+        const element = document.getElementById(id);
+        if (element) element.textContent = '—';
+      }
+      document.getElementById('cand-detail-parsed-box')?.classList.add('hidden');
+    } else loadCandidateUnifiedProfile(id, token);
 
     if(generation!==candidateDetailsGeneration||token!==sessionStorage.getItem('ats_token')||view!==currentActiveView)return;
     if (candidateDetailModal) candidateDetailModal.classList.remove('hidden');
   }
 
+  async function downloadCandidateCv(button, token) {
+    if (button.disabled || token !== sessionStorage.getItem('ats_token')) return;
+    button.disabled = true;
+    const preview = window.open('about:blank', '_blank');
+    if (preview) preview.opener = null;
+    let objectUrl;
+    try {
+      const result = await window.ATS_API.downloadCandidateCvApi(token, button.dataset.cvDownload);
+      if (!result.ok || token !== sessionStorage.getItem('ats_token')) {
+        preview?.close();
+        if (token === sessionStorage.getItem('ats_token')) window.alert(result.data?.message || 'Không thể tải tài liệu.');
+        return;
+      }
+      objectUrl = URL.createObjectURL(result.blob);
+      if (result.mimeType === 'application/pdf' && preview && !preview.closed) {
+        preview.location.replace(objectUrl);
+        const url = objectUrl;
+        objectUrl = null;
+        const release = () => { clearInterval(timer); URL.revokeObjectURL(url); window.removeEventListener('pagehide', release); };
+        const timer = setInterval(() => { if (preview.closed) release(); }, 500);
+        window.addEventListener('pagehide', release, { once: true });
+      } else {
+        preview?.close();
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        link.download = result.fileName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        const url = objectUrl;
+        objectUrl = null;
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+    } catch { preview?.close(); window.alert('Không thể tải tài liệu.'); }
+    finally { if (objectUrl) URL.revokeObjectURL(objectUrl); button.disabled = false; }
+  }
+
   async function loadCandidateUnifiedProfile(id, token) {
+    const generation = candidateDetailsGeneration;
     const docsList = document.getElementById('cand-detail-documents-list');
     const appsList = document.getElementById('cand-detail-unified-apps');
     const tagsList = document.getElementById('cand-detail-tags-list');
@@ -227,6 +273,7 @@
 
     try {
       const res = await window.ATS_API.getUnifiedProfileApi(token, id);
+      if (generation !== candidateDetailsGeneration || token !== sessionStorage.getItem('ats_token')) return;
       if (res.ok && res.data?.data) {
         const u = res.data.data;
 
@@ -241,11 +288,10 @@
                   <span style="font-weight:600;">📄 ${escapeHtml(d.fileName)}</span>
                   <span style="font-size:0.75rem;color:var(--color-text-muted);margin-left:6px;">(${Math.round(d.fileSize/1024)} KB)</span>
                 </div>
-                <a href="/api/v1/candidates/documents/${encodeURIComponent(d.id)}/download" target="_blank" class="btn btn-outline btn-xs" style="text-decoration:none;">
-                  ⬇️ Xem / Tải CV
-                </a>
+                <button type="button" data-cv-download="${escapeHtml(d.id)}" class="btn btn-outline btn-xs">⬇️ Xem / Tải CV</button>
               </div>
             `).join('');
+            docsList.querySelectorAll('[data-cv-download]').forEach(button => button.addEventListener('click', () => downloadCandidateCv(button, token)));
           }
         }
 

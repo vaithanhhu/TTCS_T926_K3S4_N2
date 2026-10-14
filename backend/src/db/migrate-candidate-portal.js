@@ -9,16 +9,16 @@ const source = db => {
 
 async function verify(db) {
   try {
-    const row = await db.prepare('SELECT checksum FROM ats_candidate_portal_migrations WHERE version=1').get();
+    const row = await db.prepare('SELECT checksum FROM ats_candidate_portal_migrations WHERE version=1').get();if(!row&&db.provider==='postgres'){const phase=await require(path.join(__dirname,'schema-executor')).verifyDDL(db,9);if(phase){db.candidatePortalSchema=true;return phase;}}
     if (row?.checksum !== source(db).checksum) throw Error('S4_MIGRATION_REQUIRED');
     db.candidatePortalSchema = true;
-  } catch (error) {
+  } catch (error) {if(db.provider==='postgres'&&error.code==='42P01'){const phase=await require(path.join(__dirname,'schema-executor')).verifyDDL(db,9);if(phase){db.candidatePortalSchema=true;return phase;}}
     if (error.code === '42P01' || /no such table/i.test(error.message)) throw Error('S4_MIGRATION_REQUIRED');
     throw error;
   }
 }
 
-async function migrate(db) {
+async function runStandardMigration(db) {
   await require('./migrate-job-publication').verify(db);
   await db.transaction(async () => {
     if (db.provider === 'postgres') await db.prepare('SELECT pg_advisory_xact_lock(?)').get(74264001);
@@ -41,7 +41,7 @@ async function main() {
   try {
     if (process.argv.includes('--check')) await verify(db);
     else await migrate(db);
-    console.log('[S4] COMPLETED');
+    console.log(db.schemaExecutionStatus?JSON.stringify(db.schemaExecutionStatus):'[S4] COMPLETED');
   } finally {
     await db.close();
   }
@@ -53,3 +53,8 @@ if (require.main === module) main().catch((err) => {
 });
 
 module.exports = { migrate, verify };
+
+async function migrate(db) {
+  if(db.provider!=='postgres')return runStandardMigration(db);
+  return require(path.join(__dirname,'schema-executor')).withStandardMigration(db,()=>runStandardMigration(db));
+}

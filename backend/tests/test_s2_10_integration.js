@@ -1,3 +1,4 @@
+const { installFailureTrigger, assertNoOpenTransaction, foreignKeyViolations } = require('./helpers/databaseCompatibilityFixture');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -20,8 +21,11 @@ const RequisitionService = require('../src/services/requisitionService');
 const service = new RequisitionService(db);
 const tokens = {};
 let origin, job, department, foreignDepartment, draft, valid, ui;
-let passed = 0, failed = 0;
+let passed = 0, failed = 0, notApplicable = 0;
 async function test(name, action) {
+  if (db.provider === 'postgres' && name === '36 Additive requisition migration preserves old records and is idempotent') {
+    notApplicable++; console.log('[NOT APPLICABLE] ' + name + ': SQLite legacy-file initSchema contract, not a PostgreSQL schema upgrade.'); return;
+  }
   try { await action(); passed++; console.log('[PASS] ' + name); }
   catch (error) { failed++; console.error('[FAIL] ' + name, error); }
 }
@@ -200,10 +204,21 @@ async function main() {
   });
   await test('35 Failed SQL update leaves the complete draft unchanged', async () => {
     const res = await api('POST', '/requisitions', tokens.hiring, { status: 'DRAFT' }); const before = (await service.getRequisitionById(res.data.data.id));
-    (await db.exec(`CREATE TEMP TRIGGER s210_fail BEFORE UPDATE ON requisitions WHEN OLD.id='${before.id}' BEGIN SELECT RAISE(ABORT, 'test failure'); END`));
-    try { assert.equal((await completed(before.id,valid)).status, 500); assert.deepEqual((await service.getRequisitionById(before.id)), before); }
-    finally { (await db.exec('DROP TRIGGER s210_fail')); }
-    (await db.exec('BEGIN')); (await db.exec('ROLLBACK')); assert.equal((await db.prepare('PRAGMA foreign_key_check').all()).length, 0);
+    const removeTrigger = await installFailureTrigger(db, {
+      name: 's210_fail',
+      table: 'requisitions',
+      event: 'UPDATE',
+      condition: "OLD.id='" + before.id.replace(/'/g, "''") + "'"
+    });
+    try {
+      assert.equal((await completed(before.id, valid)).status, 500);
+      assert.deepEqual(await service.getRequisitionById(before.id), before);
+    } finally {
+      await removeTrigger();
+    }
+    await assertNoOpenTransaction(db);
+    assert.deepEqual(await foreignKeyViolations(db), []);
+
   });
   await test('36 Additive requisition migration preserves old records and is idempotent', async () => {
     const fixture = path.join(root, 'backend/data/old_requisition.db');
@@ -455,10 +470,12 @@ async function main() {
     assert.equal(nodes.get('create-req-standard-salary').textContent, 'Dải lương đề xuất nằm trong chuẩn chức danh.');
     assert.ok(!/15\.000\.000|25\.000\.000|15000000|25000000/.test(nodes.get('create-req-standard-salary').textContent));
   });
+
   await test('60 Forged salary controls reach backend intact and cannot bypass validation or write records',async()=>{
     const tables=['requisitions','requisition_open_policy','requisition_approval_workflows','requisition_approval_snapshots','requisition_approval_events'],counts=async()=>Promise.all(tables.map(async name=>(await db.prepare('SELECT COUNT(*) AS n FROM '+name).get()).n)),before=await counts();
     for(const changes of [{proposedSalaryMin:14000000},{proposedSalaryMax:30000000}]){const payload={...valid,...changes,standardMin:0,standardMax:999999999,requireJustification:false},result=await submitted(payload,{},true);for(const field of ['standardMin','standardMax','requireJustification']){assert.ok(Object.hasOwn(result.outboundDocument,field));assert.deepEqual(result.outboundDocument[field],payload[field]);}assert.equal(result.status,400);assert.equal(result.data.code,'SALARY_JUSTIFICATION_REQUIRED');assert.equal(result.data.salaryRangeStatus,'OUTSIDE_STANDARD_RANGE');assertNoStandardSalary(result.data);assert.deepEqual(await counts(),before);}
   });
-  console.log('S210_RESULT ' + JSON.stringify({ passed, failed, total: passed + failed })); process.exitCode = failed ? 1 : 0;
+  console.log('S210_RESULT ' + JSON.stringify({ passed, failed, notApplicable, total: passed + failed + notApplicable })); process.exitCode = failed ? 1 : 0;
+
 }
 main().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => server.close());

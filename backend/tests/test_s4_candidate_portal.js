@@ -299,6 +299,11 @@ async function runSprint4Tests() {
     // TEST S4-07: NHÂN SỰ NỘI BỘ GIỚI THIỆU ỨNG VIÊN
     // =============================================================
     console.log('\n--- Kiểm thử S4-07: Nhân sự nội bộ giới thiệu ứng viên ---');
+    const unauthorizedReferral = await portalService.referCandidate({}, employee);
+    assert.equal(unauthorizedReferral.statusCode, 403, 'Unassigned fixture cannot gain referral permission from caller role');
+    const verifiedReferrer = await portalService.rbac.getAuthorizedActor(recruiter.id, 'candidate.refer');
+    assert.ok(verifiedReferrer, 'Use an existing authorized internal actor without adding grants');
+    Object.assign(employee, verifiedReferrer);
     const referralEmail = `referred.${Date.now()}@example.com`;
     const referralCv = {
       filename: 'referral_cv.pdf',

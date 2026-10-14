@@ -26,7 +26,7 @@ const EXTRA_PERMISSIONS = [
   ['perm-dashboard-read','dashboard.read','Xem bảng điều khiển tuyển dụng','REPORTS'],
   ['perm-report-read','report.read','Xem báo cáo tuyển dụng','REPORTS']
 ];
-async function synchronizePermissions(db) {
+async function runsynchronizePermissions(db) {
   return db.transaction(async () => {
     for (const permission of EXTRA_PERMISSIONS) await db.prepare('INSERT INTO permissions(id,code,name,module,description) VALUES (?,?,?,?,?) ON CONFLICT(code) DO NOTHING').run(...permission,permission[2]);
     const controlled = [...new Set(Object.values(ROLE_PERMISSIONS).flat())];
@@ -37,17 +37,17 @@ async function synchronizePermissions(db) {
   });
 }
 
-async function synchronizeBudgetPermissions(db){return db.transaction(async()=>{const required=code=>code.startsWith('headcount_budget.')||['requisition.edit','requisition.draft.edit'].includes(code);for(const permission of EXTRA_PERMISSIONS.filter(row=>required(row[1])))await db.prepare('INSERT INTO permissions(id,code,name,module,description) VALUES (?,?,?,?,?) ON CONFLICT(code) DO NOTHING').run(...permission,permission[2]);for(const [role,permissions]of Object.entries(ROLE_PERMISSIONS))for(const permission of permissions.filter(required))await db.prepare('INSERT INTO role_permissions(role_id,permission_id) SELECT r.id,p.id FROM roles r JOIN permissions p ON p.code=? WHERE r.code=? ON CONFLICT DO NOTHING').run(permission,role);});}
+async function runsynchronizeBudgetPermissions(db){return db.transaction(async()=>{const required=code=>code.startsWith('headcount_budget.')||['requisition.edit','requisition.draft.edit'].includes(code);for(const permission of EXTRA_PERMISSIONS.filter(row=>required(row[1])))await db.prepare('INSERT INTO permissions(id,code,name,module,description) VALUES (?,?,?,?,?) ON CONFLICT(code) DO NOTHING').run(...permission,permission[2]);for(const [role,permissions]of Object.entries(ROLE_PERMISSIONS))for(const permission of permissions.filter(required))await db.prepare('INSERT INTO role_permissions(role_id,permission_id) SELECT r.id,p.id FROM roles r JOIN permissions p ON p.code=? WHERE r.code=? ON CONFLICT DO NOTHING').run(permission,role);});}
 
-async function synchronizeRecruiterPermissions(db){return db.transaction(async()=>{const related=new Set(['requisition.read','requisition.create','requisition.edit','requisition.draft.edit','requisition.assign','candidate.read','candidate.create','candidate.update','interview.read','interview.create','interview.update','interview.evaluate','interview.evaluation.read','offer.read','offer.create','offer.approve','dashboard.read','report.read']);for(const permission of EXTRA_PERMISSIONS.filter(row=>related.has(row[1])))await db.prepare('INSERT INTO permissions(id,code,name,module,description) VALUES (?,?,?,?,?) ON CONFLICT(code) DO NOTHING').run(...permission,permission[2]);for(const [role,permissions]of Object.entries(ROLE_PERMISSIONS))for(const permission of permissions.filter(code=>related.has(code)))await db.prepare('INSERT INTO role_permissions(role_id,permission_id) SELECT r.id,p.id FROM roles r JOIN permissions p ON p.code=? WHERE r.code=? ON CONFLICT DO NOTHING').run(permission,role);});}
+async function runsynchronizeRecruiterPermissions(db){return db.transaction(async()=>{const related=new Set(['requisition.read','requisition.create','requisition.edit','requisition.draft.edit','requisition.assign','candidate.read','candidate.create','candidate.update','interview.read','interview.create','interview.update','interview.evaluate','interview.evaluation.read','offer.read','offer.create','offer.approve','dashboard.read','report.read']);for(const permission of EXTRA_PERMISSIONS.filter(row=>related.has(row[1])))await db.prepare('INSERT INTO permissions(id,code,name,module,description) VALUES (?,?,?,?,?) ON CONFLICT(code) DO NOTHING').run(...permission,permission[2]);for(const [role,permissions]of Object.entries(ROLE_PERMISSIONS))for(const permission of permissions.filter(code=>related.has(code)))await db.prepare('INSERT INTO role_permissions(role_id,permission_id) SELECT r.id,p.id FROM roles r JOIN permissions p ON p.code=? WHERE r.code=? ON CONFLICT DO NOTHING').run(permission,role);});}
 
-async function synchronizeLifecyclePermissions(db){return db.transaction(async()=>{await db.prepare('INSERT INTO permissions(id,code,name,module,description) VALUES (?,?,?,?,?) ON CONFLICT(code) DO NOTHING').run('perm-req-lifecycle','requisition.lifecycle.manage','Quản lý vòng đời yêu cầu tuyển dụng','REQUISITIONS','Quản lý vòng đời yêu cầu tuyển dụng');await db.prepare("INSERT INTO role_permissions(role_id,permission_id) SELECT r.id,p.id FROM roles r JOIN permissions p ON p.code='requisition.lifecycle.manage' WHERE r.code='HR_MANAGER' ON CONFLICT DO NOTHING").run();});}
+async function runsynchronizeLifecyclePermissions(db){return db.transaction(async()=>{await db.prepare('INSERT INTO permissions(id,code,name,module,description) VALUES (?,?,?,?,?) ON CONFLICT(code) DO NOTHING').run('perm-req-lifecycle','requisition.lifecycle.manage','Quản lý vòng đời yêu cầu tuyển dụng','REQUISITIONS','Quản lý vòng đời yêu cầu tuyển dụng');await db.prepare("INSERT INTO role_permissions(role_id,permission_id) SELECT r.id,p.id FROM roles r JOIN permissions p ON p.code='requisition.lifecycle.manage' WHERE r.code='HR_MANAGER' ON CONFLICT DO NOTHING").run();});}
 
-async function synchronizeJobPostingPermissions(db){return db.transaction(async()=>{for(const permission of EXTRA_PERMISSIONS.filter(row=>row[1].startsWith('job_posting.')))await db.prepare('INSERT INTO permissions(id,code,name,module,description) VALUES (?,?,?,?,?) ON CONFLICT(code) DO NOTHING').run(...permission,permission[2]);for(const [role,permissions] of Object.entries(ROLE_PERMISSIONS))for(const permission of permissions.filter(code=>code.startsWith('job_posting.')))await db.prepare('INSERT INTO role_permissions(role_id,permission_id) SELECT r.id,p.id FROM roles r JOIN permissions p ON p.code=? WHERE r.code=? ON CONFLICT DO NOTHING').run(permission,role);});}
+async function runsynchronizeJobPostingPermissions(db){return db.transaction(async()=>{for(const permission of EXTRA_PERMISSIONS.filter(row=>row[1].startsWith('job_posting.')))await db.prepare('INSERT INTO permissions(id,code,name,module,description) VALUES (?,?,?,?,?) ON CONFLICT(code) DO NOTHING').run(...permission,permission[2]);for(const [role,permissions] of Object.entries(ROLE_PERMISSIONS))for(const permission of permissions.filter(code=>code.startsWith('job_posting.')))await db.prepare('INSERT INTO role_permissions(role_id,permission_id) SELECT r.id,p.id FROM roles r JOIN permissions p ON p.code=? WHERE r.code=? ON CONFLICT DO NOTHING').run(permission,role);});}
 
-async function synchronizeJobPublicationPermissions(db){return db.transaction(async()=>{for(const permission of EXTRA_PERMISSIONS.filter(row=>['job_posting.approve','job_posting.publish'].includes(row[1])))await db.prepare('INSERT INTO permissions(id,code,name,module,description) VALUES (?,?,?,?,?) ON CONFLICT(code) DO NOTHING').run(...permission,permission[2]);for(const code of ['job_posting.approve','job_posting.publish'])await db.prepare("INSERT INTO role_permissions(role_id,permission_id) SELECT r.id,p.id FROM roles r JOIN permissions p ON p.code=? WHERE r.code='HR_MANAGER' ON CONFLICT DO NOTHING").run(code);});}
+async function runsynchronizeJobPublicationPermissions(db){return db.transaction(async()=>{for(const permission of EXTRA_PERMISSIONS.filter(row=>['job_posting.approve','job_posting.publish'].includes(row[1])))await db.prepare('INSERT INTO permissions(id,code,name,module,description) VALUES (?,?,?,?,?) ON CONFLICT(code) DO NOTHING').run(...permission,permission[2]);for(const code of ['job_posting.approve','job_posting.publish'])await db.prepare("INSERT INTO role_permissions(role_id,permission_id) SELECT r.id,p.id FROM roles r JOIN permissions p ON p.code=? WHERE r.code='HR_MANAGER' ON CONFLICT DO NOTHING").run(code);});}
 
-async function synchronizeCandidatePortalPermissions(db) {
+async function runsynchronizeCandidatePortalPermissions(db) {
   return db.transaction(async () => {
     const portalPermissions = [
       ['perm-cand-refer', 'candidate.refer', 'Giới thiệu ứng viên nội bộ', 'CANDIDATES', 'Nhân sự nội bộ giới thiệu ứng viên cho vị trí tuyển dụng'],
@@ -78,3 +78,38 @@ async function main() {
 if(require.main===module)main().catch(()=>{console.error('[Permissions] SYNC_FAILED');process.exitCode=1;});
 module.exports={synchronizeCandidatePortalPermissions,synchronizeJobPublicationPermissions,synchronizeJobPostingPermissions,synchronizeLifecyclePermissions,synchronizePermissions,synchronizeBudgetPermissions,synchronizeRecruiterPermissions,ROLE_PERMISSIONS};
 
+
+async function synchronizePermissions(db) {
+  if(db.provider!=='postgres')return runsynchronizePermissions(db);
+  return require(require('node:path').join(__dirname,'schema-executor')).withStandardMigration(db,()=>runsynchronizePermissions(db));
+}
+
+async function synchronizeBudgetPermissions(db) {
+  if(db.provider!=='postgres')return runsynchronizeBudgetPermissions(db);
+  return require(require('node:path').join(__dirname,'schema-executor')).withStandardMigration(db,()=>runsynchronizeBudgetPermissions(db));
+}
+
+async function synchronizeRecruiterPermissions(db) {
+  if(db.provider!=='postgres')return runsynchronizeRecruiterPermissions(db);
+  return require(require('node:path').join(__dirname,'schema-executor')).withStandardMigration(db,()=>runsynchronizeRecruiterPermissions(db));
+}
+
+async function synchronizeLifecyclePermissions(db) {
+  if(db.provider!=='postgres')return runsynchronizeLifecyclePermissions(db);
+  return require(require('node:path').join(__dirname,'schema-executor')).withStandardMigration(db,()=>runsynchronizeLifecyclePermissions(db));
+}
+
+async function synchronizeJobPostingPermissions(db) {
+  if(db.provider!=='postgres')return runsynchronizeJobPostingPermissions(db);
+  return require(require('node:path').join(__dirname,'schema-executor')).withStandardMigration(db,()=>runsynchronizeJobPostingPermissions(db));
+}
+
+async function synchronizeJobPublicationPermissions(db) {
+  if(db.provider!=='postgres')return runsynchronizeJobPublicationPermissions(db);
+  return require(require('node:path').join(__dirname,'schema-executor')).withStandardMigration(db,()=>runsynchronizeJobPublicationPermissions(db));
+}
+
+async function synchronizeCandidatePortalPermissions(db) {
+  if(db.provider!=='postgres')return runsynchronizeCandidatePortalPermissions(db);
+  return require(require('node:path').join(__dirname,'schema-executor')).withStandardMigration(db,()=>runsynchronizeCandidatePortalPermissions(db));
+}

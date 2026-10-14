@@ -9,15 +9,15 @@ function migration(db) {
 
 async function verify(db) {
   try {
-    const row = await db.prepare('SELECT checksum FROM ats_approval_configuration_migrations WHERE version=1').get();
+    const row = await db.prepare('SELECT checksum FROM ats_approval_configuration_migrations WHERE version=1').get();if(!row&&db.provider==='postgres'){const phase=await require(path.join(__dirname,'schema-executor')).verifyDDL(db,2);if(phase){return phase;}}
     if (!row || row.checksum !== migration(db).checksum) throw new Error('S301_MIGRATION_REQUIRED');
-  } catch (error) {
+  } catch (error) {if(db.provider==='postgres'&&error.code==='42P01'){const phase=await require(path.join(__dirname,'schema-executor')).verifyDDL(db,2);if(phase){return phase;}}
     if (error.code === '42P01' || /no such table/i.test(error.message)) throw new Error('S301_MIGRATION_REQUIRED');
     throw error;
   }
 }
 
-async function migrate(db) {
+async function runStandardMigration(db) {
   return db.transaction(async () => {
     if (db.provider === 'postgres') await db.prepare('SELECT pg_advisory_xact_lock(?)').get(74263001);
     const time = db.provider === 'postgres' ? 'TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP' : "TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))";
@@ -35,9 +35,14 @@ async function migrate(db) {
 
 async function main() {
   const db = require('./database').getDatabase();
-  try { if (process.argv.includes('--check')) await verify(db); else await migrate(db); console.log('[S3-01] COMPLETED'); }
+  try { if (process.argv.includes('--check')) await verify(db); else await migrate(db); console.log(db.schemaExecutionStatus?JSON.stringify(db.schemaExecutionStatus):'[S3-01] COMPLETED'); }
   finally { await db.close(); }
 }
 
 if (require.main === module) main().catch(() => { console.error('[S3-01] MIGRATION_FAILED'); process.exitCode = 1; });
 module.exports = { migrate, verify };
+
+async function migrate(db) {
+  if(db.provider!=='postgres')return runStandardMigration(db);
+  return require(path.join(__dirname,'schema-executor')).withStandardMigration(db,()=>runStandardMigration(db));
+}

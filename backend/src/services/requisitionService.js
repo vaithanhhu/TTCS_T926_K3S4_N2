@@ -1101,7 +1101,10 @@ class RequisitionService {
   }
 
   async getCandidates(options = {}) {
-    if(options.viewer){const fresh=await new (require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(options.viewer.id,'candidate.read');if(!fresh)return{success:false,statusCode:403,code:'CANDIDATE_FORBIDDEN',message:'Bạn không có quyền xem hồ sơ ứng viên.',candidates:[]};options={...options,viewer:fresh};}
+    const actor = await new (require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(options.viewer?.id, 'candidate.read');
+    if (!actor) return {success:false,statusCode:403,code:'CANDIDATE_FORBIDDEN',message:'Bạn không có quyền xem hồ sơ ứng viên.',candidates:[]};
+    options = {...options, viewer:actor};
+    const internalScope = this.candidateVisibility({...actor, roles:actor.roles.filter(role => role !== 'CANDIDATE')});
     const search = typeof options.search === 'string' ? options.search.trim() : '';
     const stage = typeof options.stage === 'string' ? options.stage.trim() : 'ALL';
     const reqId = typeof options.requisitionId === 'string' ? options.requisitionId.trim() : 'ALL';
@@ -1128,8 +1131,13 @@ class RequisitionService {
     }
 
     if (stage && stage !== 'ALL') {
-      conditions.push('c.stage = ?');
-      params.push(stage);
+      const closed = stage === 'CLOSED';
+      const publicStages = [...candidateStages, 'WITHDRAWN'].filter(value => closed ? require('./candidatePortalService').mapPublicStatus(value).code !== stage : require('./candidatePortalService').mapPublicStatus(value).code === stage);
+      const placeholders = publicStages.map(() => '?').join(',');
+      const publicCondition = closed ? `(c.stage IS NULL OR c.stage NOT IN (${placeholders}))` : publicStages.length ? `c.stage IN (${placeholders})` : '1=0';
+      const internalCondition = internalScope ? internalScope.condition : '1=1';
+      conditions.push(`((${internalCondition} AND c.stage=?) OR (NOT ${internalCondition} AND ${publicCondition}))`);
+      params.push(...(internalScope?.params || []), stage, ...(internalScope?.params || []), ...publicStages);
     }
 
     if (reqId && reqId !== 'ALL') {
@@ -1141,6 +1149,7 @@ class RequisitionService {
 
     const stmt = this.db.prepare(`
       SELECT
+        CASE WHEN ${internalScope ? internalScope.condition : '1=1'} THEN 1 ELSE 0 END AS in_internal_scope,
         c.id,
         c.full_name,
         c.email,
@@ -1169,11 +1178,27 @@ class RequisitionService {
       ORDER BY c.created_at DESC
     `);
 
-    const rows = (await stmt.all(...params));
+    const rows = (await stmt.all(...(internalScope?.params || []), ...params));
     return {
       success: true,
       total: rows.length,
       candidates: rows.map(r => {
+        if (!Number(r.in_internal_scope)) {
+          const status = require('./candidatePortalService').mapPublicStatus(r.stage);
+          return {
+            id:r.id,
+            fullName:r.full_name,
+            email:r.email,
+            phoneNumber:r.phone_number,
+            createdAt:r.created_at,
+            experienceYears:r.experience_years,
+            currentCompany:r.current_company,
+            expectedSalary:r.expected_salary,
+            requisition:r.requisition_id ? {title:r.requisition_title, departmentName:r.department_name} : null,
+            status:status.code,
+            statusLabel:status.label
+          };
+        }
         let code = 'CAND-001';
         if (r.id && r.id.startsWith('cand-0')) {
           code = 'CAND-' + r.id.replace('cand-', '');
@@ -1366,7 +1391,7 @@ class RequisitionService {
     const requests=await this.getRequisitions(globalReport?{}:{viewer,approvalEnabled:options.approvalEnabled});
     requests.items=requests.items.filter(row=>row.status!=='DRAFT'||row.createdBy===viewer.id);requests.total=requests.items.length;
     const ids=new Set(requests.items.map(row=>row.id));
-    const candidates=(await this.getCandidates(globalReport?{}:{viewer})).candidates.filter(row=>ids.has(row.requisition?.id));
+    const candidates=(await this.getCandidates({viewer})).candidates.filter(row=>ids.has(row.requisition?.id));
     const interviews=(await this.getInterviews(globalReport?{}:{viewer})).interviews.filter(row=>ids.has(row.requisition?.id));
     const reqs={total:requests.total,open:0,inProgress:0,handoverAlerts:0,totalHeadcount:0};
     const groups=new Map();
