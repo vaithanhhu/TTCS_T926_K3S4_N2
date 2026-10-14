@@ -58,11 +58,23 @@ async function importRows(db, prepared) {
     for (const table of TABLES) if (Number((await db.prepare('SELECT COUNT(*) AS n FROM '+table).get()).n)) throw new Error('IMPORT_REQUIRES_EMPTY_DATABASE');
     for (const table of TABLES) {
       const allowed = new Set((await db.prepare('SELECT column_name FROM information_schema.columns WHERE table_schema=current_schema() AND table_name=?').all(table)).map(c=>c.column_name));
+      let columns = [], batch = [];
+      const flush = async () => {
+        if (!batch.length) return;
+        const placeholders = '(' + columns.map(() => '?').join(',') + ')';
+        await db.prepare(`INSERT INTO ${table} (${columns.join(',')}) VALUES ${batch.map(() => placeholders).join(',')}`)
+          .run(...batch.flatMap(row => columns.map(column => row[column])));
+        batch = [];
+      };
       for (const row of prepared.rows[table]) {
-        const columns=Object.keys(row), placeholders=columns.map(()=>'?').join(',');
-        if (columns.some(column=>!/^\w+$/.test(column)||!allowed.has(column))) throw new Error('INVALID_IMPORT_COLUMN');
-        await db.prepare(`INSERT INTO ${table} (${columns.join(',')}) VALUES (${placeholders})`).run(...columns.map(c=>row[c]));
+        const keys = Object.keys(row);
+        if (!keys.length || keys.some(column => !/^\w+$/.test(column) || !allowed.has(column))) throw new Error('INVALID_IMPORT_COLUMN');
+        if (columns.join(',') !== keys.join(',')) await flush();
+        columns = keys;
+        batch.push(row);
+        if (batch.length >= Math.min(100, Math.floor(60000 / columns.length))) await flush();
       }
+      await flush();
     }
     await db.exec("SELECT setval(pg_get_serial_sequence('login_audit_logs','sequence_id'), COALESCE((SELECT MAX(sequence_id) FROM login_audit_logs),1), EXISTS(SELECT 1 FROM login_audit_logs))");
   });

@@ -1,3 +1,4 @@
+const { foreignKeyViolations } = require('./helpers/databaseCompatibilityFixture');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const { openApplication, cases } = require('./helpers/coverageApplication');
@@ -208,7 +209,7 @@ async function main() {
           assert.equal(deletion.status, 409); assert.equal(deletion.data.code, 'CATALOG_ITEM_IN_USE');
           assert.ok((await ok('GET', '/recruitment-catalogs?type=' + type)).items.some(value => value.id === item.id));
           assert.equal((await app.db.prepare(`SELECT ${column} AS value FROM ${table} WHERE id=?`).get(row.id)).value, item.id);
-          assert.deepEqual((await app.db.prepare('PRAGMA foreign_key_check').all()), []);
+          assert.deepEqual((await foreignKeyViolations(app.db)), []);
         } finally { (await app.db.prepare(`UPDATE ${table} SET ${column}=? WHERE id=?`).run(row.value, row.id)); }
       });
     }

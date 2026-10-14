@@ -460,16 +460,16 @@ class CandidatePortalService {
       user = currentUser;
       cvFile = data?.cvFile || null;
     }
-    data.cvFile = cvFile;
-
     if (!user || !user.id) {
       return { success: false, statusCode: 401, code: 'UNAUTHORIZED', message: 'Yêu cầu đăng nhập.' };
     }
 
-    const hasPerm = await this.rbac.hasPermission(user.id, 'candidate.refer');
-    if (!hasPerm && !user.roles?.some(r => ['ADMIN', 'HR_MANAGER', 'HIRING_MGR', 'RECRUITER', 'INTERVIEWER', 'APPROVER', 'EMPLOYEE'].includes(r))) {
+    user = typeof user.id === 'string'
+      ? await this.rbac.getAuthorizedActor(user.id, 'candidate.refer') : null;
+    if (!user) {
       return { success: false, statusCode: 403, code: 'FORBIDDEN', message: 'Bạn không có quyền giới thiệu ứng viên.' };
     }
+    data = { ...(data || {}), cvFile };
 
     const fullName = typeof data.fullName === 'string' ? data.fullName.trim() : '';
     const email = typeof data.email === 'string' ? data.email.trim().toLowerCase() : '';
@@ -615,19 +615,29 @@ class CandidatePortalService {
       return { success: false, statusCode: 401, code: 'UNAUTHORIZED', message: 'Yêu cầu đăng nhập.' };
     }
 
-    const hasPerm = await this.rbac.hasPermission(user.id, 'candidate.cv.parse');
-    if (!hasPerm && !user.roles?.some(r => ['ADMIN', 'HR_MANAGER', 'RECRUITER'].includes(r))) {
-      return { success: false, statusCode: 403, code: 'FORBIDDEN', message: 'Bạn không có quyền trích xuất CV.' };
-    }
+    const authorize = async (lock = false) => {
+      const actor = await this.rbac.getAuthorizedActor(user.id, 'candidate.cv.parse');
+      if (!actor || !actor.roles.some(role => ['ADMIN', 'HR_MANAGER', 'RECRUITER'].includes(role))) {
+        return { success: false, statusCode: 403, code: 'FORBIDDEN', message: 'Bạn không có quyền trích xuất CV.' };
+      }
+      const candidate = await this.db.prepare('SELECT id,requisition_id FROM candidates WHERE id=?' + (lock && this.db.provider === 'postgres' ? ' FOR SHARE' : '')).get(candidateId);
+      if (!candidate) return { success: false, statusCode: 404, code: 'CANDIDATE_NOT_FOUND', message: 'Không tìm thấy hồ sơ ứng viên.' };
+      if (!actor.roles.some(role => ['ADMIN', 'HR_MANAGER'].includes(role)) && !await this.requisitions.recruiterAssigned(candidate.requisition_id, actor.id)) {
+        return { success: false, statusCode: 403, code: 'CANDIDATE_OUT_OF_SCOPE', message: 'Hồ sơ ứng viên không thuộc vị trí bạn được phân công.' };
+      }
+      return { success: true, candidate };
+    };
+    const access = await authorize();
+    if (!access.success) return access;
 
     const doc = documentId
       ? await this.db.prepare(
-          `SELECT id, file_name, storage_path, mime_type, parsed_text, parsed_data_json
+          `SELECT id, candidate_id, file_name, storage_path, file_hash, mime_type, parsed_text, parsed_data_json
            FROM candidate_documents
            WHERE id = ? AND candidate_id = ? AND document_type = 'CV'`
         ).get(documentId, candidateId)
       : await this.db.prepare(
-          `SELECT id, file_name, storage_path, mime_type, parsed_text, parsed_data_json
+          `SELECT id, candidate_id, file_name, storage_path, file_hash, mime_type, parsed_text, parsed_data_json
            FROM candidate_documents
            WHERE candidate_id = ? AND document_type = 'CV'
            ORDER BY created_at DESC LIMIT 1`
@@ -637,12 +647,27 @@ class CandidatePortalService {
       return { success: false, statusCode: 404, code: 'CV_NOT_FOUND', message: 'Không tìm thấy tệp CV của ứng viên này.' };
     }
 
-    const filePath = path.join(UPLOADS_DIR, doc.storage_path);
-    if (!fs.existsSync(filePath)) {
+    let filePath;
+    try {
+      if (typeof doc.storage_path !== 'string' || !doc.storage_path || path.isAbsolute(doc.storage_path)) throw new Error('INVALID_CV_PATH');
+      const root = fs.realpathSync(UPLOADS_DIR);
+      const requested = path.resolve(UPLOADS_DIR, doc.storage_path);
+      const relative = path.relative(UPLOADS_DIR, requested);
+      if (!relative || relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) throw new Error('INVALID_CV_PATH');
+      filePath = fs.realpathSync(requested);
+      const canonicalRelative = path.relative(root, filePath);
+      if (!canonicalRelative || canonicalRelative === '..' || canonicalRelative.startsWith('..' + path.sep) || path.isAbsolute(canonicalRelative)) throw new Error('INVALID_CV_PATH');
+    } catch {
       return { success: false, statusCode: 404, code: 'CV_FILE_NOT_FOUND', message: 'Tệp CV không tồn tại trên hệ thống lưu trữ.' };
     }
 
-    const buffer = fs.readFileSync(filePath);
+    let buffer;
+    try { buffer = fs.readFileSync(filePath); } catch {
+      return { success: false, statusCode: 404, code: 'CV_FILE_NOT_FOUND', message: 'Tệp CV không tồn tại trên hệ thống lưu trữ.' };
+    }
+    if (doc.file_hash && crypto.createHash('sha256').update(buffer).digest('hex') !== doc.file_hash) {
+      return { success: false, statusCode: 409, code: 'CV_DOCUMENT_CHANGED', message: 'Tệp CV đã thay đổi. Vui lòng tải lại hồ sơ.' };
+    }
     let extractedText = '';
 
     try {
@@ -653,8 +678,10 @@ class CandidatePortalService {
             extractedText = parsed.text || '';
           } else if (pdfParse?.PDFParse) {
             const parser = new pdfParse.PDFParse({ data: buffer });
-            const result = await parser.getText();
-            extractedText = result?.text || '';
+            try {
+              const result = await parser.getText();
+              extractedText = result?.text || '';
+            } finally { if (typeof parser.destroy === 'function') await parser.destroy(); }
           }
         } catch {
           // Library may throw on minimal/handcrafted or unusual PDFs
@@ -672,7 +699,6 @@ class CandidatePortalService {
         }
       }
     } catch (parseErr) {
-      console.warn('[CandidatePortalService] PDF parse error:', parseErr.message);
       return {
         success: false,
         statusCode: 422,
@@ -711,9 +737,20 @@ class CandidatePortalService {
     };
 
     // Update document record with parsed data (never auto-overwriting candidate table!)
-    await this.db.prepare(
-      `UPDATE candidate_documents SET parsed_text = ?, parsed_data_json = ? WHERE id = ?`
-    ).run(extractedText.slice(0, 5000), JSON.stringify(parsedData), doc.id);
+    const saved = await this.db.transaction(async () => {
+      const currentAccess = await authorize(true);
+      if (!currentAccess.success) return currentAccess;
+      const current = await this.db.prepare("SELECT id,candidate_id,storage_path,file_hash FROM candidate_documents WHERE id=? AND candidate_id=? AND document_type='CV'" + (this.db.provider === 'postgres' ? ' FOR UPDATE' : '')).get(doc.id, candidateId);
+      if (!current || current.candidate_id !== doc.candidate_id || current.storage_path !== doc.storage_path || current.file_hash !== doc.file_hash || currentAccess.candidate.requisition_id !== access.candidate.requisition_id) {
+        return { success: false, statusCode: 409, code: 'CV_DOCUMENT_CHANGED', message: 'Tệp CV hoặc hồ sơ đã thay đổi. Vui lòng tải lại hồ sơ.' };
+      }
+      const result = await this.db.prepare(
+        `UPDATE candidate_documents SET parsed_text = ?, parsed_data_json = ? WHERE id = ? AND candidate_id = ?`
+      ).run(extractedText.slice(0, 5000), JSON.stringify(parsedData), doc.id, candidateId);
+      if (result.changes !== 1) throw new Error('CV_PARSE_SAVE_FAILED');
+      return { success: true };
+    });
+    if (!saved.success) return saved;
 
     return {
       success: true,
@@ -725,36 +762,41 @@ class CandidatePortalService {
   }
 
   // S4-08: Expire overdue jobs daily task
-  async expireOverdueJobs() {
-    const today = this.requisitions.businessDate();
-    const rows = await this.db.prepare(
-      `SELECT id, title, version, application_deadline
-       FROM job_postings
-       WHERE status = 'PUBLISHED' AND application_deadline < ?`
-    ).all(today);
-
-    if (!rows.length) return { expiredCount: 0, expiredJobs: [] };
-
-    const expiredJobs = [];
-    for (const job of rows) {
-      await this.db.prepare(
-        `UPDATE job_postings SET status = 'UNPUBLISHED', version = version + 1, updated_at = datetime('now') WHERE id = ?`
-      ).run(job.id);
-
-      const eventSql = `INSERT INTO job_posting_publication_events (
-        id, posting_id, event_version, content_version, action, before_status, after_status,
-        actor_id, actor_name, reason, response_json, created_at
-      ) VALUES (?, ?, ?, 0, 'AUTO_EXPIRE', 'PUBLISHED', 'UNPUBLISHED', 'SYSTEM', 'Hệ thống tự động', 'Quá hạn nhận hồ sơ', ?, datetime('now'))`;
-
-      await this.db.prepare(eventSql).run(
-        'jpe-' + crypto.randomUUID(), job.id, job.version + 1,
-        JSON.stringify({ id: job.id, status: 'UNPUBLISHED', reason: 'Quá hạn nhận hồ sơ' })
-      );
-
-      expiredJobs.push({ id: job.id, title: job.title });
-    }
-
-    return { expiredCount: expiredJobs.length, expiredJobs };
+  async expireOverdueJobs(currentUser) {
+    const denied = { success: false, statusCode: 403, code: 'GLOBAL_JOB_EXPIRY_FORBIDDEN', message: 'Bạn không có quyền thực hiện tác vụ hết hạn tin toàn hệ thống.' };
+    if (!currentUser || typeof currentUser.id !== 'string' || !currentUser.id) return denied;
+    const actorId = currentUser.id;
+    return this.db.transaction(async () => {
+      const actor = await this.rbac.getAuthorizedActor(actorId, 'job_posting.manage');
+      if (!actor || !actor.roles.some(role => ['ADMIN', 'HR_MANAGER'].includes(role))) return denied;
+      const today = this.requisitions.businessDate();
+      const rows = await this.db.prepare(
+        `SELECT id, title, version, content_version, application_deadline
+         FROM job_postings
+         WHERE status = 'PUBLISHED' AND application_deadline < ?
+         ORDER BY id${this.db.provider === 'postgres' ? ' FOR UPDATE' : ''}`
+      ).all(today);
+      const expiredJobs = [];
+      for (const job of rows) {
+        const changed = await this.db.prepare(
+          `UPDATE job_postings SET status = 'UNPUBLISHED', version = version + 1, updated_at = datetime('now')
+           WHERE id = ? AND status = 'PUBLISHED' AND version = ? AND application_deadline < ?`
+        ).run(job.id, job.version, today);
+        if (changed.changes !== 1) continue;
+        await this.db.prepare(
+          `INSERT INTO job_posting_publication_events (
+            id, posting_id, event_version, content_version, action, before_status, after_status,
+            actor_id, actor_name, reason, response_json, created_at
+          ) VALUES (?, ?, ?, ?, 'AUTO_EXPIRE', 'PUBLISHED', 'UNPUBLISHED', ?, ?, ?, ?, datetime('now'))`
+        ).run(
+          'jpe-' + crypto.randomUUID(), job.id, job.version + 1, job.content_version,
+          actor.id, actor.fullName || actor.id, 'Quá hạn nhận hồ sơ',
+          JSON.stringify({ id: job.id, status: 'UNPUBLISHED', reason: 'Quá hạn nhận hồ sơ' })
+        );
+        expiredJobs.push({ id: job.id, title: job.title });
+      }
+      return { expiredCount: expiredJobs.length, expiredJobs };
+    });
   }
 
   // S4-09: Unified Candidate Profile with strict IDOR RBAC
@@ -763,37 +805,26 @@ class CandidatePortalService {
       return { success: false, statusCode: 401, code: 'UNAUTHORIZED', message: 'Yêu cầu đăng nhập.' };
     }
 
+    const actor = await this.rbac.getAuthorizedActor(currentUser.id, 'candidate.read');
+    if (!actor || !actor.roles.some(role => ['ADMIN', 'HR_MANAGER', 'APPROVER', 'RECRUITER', 'HIRING_MGR'].includes(role))) {
+      return { success: false, statusCode: 403, code: 'CANDIDATE_OUT_OF_SCOPE', message: 'Bạn không có quyền xem hồ sơ hợp nhất này.' };
+    }
+    const visibility = this.requisitions.candidateVisibility({ ...actor, roles: actor.roles.filter(role => ['ADMIN', 'HR_MANAGER', 'APPROVER', 'RECRUITER', 'HIRING_MGR'].includes(role)) });
+    const scopeSql = visibility ? ' AND ' + visibility.condition : '';
+    const scopeParams = visibility ? visibility.params : [];
+
     const candidate = await this.db.prepare(
       `SELECT c.*, r.title AS requisition_title, r.department_name, r.recruiter_id, r.hiring_manager_id
        FROM candidates c
        LEFT JOIN requisitions r ON r.id = c.requisition_id
-       WHERE c.id = ?`
-    ).get(candidateId);
+       WHERE c.id = ?${scopeSql}`
+    ).get(candidateId, ...scopeParams);
 
     if (!candidate) {
-      return { success: false, statusCode: 404, code: 'CANDIDATE_NOT_FOUND', message: 'Không tìm thấy hồ sơ ứng viên.' };
+      return { success: false, statusCode: 403, code: 'CANDIDATE_OUT_OF_SCOPE', message: 'Hồ sơ ứng viên không thuộc phạm vi truy cập của bạn.' };
     }
 
     // RBAC IDOR check: Recruiter must be assigned or Hiring Manager must manage requisition
-    const isAdminOrHr = currentUser.roles?.some(r => ['ADMIN', 'HR_MANAGER'].includes(r));
-    let hasAccess = isAdminOrHr;
-
-    if (!hasAccess && currentUser.roles?.includes('RECRUITER')) {
-      hasAccess = await this.requisitions.recruiterAssigned(candidate.requisition_id, currentUser.id);
-    }
-    if (!hasAccess && currentUser.roles?.includes('HIRING_MGR')) {
-      hasAccess = await this.requisitions.canReadHiringRequisition(candidate.requisition_id, currentUser.id);
-    }
-
-    if (!hasAccess) {
-      return {
-        success: false,
-        statusCode: 403,
-        code: 'CANDIDATE_OUT_OF_SCOPE',
-        message: 'Hồ sơ ứng viên không thuộc vị trí bạn được phân công phụ trách.'
-      };
-    }
-
     // Aggregate all applications by normalized email
     const allApplications = await this.db.prepare(
       `SELECT c.id, c.requisition_id, c.job_posting_id, c.stage, c.cover_letter, c.tracking_code,
@@ -801,11 +832,14 @@ class CandidatePortalService {
               r.code AS requisition_code, r.title AS requisition_title, r.department_name
        FROM candidates c
        LEFT JOIN requisitions r ON r.id = c.requisition_id
-       WHERE LOWER(c.email) = ?
+       WHERE LOWER(c.email) = ?${scopeSql}
        ORDER BY c.created_at DESC`
-    ).all(candidate.email.toLowerCase());
+    ).all(candidate.email.toLowerCase(), ...scopeParams);
 
     const appIds = allApplications.map(a => a.id);
+    if (!appIds.length) {
+      return { success: false, statusCode: 403, code: 'CANDIDATE_OUT_OF_SCOPE', message: 'Hồ sơ ứng viên không thuộc phạm vi truy cập của bạn.' };
+    }
 
     // Fetch documents
     const docs = await this.db.prepare(
@@ -828,8 +862,9 @@ class CandidatePortalService {
       `SELECT id, candidate_id, author_id, author_name, note_text, is_private, created_at
        FROM candidate_notes
        WHERE candidate_id IN (${appIds.map(() => '?').join(',')})
+         AND (is_private = ${this.db.provider === 'postgres' ? 'FALSE' : '0'} OR author_id = ? OR ? = 1)
        ORDER BY created_at DESC`
-    ).all(...appIds);
+    ).all(...appIds, actor.id, actor.roles.some(role => ['ADMIN', 'HR_MANAGER'].includes(role)) ? 1 : 0);
 
     // Fetch status history
     const history = await this.db.prepare(
@@ -895,25 +930,44 @@ class CandidatePortalService {
   }
 
   // Add internal note to candidate profile
+  async candidateWriteAccess(candidateId, currentUser) {
+    const actor = await this.rbac.getAuthorizedActor(currentUser?.id, 'candidate.update');
+    if (!actor || !actor.roles.some(role => ['ADMIN', 'HR_MANAGER', 'RECRUITER'].includes(role))) return { success: false, statusCode: 403, code: 'CANDIDATE_FORBIDDEN', message: 'Bạn không có quyền thao tác hồ sơ ứng viên.' };
+    const row = await this.db.prepare('SELECT id FROM candidates WHERE id=?' + (this.db.provider === 'postgres' ? ' FOR SHARE' : '')).get(candidateId);
+    if (!row) return { success: false, statusCode: 403, code: 'CANDIDATE_OUT_OF_SCOPE', message: 'Hồ sơ ứng viên không thuộc phạm vi thao tác của bạn.' };
+    const access = await this.requisitions.candidateAccess(candidateId, actor, 'candidate.update');
+    if (!access.success) return access;
+    if (this.db.provider === 'postgres' && !access.actor.roles.some(role => ['ADMIN', 'HR_MANAGER'].includes(role)) && config.REQUISITION_OPERATIONS_ENABLED === true) {
+      await this.db.prepare('SELECT user_id FROM requisition_recruiter_supports WHERE requisition_id=? AND user_id=? FOR SHARE').get(access.row.requisition_id, access.actor.id);
+      if (!await this.requisitions.recruiterAssigned(access.row.requisition_id, access.actor.id)) return { success: false, statusCode: 403, code: 'CANDIDATE_OUT_OF_SCOPE', message: 'Hồ sơ ứng viên không thuộc phạm vi thao tác của bạn.' };
+    }
+    return access;
+  }
+
   async addNote(candidateId, noteText, currentUser) {
     if (!currentUser || !currentUser.id) return { success: false, statusCode: 401, message: 'Yêu cầu đăng nhập.' };
     if (!noteText || typeof noteText !== 'string' || !noteText.trim()) {
       return { success: false, statusCode: 400, message: 'Nội dung ghi chú không được để trống.' };
     }
 
-    const noteId = 'cn-' + crypto.randomUUID();
-    const insertSql = this.db.provider === 'postgres'
-      ? `INSERT INTO candidate_notes (id, candidate_id, author_id, author_name, note_text, created_at)
-         VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
-      : `INSERT INTO candidate_notes (id, candidate_id, author_id, author_name, note_text, created_at)
-         VALUES (?, ?, ?, ?, ?, datetime('now'))`;
+    return this.db.transaction(async () => {
+      const access = await this.candidateWriteAccess(candidateId, currentUser);
+      if (!access.success) return access;
+      const actor = access.actor;
+      const noteId = 'cn-' + crypto.randomUUID();
+      const insertSql = this.db.provider === 'postgres'
+        ? `INSERT INTO candidate_notes (id, candidate_id, author_id, author_name, note_text, created_at)
+           VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
+        : `INSERT INTO candidate_notes (id, candidate_id, author_id, author_name, note_text, created_at)
+           VALUES (?, ?, ?, ?, ?, datetime('now'))`;
 
-    await this.db.prepare(insertSql).run(
-      noteId, candidateId, currentUser.id,
-      currentUser.fullName || currentUser.email, noteText.trim()
-    );
+      await this.db.prepare(insertSql).run(
+        noteId, candidateId, actor.id,
+        actor.fullName || actor.id, noteText.trim()
+      );
 
-    return { success: true, statusCode: 201, message: 'Đã thêm ghi chú.', data: { id: noteId, noteText: noteText.trim() } };
+      return { success: true, statusCode: 201, message: 'Đã thêm ghi chú.', data: { id: noteId, noteText: noteText.trim() } };
+    });
   }
 
   // Add tag to candidate profile
@@ -923,66 +977,120 @@ class CandidatePortalService {
       return { success: false, statusCode: 400, message: 'Tên nhãn không được để trống.' };
     }
 
-    const tagId = 'ct-' + crypto.randomUUID();
-    const insertSql = this.db.provider === 'postgres'
-      ? `INSERT INTO candidate_tags (id, candidate_id, tag_name, created_by, created_at)
-         VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)`
-      : `INSERT INTO candidate_tags (id, candidate_id, tag_name, created_by, created_at)
-         VALUES (?, ?, ?, ?, datetime('now'))`;
+    return this.db.transaction(async () => {
+      const access = await this.candidateWriteAccess(candidateId, currentUser);
+      if (!access.success) return access;
+      const tagId = 'ct-' + crypto.randomUUID();
+      const insertSql = this.db.provider === 'postgres'
+        ? `INSERT INTO candidate_tags (id, candidate_id, tag_name, created_by, created_at)
+           VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)`
+        : `INSERT INTO candidate_tags (id, candidate_id, tag_name, created_by, created_at)
+           VALUES (?, ?, ?, ?, datetime('now'))`;
 
-    await this.db.prepare(insertSql).run(tagId, candidateId, tagName.trim(), currentUser.id);
+      await this.db.prepare(insertSql).run(tagId, candidateId, tagName.trim(), access.actor.id);
 
-    return { success: true, statusCode: 201, message: 'Đã thêm nhãn.', data: { id: tagId, tagName: tagName.trim() } };
+      return { success: true, statusCode: 201, message: 'Đã thêm nhãn.', data: { id: tagId, tagName: tagName.trim() } };
+    });
   }
 
   // Download CV document
   async getCvDocument(documentId, currentUser) {
-    const doc = await this.db.prepare(
-      `SELECT d.*, c.requisition_id
-       FROM candidate_documents d
-       JOIN candidates c ON c.id = d.candidate_id
-       WHERE d.id = ?`
-    ).get(documentId);
-
-    if (!doc) {
-      return { success: false, statusCode: 404, message: 'Không tìm thấy tài liệu.' };
-    }
-
-    // If user is logged in, verify permissions
-    if (currentUser) {
-      const isAdminOrHr = currentUser.roles?.some(r => ['ADMIN', 'HR_MANAGER'].includes(r));
-      let hasAccess = isAdminOrHr;
-      if (!hasAccess && currentUser.roles?.includes('RECRUITER')) {
-        hasAccess = await this.requisitions.recruiterAssigned(doc.requisition_id, currentUser.id);
-      }
-      if (!hasAccess && currentUser.roles?.includes('HIRING_MGR')) {
-        hasAccess = await this.requisitions.canReadHiringRequisition(doc.requisition_id, currentUser.id);
-      }
-      if (!hasAccess) {
-        return { success: false, statusCode: 403, message: 'Bạn không có quyền truy cập tài liệu này.' };
-      }
-    }
-
-    const filePath = path.join(UPLOADS_DIR, doc.storage_path);
-    if (!fs.existsSync(filePath)) {
-      return { success: false, statusCode: 404, message: 'Tệp không tồn tại trên hệ thống lưu trữ.' };
-    }
-
-    return {
-      success: true,
-      statusCode: 200,
-      fileName: doc.file_name,
-      mimeType: doc.mime_type,
-      fileSize: doc.file_size,
-      filePath
+    const denied = (statusCode = 404) => ({ success: false, statusCode, message: statusCode === 403 ? 'Bạn không có quyền tải tài liệu.' : 'Không tìm thấy tài liệu.' });
+    if (!currentUser?.id) return denied(403);
+    if (typeof documentId !== 'string' || !documentId || /[\x00-\x1f\x7f]/.test(documentId)) return { success: false, statusCode: 400, message: 'Mã tài liệu không hợp lệ.' };
+    const actorId = currentUser.id;
+    const lookup = async () => this.db.transaction(async () => {
+      const actor = await this.rbac.getAuthorizedActor(actorId, 'candidate.read');
+      if (!actor) return { failure: denied(403) };
+      const scope = this.requisitions.candidateVisibility(actor);
+      const document = await this.db.prepare(`SELECT d.*, c.requisition_id FROM candidate_documents d
+        JOIN candidates c ON c.id=d.candidate_id LEFT JOIN requisitions r ON r.id=c.requisition_id
+        WHERE d.id=? AND d.document_type='CV'${scope ? ' AND ' + scope.condition : ''}`).get(documentId, ...(scope?.params || []));
+      return document ? { document } : { failure: denied() };
+    });
+    const initial = await lookup();
+    if (initial.failure) return initial.failure;
+    const doc = initial.document;
+    let handle;
+    let closed = false;
+    let started = false;
+    let activeStream;
+    const close = async () => {
+      if (closed) return;
+      closed = true;
+      activeStream?.destroy();
+      if (handle) await handle.close().catch(() => {});
     };
+    try {
+      if (typeof doc.storage_path !== 'string' || !doc.storage_path || path.isAbsolute(doc.storage_path) || path.win32.isAbsolute(doc.storage_path) || doc.storage_path.includes('\0')) return denied();
+      const inside = (root, target) => { const relative = path.relative(root, target); return relative && relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative); };
+      const root = await fs.promises.realpath(UPLOADS_DIR);
+      const requested = path.resolve(root, doc.storage_path);
+      if (!inside(root, requested)) return denied();
+      const canonical = await fs.promises.realpath(requested);
+      if (!inside(root, canonical)) return denied();
+      const before = await fs.promises.stat(canonical);
+      if (!before.isFile() || before.size < 5 || before.size > 10 * 1024 * 1024) return denied();
+      handle = await fs.promises.open(canonical, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
+      const opened = await handle.stat();
+      const afterPath = await fs.promises.realpath(requested);
+      if (afterPath !== canonical || !inside(root, afterPath) || !opened.isFile() || opened.dev !== before.dev || opened.ino !== before.ino || opened.size !== before.size || opened.mtimeMs !== before.mtimeMs) { await close(); return denied(); }
+      const bytes = Buffer.alloc(opened.size);
+      let offset = 0;
+      while (offset < bytes.length) {
+        const read = await handle.read(bytes, offset, bytes.length - offset, offset);
+        if (!read.bytesRead) { await close(); return denied(); }
+        offset += read.bytesRead;
+      }
+      const extension = path.extname(doc.file_name || '').toLowerCase();
+      let mimeType;
+      if (extension === '.pdf' && bytes.subarray(0, 5).toString('ascii') === '%PDF-') mimeType = 'application/pdf';
+      else if (extension === '.docx' && bytes.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 3, 4]))) {
+        const JSZip = require(require.resolve('jszip', { paths: [path.dirname(require.resolve('exceljs'))] }));
+        const zip = await JSZip.loadAsync(bytes);
+        if (!zip.file('[Content_Types].xml') || !zip.file('word/document.xml')) { await close(); return denied(); }
+        mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      } else { await close(); return denied(); }
+      const hash = crypto.createHash('sha256').update(bytes).digest('hex');
+      if (doc.file_hash && doc.file_hash !== hash) { await close(); return denied(); }
+      const recheck = async () => {
+        const stat = await handle.stat();
+        if (!stat.isFile() || stat.dev !== opened.dev || stat.ino !== opened.ino || stat.size !== opened.size || stat.mtimeMs !== opened.mtimeMs || stat.ctimeMs !== opened.ctimeMs) return denied();
+        const latest = await lookup();
+        if (latest.failure) return latest.failure;
+        const identity = ['id', 'candidate_id', 'requisition_id', 'storage_path', 'file_hash', 'file_name', 'file_size'];
+        if (identity.some(key => latest.document[key] !== doc[key])) return denied();
+        return { success: true };
+      };
+      const checked = await recheck();
+      if (!checked.success) { await close(); return checked; }
+      return {
+        success: true, statusCode: 200, fileName: doc.file_name, mimeType, fileSize: opened.size,
+        close,
+        openStream: async () => {
+          if (closed || started) return denied();
+          try {
+            const checked = await recheck();
+            if (!checked.success) { await close(); return checked; }
+            started = true;
+            const stream = handle.createReadStream({ start: 0, autoClose: false });
+            activeStream = stream;
+            stream.once('close', () => { void close(); });
+            return { success: true, stream };
+          } catch { await close(); return denied(); }
+        }
+      };
+    } catch { await close(); return denied(); }
   }
 
-  // Remove tag from candidate profile
   async removeTag(candidateId, tagName, currentUser) {
     if (!currentUser || !currentUser.id) return { success: false, statusCode: 401, message: 'Yêu cầu đăng nhập.' };
-    await this.db.prepare('DELETE FROM candidate_tags WHERE candidate_id = ? AND tag_name = ?').run(candidateId, tagName);
-    return { success: true, statusCode: 200, message: 'Đã xóa nhãn.' };
+    return this.db.transaction(async () => {
+      const access = await this.candidateWriteAccess(candidateId, currentUser);
+      if (!access.success) return access;
+      await this.db.prepare('DELETE FROM candidate_tags WHERE candidate_id = ? AND tag_name = ?').run(candidateId, tagName);
+      return { success: true, statusCode: 200, message: 'Đã xóa nhãn.' };
+    });
   }
 }
 

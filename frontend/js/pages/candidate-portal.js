@@ -7,6 +7,25 @@
     const candEmailEl = document.getElementById('cand-portal-email');
     const candAvatarEl = document.getElementById('cand-portal-avatar');
     const candStageBadge = document.getElementById('cand-portal-stage-badge');
+    const publicSteps = [
+      ['portal-step-applied', 'RECEIVED', 'Đã nhận hồ sơ'],
+      ['portal-step-screening', 'IN_REVIEW', 'Đang xem xét'],
+      ['portal-step-interview', 'INTERVIEWING', 'Mời phỏng vấn'],
+      ['portal-step-offer', 'CLOSED', 'Kết thúc quá trình xét duyệt'],
+      ['portal-step-hired', 'WITHDRAWN', 'Ứng viên đã rút hồ sơ']
+    ];
+    publicSteps.forEach(([id, , label]) => {
+      const step = document.getElementById(id);
+      const name = step?.querySelector('.funnel-step-name');
+      if (name) name.textContent = label;
+      if (step) {
+        step.style.borderColor = '';
+        step.style.background = '';
+        step.removeAttribute('aria-current');
+        const count = step.querySelector('.funnel-step-count');
+        if (count) { count.textContent = '—'; count.style.color = ''; }
+      }
+    });
 
     if (currentAuthenticatedUser) {
       if (candNameEl) candNameEl.textContent = currentAuthenticatedUser.fullName || 'Ứng viên';
@@ -26,26 +45,23 @@
       let myCand = candidates.find(c => c.email && c.email.toLowerCase() === userEmail);
 
       if (myCand) {
+        const internalStatuses = {NEW:'RECEIVED', APPLIED:'RECEIVED', SCREENING:'IN_REVIEW', INTERVIEW:'INTERVIEWING', WITHDRAWN:'WITHDRAWN'};
+        const status = myCand.status || internalStatuses[myCand.stage] || 'CLOSED';
+        const label = publicSteps.find(step => step[1] === status)?.[2] || 'Kết thúc quá trình xét duyệt';
         if (candNameEl) candNameEl.textContent = myCand.fullName;
         if (candStageBadge) {
-          candStageBadge.className = `badge ${STAGE_BADGES[myCand.stage] || 'badge-primary'}`;
-          candStageBadge.textContent = STAGE_LABELS[myCand.stage] || myCand.stage;
+          candStageBadge.className = 'badge badge-primary';
+          candStageBadge.textContent = label;
         }
 
-        // Update Tracker Steps
-        const stagesOrder = ['NEW', 'SCREENING', 'INTERVIEW', 'OFFER', 'HIRED'];
-        const currentIdx = stagesOrder.indexOf(myCand.stage) !== -1 ? stagesOrder.indexOf(myCand.stage) : 0;
-
-        const stepIds = ['portal-step-applied', 'portal-step-screening', 'portal-step-interview', 'portal-step-offer', 'portal-step-hired'];
-        stepIds.forEach((sid, idx) => {
+        publicSteps.forEach(([sid, code]) => {
           const el = document.getElementById(sid);
-          if (el) {
-            if (idx <= currentIdx) {
+          if (el && code === status) {
               el.style.borderColor = 'var(--color-primary)';
               el.style.background = 'rgba(37,99,235,0.08)';
+              el.setAttribute('aria-current', 'step');
               const countEl = el.querySelector('.funnel-step-count');
-              if (countEl) countEl.style.color = 'var(--color-primary)';
-            }
+              if (countEl) { countEl.textContent = '●'; countEl.style.color = 'var(--color-primary)'; }
           }
         });
       }

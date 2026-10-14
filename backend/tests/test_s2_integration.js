@@ -31,12 +31,16 @@ const db = getDatabase();
 const users = new UserService(db), departments = new DepartmentService(db);
 const competency = new CompetencyService(db), questions = new QuestionBankService(db);
 const catalogs = new CatalogService(db), requisitions = new RequisitionService(db);
-async function assertNoOpenTransaction() { (await db.exec('BEGIN')); (await db.exec('ROLLBACK')); }
-let origin, passed = 0, failed = 0;
+const { installFailureTrigger, assertNoOpenTransaction: assertDatabaseTransactionReleased } = require('./helpers/databaseCompatibilityFixture');
+async function assertNoOpenTransaction() { await assertDatabaseTransactionReleased(db); }
+let origin, passed = 0, failed = 0, notApplicable = 0;
 const tokens = {};
 let framework, jobTitle, department, question, source, reason, image, uiHarness;
 
 async function test(name, action) {
+  if (db.provider === 'postgres' && name === 'Old job title schema migrates additively and idempotently without inventing salaries') {
+    notApplicable++; console.log('[NOT APPLICABLE] ' + name + ': SQLite initSchema upgrade contract; PostgreSQL migrations do not use this SQLite file format.'); return;
+  }
   try { await action(); passed++; console.log('[PASS] ' + name); }
   catch (error) { failed++; console.error('[FAIL] ' + name, error); }
 }
@@ -97,14 +101,14 @@ async function main() {
     const workbook = new ExcelJS.Workbook(); await workbook.xlsx.load(await users.buildBulkUserImportTemplate());
     workbook.getWorksheet('NhanSu').getRow(2).values = ['Fail', 'rollback@test.example'];
     workbook.getWorksheet('NhanSu').getRow(3).values = ['Success', 'after.rollback@test.example'];
-    (await db.exec(`CREATE TEMP TRIGGER reject_import_role BEFORE INSERT ON user_roles WHEN NEW.user_id IN (SELECT id FROM users WHERE email = 'rollback@test.example') BEGIN SELECT RAISE(ABORT, 'test failure'); END`));
+    const removeTrigger = await installFailureTrigger(db, { name: 'reject_import_role', table: 'user_roles', event: 'INSERT', condition: "NEW.user_id IN (SELECT id FROM users WHERE email = 'rollback@test.example')" });
     try {
       const res = await users.importBulkUsers(Buffer.from(await workbook.xlsx.writeBuffer()));
       assert.equal(res.data.summary.importedRows, 1); assert.equal(res.data.summary.skippedRows, 1);
       assert.equal((await db.prepare("SELECT id FROM users WHERE email = 'rollback@test.example'").get()), undefined);
       assert.ok((await db.prepare("SELECT id FROM users WHERE email = 'after.rollback@test.example'").get()));
       (await assertNoOpenTransaction());
-    } finally { (await db.exec('DROP TRIGGER reject_import_role')); }
+    } finally { await removeTrigger(); }
   });
   await test('Oversized Excel upload returns a structured error without connection reset', async () => {
     const res = await api('POST', '/admin/users/import/preview', tokens.admin, Buffer.alloc(5 * 1024 * 1024 + 1), 'application/octet-stream');
@@ -279,9 +283,9 @@ async function main() {
   });
   await test('Deletion rolls back on late FK/SQL failure and ordinary users remain deletable', async () => {
     const created = (await users.createUser({ fullName: 'Delete test', email: 'delete@test.example' })).data.user;
-    (await db.exec(`CREATE TEMP TRIGGER fail_user_delete BEFORE DELETE ON users WHEN OLD.email = 'delete@test.example' BEGIN SELECT RAISE(ABORT, 'late failure'); END`));
+    const removeTrigger = await installFailureTrigger(db, { name: 'fail_user_delete', table: 'users', event: 'DELETE', condition: "OLD.email = 'delete@test.example'", message: 'late failure' });
     try { (await assert.rejects(async () => (await users.deleteUser(created.id, { id: 'usr-admin' })))); assert.ok((await users.getUserById(created.id))); assert.equal((await db.prepare('SELECT COUNT(*) AS count FROM user_roles WHERE user_id = ?').get(created.id)).count, 1); }
-    finally { (await db.exec('DROP TRIGGER fail_user_delete')); }
+    finally { await removeTrigger(); }
     assert.equal((await users.deleteUser(created.id, { id: 'usr-admin' })).success, true);
   });
   await test('Old job title schema migrates additively and idempotently without inventing salaries', async () => {
@@ -376,7 +380,7 @@ async function main() {
     await context.window.ATS_API.updateCandidateStageApi('token', 'candidate', 'NEW'); assert.deepEqual(sent, { stage: 'NEW' });
     await context.window.ATS_API.updateCandidateStageApi('token', 'candidate', 'REJECTED', 'Note', reason.id); assert.equal(sent.rejectionReasonId, reason.id);
   });
-  console.log('SPRINT2_RESULT ' + JSON.stringify({ passed, failed, total: passed + failed }));
+  console.log('SPRINT2_RESULT ' + JSON.stringify({ passed, failed, notApplicable, total: passed + failed + notApplicable }));
   process.exitCode = failed ? 1 : 0;
 }
 main().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => server.close());

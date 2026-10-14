@@ -1,5 +1,6 @@
 const path = require('node:path');
 const fs = require('node:fs');
+const { pipeline } = require('node:stream');
 const { parseMultipartOrJson } = require('../utils/formParser');
 
 class CandidatePortalController {
@@ -127,10 +128,19 @@ class CandidatePortalController {
 
       // 7. S4-08: Expire Overdue Jobs (Admin/Cron background task)
       if (pathname === '/api/v1/admin/expire-overdue-jobs' && method === 'POST') {
-        const user = await this.rbac.authorize(req, res, this.auth, 'job_posting.manage');
-        if (!user) return;
-        const result = await this.service.expireOverdueJobs(user);
-        return this.send(res, 200, { success: true, data: result });
+        try {
+          const user = await this.rbac.authorize(req, res, this.auth, 'job_posting.manage');
+          if (!user) return;
+          const actor = await this.rbac.getAuthorizedActor(user.id, 'job_posting.manage');
+          if (!actor || !actor.roles.some(role => ['ADMIN', 'HR_MANAGER'].includes(role))) {
+            return this.send(res, 403, { success: false, statusCode: 403, code: 'GLOBAL_JOB_EXPIRY_FORBIDDEN', message: 'Bạn không có quyền thực hiện tác vụ hết hạn tin toàn hệ thống.' });
+          }
+          const result = await this.service.expireOverdueJobs(actor);
+          if (result.success === false) return this.send(res, result.statusCode || 403, result);
+          return this.send(res, 200, { success: true, data: result });
+        } catch {
+          return this.send(res, 500, { success: false, code: 'GLOBAL_JOB_EXPIRY_FAILED', message: 'Không thể hoàn tất tác vụ hết hạn tin. Vui lòng thử lại.' });
+        }
       }
 
       // 8. S4-09: Unified Candidate Profile & Details (IDOR checked)
@@ -173,19 +183,48 @@ class CandidatePortalController {
 
       // 10. Document Download / Preview
       if (/^\/api\/v1\/candidates\/documents\/[^/]+\/download$/.test(pathname) && method === 'GET') {
-        const user = await this.rbac.authorize(req, res, this.auth, 'candidate.read');
-        if (!user) return;
-        const docId = decodeURIComponent(pathname.split('/')[5]);
-        const docInfo = await this.service.getCvDocument(docId, user);
-        if (!docInfo.success) {
-          return this.send(res, docInfo.statusCode || 404, docInfo);
+        let user;
+        try { user = await this.rbac.authorize(req, res, this.auth, 'candidate.read'); }
+        catch {
+          if (!res.headersSent && !res.destroyed) return this.send(res, 503, { success: false, message: 'Không thể tải tài liệu.' });
+          return;
         }
-        res.writeHead(200, {
-          'Content-Type': docInfo.mimeType || 'application/octet-stream',
-          'Content-Disposition': `inline; filename="${encodeURIComponent(docInfo.fileName)}"`
-        });
-        fs.createReadStream(docInfo.filePath).pipe(res);
-        return;
+        if (!user) return;
+        let docId;
+        try { docId = decodeURIComponent(pathname.split('/')[5]); }
+        catch { return this.send(res, 400, { success: false, message: 'Mã tài liệu không hợp lệ.' }); }
+        let docInfo;
+        try {
+          docInfo = await this.service.getCvDocument(docId, user);
+          if (!docInfo.success) return this.send(res, docInfo.statusCode || 404, docInfo);
+          if (req.aborted || res.destroyed) { await docInfo.close(); return; }
+          const prepared = await docInfo.openStream();
+          if (!prepared.success) return this.send(res, prepared.statusCode || 404, prepared);
+          const stream = prepared.stream;
+          const cleanup = () => { stream.destroy(); void docInfo.close(); };
+          req.once('aborted', cleanup);
+          res.once('close', cleanup);
+          stream.once('error', () => { cleanup(); res.destroy(); });
+          if (req.aborted || res.destroyed) { cleanup(); return; }
+          const filename = String(docInfo.fileName || 'cv').toWellFormed().replace(/[\x00-\x1f\x7f/\\]/g, '_');
+          const ascii = filename.replace(/[^a-zA-Z0-9._ -]/g, '_');
+          const utf8 = encodeURIComponent(filename).replace(/['()*]/g, char => '%' + char.charCodeAt(0).toString(16).toUpperCase());
+          res.writeHead(200, {
+            'Content-Type': docInfo.mimeType,
+            'Content-Length': docInfo.fileSize,
+            'Content-Disposition': `${docInfo.mimeType === 'application/pdf' ? 'inline' : 'attachment'}; filename="${ascii}"; filename*=UTF-8''${utf8}`,
+            'X-Content-Type-Options': 'nosniff',
+            'Access-Control-Expose-Headers': 'Content-Disposition',
+            'Cache-Control': 'no-store'
+          });
+          pipeline(stream, res, () => { req.removeListener('aborted', cleanup); void docInfo.close(); });
+          return;
+        } catch {
+          await docInfo?.close?.();
+          if (!res.headersSent && !res.destroyed) return this.send(res, 404, { success: false, message: 'Không tìm thấy tài liệu.' });
+          res.destroy();
+          return;
+        }
       }
 
       return this.send(res, 404, { success: false, code: 'NOT_FOUND', message: 'Tài nguyên không tồn tại.' });

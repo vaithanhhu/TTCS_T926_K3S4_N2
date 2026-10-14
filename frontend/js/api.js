@@ -1574,8 +1574,27 @@ async function requisitionTrackingOptionsApi(token){try{const response=await fet
 async function requisitionLifecycleApi(token,id,method='GET',body){try{const response=await fetch(API_BASE+'/requisition-lifecycles/'+encodeURIComponent(id),{method,cache:'no-store',headers:{Authorization:token?'Bearer '+token:'',...(body===undefined?{}:{'Content-Type':'application/json'})},...(body===undefined?{}:{body:JSON.stringify(body)})});return{ok:response.ok,status:response.status,data:await response.json()};}catch{return{ok:false,status:0,data:{message:'Không thể kết nối để xử lý vòng đời yêu cầu tuyển dụng.'}};}}
 async function requisitionOperationApi(token,id,action,method='GET',body){try{const response=await fetch(API_BASE+'/requisition-operations/'+encodeURIComponent(id)+'/'+action,{method,cache:'no-store',headers:{Authorization:token?'Bearer '+token:'',...(body===undefined?{}:{'Content-Type':'application/json'})},...(body===undefined?{}:{body:JSON.stringify(body)})});return{ok:response.ok,status:response.status,data:await response.json()};}catch{return{ok:false,status:0,data:{message:'Không thể kết nối để xử lý yêu cầu tuyển dụng.'}};}}
 async function getCandidateByIdApi(token,id){try{const response=await fetch(API_BASE+'/candidates/'+encodeURIComponent(id),{cache:'no-store',headers:{Authorization:token?'Bearer '+token:''}});return{ok:response.ok,status:response.status,data:await response.json()};}catch{return{ok:false,status:0,data:{message:'Không thể tải hồ sơ ứng viên. Vui lòng thử lại.'}};}}
+async function downloadCandidateCvApi(token, documentId) {
+  if (!token) return { ok: false, status: 401, data: { message: 'Vui lòng đăng nhập.' } };
+  try {
+    const response = await fetch(API_BASE + '/candidates/documents/' + encodeURIComponent(documentId) + '/download', { cache: 'no-store', headers: { Authorization: 'Bearer ' + token } });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({ message: 'Không thể tải tài liệu.' }));
+      return { ok: false, status: response.status, data };
+    }
+    const mimeType = response.headers.get('Content-Type')?.split(';')[0];
+    if (!['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'].includes(mimeType)) return { ok: false, status: 415, data: { message: 'Định dạng tài liệu không hợp lệ.' } };
+    const disposition = response.headers.get('Content-Disposition') || '';
+    const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+    const fallback = disposition.match(/filename="([^"]*)"/i);
+    let fileName = fallback?.[1] || (mimeType === 'application/pdf' ? 'cv.pdf' : 'cv.docx');
+    if (encoded) { try { fileName = decodeURIComponent(encoded[1]); } catch {} }
+    fileName = fileName.replace(/[\x00-\x1f\x7f/\\]/g, '_');
+    return { ok: true, status: response.status, blob: await response.blob(), fileName, mimeType };
+  } catch { return { ok: false, status: 0, data: { message: 'Không thể tải tài liệu.' } }; }
+}
 window.ATS_API = {
-  jobPublicationApi,publicJobsApi,publicJobsOptionsApi,publicJobsSearchApi,applyJobApi,lookupApplicationStatusApi,withdrawApplicationApi,referCandidateApi,getMyReferralsApi,parseCvPdfApi,getUnifiedProfileApi,addCandidateNoteApi,addCandidateTagApi,removeCandidateTagApi,jobPostingDraftApi,requisitionTrackingOptionsApi,requisitionLifecycleApi,requisitionOperationApi,getCandidateByIdApi,
+  downloadCandidateCvApi,jobPublicationApi,publicJobsApi,publicJobsOptionsApi,publicJobsSearchApi,applyJobApi,lookupApplicationStatusApi,withdrawApplicationApi,referCandidateApi,getMyReferralsApi,parseCvPdfApi,getUnifiedProfileApi,addCandidateNoteApi,addCandidateTagApi,removeCandidateTagApi,jobPostingDraftApi,requisitionTrackingOptionsApi,requisitionLifecycleApi,requisitionOperationApi,getCandidateByIdApi,
   headcountBudgetRequestApi,
   getInterviewOptionsApi,
   loginApi,
