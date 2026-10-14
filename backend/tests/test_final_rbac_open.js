@@ -29,7 +29,7 @@ async function storageCases(db,label){
   const hr=actor('HR_MANAGER'),hiring=actor('HIRING_MGR'),admin=actor('ADMIN');
   const title=await new (require('../src/services/competencyService'))(db).createJobTitle({code:'FINAL-'+label.replace(/\W/g,''),name:'Final title',level:'Senior',minSalary:10000000,maxSalary:50000000});assert.equal(title.success,true);
   const valid={formVersion:'S2-10',jobTitleId:title.data.id,departmentId:'dept-3',headcount:2,recruitmentReason:'REPLACEMENT',proposedSalaryMin:15000000,proposedSalaryMax:30000000,neededDate:service.businessDate(),jobDescription:'Original document',candidateRequirements:'Original requirements',recruiterId:'usr-recruiter'};
-  const request=await service.createRequisition({...valid,recruiterId:null},hiring);assert.equal(request.success,true);const id=request.data.id;assert.equal((await service.updateRequisition(id,{recruiterId:'usr-recruiter'},hr)).success,true);
+  const request=await require('./helpers/approvalPolicyFixture').createApproved(db,{...valid,recruiterId:null},hiring);assert.equal(request.success,true);const id=request.data.id;assert.equal((await service.updateRequisition(id,{recruiterId:'usr-recruiter'},hr)).success,true);
   await test(label+' OPEN operational note updates directly without altering significant content',async()=>{
     const before=await service.getRequisitionById(id);const result=await service.updateRequisition(id,{handoverNotes:'Operational note'},hiring);assert.equal(result.success,true);
     const after=await service.getRequisitionById(id);assert.equal(after.handoverNotes,'Operational note');for(const field of ['jobTitleId','departmentId','headcount','proposedSalaryMax','jobDescription'])assert.equal(after[field],before[field]);
@@ -51,15 +51,15 @@ async function storageCases(db,label){
     await db.prepare("UPDATE requisitions SET status='OPEN' WHERE id=?").run(id);
   });
   await test(label+' foreign owner and role without edit permission remain forbidden',async()=>{
-    const foreign=await service.createRequisition({...valid,departmentId:'dept-2'},hr);assert.equal(foreign.success,true);
+    const foreign=await require('./helpers/approvalPolicyFixture').createApproved(db,{...valid,departmentId:'dept-2'},hr);assert.equal(foreign.success,true);
     assert.equal((await service.updateRequisition(foreign.data.id,{handoverNotes:'Denied'},hiring)).code,'REQUISITION_OUT_OF_SCOPE');
     assert.equal((await service.updateRequisition(id,{handoverNotes:'Denied'},actor('APPROVER'))).statusCode,403);
   });
   await test(label+' DRAFT completion and creator-only protection remain unchanged',async()=>{
     const draft=await service.createRequisition({...valid,status:'DRAFT',recruiterId:null},hiring);assert.equal(draft.success,true);
-    assert.equal((await service.updateRequisition(draft.data.id,{jobDescription:'Draft revision'},hiring)).success,true);
+    assert.equal((await service.updateRequisition(draft.data.id,{jobDescription:'Draft revision',expectedDraftVersion:draft.data.draftVersion},hiring)).success,true);
     assert.equal((await service.updateRequisition(draft.data.id,{jobDescription:'Denied'},hr)).code,'REQUISITION_DRAFT_FORBIDDEN');
-    assert.equal((await service.updateRequisition(draft.data.id,{status:'OPEN'},hiring)).success,true);
+    await assert.rejects(()=>service.updateRequisition(draft.data.id,{status:'OPEN',expectedDraftVersion:(draft.data.draftVersion+1)},hiring),error=>error.code==='APPROVAL_FEATURE_DISABLED');const config=require('../src/config/config');config.REQUISITION_APPROVAL_ENABLED=true;try{await require('./helpers/approvalPolicyFixture').sendDraft(db,draft.data.id,hiring);assert.equal((await service.getRequisitionById(draft.data.id)).status,'DRAFT');await require('./helpers/approvalPolicyFixture').approve(db,draft.data.id);assert.equal((await service.getRequisitionById(draft.data.id)).status,'OPEN');}finally{config.REQUISITION_APPROVAL_ENABLED=false;}
   });
 }
 async function main(){

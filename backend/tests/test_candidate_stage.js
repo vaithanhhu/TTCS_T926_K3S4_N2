@@ -26,6 +26,7 @@ async function stageCases(db, engine, app) {
   const s = await setup(db, engine);
   await prepare(s);
   const id = await s.create();
+  await s.approve(id);
   await s.assign(id, s.rec.id, []);
   const data = stage => ({ fullName: 'Isolated stage regression', email: uuid() + '@example.invalid', requisitionId: id, stage });
   for (const stage of stages) {

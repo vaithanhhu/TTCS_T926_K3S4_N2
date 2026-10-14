@@ -119,18 +119,18 @@ async function main() {
     await test('API save version and publish use real persisted flow',async()=>{let result=await app.api('POST','/approval-configurations',hr.token,{departmentId:'dept-2',levels:state.levels});assert.equal(result.status,201);const id=result.data.data.id,versionId=result.data.data.versions[0].id;result=await app.api('POST','/approval-configurations/'+id+'/versions/'+versionId+'/publish',hr.token,{});assert.equal(result.status,200);result=await app.api('GET','/approval-configurations/'+id,hr.token);assert.equal(result.data.data.publishedVersionId,versionId);});
     await test('API salary resolver honors equality and all mandatory levels',async()=>{for(const [salary,count] of [[20000000,1],[20000001,2]]){const result=await app.api('POST','/approval-configurations/resolve',hr.token,{departmentId:'dept-2',proposedSalaryMax:salary});assert.equal(result.status,200);assert.equal(result.data.data.levels.length,count);}});
     await test('navigation adds only permitted configuration item',async()=>{for(const session of [hr,admin,recruiter]){const result=await app.api('GET','/navigation/menu',session.token);assert.equal(result.data.menuItems.some(item=>item.path==='/admin/approval-configurations'),session===hr||session===admin);}});
-    await test('enabled S3-01 preserves legacy requisition response and does not auto-submit',async()=>{
+    await test('enabled S3-01 permits private drafts without opening or submitting',async()=>{
       const before=(await app.db.prepare('SELECT COUNT(*) AS n FROM requisition_approval_snapshots').get()).n;
       const result=await app.api('POST','/requisitions',hr.token,{title:'S301 compatibility',departmentName:'Legacy free text',headcount:2,hiringManagerId:'usr-hiring-mgr'});
-      assert.equal(result.status,201);assert.equal(result.data.data.status,'OPEN');assert.deepEqual(Object.keys(result.data.data).sort(),['id','code','title','departmentName','headcount','status'].sort());assert.equal((await app.db.prepare('SELECT COUNT(*) AS n FROM requisition_approval_snapshots').get()).n,before);
+      assert.equal(result.status,201);assert.equal(result.data.data.status,'DRAFT');assert.deepEqual(Object.keys(result.data.data).sort(),['id','code','title','departmentName','headcount','status','draftVersion'].sort());assert.equal(result.data.data.status,'DRAFT');assert.equal((await app.db.prepare('SELECT COUNT(*) AS n FROM requisition_approval_snapshots').get()).n,before);
     });
-    await test('enabled S3-01 preserves S2-10 DRAFT completion to OPEN without workflow creation',async()=>{
+    await test('S3-01 alone cannot bypass approval by completing DRAFT to OPEN',async()=>{
       const before=(await app.db.prepare('SELECT COUNT(*) AS n FROM requisition_approval_snapshots').get()).n;
       const title=await app.api('POST','/job-titles',hr.token,{code:'S301-COMPAT',name:'S301 compatibility',level:'Senior',minSalary:100,maxSalary:200});assert.equal(title.status,201);
       const draft=await app.api('POST','/requisitions',hr.token,{status:'DRAFT'});assert.equal(draft.status,201);assert.equal(draft.data.data.status,'DRAFT');
       const date=new(require('../src/services/requisitionService'))(app.db).businessDate();
-      const completed=await app.api('PUT','/requisitions/'+draft.data.data.id,hr.token,{status:'OPEN',jobTitleId:title.data.data.id,departmentId:'dept-2',headcount:1,recruitmentReason:'REPLACEMENT',proposedSalaryMin:110,proposedSalaryMax:190,neededDate:date,jobDescription:'Unchanged description',candidateRequirements:'Unchanged requirements'});
-      assert.equal(completed.status,200);assert.equal(completed.data.data.status,'OPEN');assert.equal(completed.data.data.proposedSalaryMax,190);assert.equal((await app.db.prepare('SELECT COUNT(*) AS n FROM requisition_approval_snapshots').get()).n,before);
+      const completed=await app.api('PUT','/requisitions/'+draft.data.data.id,hr.token,{status:'OPEN',expectedDraftVersion:draft.data.data.draftVersion,jobTitleId:title.data.data.id,departmentId:'dept-2',headcount:1,recruitmentReason:'REPLACEMENT',proposedSalaryMin:110,proposedSalaryMax:190,neededDate:date,jobDescription:'Unchanged description',candidateRequirements:'Unchanged requirements'});
+      assert.equal(completed.status,409);assert.equal(completed.data.code,'APPROVAL_FEATURE_DISABLED');assert.equal((await app.api('GET','/requisitions/'+draft.data.data.id,hr.token)).data.data.proposedSalaryMax,null);assert.equal((await app.db.prepare('SELECT COUNT(*) AS n FROM requisition_approval_snapshots').get()).n,before);
     });
     const {createFrontendRuntime}=require('./helpers/frontendRuntime');
     const runtime=await createFrontendRuntime(app.base,'/login');

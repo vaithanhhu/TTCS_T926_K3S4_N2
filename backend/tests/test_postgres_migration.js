@@ -63,7 +63,7 @@ async function main(){
  const query=async(sql,params)=>{
   const raw=params===undefined?(await engine.exec(sql)).at(-1):await engine.query(sql,params);
   const rows=(raw?.rows||[]).map(row=>Object.fromEntries(Object.entries(row).map(([key,value])=>[key,
-    value instanceof Date ? (raw.fields.find(field=>field.name===key)?.dataTypeID===1082 ? value.toISOString().slice(0,10) : value.toISOString()) : typeof value==='bigint'?Number(value):value])));
+    value instanceof Date ? (raw.fields.find(field=>field.name===key)?.dataTypeID===1082 ? value.toISOString().slice(0,10) : value.toISOString()) : typeof value==='bigint'?Number(value):typeof value==='string'&&[20,1700].includes(raw.fields.find(field=>field.name===key)?.dataTypeID)?pgTypes().getTypeParser(raw.fields.find(field=>field.name===key).dataTypeID)(value):value])));
   return {rows,rowCount:raw?.affectedRows||rows.length};
  };
  const pool={on(){},query,async connect(){const previous=tail;let release;tail=new Promise(resolve=>{release=resolve;});await previous;return {query,release};},async end(){await engine.close();}};
@@ -132,10 +132,10 @@ async function main(){
    const catalog=new (require('../src/services/recruitmentCatalogService'))(db);const item=await catalog.createItem({type:'WORK_MODE',code:'PG-HYBRID',name:'Hybrid'});assert.equal(item.success,true);assert.ok((await catalog.getItems('WORK_MODE')).items.length>0);
    const requisitions=new (require('../src/services/requisitionService'))(db),actor={id:'usr-hr-mgr',roles:['HR_MANAGER']};
    const data={status:'OPEN',jobTitleId:a.data.id,departmentId:'dept-3',headcount:1,recruitmentReason:'REPLACEMENT',proposedSalaryMin:110,proposedSalaryMax:190,neededDate:requisitions.businessDate(),jobDescription:'PG description',candidateRequirements:'PG requirements'};
-   const request=await requisitions.createRequisition(data,actor);assert.equal(request.success,true);assert.equal(request.data.neededDate,data.neededDate);
-   assert.equal((await requisitions.createRequisition({...data,proposedSalaryMax:300},actor)).success,false);
+   const request=await require('./helpers/approvalPolicyFixture').createApproved(db,{...data,status:'DRAFT'},actor);assert.equal(request.success,true);assert.equal(request.data.neededDate,data.neededDate);
+   require('../src/config/config').REQUISITION_APPROVAL_ENABLED=true;await assert.rejects(()=>new(require('../src/services/requisitionApprovalService'))(db).saveAndSubmit({requestId:require('node:crypto').randomUUID(),document:require('./helpers/approvalPolicyFixture').document({...data,proposedSalaryMax:300})},actor),error=>error.code==='SALARY_JUSTIFICATION_REQUIRED');
    const draft=await requisitions.createRequisition({status:'DRAFT',jobTitleId:b.data.id},actor);assert.equal(draft.success,true);
-   const unavailable=await requisitions.updateRequisition(draft.data.id,{...data,jobTitleId:b.data.id},actor);assert.equal(unavailable.statusCode,409);assert.equal(unavailable.code,'JOB_TITLE_SALARY_RANGE_UNAVAILABLE');
+   await assert.rejects(()=>require('./helpers/approvalPolicyFixture').sendDraft(db,draft.data.id,actor,{...data,jobTitleId:b.data.id}),error=>error.statusCode===409&&error.code==='JOB_TITLE_SALARY_RANGE_UNAVAILABLE');
    assert.equal((await requisitions.getRequisitions({})).success,true);
   });
  }finally{await db.close();}

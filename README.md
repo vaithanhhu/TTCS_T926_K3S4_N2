@@ -73,7 +73,7 @@ Profile local tự áp dụng cấu hình an toàn trong tiến trình:
 
 Không cần tạo `.env`. `.env.example` là cấu hình mẫu không chứa secret dành cho người muốn đọc hoặc cấu hình thủ công. Với demo, tiếp tục dùng hai lệnh local ở trên. Các lệnh `npm start`, `migrate`, `seed`, `migrate:postgres` và `import:postgres` là lệnh vận hành khác; không dùng chúng thay cho setup demo.
 
-`setup:local` tạo schema SQLite hiện hành và áp dụng migration Sprint 3 theo thứ tự 002–008. Migration 001 là nền PostgreSQL, không chạy SQL PostgreSQL lên SQLite. Setup đầu tiên tạo tài khoản/dữ liệu mẫu trong transaction. Chạy setup lần nữa kiểm tra migration và foreign keys, không seed lại hoặc ghi đè dữ liệu tester. Nếu database đã tồn tại nhưng không có marker sở hữu, setup từ chối. Không đổi tên/copy database thật vào `.local`.
+`setup:local` tạo schema SQLite hiện hành và áp dụng các migration hiện hành theo thứ tự 002–010. Migration 001 là nền PostgreSQL, không chạy SQL PostgreSQL lên SQLite. Setup đầu tiên tạo tài khoản/dữ liệu mẫu trong transaction. Chạy setup lần nữa kiểm tra migration và foreign keys, không seed lại hoặc ghi đè dữ liệu tester. Nếu database đã tồn tại nhưng không có marker sở hữu, setup từ chối. Không đổi tên/copy database thật vào `.local`.
 
 ## Tài khoản demo
 
@@ -97,7 +97,7 @@ ADMIN không vượt quy tắc bảo mật dải lương chuẩn S2-05: HR_MANAG
 Setup tạo 26 tài khoản, phòng ban/danh mục cơ sở, khung năng lực/chức danh demo, cấu hình duyệt và ngân sách theo phòng ban. Có năm Requisition mang tiền tố `DEMO`:
 
 - Nháp để chỉnh sửa: dùng kiểm tra DRAFT, form và sao chép.
-- Sẵn sàng gửi duyệt: creator chủ động gửi; không tự gửi khi lưu OPEN.
+- Sẵn sàng gửi duyệt: hồ sơ vẫn DRAFT; creator chủ động gửi. Chỉ cấp cuối duyệt thành công mới chuyển sang OPEN.
 - Chờ duyệt hai cấp: HR_MANAGER rồi APPROVER; kiểm tra approve/reject/request info và lịch sử.
 - Đã duyệt để soạn tin: recruiter chính/hỗ trợ đã được phân công.
 - Tin tuyển dụng công khai: có tin đã được HR độc lập duyệt, ADMIN xuất bản; một ứng viên đang phỏng vấn để kiểm tra cảnh báo khi đóng.
@@ -106,7 +106,7 @@ Setup tạo 26 tài khoản, phòng ban/danh mục cơ sở, khung năng lực/c
 
 Luồng thao tác gợi ý:
 
-1. HIRING_MGR mở **Yêu cầu và vị trí**, chọn hồ sơ sẵn sàng và **Gửi phê duyệt**.
+1. HIRING_MGR mở **Yêu cầu và vị trí**, chọn hồ sơ sẵn sàng và **Gửi phê duyệt**. Khi tạo mới, dùng **Lưu nháp** hoặc **Lưu và Gửi phê duyệt**. Flag phê duyệt OFF chỉ cho lưu nháp.
 2. HR_MANAGER mở **Phê duyệt**, đọc và duyệt bước được phân công. Với hồ sơ hai cấp, APPROVER duyệt cấp tiếp theo.
 3. HR_MANAGER mở Chi tiết hồ sơ đã duyệt, phân công recruiter chính và hỗ trợ.
 4. RECRUITER mở hồ sơ được giao, tạo/lưu bản nháp tin, preview và gửi duyệt.
@@ -175,4 +175,6 @@ npm run start:local
 
 Không đưa `.env`, `.local`, `backend/data/*.db`, WAL/SHM, `node_modules`, media tải lên, log, screenshot chứa dữ liệu cá nhân hoặc trace chưa khử bí mật lên Git. `.gitignore` bảo vệ file mới; file database đã được theo dõi từ trước vẫn cần developer xử lý index riêng. Setup/test local không thực hiện thao tác Git.
 
-Giữ source, package/lockfile, frontend components/routes, tests và toàn bộ SQL/migration runner cần cho Sprint 1–3 trong revision bàn giao. Không dùng SQL Docker cũ thay cho schema runtime. PostgreSQL vận hành qua profile Azure bên trên; không chia sẻ URI hoặc credential thật cho tester.
+Gi? source, package/lockfile, frontend components/routes, tests v? to?n b? SQL/migration runner c?n cho Sprint 1?3 trong revision b?n giao. Kh?ng d?ng SQL Docker c? thay cho schema runtime. PostgreSQL v?n h?nh qua profile Azure b?n tr?n; kh?ng chia s? URI ho?c credential th?t cho tester.
+
+Ch?nh s?ch QA-S3-06, migration 010 v? b?ng ch?ng regression: [QA-S3-06](docs/QA-S3-06-approval-before-open.md).

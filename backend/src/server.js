@@ -41,6 +41,8 @@ async function initializeApplication() {
     await ensureQuestionBankFeature(db); await ensureRecruitmentCatalogFeature(db);
     await ensureCareerPageFeature(db); await ensureRequisitionDraftFeature(db);
   }
+  if(db.provider==='sqlite')await require('./db/migrate-requisition-open-policy').migrate(db);
+  else await require('./db/migrate-requisition-open-policy').verify(db);
   if (config.APPROVAL_CONFIGURATION_ENABLED) await require('./db/migrate-approval-configurations').verify(db);
   if (config.REQUISITION_APPROVAL_ENABLED) await require('./db/migrate-requisition-approvals').verify(db);
   if (config.HEADCOUNT_BUDGET_ENABLED) await require('./db/migrate-headcount-budgets').verify(db);
@@ -260,8 +262,8 @@ async function handleRequest(req, res) {
   }
   if (pathname === '/api/v1/requisition-approvals' || pathname.startsWith('/api/v1/requisition-approvals/')) {
     if (!config.REQUISITION_APPROVAL_ENABLED) {
-      res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ success: false, code: 'S302_DISABLED', message: 'Phê duyệt yêu cầu tuyển dụng chưa được bật.' }));
+      res.writeHead(pathname.endsWith('/save-and-submit')?409:404, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, code: pathname.endsWith('/save-and-submit')?'APPROVAL_FEATURE_DISABLED':'S302_DISABLED', message: 'Cần bật và cấu hình phê duyệt trước khi gửi hoặc mở yêu cầu tuyển dụng mới.' }));
       return;
     }
     await requisitionApprovalController.handle(req, res, parsedUrl, parseBody);
@@ -1657,7 +1659,7 @@ async function handleRequest(req, res) {
       res.writeHead(result.statusCode || 201, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
-      if(err instanceof require('./services/headcountBudgetService').HeadcountBudgetError||err instanceof require('./services/requisitionOperationsService').RequisitionOperationsError){res.writeHead(err.statusCode,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,statusCode:err.statusCode,code:err.code,message:err.message}));return;}
+      if(err instanceof require('./services/approvalConfigurationService').ApprovalConfigurationError||err instanceof require('./services/headcountBudgetService').HeadcountBudgetError||err instanceof require('./services/requisitionOperationsService').RequisitionOperationsError){res.writeHead(err.statusCode,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,statusCode:err.statusCode,code:err.code,message:err.message}));return;}
       res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
     }
@@ -1724,7 +1726,8 @@ async function handleRequest(req, res) {
       res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
-      if(err instanceof require('./services/headcountBudgetService').HeadcountBudgetError||err instanceof require('./services/requisitionOperationsService').RequisitionOperationsError){res.writeHead(err.statusCode,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,statusCode:err.statusCode,code:err.code,message:err.message}));return;}
+      if(err instanceof require('./services/approvalConfigurationService').ApprovalConfigurationError){res.writeHead(err.statusCode,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:err.code,message:err.message}));return;}
+      if(err instanceof require('./services/approvalConfigurationService').ApprovalConfigurationError||err instanceof require('./services/headcountBudgetService').HeadcountBudgetError||err instanceof require('./services/requisitionOperationsService').RequisitionOperationsError){res.writeHead(err.statusCode,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,statusCode:err.statusCode,code:err.code,message:err.message}));return;}
       res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
     }
@@ -1895,6 +1898,7 @@ async function handleRequest(req, res) {
       res.writeHead(result.statusCode || 201, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
+      if(err instanceof require('./services/approvalConfigurationService').ApprovalConfigurationError){res.writeHead(err.statusCode,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:err.code,message:err.message}));return;}
       res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
     }
@@ -1914,6 +1918,7 @@ async function handleRequest(req, res) {
       res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
+      if(err instanceof require('./services/approvalConfigurationService').ApprovalConfigurationError){res.writeHead(err.statusCode,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:err.code,message:err.message}));return;}
       res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
     }
@@ -1957,6 +1962,7 @@ async function handleRequest(req, res) {
       res.writeHead(result.statusCode || 201, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
+      if(err instanceof require('./services/approvalConfigurationService').ApprovalConfigurationError){res.writeHead(err.statusCode,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:err.code,message:err.message}));return;}
       res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
     }
@@ -1980,6 +1986,7 @@ async function handleRequest(req, res) {
       res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
+      if(err instanceof require('./services/approvalConfigurationService').ApprovalConfigurationError){res.writeHead(err.statusCode,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:err.code,message:err.message}));return;}
       res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
     }
@@ -2006,6 +2013,7 @@ async function handleRequest(req, res) {
       res.writeHead(result.statusCode || 201, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
+      if(err instanceof require('./services/approvalConfigurationService').ApprovalConfigurationError){res.writeHead(err.statusCode,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:err.code,message:err.message}));return;}
       res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
     }
@@ -2031,6 +2039,7 @@ async function handleRequest(req, res) {
       res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
+      if(err instanceof require('./services/approvalConfigurationService').ApprovalConfigurationError){res.writeHead(err.statusCode,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:err.code,message:err.message}));return;}
       res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
     }

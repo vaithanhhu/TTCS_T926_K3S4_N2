@@ -44,11 +44,11 @@ async function seedLocalDemo(db) {
   if (!location || !mode) throw new Error('LOCAL_CATALOG_MISSING');
   const document = { formVersion: 'S2-10', departmentId: 'dept-3', jobTitleId: title.data.id, headcount: 2, recruitmentReason: 'NEW_HEADCOUNT', proposedSalaryMin: 20000000, proposedSalaryMax: 25000000, neededDate, jobDescription: 'Phát triển phần mềm và phối hợp với nhóm.\nDữ liệu này chỉ dùng để kiểm thử localhost.', candidateRequirements: 'Có kiến thức lập trình, kỹ năng giao tiếp và làm việc nhóm.', workLocationId: location.id, workModeId: mode.id };
   const create = async (name, extra = {}) => {
-    const result = await requisitions.createRequisition({ ...document, title: name, ...extra }, actors.owner);
+    const result = await requisitions.createRequisition({ ...document, title: name, status:'DRAFT', ...extra }, actors.owner);
     if (!result.success) throw new Error(result.code || 'LOCAL_REQUISITION_FAILED');
     return result.data.id;
   };
-  const submit = id => approvals.submit(id, { requestId: crypto.randomUUID() }, actors.owner);
+  const submit = async id => approvals.submit(id, { requestId: crypto.randomUUID(),expectedDraftVersion:(await requisitions.getRequisitionById(id)).draftVersion }, actors.owner);
   const completeApproval = async id => {
     const workflow = await submit(id);
     while ((await approvals.read(workflow.id, actors.hr)).status === 'PENDING') {

@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 /** Real application, fresh SQLite and installed dependencies; never the working repository. */
-async function openApplication() {
+async function openApplication(beforeStartup = null) {
   const root = path.resolve(__dirname, '../../..');
   for (const file of ['.git', '.env', 'backend/data/ats.db', 'backend/data/ats.db-shm',
     'backend/data/ats.db-wal', 'backend/data/ats_test.db']) {
@@ -22,6 +22,7 @@ async function openApplication() {
   }
   const { startServer, server } = require('../../src/server');
   const { getDatabase } = require('../../src/db/database');
+  if (beforeStartup) await beforeStartup(getDatabase());
   await startServer(0);
   const base = 'http://127.0.0.1:' + server.address().port;
   const db = getDatabase();
