@@ -574,7 +574,7 @@ class AuthService {
     try {
       otpRow = (await this.db.prepare(`
         SELECT * FROM otps
-        WHERE email = ? COLLATE NOCASE AND otp_code = ? AND used_at IS NULL
+        WHERE email = ? COLLATE NOCASE AND otp_code = ? AND purpose = 'PASSWORD_RESET' AND used_at IS NULL AND verified_at IS NULL
         ORDER BY created_at DESC LIMIT 1
       `).get(normalizedEmail, cleanOtp));
     } catch (err) {
@@ -600,9 +600,8 @@ class AuthService {
     }
 
     // Mark OTP as verified
-    try {
-      (await this.db.prepare("UPDATE otps SET verified_at = datetime('now') WHERE id = ?").run(otpRow.id));
-    } catch (e) {}
+    const claimed = await this.db.prepare("UPDATE otps SET verified_at = datetime('now') WHERE id = ? AND verified_at IS NULL AND used_at IS NULL").run(otpRow.id);
+    if (!claimed.changes) return {valid:false,statusCode:400,code:'INVALID_OTP',message:'Mã OTP không chính xác hoặc đã được sử dụng.'};
 
     // Find or create resetToken to bind to user
     const user = (await this.db.prepare('SELECT id FROM users WHERE email = ? COLLATE NOCASE').get(normalizedEmail));
@@ -722,7 +721,9 @@ class AuthService {
       };
     }
 
-    const existing = (await this.db.prepare('SELECT password_hash, must_change_password FROM users WHERE id=?').get(userId));
+    const existing = (await this.db.prepare('SELECT password_hash, must_change_password FROM users WHERE id=?'+(this.db.provider==='postgres'?' FOR UPDATE':'')).get(userId));
+    const currentToken = await this.verifyResetToken(token);
+    if (!currentToken.valid) return {success:false,statusCode:currentToken.statusCode,message:currentToken.message,code:currentToken.code};
     if (existing?.must_change_password && verifyPassword(newPassword, existing.password_hash)) return {
       success: false, statusCode: 400, code: 'SAME_PASSWORD',
       message: 'Mật khẩu mới không được trùng với mật khẩu tạm thời.'
@@ -736,8 +737,7 @@ class AuthService {
       WHERE id = ?
     `).run(newHash, userId));
 
-    // Invalidate the reset token
-    (await this.db.prepare("UPDATE password_reset_tokens SET used_at = datetime('now') WHERE token = ?").run(token));
+    (await this.db.prepare("UPDATE password_reset_tokens SET used_at = datetime('now') WHERE user_id = ? AND used_at IS NULL").run(userId));
 
     // Invalidate all OTPs for this user's email
     try {

@@ -2,7 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const config = require('../config/config');
-const { EmailService } = require('./emailService');
+const { EmailService, escapeEmailHtml } = require('./emailService');
 const Rbac = require('../middlewares/rbacMiddleware');
 const Requisitions = require('./requisitionService');
 const pdfParse = require('pdf-parse');
@@ -47,6 +47,8 @@ class CandidatePortalService {
   // Anti-spam IP rate limiting: max 5 requests per hour per action
   async checkRateLimit(ipAddress, action = 'APPLY', maxAttempts = 5) {
     if (!ipAddress) return { allowed: true };
+    return this.db.transaction(async () => {
+    if (this.db.provider === 'postgres') await this.db.prepare('SELECT pg_advisory_xact_lock(hashtext(?))').get('application-rate:'+action+':'+ipAddress);
     const cutoff = this.db.provider === 'postgres'
       ? "NOW() - INTERVAL '1 hour'"
       : "datetime('now', '-1 hour')";
@@ -71,11 +73,12 @@ class CandidatePortalService {
     await this.db.prepare(insertSql).run(id, ipAddress, action);
 
     return { allowed: true };
+    });
   }
 
   // Validate CV file buffer, magic numbers, MIME type, size <= 10MB
-  validateCvFile(file) {
-    if (!file || !file.buffer || !file.filename) {
+  async validateCvFile(file) {
+    if (!file || !Buffer.isBuffer(file.buffer) || typeof file.filename !== 'string' || !file.filename) {
       return { success: false, statusCode: 400, code: 'CV_FILE_REQUIRED', message: 'Tệp CV là bắt buộc.' };
     }
 
@@ -94,7 +97,7 @@ class CandidatePortalService {
 
     // Validate magic numbers
     if (ext === '.pdf') {
-      const isPdfMagic = buf.length >= 4 && buf[0] === 0x25 && buf[1] === 0x50 && buf[2] === 0x44 && buf[3] === 0x46; // %PDF
+      const isPdfMagic = buf.subarray(0, 5).toString('ascii') === '%PDF-';
       if (!isPdfMagic) {
         return { success: false, statusCode: 400, code: 'CV_FILE_INVALID_SIGNATURE', message: 'Tệp PDF không hợp lệ hoặc bị hỏng.' };
       }
@@ -104,6 +107,11 @@ class CandidatePortalService {
       if (!isZipMagic) {
         return { success: false, statusCode: 400, code: 'CV_FILE_INVALID_SIGNATURE', message: 'Tệp DOCX không hợp lệ hoặc bị hỏng.' };
       }
+      try {
+        const JSZip = require(require.resolve('jszip', {paths:[path.dirname(require.resolve('exceljs'))]}));
+        const zip = await JSZip.loadAsync(buf);
+        if (!zip.file('[Content_Types].xml') || !zip.file('word/document.xml')) return {success:false,statusCode:400,code:'CV_FILE_INVALID_SIGNATURE',message:'Tệp DOCX không hợp lệ hoặc bị hỏng.'};
+      } catch { return {success:false,statusCode:400,code:'CV_FILE_INVALID_SIGNATURE',message:'Tệp DOCX không hợp lệ hoặc bị hỏng.'}; }
       mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
     }
 
@@ -156,7 +164,7 @@ class CandidatePortalService {
     }
 
     // 4. Validate CV file
-    const fileValidation = this.validateCvFile(data.cvFile);
+    const fileValidation = await this.validateCvFile(data.cvFile);
     if (!fileValidation.success) return fileValidation;
 
     // 5. Check Job Posting & Requisition State
@@ -199,13 +207,22 @@ class CandidatePortalService {
 
     const storageFileName = 'cv-' + candidateId + fileValidation.ext;
     const storagePath = path.join(UPLOADS_DIR, storageFileName);
-    fs.writeFileSync(storagePath, data.cvFile.buffer);
+    fs.writeFileSync(storagePath, data.cvFile.buffer, {flag:'wx'});
 
     const fileHash = crypto.createHash('sha256').update(data.cvFile.buffer).digest('hex');
     const docId = 'doc-' + crypto.randomUUID();
 
     // 8. Transactional persistence
+    try {
     await this.db.transaction(async () => {
+      if (this.db.provider === 'postgres') {
+        await this.db.prepare('SELECT id FROM requisitions WHERE id=? FOR SHARE').get(requisitionId);
+        await this.db.prepare('SELECT pg_advisory_xact_lock(hashtext(?))').get('application:'+requisitionId+':'+email);
+      }
+      const latest = await this.db.prepare('SELECT p.status,p.application_deadline,r.status AS req_status FROM job_postings p JOIN requisitions r ON r.id=p.requisition_id WHERE p.id=?'+(this.db.provider==='postgres'?' FOR SHARE OF p':'')).get(jobPostingId);
+      if (!latest || latest.status!=='PUBLISHED' || !['OPEN','IN_PROGRESS'].includes(latest.req_status) || latest.application_deadline && latest.application_deadline<this.requisitions.businessDate()) throw Object.assign(new Error('Tin tuyển dụng hiện không nhận hồ sơ.'),{statusCode:409,code:'JOB_POSTING_CLOSED'});
+      const duplicate = await this.db.prepare("SELECT id FROM candidates WHERE requisition_id=? AND LOWER(email)=? AND stage<>'WITHDRAWN'").get(requisitionId,email);
+      if (duplicate) throw Object.assign(new Error('Email này đã nộp hồ sơ ứng tuyển vào vị trí này.'),{statusCode:409,code:'APPLICATION_DUPLICATE_JOB'});
       // Insert Candidate
       const candidateSql = this.db.provider === 'postgres'
         ? `INSERT INTO candidates (
@@ -255,6 +272,11 @@ class CandidatePortalService {
            VALUES (?, ?, ?, 'WITHDRAW', datetime('now'))`;
       await this.db.prepare(attSql).run('att-' + crypto.randomUUID(), candidateId, withdrawTokenHash);
     });
+    } catch (error) {
+      fs.unlinkSync(storagePath);
+      if (['APPLICATION_DUPLICATE_JOB','JOB_POSTING_CLOSED'].includes(error.code)) return {success:false,statusCode:409,code:error.code,message:error.message};
+      throw error;
+    }
 
     // 9. Send Confirmation Email (Safe with Fallback)
     const trackingUrl = `${config.APP_URL}/careers/jobs?trackingCode=${encodeURIComponent(trackingCode)}&email=${encodeURIComponent(email)}`;
@@ -264,8 +286,8 @@ class CandidatePortalService {
       const emailHtml = `
         <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
           <h2 style="color: #2563eb;">Xác nhận nộp hồ sơ ứng tuyển thành công</h2>
-          <p>Chào <strong>${fullName}</strong>,</p>
-          <p>Cảm ơn bạn đã ứng tuyển vị trí <strong>${posting.title}</strong> tại phòng ban <strong>${posting.department_name}</strong>.</p>
+          <p>Chào <strong>${escapeEmailHtml(fullName)}</strong>,</p>
+          <p>Cảm ơn bạn đã ứng tuyển vị trí <strong>${escapeEmailHtml(posting.title)}</strong> tại phòng ban <strong>${escapeEmailHtml(posting.department_name)}</strong>.</p>
           <div style="background-color: #f1f5f9; padding: 16px; border-radius: 8px; margin: 16px 0;">
             <p style="margin: 0 0 8px 0;">Mã tra cứu hồ sơ của bạn:</p>
             <p style="font-size: 20px; font-weight: bold; color: #0f172a; letter-spacing: 2px; margin: 0;">${trackingCode}</p>
@@ -429,7 +451,7 @@ class CandidatePortalService {
         await this.emailService.sendMail({
           to: candidate.recruiter_email,
           subject: `[ATS Thông báo] Ứng viên ${candidate.full_name} đã rút hồ sơ vị trí ${candidate.job_title}`,
-          html: `<p>Ứng viên <strong>${candidate.full_name}</strong> (${candidate.email}) đã rút hồ sơ vị trí <strong>${candidate.job_title}</strong>.</p><p>Lý do: ${withdrawReason || 'Không cung cấp'}</p>`,
+          html: `<p>Ứng viên <strong>${escapeEmailHtml(candidate.full_name)}</strong> (${escapeEmailHtml(candidate.email)}) đã rút hồ sơ vị trí <strong>${escapeEmailHtml(candidate.job_title)}</strong>.</p><p>Lý do: ${escapeEmailHtml(withdrawReason || 'Không cung cấp')}</p>`,
           text: `Ứng viên ${candidate.full_name} đã rút hồ sơ vị trí ${candidate.job_title}.`,
           templateName: 'CANDIDATE_WITHDRAW_NOTIFICATION'
         });
@@ -503,17 +525,25 @@ class CandidatePortalService {
     let docId = null;
     let storageFileName = null;
     if (data.cvFile) {
-      const fileVal = this.validateCvFile(data.cvFile);
+      const fileVal = await this.validateCvFile(data.cvFile);
       if (!fileVal.success) return fileVal;
       storageFileName = 'cv-ref-' + crypto.randomUUID() + fileVal.ext;
-      fs.writeFileSync(path.join(UPLOADS_DIR, storageFileName), data.cvFile.buffer);
+      fs.writeFileSync(path.join(UPLOADS_DIR, storageFileName), data.cvFile.buffer, {flag:'wx'});
       docId = 'doc-' + crypto.randomUUID();
     }
 
     const candidateId = 'cand-' + crypto.randomUUID();
     const trackingCode = 'TRK-REF-' + new Date().getFullYear() + '-' + crypto.randomBytes(3).toString('hex').toUpperCase();
 
+    try {
     await this.db.transaction(async () => {
+      const fresh = await this.rbac.getAuthorizedActor(user.id,'candidate.refer');
+      if (!fresh) throw Object.assign(new Error('Bạn không có quyền giới thiệu ứng viên.'),{statusCode:403,code:'FORBIDDEN'});
+      user = fresh;
+      const latest = await this.db.prepare('SELECT status FROM requisitions WHERE id=?'+(this.db.provider==='postgres'?' FOR SHARE':'')).get(requisitionId);
+      if (!latest || !['OPEN','IN_PROGRESS'].includes(latest.status)) throw Object.assign(new Error('Vị trí này hiện không mở nhận ứng viên.'),{statusCode:409,code:'REQUISITION_NOT_OPEN'});
+      if (this.db.provider==='postgres') await this.db.prepare('SELECT pg_advisory_xact_lock(hashtext(?))').get('application:'+requisitionId+':'+email);
+      if (await this.db.prepare("SELECT id FROM candidates WHERE requisition_id=? AND LOWER(email)=? AND stage<>'WITHDRAWN'").get(requisitionId,email)) throw Object.assign(new Error('Ứng viên với email này đã có trong danh sách tuyển dụng của vị trí.'),{statusCode:409,code:'DUPLICATE_CANDIDATE'});
       const insertSql = this.db.provider === 'postgres'
         ? `INSERT INTO candidates (
              id, full_name, email, phone_number, requisition_id, stage,
@@ -554,6 +584,11 @@ class CandidatePortalService {
         user.fullName || user.id, referralNotes
       );
     });
+    } catch (error) {
+      if (storageFileName) fs.unlinkSync(path.join(UPLOADS_DIR,storageFileName));
+      if (['FORBIDDEN','REQUISITION_NOT_OPEN','DUPLICATE_CANDIDATE'].includes(error.code)) return {success:false,statusCode:error.statusCode,code:error.code,message:error.message};
+      throw error;
+    }
 
     return {
       success: true,

@@ -551,6 +551,8 @@ async function handleRequest(req, res) {
   }
   // 10. API: S1-05 Get Full RBAC Matrix (AC-01)
   if (req.method === 'GET' && (pathname === '/api/v1/rbac/matrix' || pathname === '/rbac/matrix' || pathname === '/api/v1/admin/roles-matrix' || pathname === '/admin/roles-matrix')) {
+    const user = await rbacMiddleware.authorize(req, res, authController.authService, 'role.read');
+    if (!user) return;
     const rawMatrix = (await rbacMiddleware.getRbacMatrix());
     const roles = (await db.prepare('SELECT id, code AS name, name AS description FROM roles ORDER BY code ASC').all());
     const permissions = (await db.prepare('SELECT id, code AS name, name AS description, module FROM permissions ORDER BY module, code ASC').all());

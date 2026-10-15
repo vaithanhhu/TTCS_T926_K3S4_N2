@@ -17,8 +17,8 @@
     if (candSelect) {
       candSelect.innerHTML = `<option value="">-- Chọn ứng viên trong danh sách --</option>` +
         currentCandidatesList.map(c => `
-          <option value="${c.id}" ${c.id === preselectedCandidateId ? 'selected' : ''}>
-            ${c.fullName || c.full_name} (${formatCandCode(c)}) - ${c.requisition_title || (c.requisition && c.requisition.title) || 'Vị trí'}
+          <option value="${escapeHtml(c.id)}" ${c.id === preselectedCandidateId ? 'selected' : ''}>
+            ${escapeHtml(c.fullName || c.full_name)} (${escapeHtml(formatCandCode(c))}) - ${escapeHtml(c.requisition_title || (c.requisition && c.requisition.title) || 'Vị trí')}
           </option>
         `).join('');
     }
@@ -27,7 +27,7 @@
     const reqSelect = document.getElementById('schedule-req-select');
     if (reqSelect) {
       reqSelect.innerHTML = `<option value="">-- Theo vị trí tuyển dụng --</option>` +
-        currentRequisitionsList.map(r => `<option value="${r.id}">${r.code} - ${r.title}</option>`).join('');
+        currentRequisitionsList.map(r => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.code)} - ${escapeHtml(r.title)}</option>`).join('');
     }
 
     // Populate interviewers
@@ -148,7 +148,16 @@
     if (interviewerEl) interviewerEl.textContent = interviewer;
     if (idInput) idInput.value = iv.id;
     if (statusSelect) statusSelect.value = iv.status || 'SCHEDULED';
-    if (scoreSelect) scoreSelect.value = iv.score || 4;
+    if (scoreSelect) {
+      const score = String(iv.score ?? 4);
+      if (!Array.from(scoreSelect.options || []).some(option => option.value === score)) {
+        const option = document.createElement('option');
+        option.value = score;
+        option.textContent = 'Điểm hiện tại: ' + score;
+        scoreSelect.appendChild(option);
+      }
+      scoreSelect.value = score;
+    }
     if (feedbackInput) feedbackInput.value = iv.feedback || '';
     const permissions=currentAuthenticatedUser?.permissions||[];
     const evaluate=permissions.includes('interview.evaluate')&&(currentAuthenticatedUser.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))||iv.interviewer?.id===currentAuthenticatedUser.id);
