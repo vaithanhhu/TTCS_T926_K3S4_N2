@@ -1,0 +1,652 @@
+--- backend/src/services/userService.js (before this task)
++++ backend/src/services/userService.js (after)
+@@ -479,16 +479,27 @@
+     const users = (await dataStmt.all(...queryParams));
+ 
+     // Lấy vai trò cho từng user
+-    const rolesStmt = this.db.prepare(`
+-      SELECT r.code, r.name, r.default_path
+-      FROM roles r
+-      JOIN user_roles ur ON r.id = ur.role_id
+-      WHERE ur.user_id = ?
+-      ORDER BY r.code ASC
+-    `);
+-
+-    const items = (await Promise.all(users.map(async user => {
+-      const userRoles = (await rolesStmt.all(user.id));
++    const rolesByUser = new Map();
++    if (users.length) {
++      const selectedUserIds = JSON.stringify(users.map(user => user.id));
++      const idQuery = this.db.provider === 'postgres'
++        ? 'SELECT jsonb_array_elements_text(?::jsonb)'
++        : 'SELECT value FROM json_each(?)';
++      const roles = await this.db.prepare(`
++        SELECT ur.user_id, r.code, r.name, r.default_path
++        FROM roles r
++        JOIN user_roles ur ON r.id = ur.role_id
++        WHERE ur.user_id IN (${idQuery})
++        ORDER BY ur.user_id ASC, r.code ASC
++      `).all(selectedUserIds);
++      for (const role of roles) {
++        if (!rolesByUser.has(role.user_id)) rolesByUser.set(role.user_id, []);
++        rolesByUser.get(role.user_id).push(role);
++      }
++    }
++
++    const items = users.map(user => {
++      const userRoles = rolesByUser.get(user.id) || [];
+       return {
+         id: user.id,
+         email: user.email,
+@@ -504,7 +515,7 @@
+         createdAt: user.created_at,
+         updatedAt: user.updated_at
+       };
+-    })));
++    });
+ 
+     return {
+       success: true,
+--- package.json (before this task)
++++ package.json (after)
+@@ -4,6 +4,8 @@
+   "description": "Hệ thống Tuyển dụng Nội bộ (ATS) - Sprint 1",
+   "private": true,
+   "scripts": {
++    "test:browser-e2e": "node backend/tests/run_browser_e2e.js",
++    "test:user-list-batch": "node backend/tests/test_user_list_batch.js",
+     "test:candidate-stage": "node backend/tests/test_candidate_stage.js",
+     "test:s1-frontend-fixes": "node backend/tests/test_s1_frontend_fixes.js",
+     "test:final-rbac-open": "node backend/tests/test_final_rbac_open.js",
+@@ -81,6 +83,7 @@
+     "sharp": "^0.35.5"
+   },
+   "devDependencies": {
+-    "@electric-sql/pglite": "^0.5.8"
++    "@electric-sql/pglite": "^0.5.8",
++    "playwright": "^1.64.0"
+   }
+ }
+--- package-lock.json (before this task)
++++ package-lock.json (after)
+@@ -14,7 +14,8 @@
+         "sharp": "^0.35.5"
+       },
+       "devDependencies": {
+-        "@electric-sql/pglite": "^0.5.8"
++        "@electric-sql/pglite": "^0.5.8",
++        "playwright": "^1.64.0"
+       },
+       "engines": {
+         "node": ">=22.0.0"
+@@ -1424,6 +1425,35 @@
+       "license": "MIT",
+       "dependencies": {
+         "split2": "^4.1.0"
++      }
++    },
++    "node_modules/playwright": {
++      "version": "1.64.0",
++      "resolved": "https://registry.npmjs.org/playwright/-/playwright-1.64.0.tgz",
++      "integrity": "sha512-kVzTnYFYEyQ9RGzBjNCd2+yEqWmVbxl3AHPynv3qQ6JTjv4a+kwRcnqQwIpuP3NnrnIrE/Q6wWAIAvMfIE2/Yg==",
++      "dev": true,
++      "license": "Apache-2.0",
++      "dependencies": {
++        "playwright-core": "1.64.0"
++      },
++      "bin": {
++        "playwright": "cli.js"
++      },
++      "engines": {
++        "node": ">=20"
++      }
++    },
++    "node_modules/playwright-core": {
++      "version": "1.64.0",
++      "resolved": "https://registry.npmjs.org/playwright-core/-/playwright-core-1.64.0.tgz",
++      "integrity": "sha512-T9r+MZkTECl2+oUcZ26YgZzTrYidTsIhYYkJix+6iDOymOb1FB2RLLSOxRGnZGv5DStt+aduIVbt+E8WygXYpg==",
++      "dev": true,
++      "license": "Apache-2.0",
++      "bin": {
++        "playwright-core": "cli.js"
++      },
++      "engines": {
++        "node": ">=20"
+       }
+     },
+     "node_modules/postgres-array": {
+--- /dev/null
++++ backend/tests/test_user_list_batch.js (new this task)
+@@ -0,0 +1,130 @@
++const assert = require('node:assert/strict');
++const fs = require('node:fs');
++const path = require('node:path');
++const { openApplication, cases } = require('./helpers/coverageApplication');
++const { PostgresDatabase, pgTypes } = require('../src/db/postgres');
++const UserService = require('../src/services/userService');
++const { test, finish } = cases('USER_LIST_BATCH');
++const measurements = [];
++
++async function reference(db, options) {
++  const conditions = [], params = [];
++  if (options.search) {
++    conditions.push('(u.full_name LIKE ? OR u.email LIKE ? OR u.department_name LIKE ? OR u.job_title LIKE ?)');
++    params.push(...Array(4).fill('%' + options.search.trim() + '%'));
++  }
++  if (options.role && options.role !== 'ALL') {
++    conditions.push('EXISTS (SELECT 1 FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE ur.user_id=u.id AND (r.code=? OR r.name=?))');
++    params.push(options.role, options.role);
++  }
++  if (options.status && options.status !== 'ALL') {
++    conditions.push('u.status=?');
++    params.push(options.status);
++  }
++  const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
++  const totalItems = (await db.prepare('SELECT COUNT(*) AS n FROM users u ' + where).get(...params)).n;
++  const totalPages = Math.ceil(totalItems / options.limit) || 1;
++  const rows = await db.prepare('SELECT u.* FROM users u ' + where + ' ORDER BY u.created_at DESC LIMIT ? OFFSET ?').all(...params, options.limit, (options.page - 1) * options.limit);
++  const roles = await db.prepare('SELECT ur.user_id,r.code,r.name FROM user_roles ur JOIN roles r ON r.id=ur.role_id ORDER BY r.code').all();
++  const items = rows.map(user => {
++    const assigned = roles.filter(role => role.user_id === user.id);
++    return { id: user.id, email: user.email, fullName: user.full_name, jobTitle: user.job_title || '', departmentId: user.department_id || '', departmentName: user.department_name || '', phoneNumber: user.phone_number || '', status: user.status, lockReason: user.lock_reason || null, roles: assigned.map(role => role.code), roleNames: assigned.map(role => role.name), createdAt: user.created_at, updatedAt: user.updated_at };
++  });
++  return { success: true, data: { items, pagination: { totalItems, totalPages, currentPage: options.page, limit: options.limit, hasNextPage: options.page < totalPages, hasPrevPage: options.page > 1 } } };
++}
++
++async function verify(db, engine) {
++  const users = new UserService(db);
++  const hash = (await db.prepare("SELECT password_hash FROM users WHERE email='admin@company.com'").get()).password_hash;
++  const roles = await db.prepare("SELECT id,code FROM roles WHERE code IN ('RECRUITER','HIRING_MGR','APPROVER') ORDER BY code DESC").all();
++  const measure = async options => {
++    const expected = await reference(db, options), original = db.prepare.bind(db), sqls = [];
++    db.prepare = sql => {
++      const statement = original(sql);
++      return Object.fromEntries(['all', 'get', 'run'].map(key => [key, async (...args) => {
++        sqls.push(sql.replace(/\s+/g, ' ').trim());
++        return statement[key](...args);
++      }]));
++    };
++    let actual;
++    try { actual = await users.getUsers(options); } finally { db.prepare = original; }
++    assert.deepEqual(actual, expected);
++    assert.equal(sqls.length, actual.data.items.length ? 3 : 2);
++    assert.equal(sqls.filter(sql => sql.includes('FROM roles r')).length, actual.data.items.length ? 1 : 0);
++    measurements.push({ engine, options, rows: actual.data.items.length, queries: sqls.length });
++  };
++  for (const size of [0, 1, 20, 120]) {
++    const prefix = 'batch-' + engine + '-' + size + '-';
++    for (let n = 0; n < size; n++) {
++      const id = prefix + n;
++      await db.prepare('INSERT INTO users(id,email,full_name,password_hash,status,job_title,department_name,created_at) VALUES (?,?,?,?,?,?,?,?)')
++        .run(id, id + '@example.invalid', id, hash, n % 2 ? 'LOCKED' : 'ACTIVE', n % 3 ? 'Fixture job' : null, n % 3 ? 'Fixture department' : null, new Date(Date.UTC(2030, 0, 1, 0, 0, n)).toISOString());
++      for (const role of n % 4 ? roles : []) await db.prepare('INSERT INTO user_roles(user_id,role_id) VALUES (?,?)').run(id, role.id);
++    }
++    await test(engine, 'batch count and complete contract', size + ' users', () => measure({ search: prefix, page: 1, limit: 200 }));
++  }
++  const prefix = 'batch-' + engine + '-120-';
++  await test(engine, 'pagination', 'page2, last page, out-of-range page preserve count/order', async () => {
++    for (const page of [1, 2, 6, 7]) await measure({ search: prefix, page, limit: 20 });
++  });
++  await test(engine, 'combined filters', 'search/status/role code or role name and multi-role order', async () => {
++    for (const role of ['RECRUITER', 'APPROVER', (await db.prepare("SELECT name FROM roles WHERE code='RECRUITER'").get()).name, 'UNKNOWN_ROLE']) {
++      await measure({ search: '  ' + prefix + '  ', status: 'ACTIVE', role, page: 1, limit: 20 });
++    }
++  });
++  await test(engine, 'parameter safety', 'search SQL text cannot change the query', () => measure({ search: "' OR 1=1 --", role: 'ALL', status: 'ALL', page: 1, limit: 20 }));
++  await test(engine, 'normalization', 'invalid page/limit retain defaults', async () => {
++    assert.deepEqual(await users.getUsers({ page: 0, limit: -1 }), await users.getUsers({ page: 1, limit: 20 }));
++  });
++}
++
++async function embedded() {
++  const { PGlite } = require('@electric-sql/pglite'), engine = new PGlite();
++  let tail = Promise.resolve();
++  const query = async (sql, params) => {
++    const result = params === undefined ? (await engine.exec(sql)).at(-1) : await engine.query(sql, params);
++    return { rows: (result?.rows || []).map(row => Object.fromEntries(Object.entries(row).map(([key, value]) => {
++      const type = result.fields.find(field => field.name === key)?.dataTypeID;
++      return [key, value instanceof Date ? (type === 1082 ? value.toISOString().slice(0, 10) : value.toISOString()) : typeof value === 'bigint' ? Number(value) : typeof value === 'string' && [20, 1700].includes(type) ? pgTypes().getTypeParser(type)(value) : value];
++    }))), rowCount: result?.affectedRows || result?.rows?.length || 0 };
++  };
++  return new PostgresDatabase({}, { on() {}, query, async connect() {
++    const previous = tail;
++    let release;
++    tail = new Promise(resolve => release = resolve);
++    await previous;
++    return { query, release };
++  }, async end() { await engine.close(); } });
++}
++
++async function initialize(db) {
++  await require('../src/db/migrate-postgres').migrate(db);
++  await db.transaction(() => require('../src/db/seed').seedDatabase(db));
++}
++
++async function main() {
++  if (process.argv.includes('--postgres-only')) {
++    const address = process.env.ATS_POSTGRES_TEST_URL;
++    assert.ok(address);
++    const parsed = new URL(address);
++    assert.ok(['127.0.0.1', 'localhost'].includes(parsed.hostname));
++    assert.equal(parsed.pathname, '/ats_user_list_test');
++    const root = path.resolve(__dirname, '../..');
++    assert.equal(fs.existsSync(path.join(root, '.env')), false);
++    assert.equal(fs.existsSync(path.join(root, '.git')), false);
++    const db = new PostgresDatabase({ DATABASE_URL: address, PG_SSL_MODE: 'disable' });
++    try {
++      assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM information_schema.tables WHERE table_schema='public'").get()).n, 0);
++      await initialize(db);
++      await verify(db, 'PostgreSQL-real');
++    } finally { await db.close(); }
++  } else {
++    const app = await openApplication();
++    try { await verify(app.db, 'SQLite'); } finally { await app.close(); }
++    const db = await embedded();
++    try { await initialize(db); await verify(db, 'PGlite'); } finally { await db.close(); }
++  }
++  console.log('USER_LIST_QUERY_MEASUREMENTS ' + JSON.stringify(measurements));
++  finish();
++}
++main().catch(error => { console.error(error.stack); process.exitCode = 1; });
+--- /dev/null
++++ backend/tests/test_browser_e2e.js (new this task)
+@@ -0,0 +1,348 @@
++const fs = require('node:fs');
++const path = require('node:path');
++const assert = require('node:assert/strict');
++const { createRequire } = require('node:module');
++const { chromium } = require('playwright');
++const { openApplication } = require('./helpers/coverageApplication');
++const { setup, prepare } = require('./test_s3_10');
++const output = process.env.ATS_E2E_ARTIFACTS || path.resolve(__dirname, '../../test-artifacts/browser');
++const results = [], network = [], errors = [], consoleErrors = [], contexts = [], secrets = new Set(['Ats@123456']);
++const roles = { ADMIN: ['admin@company.com', '/admin'], HR_MANAGER: ['hrmanager@company.com', '/dashboard'], HIRING_MGR: ['hiringmgr@company.com', '/hiring'], APPROVER: ['approver@company.com', '/approvals'], RECRUITER: ['recruiter@company.com', '/recruitment'], INTERVIEWER: ['interviewer@company.com', '/interviews'], CANDIDATE: ['candidate@example.com', '/candidate'] };
++const flags = ['APPROVAL_CONFIGURATION_ENABLED', 'REQUISITION_APPROVAL_ENABLED', 'HEADCOUNT_BUDGET_ENABLED', 'REQUISITION_OPERATIONS_ENABLED', 'REQUISITION_LIFECYCLE_ENABLED', 'REQUISITION_TRACKING_ENABLED', 'JOB_POSTING_DRAFTS_ENABLED', 'JOB_POSTING_PUBLICATION_ENABLED'];
++const wait = async predicate => {
++  const deadline = Date.now() + 12000;
++  while (!await predicate()) {
++    if (Date.now() > deadline) throw new Error('Browser backend state wait timed out');
++    await new Promise(resolve => setTimeout(resolve, 50));
++  }
++};
++async function check(name, page, action) {
++  try {
++    await action();
++    results.push({ name, status: 'PASS' });
++    console.log('[PASS] ' + name);
++  } catch (error) {
++    results.push({ name, status: 'FAIL', message: error.message });
++    if (page && !page.isClosed()) await page.screenshot({ path: path.join(output, 'failure-' + results.length + '.png'), fullPage: true }).catch(() => {});
++    console.error('[FAIL] ' + name + '\n' + error.stack);
++  }
++}
++async function sanitizeTrace(file) {
++  const JSZip = createRequire(require.resolve('exceljs'))('jszip'), archive = await JSZip.loadAsync(fs.readFileSync(file));
++  for (const entry of Object.values(archive.files)) {
++    if (entry.dir) continue;
++    const bytes = await entry.async('nodebuffer');
++    let text;
++    try { text = new TextDecoder('utf-8', { fatal: true }).decode(bytes); } catch { continue; }
++    for (const secret of secrets) if (secret) text = text.split(secret).join('[REDACTED_TEST_SECRET]');
++    archive.file(entry.name, text);
++  }
++  fs.writeFileSync(file, await archive.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' }));
++}
++async function main() {
++  fs.mkdirSync(output, { recursive: true });
++  const app = await openApplication(), s = await setup(app.db, 'Browser'), config = require('../src/config/config');
++  await prepare(s);
++  for (const flag of flags) config[flag] = true;
++  assert.equal(config.DB_PROVIDER, 'sqlite');
++  assert.equal(config.EMAIL_MODE, 'simulated');
++  assert.ok(config.DB_PATH.startsWith(app.root));
++  await s.budgets.save({ departmentId: 'dept-3', year: s.year, approvedHeadcount: 100, annualSalaryBudget: 1000000000 }, s.hr);
++  let browser;
++  try {
++    browser = await chromium.launch({ headless: true });
++    const pages = {}, adminSession = await app.login(roles.ADMIN[0]);
++    secrets.add(adminSession.token);
++    const makePage = async name => {
++      const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, timezoneId: 'Asia/Ho_Chi_Minh' });
++      await context.route('**/*', route => {
++        const url = new URL(route.request().url());
++        if (url.origin === app.base || url.protocol === 'data:') return route.continue();
++        return route.fulfill({ status: 200, contentType: 'text/css', body: '' });
++      });
++      await context.tracing.start({ screenshots: true, snapshots: true, sources: false });
++      const page = await context.newPage();
++      page.setDefaultTimeout(12000);
++      const goto = page.goto.bind(page);
++      page.goto = async (...args) => {
++        const response = await goto(...args);
++        await page.waitForSelector('html[data-app-ready="true"]');
++        return response;
++      };
++      page.on('dialog', dialog => dialog.accept());
++      page.on('pageerror', error => errors.push({ page: name, message: error.message }));
++      page.on('console', message => { if (message.type() === 'error') consoleErrors.push({ page: name, message: message.text() }); });
++      page.on('response', async response => {
++        const request = response.request(), url = new URL(response.url());
++        if (url.origin !== app.base) return;
++        network.push({ page: name, method: request.method(), path: url.pathname, status: response.status(), injected: response.headers()['x-e2e-injected-error'] === 'true' });
++        if (url.pathname === '/api/v1/auth/login') {
++          const data = await response.json().catch(() => null);
++          if (data?.data?.token) secrets.add(data.data.token);
++        }
++      });
++      contexts.push({ name, context });
++      return page;
++    };
++    for (const [role, [email, home]] of Object.entries(roles)) {
++      pages[role] = await makePage(role);
++      await check('S1 login/home/navigation ' + role, pages[role], async () => {
++        const page = pages[role];
++        await page.goto(app.base + '/login');
++        await page.locator('#email').fill(email);
++        await page.locator('#password').fill('Ats@123456');
++        await page.locator('#login-form button[type=submit]').click();
++        await page.waitForURL(app.base + home);
++        await page.locator('#login-view').waitFor({ state: 'hidden' });
++        await page.screenshot({ path: path.join(output, 'home-' + role + '.png'), fullPage: true });
++      });
++    }
++    const hr = pages.HR_MANAGER, owner = pages.HIRING_MGR, admin = pages.ADMIN, recruiter = pages.RECRUITER;
++    await check('S1 users real table and pagination after batching', admin, async () => {
++      await admin.goto(app.base + '/admin/users');
++      await admin.locator('#users-table-body [data-user-id]').first().waitFor();
++      assert.doesNotMatch(await admin.locator('#users-page-info').innerText(), /undefined|NaN/);
++      await admin.locator('#users-next-btn').click();
++      await wait(async () => (await admin.locator('#users-current-page-badge').innerText()).startsWith('2 /'));
++    });
++    await check('RBAC Hiring Manager configuration route denied', owner, async () => {
++      await owner.goto(app.base + '/admin/approval-configurations');
++      await wait(async () => (await owner.locator('#error-code-display').innerText()) === '403');
++      await owner.goto(app.base + '/requisitions');
++    });
++    for (const role of ['CANDIDATE', 'INTERVIEWER']) {
++      await check('RBAC real route blocks internal administration ' + role, pages[role], async () => {
++        await pages[role].goto(app.base + '/admin/users');
++        await wait(async () => (await pages[role].locator('#error-code-display').innerText()) === '403');
++      });
++    }
++    await check('Configuration API failure displays user-facing error', hr, async () => {
++      await hr.route('**/api/v1/approval-configurations/options', route => route.fulfill({ status: 500, contentType: 'application/json', headers: { 'x-e2e-injected-error': 'true' }, body: JSON.stringify({ success: false, code: 'INTERNAL_SERVER_ERROR', message: 'Không thể tải cấu hình trong phép thử lỗi cách ly.' }) }), { times: 1 });
++      await hr.goto(app.base + '/admin/approval-configurations');
++      await hr.locator('#s301-alert').waitFor({ state: 'visible' });
++      assert.match(await hr.locator('#s301-message').innerText(), /Không thể tải cấu hình/);
++    });
++    await check('S3-01 HR creates and publishes two-level configuration version', hr, async () => {
++      await hr.goto(app.base + '/admin/approval-configurations');
++      const configuration = (await s.configurations.list()).find(item => item.departmentId === 'dept-3');
++      await hr.locator('[data-configuration-id="' + configuration.id + '"]').click();
++      await hr.locator('.s301-limit').fill('200');
++      await hr.locator('.s301-approver').selectOption(s.hr.id);
++      await hr.locator('#s301-add-level').click();
++      await hr.locator('.s301-limit').nth(1).fill('1000');
++      await hr.locator('.s301-approver').nth(1).selectOption(s.admin.id);
++      await hr.locator('#s301-save').click();
++      await wait(async () => !(await hr.locator('#s301-publish').isDisabled()));
++      await hr.locator('#s301-publish').click();
++      await wait(async () => (await s.configurations.list()).find(item => item.id === configuration.id).publishedVersion === 2);
++      await hr.screenshot({ path: path.join(output, 'configuration-version2.png'), fullPage: true });
++    });
++    const create = async label => {
++      await owner.goto(app.base + '/requisitions');
++      await owner.locator('#open-create-req-modal-btn').click();
++      await owner.locator('#create-req-modal').waitFor({ state: 'visible' });
++      await owner.locator('#create-req-job-title-input').selectOption(s.title.data.id);
++      await owner.locator('#create-req-dept-input').selectOption('dept-3');
++      await owner.locator('#create-req-title-input').fill(label);
++      await owner.locator('#create-req-headcount-input').fill('2');
++      await owner.locator('#create-req-reason-input').selectOption('NEW_HEADCOUNT');
++      await owner.locator('#create-req-needed-date-input').fill(s.valid.neededDate);
++      await owner.locator('#create-req-salary-min-input').fill('150');
++      await owner.locator('#create-req-salary-max-input').fill('300');
++      await owner.locator('#create-req-description-input').fill('Browser JD tiếng Việt\nResponsibilities and collaboration.');
++      await owner.locator('#create-req-requirements-input').fill('Browser requirements: experience and teamwork.');
++      await owner.locator('#create-req-work-location-select').selectOption('s309-location');
++      await owner.locator('#create-req-work-mode-select').selectOption('s309-mode');
++      const response = owner.waitForResponse(r => r.url() === app.base + '/api/v1/requisitions' && r.request().method() === 'POST');
++      await owner.locator('#submit-create-req-btn').click();
++      const result = await (await response).json();
++      assert.equal(result.success, true);
++      await owner.locator('#create-req-modal').waitFor({ state: 'hidden' });
++      return result.data.id;
++    };
++    const detail = async (page, id) => {
++      await page.goto(app.base + '/requisitions');
++      await page.locator('.btn-detail-req[data-id="' + id + '"]').click();
++      await page.locator('#create-req-modal').waitFor({ state: 'visible' });
++    };
++    const approve = async id => {
++      await owner.goto(app.base + '/requisitions');
++      await owner.getByLabel('Yêu cầu gửi phê duyệt').first().selectOption(id);
++      await owner.getByRole('button', { name: 'Gửi phê duyệt', exact: true }).first().click();
++      await owner.locator('#s302-modal').waitFor({ state: 'visible' });
++      const row = await app.db.prepare('SELECT id FROM requisition_approval_workflows WHERE requisition_id=?').get(id);
++      for (const page of [hr, admin]) {
++        await page.goto(app.base + '/approvals');
++        const item = await s.service.getRequisitionById(id);
++        const tr = page.locator('#approvals-view tr').filter({ hasText: item.code });
++        await tr.getByRole('button', { name: 'Mở hồ sơ', exact: true }).click();
++        await page.locator('#s302-approve').waitFor({ state: 'visible' });
++        await page.locator('#s302-comment').fill('Browser approved with recorded opinion');
++        await page.locator('#s302-approve').click();
++        await wait(async () => (await s.approvals.read(row.id, s.hr)).events.filter(e => e.action === 'APPROVE').length === (page === hr ? 1 : 2));
++      }
++      assert.equal((await s.approvals.read(row.id, s.hr)).status, 'APPROVED');
++    };
++    const assign = async id => {
++      await detail(hr, id);
++      await hr.locator('#s306-s210 [data-recruiter-primary]').selectOption(s.rec.id);
++      await hr.locator('#s306-s210 input[type=checkbox][value="' + s.r2.id + '"]').check();
++      await hr.locator('#s306-s210').getByRole('button', { name: 'Cập nhật phân công', exact: true }).click();
++      await wait(async () => (await s.operations.assignments(id, s.hr)).primary?.id === s.rec.id);
++    };
++    const publish = async id => {
++      await detail(recruiter, id);
++      await recruiter.locator('#s309-s210 [data-job-create]').click();
++      assert.match(await recruiter.locator('[data-job-field="jobDescription"]').inputValue(), /Browser JD/);
++      await recruiter.locator('[data-job-field="applicationDeadline"]').fill(s.year + '-12-31');
++      await recruiter.locator('[data-job-field="showSalary"]').uncheck();
++      await recruiter.locator('[data-job-form]').getByRole('button', { name: 'Lưu bản nháp', exact: true }).click();
++      await recruiter.locator('#s309-s210 [data-job-id]').waitFor();
++      const idPost = (await s.jobs.context(id, s.hr)).postings[0].id;
++      await recruiter.locator('#s309-s210').getByRole('button', { name: 'Preview / gửi duyệt / xuất bản', exact: true }).click();
++      await recruiter.locator('[data-job-action="SUBMIT"]').click();
++      await wait(async () => (await s.jobs.read(idPost, s.hr)).status === 'PENDING_APPROVAL');
++      assert.equal(await recruiter.locator('[data-job-action="APPROVE"]').count(), 0);
++      await hr.goto(app.base + '/approvals');
++      const row = hr.locator('#s310-queue p').filter({ hasText: (await s.service.getRequisitionById(id)).code });
++      await row.getByRole('button', { name: 'Chi tiết / preview', exact: true }).click();
++      await hr.locator('[data-job-action="APPROVE"]').click();
++      await hr.locator('[data-job-action="PUBLISH"]').waitFor();
++      await hr.locator('[data-job-action="PUBLISH"]').click();
++      await wait(async () => (await s.jobs.read(idPost, s.hr)).status === 'PUBLISHED');
++      return idPost;
++    };
++    const lifecycle = async (id, action) => {
++      await detail(hr, id);
++      await hr.locator('#s307-s210 [data-lifecycle-action]').selectOption(action);
++      await hr.locator('#s307-s210 [data-lifecycle-reason]').fill('Browser lifecycle reason ' + action);
++      await hr.locator('#s307-s210').getByRole('button', { name: 'Xác nhận thao tác', exact: true }).click();
++      await wait(async () => (await s.service.getRequisitionById(id)).status === (action === 'FULFILLED' ? 'CLOSED' : action));
++    };
++    let mainId, postId;
++    await check('S2-10 invalid quantity has visible validation and no write', owner, async () => {
++      await owner.goto(app.base + '/requisitions');
++      await owner.locator('#open-create-req-modal-btn').click();
++      await owner.locator('#create-req-headcount-input').fill('-1');
++      const count = (await app.db.prepare('SELECT COUNT(*) AS n FROM requisitions').get()).n;
++      await owner.locator('#submit-create-req-btn').click();
++      await owner.locator('#create-req-alert').waitFor({ state: 'visible' });
++      assert.match(await owner.locator('#create-req-alert-msg').innerText(), /Số lượng/);
++      assert.equal((await app.db.prepare('SELECT COUNT(*) AS n FROM requisitions').get()).n, count);
++      await owner.locator('#close-create-req-modal').click();
++    });
++    await check('S2-10 real UI creates OPEN without auto approval', owner, async () => {
++      mainId = await create('Browser main position');
++      assert.equal((await s.service.getRequisitionById(mainId)).status, 'OPEN');
++      assert.equal(await app.db.prepare('SELECT id FROM requisition_approval_workflows WHERE requisition_id=?').get(mainId), undefined);
++    });
++    if (mainId) {
++      await check('S3-02 two assigned approval levels through real UI', hr, () => approve(mainId));
++      await check('S3-03 owner sees ordered approval history and decisions', owner, async () => {
++        await detail(owner, mainId);
++        await owner.locator('#s303-s210 table').waitFor();
++        const history = await owner.locator('#s303-s210').innerText();
++        assert.match(history, /Đã duyệt/);
++        assert.match(history, /Browser approved with recorded opinion/);
++        assert.equal(await owner.locator('#s303-s210 tbody tr').count(), 2);
++        await owner.screenshot({ path: path.join(output, 'approval-history.png'), fullPage: true });
++      });
++      await check('S3-06 real UI assigns primary and support recruiter', hr, () => assign(mainId));
++      await check('S3-09/10 UI composes, submits, independently approves and publishes', recruiter, async () => { postId = await publish(mainId); });
++    }
++    const publicPage = await makePage('PUBLIC');
++    if (postId) {
++      await check('S3-10 preview and public share exact DOM and hidden salary', hr, async () => {
++        await publicPage.goto(app.base + '/careers/jobs');
++        await publicPage.locator('[data-public-job-id="' + postId + '"]').click();
++        await publicPage.locator('[data-public-job]').waitFor();
++        const preview = await hr.locator('#s310-preview [data-public-job]').evaluate(n => n.outerHTML);
++        const publicDom = await publicPage.locator('#public-jobs-content [data-public-job]').evaluate(n => n.outerHTML);
++        assert.equal(publicDom, preview);
++        assert.equal(Object.hasOwn((await s.jobs.publicList(postId))[0], 'salaryMin'), false);
++        await publicPage.screenshot({ path: path.join(output, 'public-desktop.png'), fullPage: true });
++        await hr.screenshot({ path: path.join(output, 'preview-desktop.png'), fullPage: true });
++      });
++      await check('Mobile public detail and HR preview render without horizontal overflow', hr, async () => {
++        for (const page of [publicPage, hr]) {
++          await page.setViewportSize({ width: 390, height: 844 });
++          assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
++        }
++        await publicPage.screenshot({ path: path.join(output, 'public-mobile.png'), fullPage: true });
++        await hr.screenshot({ path: path.join(output, 'preview-mobile.png'), fullPage: true });
++        await hr.setViewportSize({ width: 1440, height: 1000 });
++      });
++      await check('S3-07 CLOSED via UI unpublishes and retains quota', hr, async () => {
++        await s.service.createCandidate({ fullName: 'Browser hired1', email: 'hired1@browser.example.invalid', requisitionId: mainId, stage: 'HIRED' }, s.rec);
++        await s.service.createCandidate({ fullName: 'Browser hired2', email: 'hired2@browser.example.invalid', requisitionId: mainId, stage: 'HIRED' }, s.rec);
++        const usage = await s.budgets.measure('dept-3', s.year);
++        await lifecycle(mainId, 'FULFILLED');
++        assert.deepEqual(await s.budgets.measure('dept-3', s.year), usage);
++        await publicPage.reload();
++        await publicPage.locator('#public-jobs-content [data-public-job]').waitFor({ state: 'hidden' });
++        assert.equal((await s.jobs.publicList(postId)).length, 0);
++      });
++    }
++    for (const action of ['PAUSED', 'CANCELLED']) {
++      await check('S3-07 ' + action + ' real UI and public removal', hr, async () => {
++        const id = await create('Browser ' + action);
++        await approve(id);
++        await assign(id);
++        const post = await publish(id), usage = await s.budgets.measure('dept-3', s.year);
++        await lifecycle(id, action);
++        assert.equal((await s.jobs.publicList(post)).length, 0);
++        if (action === 'PAUSED') assert.deepEqual(await s.budgets.measure('dept-3', s.year), usage);
++        await publicPage.goto(app.base + '/careers/jobs?id=' + post);
++        await publicPage.locator('#public-jobs-content [data-public-job]').waitFor({ state: 'hidden' });
++        const application = await s.service.createCandidate({ fullName: 'Must block', email: action + '@browser.example.invalid', requisitionId: id }, s.rec);
++        assert.equal(application.code, 'REQUISITION_NOT_ACCEPTING_APPLICATIONS');
++        await hr.screenshot({ path: path.join(output, action.toLowerCase() + '-history.png'), fullPage: true });
++      });
++    }
++    await check('Feature flags ON agree with backend capabilities and navigation', admin, async () => {
++      assert.ok(flags.every(flag => config[flag] === true));
++      const list = await app.api('GET', '/requisitions', adminSession.token);
++      for (const feature of ['requisitionLifecycle', 'requisitionOperations', 'requisitionTracking']) assert.equal(list.data.features[feature], true);
++      const menu = await app.api('GET', '/navigation/menu', adminSession.token);
++      assert.match(JSON.stringify(menu.data), /nav-approval-configurations/);
++      assert.match(JSON.stringify(menu.data), /nav-headcount-budgets/);
++    });
++    await check('Eight feature flags OFF enforce API and hide frontend features', admin, async () => {
++      try {
++        for (const flag of flags) config[flag] = false;
++        for (const endpoint of ['/approval-configurations', '/requisition-approvals', '/headcount-budgets', '/requisition-operations/' + mainId + '/assignments', '/requisition-lifecycles/' + mainId, '/requisition-tracking/options', '/job-posting-drafts/requisitions/' + mainId, '/job-posting-publication']) assert.equal((await app.api('GET', endpoint, adminSession.token)).status, 404, endpoint);
++        const menu = await app.api('GET', '/navigation/menu', adminSession.token);
++        assert.doesNotMatch(JSON.stringify(menu.data), /nav-approval-configurations|nav-headcount-budgets/);
++        await detail(admin, mainId);
++        for (const id of ['s303-s210', 's306-s210', 's307-s210', 's309-s210']) await admin.locator('#' + id).waitFor({ state: 'hidden' });
++        await admin.screenshot({ path: path.join(output, 'flags-off.png'), fullPage: true });
++      } finally { for (const flag of flags) config[flag] = true; }
++    });
++    await check('S1 logout clears session and protected deep link requires login', pages.INTERVIEWER, async () => {
++      await pages.INTERVIEWER.goto(app.base + '/interviews');
++      await pages.INTERVIEWER.locator('#sidebar-logout-btn').click();
++      await pages.INTERVIEWER.waitForURL(app.base + '/login');
++      await pages.INTERVIEWER.goto(app.base + '/interviews');
++      await pages.INTERVIEWER.waitForURL(app.base + '/login');
++    });
++    await check('Browser console/page runtime and HTTP5xx clean', null, async () => {
++      assert.deepEqual(errors, []);
++      assert.deepEqual(network.filter(item => item.status >= 500 && !item.injected), []);
++      assert.deepEqual(consoleErrors.filter(item => !/Failed to load resource.*(?:401|403|404|500)/.test(item.message)), []);
++    });
++  } finally {
++    for (const { name, context } of contexts) {
++      const trace = path.join(output, 'trace-' + name + '.zip');
++      await context.tracing.stop({ path: trace });
++      await sanitizeTrace(trace);
++      await context.close();
++    }
++    if (browser) await browser.close();
++    await app.close();
++    const report = { engine: 'Playwright Chromium real headless browser', database: 'fresh isolated SQLite', email: 'simulated', featureFlags: 'ON and OFF only in test process', productionFlagsChanged: false, passed: results.filter(r => r.status === 'PASS').length, failed: results.filter(r => r.status === 'FAIL').length, total: results.length, cases: results, network, pageErrors: errors, consoleErrors, browserVersion: browser?.version(), artifacts: fs.readdirSync(output).filter(name => /\.(png|zip)$/.test(name)), traceSecretsRedacted: true, externalFonts: 'blocked with empty response to keep test offline', viewportDesktop: '1440x1000', viewportMobile: '390x844' };
++    fs.writeFileSync(path.join(output, 'results.json'), JSON.stringify(report, null, 2));
++    console.log('BROWSER_E2E_RESULT ' + JSON.stringify({ passed: report.passed, failed: report.failed, total: report.total }));
++    process.exitCode = report.failed ? 1 : 0;
++  }
++}
++main().catch(error => { console.error(error.stack); process.exitCode = 1; });
+--- /dev/null
++++ backend/tests/run_browser_e2e.js (new this task)
+@@ -0,0 +1,48 @@
++const fs = require('node:fs');
++const path = require('node:path');
++const os = require('node:os');
++const { spawn } = require('node:child_process');
++const source = path.resolve(__dirname, '../..');
++const environment = { ...process.env };
++for (const key of Object.keys(environment)) {
++  if (/^(ATS_POSTGRES_|DATABASE_|DB_|PG|SMTP_|MAIL_|EMAIL_|GOOGLE_|APPROVAL_|REQUISITION_|HEADCOUNT_|JOB_POSTING_|NODE_OPTIONS$)/.test(key)) delete environment[key];
++}
++Object.assign(environment, { NODE_ENV: 'test', DB_PROVIDER: 'sqlite', EMAIL_MODE: 'simulated' });
++const artifacts = process.env.ATS_E2E_ARTIFACTS
++  ? path.resolve(process.env.ATS_E2E_ARTIFACTS)
++  : fs.mkdtempSync(path.join(os.tmpdir(), 'ats-browser-e2e-evidence-'));
++environment.ATS_E2E_ARTIFACTS = artifacts;
++
++async function execute(args, cwd) {
++  return new Promise((resolve, reject) => {
++    const child = spawn(process.execPath, args, { cwd, env: environment, windowsHide: true, stdio: 'inherit' });
++    child.on('error', reject);
++    child.on('close', resolve);
++  });
++}
++
++async function main() {
++  const isolated = !fs.existsSync(path.join(source, '.git')) && !fs.existsSync(path.join(source, '.env'));
++  const root = isolated ? source : fs.mkdtempSync(path.join(os.tmpdir(), 'ats-browser-e2e-source-'));
++  if (!isolated) {
++    for (const directory of ['backend', 'frontend']) {
++      fs.cpSync(path.join(source, directory), path.join(root, directory), { recursive: true, filter(file) {
++        const relative = path.relative(path.join(source, directory), file);
++        return !relative.split(path.sep).some(part => ['node_modules', '.git', 'data', '.env'].includes(part))
++          && !path.basename(file).startsWith('.env')
++          && !(directory === 'frontend' && /^public[\\/](avatars|company)([\\/]|$)/.test(relative));
++      } });
++    }
++    for (const file of ['package.json', 'package-lock.json']) fs.copyFileSync(path.join(source, file), path.join(root, file));
++    const npm = path.join(path.dirname(process.execPath), 'node_modules/npm/bin/npm-cli.js');
++    if (!fs.existsSync(npm)) throw new Error('NPM_CLI_NOT_FOUND');
++    const installed = await execute([npm, 'ci', '--offline', '--ignore-scripts', '--no-audit', '--no-fund'], root);
++    if (installed !== 0) throw new Error('ISOLATED_DEPENDENCY_INSTALL_FAILED');
++  }
++  for (const file of ['.git', '.env', 'backend/data/ats.db', 'backend/data/ats.db-shm', 'backend/data/ats.db-wal', 'backend/data/ats_test.db']) {
++    if (fs.existsSync(path.join(root, file))) throw new Error('FRESH_ISOLATED_SOURCE_REQUIRED');
++  }
++  console.log('BROWSER_E2E_ENVIRONMENT ' + JSON.stringify({ provider: 'sqlite', isolated: true, email: 'simulated', artifacts }));
++  process.exitCode = await execute(['backend/tests/test_browser_e2e.js'], root);
++}
++main().catch(error => { console.error(error.message); process.exitCode = 1; });
