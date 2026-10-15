@@ -1866,7 +1866,16 @@ async function handleRequest(req, res) {
     pathname.startsWith('/api/v1/candidates/documents/') ||
     /^\/api\/v1\/candidates\/[^/]+\/(?:parse-cv|notes|tags(?:\/[^/]+)?)$/.test(pathname)
   )){await new(require('./controllers/candidatePortalController'))(new(require('./services/candidatePortalService'))(db),rbacMiddleware,authController.authService).handle(req,res,parsedUrl,parseBody);return;}
-  if(pathname.startsWith('/api/v1/requisition-operations/')){if(!config.REQUISITION_OPERATIONS_ENABLED){res.writeHead(404,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:'S305_S306_DISABLED',message:'Chức năng sao chép/phân công chưa được bật.'}));return;}const {RequisitionOperationsService}=require('./services/requisitionOperationsService');await new(require('./controllers/requisitionOperationsController'))(new RequisitionOperationsService(db),rbacMiddleware,authController.authService).handle(req,res,parsedUrl,parseBody);return;}
+  // S5-09 (SCRUM-119): Candidate Mandatory Screening & Scoring API
+  if (
+    /^\/(?:api\/v1\/)?requisitions\/[^/]+\/(?:screening-criteria|screen-all|screening-candidates)$/.test(pathname) ||
+    /^\/(?:api\/v1\/)?candidates\/[^/]+\/screen$/.test(pathname)
+  ) {
+    const CandidateScreeningService = require('./services/candidateScreeningService');
+    const CandidateScreeningController = require('./controllers/candidateScreeningController');
+    await new CandidateScreeningController(new CandidateScreeningService(db), rbacMiddleware, authController.authService).handle(req, res, parsedUrl, parseBody);
+    return;
+  }
 
   if(req.method==='GET'&&/^\/(?:api\/v1\/)?candidates\/[^/]+$/.test(pathname)){const user=await rbacMiddleware.authorize(req,res,authController.authService,'candidate.read');if(!user)return;let candidateId;try{candidateId=decodeURIComponent(pathname.split('/').at(-1));}catch{res.writeHead(400,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:'BAD_REQUEST',message:'Mã hồ sơ không hợp lệ.'}));return;}const result=await requisitionService.getCandidateById(candidateId,user);res.writeHead(result.statusCode||200,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(result));return;}
 
@@ -1882,6 +1891,42 @@ async function handleRequest(req, res) {
     };
     if (isCandidateOnly(user)) options.candidateEmail = user.email;
     const result = (await requisitionService.getCandidates(options));
+
+    // S5-09: Gắn kết quả điểm sàng lọc tiêu chí bắt buộc vào danh sách ứng viên
+    if (result && result.success && Array.isArray(result.candidates) && result.candidates.length > 0) {
+      try {
+        const candIds = result.candidates.map(c => c.id).filter(Boolean);
+        if (candIds.length > 0) {
+          const placeholders = candIds.map(() => '?').join(',');
+          const srRows = await db.prepare(
+            `SELECT candidate_id, fit_score, mandatory_pass, experience_passed, education_passed, skills_passed, evaluation_details, evaluated_at 
+             FROM candidate_screening_results WHERE candidate_id IN (${placeholders})`
+          ).all(...candIds);
+          const srMap = new Map();
+          for (const sr of srRows) {
+            let breakdown = null;
+            if (sr.evaluation_details) {
+              try { breakdown = JSON.parse(sr.evaluation_details); } catch {}
+            }
+            srMap.set(sr.candidate_id, {
+              fitScore: sr.fit_score,
+              mandatoryPass: Boolean(sr.mandatory_pass),
+              experiencePassed: Boolean(sr.experience_passed),
+              educationPassed: Boolean(sr.education_passed),
+              skillsPassed: Boolean(sr.skills_passed),
+              evaluatedAt: sr.evaluated_at,
+              breakdown
+            });
+          }
+          for (const c of result.candidates) {
+            c.screening = srMap.get(c.id) || null;
+          }
+        }
+      } catch (err) {
+        // Bảng screening results chưa tồn tại
+      }
+    }
+
     res.writeHead(result.statusCode||200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(result));
     return;
@@ -1938,6 +1983,18 @@ async function handleRequest(req, res) {
       }
 
       const result = (await requisitionService.createCandidate(body,user));
+
+      // S5-09: Tự động chấm điểm hồ sơ mới theo tiêu chí sàng lọc bắt buộc của vị trí (AC-02)
+      const createdId = result.data?.id || result.candidate?.id || result.id;
+      if (result.success && createdId) {
+        try {
+          const CandidateScreeningService = require('./services/candidateScreeningService');
+          await new CandidateScreeningService(db).screenCandidate(createdId, user);
+        } catch (screenErr) {
+          // Bỏ qua nếu vị trí chưa có tiêu chí
+        }
+      }
+
       res.writeHead(result.statusCode || 201, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {

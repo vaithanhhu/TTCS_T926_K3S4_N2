@@ -84,7 +84,10 @@
     "test:qa-s3-06:pg-live": "node backend/tests/test_qa_s3_06_pg_live.js",
     "test:qa-s3-batch": "node backend/tests/test_s3_remaining_qa.js",
     "test:qa-s3-batch:pg-live": "node backend/tests/test_s3_remaining_qa_pg_live.js",
-    "test:ui-interface": "node backend/tests/test_ui_interface_audit.js"
+    "test:ui-interface": "node backend/tests/test_ui_interface_audit.js",
+    "test:s5-07": "node backend/tests/test_s5_07_candidate_timeline.js",
+    "test:s5-08": "node backend/tests/test_s5_08_candidate_manual_entry.js",
+    "test:s5-09": "node backend/tests/test_s5_09_candidate_screening.js"
   },
   "keywords": [
     "ats",
