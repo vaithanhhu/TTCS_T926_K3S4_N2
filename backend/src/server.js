@@ -1868,6 +1868,7 @@ async function handleRequest(req, res) {
     pathname.startsWith('/api/v1/candidates/documents/') ||
     /^\/api\/v1\/candidates\/[^/]+\/(?:parse-cv|notes|tags(?:\/[^/]+)?)$/.test(pathname)
   )){await new(require('./controllers/candidatePortalController'))(new(require('./services/candidatePortalService'))(db),rbacMiddleware,authController.authService).handle(req,res,parsedUrl,parseBody);return;}
+  if(pathname.startsWith('/api/v1/requisition-operations/')){if(!config.REQUISITION_OPERATIONS_ENABLED){res.writeHead(404,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:'S305_S306_DISABLED',message:'Chức năng sao chép/phân công chưa được bật.'}));return;}const {RequisitionOperationsService}=require('./services/requisitionOperationsService');await new(require('./controllers/requisitionOperationsController'))(new RequisitionOperationsService(db),rbacMiddleware,authController.authService).handle(req,res,parsedUrl,parseBody);return;}
   // S5-09 (SCRUM-119): Candidate Mandatory Screening & Scoring API
   if (
     /^\/(?:api\/v1\/)?requisitions\/[^/]+\/(?:screening-criteria|screen-all|screening-candidates)$/.test(pathname) ||

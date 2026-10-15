@@ -9,7 +9,12 @@ for (const key of Object.keys(environment)) {
   if (/^(ATS_POSTGRES_|ATS_LOCAL_|ATS_E2E_|DATABASE_|DB_|PG|SMTP_|MAIL_|EMAIL_|GOOGLE_|APPROVAL_|REQUISITION_|HEADCOUNT_|JOB_POSTING_|NODE_OPTIONS$)/.test(key)) delete environment[key];
 }
 Object.assign(environment, { NODE_ENV: 'test', DB_PROVIDER: 'sqlite', EMAIL_MODE: 'simulated' });
-const npm = path.join(path.dirname(process.execPath), 'node_modules/npm/bin/npm-cli.js');
+const npmCandidates = [
+  path.join(path.dirname(process.execPath), 'node_modules/npm/bin/npm-cli.js'),
+  path.resolve(path.dirname(process.execPath), '../lib/node_modules/npm/bin/npm-cli.js'),
+  path.resolve(path.dirname(process.execPath), '../node_modules/npm/bin/npm-cli.js')
+];
+const npm = npmCandidates.find(candidate => fs.existsSync(candidate));
 const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'ats-local-regression-'));
 
 function copySource(root) {
