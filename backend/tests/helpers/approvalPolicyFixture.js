@@ -1,0 +1,34 @@
+const crypto=require('node:crypto');
+async function infrastructure(db){await require('../../src/db/migrate-approval-configurations').migrate(db);await require('../../src/db/migrate-requisition-approvals').migrate(db);await require('../../src/db/migrate-requisition-open-policy').migrate(db);}
+async function createDraft(db,data,actor){await infrastructure(db);return new(require('../../src/services/requisitionService'))(db).createRequisition({...data,status:'DRAFT'},actor);}
+async function submit(db,id,actor,data={}){const Req=require('../../src/services/requisitionService'),Approval=require('../../src/services/requisitionApprovalService'),item=typeof id==='string'&&id.trim()?await new Req(db).getRequisitionById(id):null;return new Approval(db).submit(id,{requestId:crypto.randomUUID(),expectedDraftVersion:item?.draftVersion,...data},actor);}
+async function approve(db,id){const Approval=require('../../src/services/requisitionApprovalService'),rbac=new(require('../../src/middlewares/rbacMiddleware'))(db),service=new Approval(db);let workflow=await db.prepare('SELECT id,status FROM requisition_approval_workflows WHERE requisition_id=?').get(id);if(!workflow)throw Error('FIXTURE_SUBMISSION_REQUIRED');while(workflow.status==='PENDING'){const row=await db.prepare("SELECT s.id,s.approver_id,w.version FROM requisition_approval_steps s JOIN requisition_approval_workflows w ON w.current_submission_id=s.submission_id WHERE w.id=? AND s.status='PENDING'").get(workflow.id),actor=await rbac.getAuthorizedActor(row.approver_id,'requisition.approve');await service.decide(workflow.id,{requestId:crypto.randomUUID(),expectedVersion:row.version,expectedStepId:row.id,action:'APPROVE'},actor);workflow=await db.prepare('SELECT id,status FROM requisition_approval_workflows WHERE id=?').get(workflow.id);}return workflow;}
+async function createApproved(db,data={},actor=null){
+ await infrastructure(db);
+ const config=require('../../src/config/config'),Req=require('../../src/services/requisitionService'),rbac=new(require('../../src/middlewares/rbacMiddleware'))(db),service=new Req(db),savedFlag=config.REQUISITION_APPROVAL_ENABLED;config.REQUISITION_APPROVAL_ENABLED=true;
+ try{
+  if(!actor){const row=await db.prepare("SELECT id FROM users WHERE email='hiringmgr@company.com'").get();actor=await rbac.getAuthorizedActor(row.id,'requisition.create');}
+  const document={departmentId:'dept-3',headcount:1,recruitmentReason:'NEW_HEADCOUNT',proposedSalaryMin:15000000,proposedSalaryMax:20000000,neededDate:service.businessDate(new Date(Date.now()+30*86400000)),jobDescription:'Approved fixture JD',candidateRequirements:'Approved fixture requirements',...data};
+  if(!document.jobTitleId){const code='FIXTURE-'+crypto.randomUUID(),result=await new(require('../../src/services/competencyService'))(db).createJobTitle({code,name:document.title||'Approved fixture',level:'Middle',minSalary:0,maxSalary:100000000});if(!result.success)throw Error(result.code);document.jobTitleId=result.data.id;}
+  const {ApprovalConfigurationService:Configurations}=require('../../src/services/approvalConfigurationService'),configs=new Configurations(db),published=await db.prepare('SELECT published_version_id FROM approval_configurations WHERE department_id=?').get(document.departmentId);
+  if(!published?.published_version_id){const managerRow=await db.prepare("SELECT id FROM users WHERE email='hrmanager@company.com'").get(),manager=await rbac.getAuthorizedActor(managerRow.id,'approval_configuration.manage'),reviewer=await db.prepare("SELECT id FROM users WHERE email=?").get(actor.id===manager.id?'approver@company.com':'hrmanager@company.com');const c=await configs.create({departmentId:document.departmentId,levels:[{order:1,salaryLimit:100000000,approverUserId:reviewer.id}]},manager.id);await configs.publish(c.id,c.versions[0].id,manager.id);}
+  const recruiterId=document.recruiterId;document.recruiterId=null;
+  const response=await new(require('../../src/services/requisitionApprovalService'))(db).saveAndSubmit({requestId:crypto.randomUUID(),document:Object.fromEntries(Object.entries(document).filter(([key])=>!['status','formVersion'].includes(key)))},actor);
+  await approve(db,response.requisitionId);
+  if(recruiterId){const row=await db.prepare("SELECT id FROM users WHERE email='hrmanager@company.com'").get(),manager=await rbac.getAuthorizedActor(row.id,'requisition.edit'),changed=await service.updateRequisition(response.requisitionId,{recruiterId},manager,{approvalEnabled:true});if(!changed.success)throw Error(changed.code);}
+  return {success:true,statusCode:201,data:await service.getRequisitionById(response.requisitionId)};
+ }finally{config.REQUISITION_APPROVAL_ENABLED=savedFlag;}
+}
+const document=data=>Object.fromEntries(Object.entries(data).filter(([key])=>['title','jobTitleId','departmentId','departmentName','headcount','recruitmentReason','proposedSalaryMin','proposedSalaryMax','neededDate','jobDescription','candidateRequirements','salaryJustification','recruiterId','workLocationId','workModeId'].includes(key)));
+const pendingCommands=new WeakMap();
+async function resubmit(db,id,data,actor){
+ const service=new(require('../../src/services/requisitionApprovalService'))(db),cache=pendingCommands.get(db)||new Map();pendingCommands.set(db,cache);const cacheKey=actor.id+':'+data.requestId,signature=JSON.stringify(data),previous=cache.get(cacheKey);
+ if(previous?.signature===signature)return service.saveAndSubmit(previous.command,actor);
+ const current=await service.read(id,actor),main=await new(require('../../src/services/requisitionService'))(db).getRequisitionById(current.requisitionId);
+ if(main.status==='DRAFT'&&main.createdBy===actor.id){const command={requestId:data.requestId,requisitionId:main.id,expectedDraftVersion:main.draftVersion,expectedWorkflowVersion:data.expectedVersion,document:document({...main,...data.document}),reason:data.reason};cache.set(cacheKey,{signature,command});return service.saveAndSubmit(command,actor);}
+ return service.resubmit(id,data,actor);
+}
+
+async function sendDraft(db,id,actor,changes={}){const reqs=new(require('../../src/services/requisitionService'))(db),main=await reqs.getRequisitionById(id),flow=await db.prepare('SELECT version FROM requisition_approval_workflows WHERE requisition_id=?').get(id);return new(require('../../src/services/requisitionApprovalService'))(db).saveAndSubmit({requestId:crypto.randomUUID(),requisitionId:id,expectedDraftVersion:main.draftVersion,expectedWorkflowVersion:flow?.version,document:document({...main,...changes})},actor);}
+async function openDraft(db,id,actor,changes={}){await sendDraft(db,id,actor,changes);await approve(db,id);return{success:true,data:await new(require('../../src/services/requisitionService'))(db).getRequisitionById(id)};}
+module.exports={infrastructure,createDraft,createApproved,submit,approve,document,resubmit,sendDraft,openDraft};

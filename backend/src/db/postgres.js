@@ -22,11 +22,18 @@ function postgresSQL(source) {
   return masked.split(';').filter(part => part.trim()).map(part => {
     const ignore = /\bINSERT OR IGNORE\b/i.test(part);
     part = part.replace(/\bINSERT OR IGNORE\b/gi, 'INSERT').replace(/datetime\(([^)]+)\)/gi, (_, expression) => {
+      const offset = expression.match(/^__ATS_LITERAL_(\d+)__\s*,\s*__ATS_LITERAL_(\d+)__$/);
+      if (offset && literals[Number(offset[1])] === "'now'") {
+        const modifier = literals[Number(offset[2])].match(/^'([+-]?\d+(?:\.\d+)?) (seconds?|minutes?|hours?|days?)'$/);
+        if (!modifier || !Number.isFinite(Number(modifier[1])) || Math.abs(Number(modifier[1])) > Number.MAX_SAFE_INTEGER) throw new Error('UNSUPPORTED_SQLITE_DATETIME');
+        return "(CURRENT_TIMESTAMP + INTERVAL '" + modifier[1] + ' ' + modifier[2] + "')";
+      }
       const literal = expression.match(/^__ATS_LITERAL_(\d+)__$/);
       if (literal && literals[Number(literal[1])] === "'now'") return 'CURRENT_TIMESTAMP';
       if (!literal && /^[\w.]+$/.test(expression)) return expression;
       throw new Error('UNSUPPORTED_SQLITE_DATETIME');
-    }).replace(/([\w.]+)\s*=\s*\?\s+COLLATE NOCASE/gi, 'lower($1) = lower(?)')
+    }).replace(/\bAS\s+([A-Za-z_]\w*)/gi, (match, alias) => /[a-z]/.test(alias) && /[A-Z]/.test(alias) ? 'AS "' + alias + '"' : match)
+      .replace(/([\w.]+)\s*=\s*\?\s+COLLATE NOCASE/gi, 'lower($1) = lower(?)')
       .replace(/([\w.]+)\s+COLLATE NOCASE/gi, 'lower($1)')
       .replace(/\b([\w.]*email)\s*=\s*\?/gi, 'lower($1) = lower(?)')
       .replace(/\browid\b/gi, 'sequence_id').replace(/\bLIKE\b/gi, 'ILIKE')

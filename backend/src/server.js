@@ -41,6 +41,8 @@ async function initializeApplication() {
     await ensureQuestionBankFeature(db); await ensureRecruitmentCatalogFeature(db);
     await ensureCareerPageFeature(db); await ensureRequisitionDraftFeature(db);
   }
+  if(db.provider==='sqlite')await require('./db/migrate-requisition-open-policy').migrate(db);
+  else await require('./db/migrate-requisition-open-policy').verify(db);
   if (config.APPROVAL_CONFIGURATION_ENABLED) await require('./db/migrate-approval-configurations').verify(db);
   if (config.REQUISITION_APPROVAL_ENABLED) await require('./db/migrate-requisition-approvals').verify(db);
   if (config.HEADCOUNT_BUDGET_ENABLED) await require('./db/migrate-headcount-budgets').verify(db);
@@ -260,8 +262,8 @@ async function handleRequest(req, res) {
   }
   if (pathname === '/api/v1/requisition-approvals' || pathname.startsWith('/api/v1/requisition-approvals/')) {
     if (!config.REQUISITION_APPROVAL_ENABLED) {
-      res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ success: false, code: 'S302_DISABLED', message: 'Phê duyệt yêu cầu tuyển dụng chưa được bật.' }));
+      res.writeHead(pathname.endsWith('/save-and-submit')?409:404, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, code: pathname.endsWith('/save-and-submit')?'APPROVAL_FEATURE_DISABLED':'S302_DISABLED', message: 'Cần bật và cấu hình phê duyệt trước khi gửi hoặc mở yêu cầu tuyển dụng mới.' }));
       return;
     }
     await requisitionApprovalController.handle(req, res, parsedUrl, parseBody);
@@ -1657,7 +1659,7 @@ async function handleRequest(req, res) {
       res.writeHead(result.statusCode || 201, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
-      if(err instanceof require('./services/headcountBudgetService').HeadcountBudgetError||err instanceof require('./services/requisitionOperationsService').RequisitionOperationsError){res.writeHead(err.statusCode,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,statusCode:err.statusCode,code:err.code,message:err.message}));return;}
+      if(err instanceof require('./services/approvalConfigurationService').ApprovalConfigurationError||err instanceof require('./services/headcountBudgetService').HeadcountBudgetError||err instanceof require('./services/requisitionOperationsService').RequisitionOperationsError){res.writeHead(err.statusCode,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,statusCode:err.statusCode,code:err.code,message:err.message}));return;}
       res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
     }
@@ -1724,7 +1726,8 @@ async function handleRequest(req, res) {
       res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
-      if(err instanceof require('./services/headcountBudgetService').HeadcountBudgetError||err instanceof require('./services/requisitionOperationsService').RequisitionOperationsError){res.writeHead(err.statusCode,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,statusCode:err.statusCode,code:err.code,message:err.message}));return;}
+      if(err instanceof require('./services/approvalConfigurationService').ApprovalConfigurationError){res.writeHead(err.statusCode,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:err.code,message:err.message}));return;}
+      if(err instanceof require('./services/approvalConfigurationService').ApprovalConfigurationError||err instanceof require('./services/headcountBudgetService').HeadcountBudgetError||err instanceof require('./services/requisitionOperationsService').RequisitionOperationsError){res.writeHead(err.statusCode,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,statusCode:err.statusCode,code:err.code,message:err.message}));return;}
       res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
     }
@@ -1863,7 +1866,16 @@ async function handleRequest(req, res) {
     pathname.startsWith('/api/v1/candidates/documents/') ||
     /^\/api\/v1\/candidates\/[^/]+\/(?:parse-cv|notes|tags(?:\/[^/]+)?)$/.test(pathname)
   )){await new(require('./controllers/candidatePortalController'))(new(require('./services/candidatePortalService'))(db),rbacMiddleware,authController.authService).handle(req,res,parsedUrl,parseBody);return;}
-  if(pathname.startsWith('/api/v1/requisition-operations/')){if(!config.REQUISITION_OPERATIONS_ENABLED){res.writeHead(404,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:'S305_S306_DISABLED',message:'Chức năng sao chép/phân công chưa được bật.'}));return;}const {RequisitionOperationsService}=require('./services/requisitionOperationsService');await new(require('./controllers/requisitionOperationsController'))(new RequisitionOperationsService(db),rbacMiddleware,authController.authService).handle(req,res,parsedUrl,parseBody);return;}
+  // S5-09 (SCRUM-119): Candidate Mandatory Screening & Scoring API
+  if (
+    /^\/(?:api\/v1\/)?requisitions\/[^/]+\/(?:screening-criteria|screen-all|screening-candidates)$/.test(pathname) ||
+    /^\/(?:api\/v1\/)?candidates\/[^/]+\/screen$/.test(pathname)
+  ) {
+    const CandidateScreeningService = require('./services/candidateScreeningService');
+    const CandidateScreeningController = require('./controllers/candidateScreeningController');
+    await new CandidateScreeningController(new CandidateScreeningService(db), rbacMiddleware, authController.authService).handle(req, res, parsedUrl, parseBody);
+    return;
+  }
 
   if(req.method==='GET'&&/^\/(?:api\/v1\/)?candidates\/[^/]+$/.test(pathname)){const user=await rbacMiddleware.authorize(req,res,authController.authService,'candidate.read');if(!user)return;let candidateId;try{candidateId=decodeURIComponent(pathname.split('/').at(-1));}catch{res.writeHead(400,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:'BAD_REQUEST',message:'Mã hồ sơ không hợp lệ.'}));return;}const result=await requisitionService.getCandidateById(candidateId,user);res.writeHead(result.statusCode||200,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(result));return;}
 
@@ -1879,8 +1891,57 @@ async function handleRequest(req, res) {
     };
     if (isCandidateOnly(user)) options.candidateEmail = user.email;
     const result = (await requisitionService.getCandidates(options));
+
+    // S5-09: Gắn kết quả điểm sàng lọc tiêu chí bắt buộc vào danh sách ứng viên
+    if (result && result.success && Array.isArray(result.candidates) && result.candidates.length > 0) {
+      try {
+        const candIds = result.candidates.map(c => c.id).filter(Boolean);
+        if (candIds.length > 0) {
+          const placeholders = candIds.map(() => '?').join(',');
+          const srRows = await db.prepare(
+            `SELECT candidate_id, fit_score, mandatory_pass, experience_passed, education_passed, skills_passed, evaluation_details, evaluated_at 
+             FROM candidate_screening_results WHERE candidate_id IN (${placeholders})`
+          ).all(...candIds);
+          const srMap = new Map();
+          for (const sr of srRows) {
+            let breakdown = null;
+            if (sr.evaluation_details) {
+              try { breakdown = JSON.parse(sr.evaluation_details); } catch {}
+            }
+            srMap.set(sr.candidate_id, {
+              fitScore: sr.fit_score,
+              mandatoryPass: Boolean(sr.mandatory_pass),
+              experiencePassed: Boolean(sr.experience_passed),
+              educationPassed: Boolean(sr.education_passed),
+              skillsPassed: Boolean(sr.skills_passed),
+              evaluatedAt: sr.evaluated_at,
+              breakdown
+            });
+          }
+          for (const c of result.candidates) {
+            c.screening = srMap.get(c.id) || null;
+          }
+        }
+      } catch (err) {
+        // Bảng screening results chưa tồn tại
+      }
+    }
+
     res.writeHead(result.statusCode||200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(result));
+    return;
+  }
+
+  // S5-08 (SCRUM-118): Candidate Manual Entry & Duplicate Detection API
+  if (
+    pathname === '/api/v1/candidates/manual' ||
+    pathname === '/candidates/manual' ||
+    pathname === '/api/v1/candidates/check-duplicate' ||
+    pathname === '/candidates/check-duplicate'
+  ) {
+    const CandidateManualEntryService = require('./services/candidateManualEntryService');
+    const CandidateManualEntryController = require('./controllers/candidateManualEntryController');
+    await new CandidateManualEntryController(new CandidateManualEntryService(db), rbacMiddleware, authController.authService).handle(req, res, parsedUrl, parseBody);
     return;
   }
 
@@ -1891,10 +1952,53 @@ async function handleRequest(req, res) {
     try {
       const body = await parseBody(req);
       if (isCandidateOnly(user)) Object.assign(body, { email: user.email, fullName: user.fullName, stage: 'NEW', notes: null, rejectionReasonId: null });
+
+      // S5-08 (SCRUM-118): Kiểm tra chống trùng lặp ứng viên trên cùng vị trí (AC-02)
+      const CandidateManualEntryService = require('./services/candidateManualEntryService');
+      const manualEntryService = new CandidateManualEntryService(db);
+      const dupCheck = await manualEntryService.checkDuplicateCandidate({
+        email: body.email,
+        phoneNumber: body.phoneNumber || body.phone,
+        requisitionId: body.requisitionId
+      });
+
+      if (dupCheck.hasSamePositionDuplicate) {
+        const match = dupCheck.samePositionMatches[0];
+        const matchFieldText = match.matchField === 'BOTH'
+          ? 'email và số điện thoại'
+          : match.matchField === 'EMAIL' ? 'email' : 'số điện thoại';
+        res.writeHead(409, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({
+          success: false,
+          statusCode: 409,
+          code: 'DUPLICATE_CANDIDATE_IN_POSITION',
+          message: `Ứng viên với ${matchFieldText} này đã có hồ sơ đang xử lý tại vị trí "${match.requisitionTitle || 'này'}".`,
+          data: {
+            duplicateType: 'SAME_POSITION',
+            matchField: match.matchField,
+            existingCandidate: match
+          }
+        }));
+        return;
+      }
+
       const result = (await requisitionService.createCandidate(body,user));
+
+      // S5-09: Tự động chấm điểm hồ sơ mới theo tiêu chí sàng lọc bắt buộc của vị trí (AC-02)
+      const createdId = result.data?.id || result.candidate?.id || result.id;
+      if (result.success && createdId) {
+        try {
+          const CandidateScreeningService = require('./services/candidateScreeningService');
+          await new CandidateScreeningService(db).screenCandidate(createdId, user);
+        } catch (screenErr) {
+          // Bỏ qua nếu vị trí chưa có tiêu chí
+        }
+      }
+
       res.writeHead(result.statusCode || 201, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
+      if(err instanceof require('./services/approvalConfigurationService').ApprovalConfigurationError){res.writeHead(err.statusCode,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:err.code,message:err.message}));return;}
       res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
     }
@@ -1914,6 +2018,7 @@ async function handleRequest(req, res) {
       res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
+      if(err instanceof require('./services/approvalConfigurationService').ApprovalConfigurationError){res.writeHead(err.statusCode,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:err.code,message:err.message}));return;}
       res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
     }
@@ -1957,6 +2062,7 @@ async function handleRequest(req, res) {
       res.writeHead(result.statusCode || 201, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
+      if(err instanceof require('./services/approvalConfigurationService').ApprovalConfigurationError){res.writeHead(err.statusCode,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:err.code,message:err.message}));return;}
       res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
     }
@@ -1980,6 +2086,7 @@ async function handleRequest(req, res) {
       res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
+      if(err instanceof require('./services/approvalConfigurationService').ApprovalConfigurationError){res.writeHead(err.statusCode,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:err.code,message:err.message}));return;}
       res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
     }
@@ -2006,6 +2113,7 @@ async function handleRequest(req, res) {
       res.writeHead(result.statusCode || 201, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
+      if(err instanceof require('./services/approvalConfigurationService').ApprovalConfigurationError){res.writeHead(err.statusCode,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:err.code,message:err.message}));return;}
       res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
     }
@@ -2031,6 +2139,7 @@ async function handleRequest(req, res) {
       res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
+      if(err instanceof require('./services/approvalConfigurationService').ApprovalConfigurationError){res.writeHead(err.statusCode,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:err.code,message:err.message}));return;}
       res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
     }

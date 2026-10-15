@@ -11,6 +11,7 @@
   const candidatesTotalBadge = document.getElementById('candidates-total-badge');
 
   function formatCandCode(c) {
+    if (c?.status && !c.stage) return '—';
     if (!c) return 'CAND-001';
     if (c.code) return c.code;
     if (c.id) {
@@ -64,8 +65,8 @@
 
         candidatesTableBody.innerHTML = list.map(c => {
           const badgeClass = STAGE_BADGES[c.stage] || 'badge-neutral';
-          const stageName = STAGE_LABELS[c.stage] || c.stage;
-          const stars = '★'.repeat(c.rating || 4) + '☆'.repeat(5 - (c.rating || 4));
+          const stageName = c.statusLabel || STAGE_LABELS[c.stage] || c.stage || '—';
+          const stars = c.status && !c.stage ? '—' : '★'.repeat(c.rating || 4) + '☆'.repeat(5 - (c.rating || 4));
           const name = c.fullName || c.full_name || 'Ứng viên';
           const phone = c.phoneNumber || c.phone || '';
           const reqTitle = (c.requisition && c.requisition.title) ? c.requisition.title : (c.requisition_title || 'Chưa gắn vị trí');
@@ -114,9 +115,9 @@
         (c.requisition && c.requisition.title) ? c.requisition.title : (c.requisition_title || ''),
         c.email || '',
         c.phoneNumber || c.phone || '',
-        STAGE_LABELS[c.stage] || c.stage,
+        c.statusLabel || STAGE_LABELS[c.stage] || c.stage || '—',
         (c.createdAt || c.created_at) ? new Date(c.createdAt || c.created_at).toLocaleDateString('vi-VN') : '',
-        (c.rating || 4) + ' sao'
+        c.status && !c.stage ? '—' : (c.rating || 4) + ' sao'
       ]);
       exportTableToCsv('danh_sach_ung_vien.csv', headers, rows);
     });

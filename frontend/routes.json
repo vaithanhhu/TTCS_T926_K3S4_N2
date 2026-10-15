@@ -199,6 +199,7 @@
     "/js/shared/datetime.js",
     "/js/components/action-menu.js",
     "/js/components/mobile-navigation.js",
+    "/js/components/modal-focus.js",
     "/js/pages/login.js",
     "/js/services/session.js",
     "/js/components/navigation.js",
@@ -232,6 +233,8 @@
     "/js/pages/approvals.js",
     "/js/pages/candidate-portal.js",
     "/js/components/requisition-detail.js",
+    "/js/components/candidate-manual-entry.js",
+    "/js/components/candidate-screening.js",
     "/js/shared/page-lifecycle.js",
     "/js/shared/route-lifecycle.js"
   ],

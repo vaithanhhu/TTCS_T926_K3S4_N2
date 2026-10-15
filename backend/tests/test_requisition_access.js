@@ -24,7 +24,7 @@ async function main() {
   const db = getDatabase(), service = new RequisitionService(db), base = 'http://127.0.0.1:' + server.address().port;
   const password = crypto.randomBytes(18).toString('base64url') + '!aA7';
   await db.prepare('UPDATE users SET password_hash=?, failed_attempts=0, locked_until=NULL, must_change_password=FALSE').run(hashPassword(password));
-  const fixture = await service.createRequisition({ title: 'Permission feedback fixture', departmentId: 'dept-3', hiringManagerId: 'usr-hiring-mgr', recruiterId: 'usr-recruiter', headcount: 2 });
+  await db.prepare("UPDATE requisitions SET title='Permission feedback fixture',created_by='usr-hiring-mgr' WHERE id='req-001'").run();const fixture={success:true,data:await service.getRequisitionById('req-001')};
   assert.equal(fixture.success, true);
   const runtime = await createFrontendRuntime(base, '/login');
   const createElement = runtime.document.createElement.bind(runtime.document);
@@ -127,7 +127,7 @@ async function main() {
     });
     let ownCandidate, foreignCandidate;
     await test('Hiring Manager candidate list and client-supplied scope are restricted by backend ownership', async () => {
-      const foreign = await service.createRequisition({ title: 'Foreign scope fixture', departmentId: 'dept-2', hiringManagerId: 'usr-hr-mgr', recruiterId: 'usr-recruiter', headcount: 1 }); assert.equal(foreign.success, true);
+      const foreign = await require('./helpers/approvalPolicyFixture').createApproved(service.db,{ title: 'Foreign scope fixture', departmentId: 'dept-2', hiringManagerId: 'usr-hr-mgr', recruiterId: 'usr-recruiter', headcount: 1 },{id:'usr-admin',roles:['ADMIN']}); assert.equal(foreign.success, true);
       ownCandidate = await service.createCandidate({ fullName: 'Scope fixture own', email: 'scope-own@example.test', requisitionId: fixture.data.id });
       foreignCandidate = await service.createCandidate({ fullName: 'Scope fixture foreign', email: 'scope-foreign@example.test', requisitionId: foreign.data.id });
       assert.equal(ownCandidate.success, true); assert.equal(foreignCandidate.success, true);
@@ -174,14 +174,14 @@ async function main() {
   const { PGlite } = require('@electric-sql/pglite'), { PostgresDatabase } = require('../src/db/postgres'), engine = new PGlite();
   const query = async (sql, params) => {
     const result = params === undefined ? (await engine.exec(sql)).at(-1) : await engine.query(sql, params);
-    return { rows: (result?.rows || []).map(row => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, value instanceof Date ? value.toISOString() : typeof value === 'bigint' ? Number(value) : value]))), rowCount: result?.affectedRows || result?.rows?.length || 0 };
+    return { rows: (result?.rows || []).map(row => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, value instanceof Date ? (result.fields.find(field=>field.name===key)?.dataTypeID===1082?value.toISOString().slice(0,10):value.toISOString()) : typeof value === 'bigint' ? Number(value) :typeof value==='string'&&[20,1700].includes(result.fields.find(field=>field.name===key)?.dataTypeID)?require('../src/db/postgres').pgTypes().getTypeParser(result.fields.find(field=>field.name===key).dataTypeID)(value): value]))), rowCount: result?.affectedRows || result?.rows?.length || 0 };
   };
   const pg = new PostgresDatabase({}, { on() {}, query, async connect() { return { query, release() {} }; }, async end() { await engine.close(); } });
   try {
     await require('../src/db/migrate-postgres').migrate(pg); await pg.transaction(() => require('../src/db/seed').seedDatabase(pg));
     const service = new RequisitionService(pg);
-    const own = await service.createRequisition({ title: 'PG scope own', departmentId: 'dept-3', hiringManagerId: 'usr-hiring-mgr', headcount: 1 });
-    const foreign = await service.createRequisition({ title: 'PG scope foreign', departmentId: 'dept-2', hiringManagerId: 'usr-hr-mgr', headcount: 1 });
+    const own = await require('./helpers/approvalPolicyFixture').createApproved(service.db,{ title: 'PG scope own', departmentId: 'dept-3', hiringManagerId: 'usr-hiring-mgr', headcount: 1 });
+    const foreign = await require('./helpers/approvalPolicyFixture').createApproved(service.db,{ title: 'PG scope foreign', departmentId: 'dept-2', hiringManagerId: 'usr-hr-mgr', headcount: 1 },{id:'usr-admin',roles:['ADMIN']});
     const a = await service.createCandidate({ fullName: 'PG scope own', email: 'pg-own@example.test', requisitionId: own.data.id });
     const b = await service.createCandidate({ fullName: 'PG scope foreign', email: 'pg-foreign@example.test', requisitionId: foreign.data.id });
     await service.createInterview({ candidateId: b.data.id, interviewerId: 'usr-interviewer', scheduledTime: '2027-01-01T12:00:00Z' });

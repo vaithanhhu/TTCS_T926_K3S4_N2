@@ -127,7 +127,7 @@ async function main() {
       assert.equal((await api('POST', '/approval-configurations', 'HR_MANAGER', { departmentId: 'dept-7', levels: [{ order: 1, salaryLimit: 10, approverUserId: 'usr-approver' }, { order: 2, salaryLimit: 20, approverUserId: 'usr-approver' }] })).data.code, 'REPEATED_APPROVER_FORBIDDEN');
     });
     const valid = { formVersion: 'S2-10', departmentId: 'dept-3', jobTitleId: null, headcount: 2, recruitmentReason: 'REPLACEMENT', proposedSalaryMin: 15000000, proposedSalaryMax: 30000000, neededDate: new (require('../src/services/requisitionService'))(db).businessDate(), jobDescription: 'E2E original JD', candidateRequirements: 'E2E requirements' };
-    async function createRequest() { const response = await api('POST', '/requisitions', 'HIRING_MGR', { ...valid, jobTitleId: titleId }); assert.equal(response.status, 201); assert.equal(response.data.data.status, 'OPEN'); return response.data.data.id; }
+    async function createRequest() { const response = await api('POST', '/requisitions', 'HIRING_MGR', { ...valid, jobTitleId: titleId }); assert.equal(response.status, 201); assert.equal(response.data.data.status, 'DRAFT'); return response.data.data.id; }
     function card(runtime, view) { return runtime.nodes.get(view + '-view').children.find(item => item.querySelectorAll('h3').length || item.children[0]?.textContent?.includes(view === 'requisitions' ? 'của tôi' : 'chờ tôi')); }
     async function openFromApprovalList(runtime, view, id) {
       runtime.window.ATS_ROUTER.navigate(view === 'approvals' ? '/approvals' : '/requisitions'); await runtime.settle();
@@ -136,7 +136,7 @@ async function main() {
       for (const row of rows) { await row.children.at(-1).children[0].dispatch('click'); await runtime.settle(); if (runtime.nodes.get('s302-view-revision').value === (await api('GET', '/requisition-approvals/' + id, view === 'requisitions' ? 'HIRING_MGR' : runtime === hr ? 'HR_MANAGER' : 'APPROVER')).data.data.submissionId) return; }
       assert.fail('Requested workflow absent from visible list');
     }
-    await test('Hiring frontend explicitly submits OPEN request and HR sees assigned first step', async () => {
+    await test('Hiring frontend explicitly submits DRAFT request and HR sees assigned first step', async () => {
       const id = await createRequest(), owner = runtimes.HIRING_MGR;
       assert.equal((await api('GET', '/requisition-approvals', 'HIRING_MGR')).data.data.length, 0);
       owner.window.ATS_ROUTER.navigate('/requisitions'); await owner.settle();
@@ -156,7 +156,7 @@ async function main() {
       const detail = (await api('GET', '/requisition-approvals/' + workflowId, 'HIRING_MGR')).data.data;
       assert.equal(detail.submissions.length, 2); assert.equal(detail.submissions[0].document.jobDescription, 'E2E original JD'); assert.equal(detail.submissions[1].document.jobDescription, 'E2E revised JD'); assert.equal(detail.steps[0].status, 'PENDING'); assert.equal(detail.steps[1].status, 'WAITING'); assert.equal(detail.events.length, 3);
     });
-    await test('Frontend sequential approval reaches APPROVED without changing Sprint2 OPEN', async () => {
+    await test('Frontend sequential approval reaches APPROVED and activates OPEN', async () => {
       await openFromApprovalList(hr, 'approvals', workflowId); await hr.nodes.get('s302-approve').dispatch('click'); await hr.settle();
       const reviewer = runtimes.APPROVER; await openFromApprovalList(reviewer, 'approvals', workflowId); await reviewer.nodes.get('s302-approve').dispatch('click'); await reviewer.settle();
       assert.match(reviewer.nodes.get('s302-status').textContent, /Đã duyệt/);
@@ -164,7 +164,7 @@ async function main() {
       assert.equal((await api('GET', '/requisitions/' + detail.requisitionId, 'HIRING_MGR')).data.data.status, 'OPEN');
     });
     await test('Frontend rejection persists comment and shows terminal REJECTED independently of Offer', async () => {
-      const submit = await api('POST', '/requisition-approvals', 'HIRING_MGR', { requisitionId: await createRequest(), requestId: crypto.randomUUID() }); assert.equal(submit.status, 201);
+      const submit = await api('POST', '/requisition-approvals', 'HIRING_MGR', { requisitionId: await createRequest(), expectedDraftVersion:1,requestId: crypto.randomUUID() }); assert.equal(submit.status, 201);
       await openFromApprovalList(hr, 'approvals', submit.data.data.id); hr.nodes.get('s302-comment').value = 'E2E từ chối'; await hr.nodes.get('s302-reject').dispatch('click'); await hr.settle(); assert.match(hr.nodes.get('s302-status').textContent, /Đã từ chối/); assert.match(hr.nodes.get('s302-history').textContent, /E2E từ chối/);
     });
     await test('Candidate offer read contains only matching account records', async () => {
@@ -259,11 +259,26 @@ async function main() {
       await service.createInterview({ candidateId: created.data.id, interviewerId: 'usr-interviewer', scheduledTime: '2027-01-01T12:00:00Z' });
       await service.createOffer({ candidateId: created.data.id, salaryMonthly: 18000000, startDate: '2027-01-01' });
     }
+    const candidateViewer = await rbac.getAuthorizedActor('usr-admin', 'candidate.read');
+    assert.ok(candidateViewer);
+    assert.equal(candidateViewer.id, 'usr-admin');
+    assert.ok(candidateViewer.roles.includes('ADMIN'));
+    await test('PostgreSQL embedded getCandidates rejects missing actor without returning data', async () => {
+      const denied = await service.getCandidates();
+      assert.equal(denied.success, false);
+      assert.equal(denied.statusCode, 403);
+      assert.equal(denied.code, 'CANDIDATE_FORBIDDEN');
+      assert.deepEqual(denied.candidates, []);
+      assert.equal(Object.hasOwn(denied, 'total'), false);
+      assert.equal(Object.hasOwn(denied, 'data'), false);
+    });
     for (const [method, field] of [['getCandidates', 'candidates'], ['getInterviews', 'interviews'], ['getOffers', 'offers']]) await test('PostgreSQL embedded ' + method + ' enforces candidate scope with case-insensitive matching', async () => {
-      const own = await service[method]({ candidateEmail: 'CANDIDATE@EXAMPLE.COM' }); assert.ok(own[field].length > 0);
+      const viewerOptions = method === 'getCandidates' ? { viewer: candidateViewer } : {};
+      const own = await service[method]({ ...viewerOptions, candidateEmail: 'CANDIDATE@EXAMPLE.COM' }); assert.ok(own[field].length > 0);
       assert.ok(own[field].every(row => (field === 'candidates' ? row.email : row.candidate.email).toLowerCase() === 'candidate@example.com'));
-      assert.deepEqual((await service[method]({ candidateEmail: 'absent@example.test' }))[field], []);
-      assert.ok((await service[method]())[field].length > own[field].length);
+      assert.deepEqual((await service[method]({ ...viewerOptions, candidateEmail: 'absent@example.test' }))[field], []);
+      const all = method === 'getCandidates' ? await service.getCandidates(viewerOptions) : await service[method]();
+      assert.ok(all[field].length > own[field].length);
     });
   } finally { await pg.close(); }
   const report = { provider: 'sqlite', database: config.DB_PATH, browser: 'NOT_RUN', smtp: 'simulated', accounts, requests, results, passed: results.filter(row => row.status === 'PASS').length, failed: results.filter(row => row.status === 'FAIL').length, total: results.length };

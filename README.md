@@ -1,6 +1,31 @@
-# ATS — chạy Sprint 1–3 trên localhost
+# ATS — phát triển với Azure PostgreSQL
 
-Backend Node.js CommonJS, HTTP/JSON; frontend HTML/CSS/JavaScript. Ứng dụng hỗ trợ PostgreSQL và SQLite. Profile demo bên dưới dùng SQLite riêng, không cần Neon, PostgreSQL server, Docker hay SMTP.
+## Khởi động mặc định trên máy phát triển đã cấu hình
+
+```powershell
+Set-Location A:\Projects\TTCS_T926_K3S4_N2
+npm start
+```
+
+Mở **http://127.0.0.1:5051/login**. Lệnh mặc định dùng profile riêng tại `%LOCALAPPDATA%\ATS\AzureStaging`, SSH tunnel và TLS có xác minh CA/hostname. Mật khẩu và private key không nằm trong repository. Cần profile đã được người vận hành cấp; clone mới không tự tạo credentials.
+
+Database phát triển có ghi: `ats_migration_validation_9ed91916`. Database nghiệm thu chỉ đọc: `ats_migration_validation_7cd908a1`. Không dùng `ats_db`. Startup không chạy migration, seed, import hoặc đồng bộ grants. Giữ 72 grants nguồn và 7 mục RBAC PENDING.
+
+```powershell
+npm run status:azure
+npm run test:azure
+npm run stop:azure
+npm run start:azure:readonly
+```
+
+Dừng profile trước khi chuyển chế độ. Ctrl+C dừng tunnel/app do launcher này tạo; profile đang chạy được tái sử dụng và vẫn chạy sau Ctrl+C. `stop:azure` dừng profile đang dùng. Khi SSH ngắt, manager tạo lại tunnel và pool, xác minh lại TLS/schema; request đang chạy có thể thất bại và phải thử lại. Nếu Azure/profile không khả dụng, startup báo lỗi và dừng, không chuyển database khác.
+
+`DATABASE_URL` vẫn là biến chung của PostgreSQL adapter cho công cụ vận hành riêng. Quy trình mặc định lấy secret từ profile bên ngoài, không đọc URL từ `.env`. Không chạy runner cũ hoặc seed/import trên hai database đã nghiệm thu.
+
+## Demo SQLite độc lập cho Tester/Mentor
+
+
+Backend Node.js CommonJS, HTTP/JSON; frontend HTML/CSS/JavaScript. Ứng dụng hỗ trợ PostgreSQL và SQLite. Profile demo bên dưới dùng SQLite riêng, không cần PostgreSQL server, Docker hay SMTP.
 
 ## Yêu cầu Windows
 
@@ -44,11 +69,11 @@ Profile local tự áp dụng cấu hình an toàn trong tiến trình:
 - Bỏ qua `.env` hiện có và các biến kết nối database/SMTP kế thừa.
 - Email mô phỏng; không gửi email ra ngoài.
 - Chỉ nghe trên `127.0.0.1`; bật tám flags Sprint 3 cho tiến trình demo.
-- Không dùng hoặc sửa `backend/data/ats.db`, WAL/SHM, `ats_test.db` hay Neon.
+- Không dùng hoặc sửa `backend/data/ats.db`, WAL/SHM, `ats_test.db` hay database remote.
 
 Không cần tạo `.env`. `.env.example` là cấu hình mẫu không chứa secret dành cho người muốn đọc hoặc cấu hình thủ công. Với demo, tiếp tục dùng hai lệnh local ở trên. Các lệnh `npm start`, `migrate`, `seed`, `migrate:postgres` và `import:postgres` là lệnh vận hành khác; không dùng chúng thay cho setup demo.
 
-`setup:local` tạo schema SQLite hiện hành và áp dụng migration Sprint 3 theo thứ tự 002–008. Migration 001 là nền PostgreSQL, không chạy SQL PostgreSQL lên SQLite. Setup đầu tiên tạo tài khoản/dữ liệu mẫu trong transaction. Chạy setup lần nữa kiểm tra migration và foreign keys, không seed lại hoặc ghi đè dữ liệu tester. Nếu database đã tồn tại nhưng không có marker sở hữu, setup từ chối. Không đổi tên/copy database thật vào `.local`.
+`setup:local` tạo schema SQLite hiện hành và áp dụng các migration hiện hành theo thứ tự 002–010. Migration 001 là nền PostgreSQL, không chạy SQL PostgreSQL lên SQLite. Setup đầu tiên tạo tài khoản/dữ liệu mẫu trong transaction. Chạy setup lần nữa kiểm tra migration và foreign keys, không seed lại hoặc ghi đè dữ liệu tester. Nếu database đã tồn tại nhưng không có marker sở hữu, setup từ chối. Không đổi tên/copy database thật vào `.local`.
 
 ## Tài khoản demo
 
@@ -72,7 +97,7 @@ ADMIN không vượt quy tắc bảo mật dải lương chuẩn S2-05: HR_MANAG
 Setup tạo 26 tài khoản, phòng ban/danh mục cơ sở, khung năng lực/chức danh demo, cấu hình duyệt và ngân sách theo phòng ban. Có năm Requisition mang tiền tố `DEMO`:
 
 - Nháp để chỉnh sửa: dùng kiểm tra DRAFT, form và sao chép.
-- Sẵn sàng gửi duyệt: creator chủ động gửi; không tự gửi khi lưu OPEN.
+- Sẵn sàng gửi duyệt: hồ sơ vẫn DRAFT; creator chủ động gửi. Chỉ cấp cuối duyệt thành công mới chuyển sang OPEN.
 - Chờ duyệt hai cấp: HR_MANAGER rồi APPROVER; kiểm tra approve/reject/request info và lịch sử.
 - Đã duyệt để soạn tin: recruiter chính/hỗ trợ đã được phân công.
 - Tin tuyển dụng công khai: có tin đã được HR độc lập duyệt, ADMIN xuất bản; một ứng viên đang phỏng vấn để kiểm tra cảnh báo khi đóng.
@@ -81,7 +106,7 @@ Setup tạo 26 tài khoản, phòng ban/danh mục cơ sở, khung năng lực/c
 
 Luồng thao tác gợi ý:
 
-1. HIRING_MGR mở **Yêu cầu và vị trí**, chọn hồ sơ sẵn sàng và **Gửi phê duyệt**.
+1. HIRING_MGR mở **Yêu cầu và vị trí**, chọn hồ sơ sẵn sàng và **Gửi phê duyệt**. Khi tạo mới, dùng **Lưu nháp** hoặc **Lưu và Gửi phê duyệt**. Flag phê duyệt OFF chỉ cho lưu nháp.
 2. HR_MANAGER mở **Phê duyệt**, đọc và duyệt bước được phân công. Với hồ sơ hai cấp, APPROVER duyệt cấp tiếp theo.
 3. HR_MANAGER mở Chi tiết hồ sơ đã duyệt, phân công recruiter chính và hỗ trợ.
 4. RECRUITER mở hồ sơ được giao, tạo/lưu bản nháp tin, preview và gửi duyệt.
@@ -114,7 +139,7 @@ Cài Chromium cho người dùng Windows hiện tại:
 npx playwright install chromium
 ```
 
-Runner `test:local` tạo một bản sao source và SQLite mới **cho từng suite**, bỏ `.env`, runtime DB và media cá nhân; email mô phỏng; không dùng Neon. Dependency cài vào thư mục test tạm, các suite dùng bản sao qua hardlink trên cùng ổ đĩa. Log và `results.json` nằm trong thư mục `%TEMP%` được runner in ra. Test không ghi đè database demo `.local` của tester.
+Runner `test:local` tạo một bản sao source và SQLite mới **cho từng suite**, bỏ `.env`, runtime DB và media cá nhân; email mô phỏng; không dùng database remote. Dependency cài vào thư mục test tạm, các suite dùng bản sao qua hardlink trên cùng ổ đĩa. Log và `results.json` nằm trong thư mục `%TEMP%` được runner in ra. Test không ghi đè database demo `.local` của tester.
 
 ```powershell
 npm run test:local
@@ -124,7 +149,7 @@ npm run test:local -- --all
 
 Lệnh mặc định chạy setup/browser demo, Sprint 1 aggregate, Sprint 2, S2-10 và S3-01 đến S3-10. `--all` chạy các suite đăng ký có thể chạy cách ly, gồm coverage, RBAC, routing, PGlite, bảo mật email và browser. Aggregate Sprint 1 lặp các suite S1 riêng: không cộng thành số test case độc lập.
 
-Không chạy riêng các lệnh test cũ trực tiếp trên checkout đang có database. Các bài PostgreSQL live không nằm trong runner này vì cần PostgreSQL test độc lập và cấu hình được xác minh; không trỏ chúng tới Neon. Browser E2E cần Chromium đã cài; thiếu browser là FAIL/NOT RUN, không thay bằng API rồi tuyên bố browser PASS.
+Không chạy riêng các lệnh test cũ trực tiếp trên checkout đang có database. Các bài PostgreSQL live không nằm trong runner này vì cần PostgreSQL test độc lập và cấu hình được xác minh; không trỏ chúng tới database nghiệp vụ. Browser E2E cần Chromium đã cài; thiếu browser là FAIL/NOT RUN, không thay bằng API rồi tuyên bố browser PASS.
 
 ## Xử lý lỗi
 
@@ -150,4 +175,6 @@ npm run start:local
 
 Không đưa `.env`, `.local`, `backend/data/*.db`, WAL/SHM, `node_modules`, media tải lên, log, screenshot chứa dữ liệu cá nhân hoặc trace chưa khử bí mật lên Git. `.gitignore` bảo vệ file mới; file database đã được theo dõi từ trước vẫn cần developer xử lý index riêng. Setup/test local không thực hiện thao tác Git.
 
-Giữ source, package/lockfile, frontend components/routes, tests và toàn bộ SQL/migration runner cần cho Sprint 1–3 trong revision bàn giao. Không dùng SQL Docker cũ thay cho schema runtime. PostgreSQL/Neon vận hành riêng ngoài hướng dẫn localhost này; không chia sẻ URI hoặc credential thật cho tester.
+Gi? source, package/lockfile, frontend components/routes, tests v? to?n b? SQL/migration runner c?n cho Sprint 1?3 trong revision b?n giao. Kh?ng d?ng SQL Docker c? thay cho schema runtime. PostgreSQL v?n h?nh qua profile Azure b?n tr?n; kh?ng chia s? URI ho?c credential th?t cho tester.
+
+Ch?nh s?ch QA-S3-06, migration 010 v? b?ng ch?ng regression: [QA-S3-06](docs/QA-S3-06-approval-before-open.md).

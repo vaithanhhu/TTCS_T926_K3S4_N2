@@ -174,6 +174,13 @@ async function main() {
       await page.goto(base + '/careers/jobs?id=' + postingId);
       await page.locator('#public-jobs-content [data-public-job]').waitFor();
       assert.equal(await page.locator('#public-jobs-content [data-public-job]').evaluate(node => node.outerHTML), await hr.locator('#s310-preview [data-public-job]').evaluate(node => node.outerHTML));
+      await page.getByRole('button', { name: '🚀 Ứng tuyển ngay bây giờ', exact: true }).click();
+      await page.locator('#modal-apply-job').waitFor({ state: 'visible' });
+      assert.equal(await page.locator('#apply-job-id').inputValue(), postingId);
+      await page.locator('#btn-submit-apply').click();
+      for (const field of ['fullname', 'email', 'phone', 'cvfile']) await page.locator('#err-apply-' + field).waitFor({ state: 'visible' });
+      await page.locator('#btn-cancel-apply').click();
+      await page.locator('#modal-apply-job').waitFor({ state: 'hidden' });
       await page.screenshot({ path: path.join(output, 'local-public-detail.png'), fullPage: true });
     });
     await test('LOCAL', 'mobile', 'Demo requisition detail works at 360px with no horizontal overflow', async () => {

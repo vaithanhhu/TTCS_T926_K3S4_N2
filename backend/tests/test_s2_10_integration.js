@@ -1,3 +1,4 @@
+const { installFailureTrigger, assertNoOpenTransaction, foreignKeyViolations } = require('./helpers/databaseCompatibilityFixture');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -20,21 +21,34 @@ const RequisitionService = require('../src/services/requisitionService');
 const service = new RequisitionService(db);
 const tokens = {};
 let origin, job, department, foreignDepartment, draft, valid, ui;
-let passed = 0, failed = 0;
+let passed = 0, failed = 0, notApplicable = 0;
 async function test(name, action) {
+  if (db.provider === 'postgres' && name === '36 Additive requisition migration preserves old records and is idempotent') {
+    notApplicable++; console.log('[NOT APPLICABLE] ' + name + ': SQLite legacy-file initSchema contract, not a PostgreSQL schema upgrade.'); return;
+  }
   try { await action(); passed++; console.log('[PASS] ' + name); }
   catch (error) { failed++; console.error('[FAIL] ' + name, error); }
 }
 async function api(method, route, token = tokens.hiring, body) {
+  if(method==='PUT'&&route.startsWith('/requisitions/')&&body&&typeof body==='object'&&!Object.hasOwn(body,'expectedDraftVersion')){const read=await fetch(origin+'/api/v1'+route,{headers:{Authorization:token?'Bearer '+token:''}}),data=await read.json();if(read.status===200&&data.data?.status==='DRAFT')body={...body,expectedDraftVersion:data.data.draftVersion};}
+  const serializedBody=body!==undefined?JSON.stringify(body):undefined;
   const res = await fetch(origin + '/api/v1' + route, { method,
     headers: { ...(token ? { Authorization: 'Bearer ' + token } : {}), ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
-    ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
-  return { status: res.status, data: await res.json() };
+    ...(body !== undefined ? { body: serializedBody } : {}) });
+  return { status: res.status, data: await res.json(),outboundBody:serializedBody?JSON.parse(serializedBody):undefined };
 }
-const create = changes => api('POST', '/requisitions', tokens.hiring, { ...valid, ...changes });
+async function submitted(document,extra={},raw=false) {
+  const body={requestId:require('node:crypto').randomUUID(),document:raw?{...document}:require('./helpers/approvalPolicyFixture').document(document),...extra};
+  const response=await api('POST','/requisition-approvals/save-and-submit',tokens.hiring,body);
+  if(response.status<300&&response.data.success){const workflow=response.data.data,read=await api('GET','/requisitions/'+workflow.requisitionId);return{status:response.status,data:{...response.data,data:read.data.data},workflow};}
+  return {...response,outboundDocument:response.outboundBody?.document};
+}
+const create = changes => changes?.status==='DRAFT'||changes?.status&&changes.status!=='OPEN'?api('POST','/requisitions',tokens.hiring,{...valid,...changes}):submitted({...valid,...changes});
+async function completed(id,changes={},token=tokens.hiring){const read=await api('GET','/requisitions/'+id,token);if(read.status!==200)return read;return submitted({...read.data.data,...changes},{requisitionId:id,expectedDraftVersion:read.data.data.draftVersion,expectedWorkflowVersion:read.data.data.approvalVersion});}
+
 const rejected = async (changes, code) => {
   const before = (await db.prepare('SELECT COUNT(*) AS n FROM requisitions').get()).n;
-  const res = await create(changes); assert.equal(res.status, 400, JSON.stringify(res.data));
+  const attacks=['standardMin','standardMax','requireJustification'].filter(key=>Object.hasOwn(changes,key));const res=attacks.length?await submitted({...valid,...changes},{},true):await create(changes);for(const key of attacks){assert.ok(Object.hasOwn(res.outboundDocument,key));assert.deepEqual(res.outboundDocument[key],changes[key]);}assert.equal(res.status,400,JSON.stringify(res.data));
   if (code) assert.equal(res.data.code, code);
   assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM requisitions').get()).n, before);
 };
@@ -55,12 +69,14 @@ async function main() {
   assert.equal(res.status, 201); department = res.data.data;
   res = await api('POST', '/departments', tokens.hr, { code: 'S210-OTHER', name: 'Bộ phận khác', managerId: 'usr-hr-mgr' });
   assert.equal(res.status, 201); foreignDepartment = res.data.data;
+  await require('./helpers/approvalPolicyFixture').infrastructure(db);config.REQUISITION_APPROVAL_ENABLED=true;
+  const configs=new(require('../src/services/approvalConfigurationService').ApprovalConfigurationService)(db);for(const dept of [department,foreignDepartment]){const c=await configs.create({departmentId:dept.id,levels:[{order:1,salaryLimit:100000000,approverUserId:'usr-hr-mgr'}]},'usr-hr-mgr');await configs.publish(c.id,c.versions[0].id,'usr-hr-mgr');}
   valid = { formVersion: 'S2-10', jobTitleId: job.id, departmentId: department.id, headcount: 2,
     recruitmentReason: 'REPLACEMENT', proposedSalaryMin: 18000000, proposedSalaryMax: 23000000,
     neededDate: service.businessDate(), jobDescription: '  Thiết kế API\nDuy trì hệ thống.  ', candidateRequirements: '  Node.js\nSQLite\nKỹ năng làm việc nhóm.  ' };
 
-  await test('01 Valid requisition is persisted in the existing OPEN workflow', async () => {
-    const res = await create({}); assert.equal(res.status, 201); assert.equal(res.data.data.status, 'OPEN');
+  await test('01 Valid requisition is saved as DRAFT with a pending approval workflow', async () => {
+    const res = await create({}); assert.equal(res.status, 201); assert.equal(res.data.data.status, 'DRAFT');
     assert.equal(res.data.data.title, job.name); assert.equal((await db.prepare('SELECT s210_version FROM requisitions WHERE id=?').get(res.data.data.id)).s210_version, 1);
   });
   await test('02 Job title must reference an active S2-05 title; framework is optional', async () => {
@@ -116,15 +132,15 @@ async function main() {
     res = await api('PUT', '/requisitions/' + draft.id, tokens.hiring, { candidateRequirements: 'Yêu cầu nháp' }); assert.equal(res.status, 200);
     assert.equal(res.data.data.jobDescription, 'Nháp\nđang viết'); assert.equal(res.data.data.headcount, 2);
   });
-  await test('23 Complete DRAFT transitions to existing OPEN without adding approval steps', async () => {
-    const res = await api('PUT', '/requisitions/' + draft.id, tokens.hiring, { ...valid, status: 'OPEN' }); assert.equal(res.status, 200); assert.equal(res.data.data.status, 'OPEN');
+  await test('23 Complete DRAFT creates pending approval and opens only after final decision', async () => {
+    const res=await completed(draft.id,valid);assert.equal(res.status,201);assert.equal(res.data.data.status,'DRAFT');assert.equal((await db.prepare('SELECT status FROM requisition_approval_workflows WHERE requisition_id=?').get(draft.id)).status,'PENDING');await require('./helpers/approvalPolicyFixture').approve(db,draft.id);assert.equal((await service.getRequisitionById(draft.id)).status,'OPEN');
     assert.equal(res.data.data.jobTitleId, job.id);
   });
   await test('24 Completing DRAFT missing any mandatory field is rejected atomically', async () => {
     for (const key of ['jobTitleId', 'departmentId', 'headcount', 'recruitmentReason', 'proposedSalaryMin', 'proposedSalaryMax', 'neededDate', 'jobDescription', 'candidateRequirements']) {
       const empty = await api('POST', '/requisitions', tokens.hiring, { status: 'DRAFT' });
       const before = (await service.getRequisitionById(empty.data.data.id));
-      const res = await api('PUT', '/requisitions/' + before.id, tokens.hiring, { ...valid, status: 'OPEN', [key]: null }); assert.equal(res.status, 400, key);
+      const res = await completed(before.id,{...valid,[key]:null}); assert.equal(res.status, 400, key);
       assert.deepEqual((await service.getRequisitionById(before.id)), before);
     }
   });
@@ -144,9 +160,9 @@ async function main() {
   });
   await test('27 Legacy requisition request/response, manager and handover remain compatible', async () => {
     const res = await api('POST', '/requisitions', tokens.hiring, { title: 'Legacy title', departmentName: 'Legacy free text', headcount: 2, hiringManagerId: 'usr-hiring-mgr' });
-    assert.equal(res.status, 201); assert.deepEqual(Object.keys(res.data.data).sort(), ['id', 'code', 'title', 'departmentName', 'headcount', 'status'].sort());
+    assert.equal(res.status, 201); assert.deepEqual(Object.keys(res.data.data).sort(), ['id', 'code', 'title', 'departmentName', 'headcount', 'status','draftVersion'].sort());
     assert.equal((await service.getRequisitionById(res.data.data.id)).hiringManagerId, 'usr-hiring-mgr');
-    assert.equal((await service.updateRequisition(res.data.data.id, { departmentName: 'Changed legacy name' })).success, true);
+    assert.equal((await service.updateRequisition(res.data.data.id, { departmentName: 'Changed legacy name',expectedDraftVersion:res.data.data.draftVersion })).success, true);
     assert.equal((await service.reassignHandover(res.data.data.id, 'usr-recruiter', 'Legacy handover')).success, true);
     const legacyS2 = await api('POST', '/requisitions', tokens.hiring, { title: 'Old department reference', departmentId: department.id }); assert.equal(legacyS2.status, 201);
   });
@@ -182,16 +198,27 @@ async function main() {
   });
   await test('34 Invalid draft transitions and version downgrade cannot bypass required fields', async () => {
     const res = await api('POST', '/requisitions', tokens.hiring, { status: 'DRAFT' }); const id = res.data.data.id;
-    assert.equal((await api('PUT', '/requisitions/' + id, tokens.hiring, { status: 'IN_PROGRESS' })).status, 400);
-    assert.equal((await api('PUT', '/requisitions/' + id, tokens.hiring, { formVersion: 'old', status: 'OPEN' })).status, 400);
+    assert.equal((await api('PUT', '/requisitions/' + id, tokens.hiring, { status: 'IN_PROGRESS' })).status, 409);
+    assert.equal((await api('PUT', '/requisitions/' + id, tokens.hiring, { formVersion: 'old', status: 'OPEN' })).status, 409);
     assert.equal((await service.getRequisitionById(id)).status, 'DRAFT');
   });
   await test('35 Failed SQL update leaves the complete draft unchanged', async () => {
     const res = await api('POST', '/requisitions', tokens.hiring, { status: 'DRAFT' }); const before = (await service.getRequisitionById(res.data.data.id));
-    (await db.exec(`CREATE TEMP TRIGGER s210_fail BEFORE UPDATE ON requisitions WHEN OLD.id='${before.id}' BEGIN SELECT RAISE(ABORT, 'test failure'); END`));
-    try { assert.equal((await api('PUT', '/requisitions/' + before.id, tokens.hiring, { ...valid, status: 'OPEN' })).status, 400); assert.deepEqual((await service.getRequisitionById(before.id)), before); }
-    finally { (await db.exec('DROP TRIGGER s210_fail')); }
-    (await db.exec('BEGIN')); (await db.exec('ROLLBACK')); assert.equal((await db.prepare('PRAGMA foreign_key_check').all()).length, 0);
+    const removeTrigger = await installFailureTrigger(db, {
+      name: 's210_fail',
+      table: 'requisitions',
+      event: 'UPDATE',
+      condition: "OLD.id='" + before.id.replace(/'/g, "''") + "'"
+    });
+    try {
+      assert.equal((await completed(before.id, valid)).status, 500);
+      assert.deepEqual(await service.getRequisitionById(before.id), before);
+    } finally {
+      await removeTrigger();
+    }
+    await assertNoOpenTransaction(db);
+    assert.deepEqual(await foreignKeyViolations(db), []);
+
   });
   await test('36 Additive requisition migration preserves old records and is idempotent', async () => {
     const fixture = path.join(root, 'backend/data/old_requisition.db');
@@ -224,11 +251,11 @@ async function main() {
       createRequisition: async (_, payload) => { sent = payload; return { ok: false, data: { message: 'Captured' } }; } }, { get: (object, key) => object[key] || fallback });
     const document = { getElementById: id => nodes.get(id) || null, querySelectorAll: () => [], querySelector: () => null, createElement: makeNode,
       addEventListener(name, fn) { if (name === 'DOMContentLoaded') ready = fn; }, body: makeNode(), documentElement: makeNode() };
-    const context = { document, window: { ATS_API: apiMock, addEventListener() {}, location: { search: '', pathname: '/' } }, sessionStorage: {
+    const context = { document, window: { ATS_API: apiMock, ATS_REQUISITION_APPROVAL_API:{request:async(route,method,payload)=>{if(route!=='/save-and-submit'||!payload)return{ok:false,data:{success:false}};sent={...payload.document,formVersion:'S2-10',status:'DRAFT'};return{ok:false,data:{message:'Captured'}};}}, addEventListener() {}, location: { search: '', pathname: '/' } }, sessionStorage: {
       getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) },
       URL, URLSearchParams, console, setTimeout: () => 0, setInterval: () => 0, clearInterval() {}, clearTimeout() {}, navigator: {}, confirm: () => true };
     const code = require('./helpers/frontendFixture').source().replace('  loadPublicCareerPage();', '  window.__S210_TEST__ = { openCreateReqModal, updateRequisitionSalaryHint, refreshRequisitionSalaryCheck, requisitionBusinessDate, performLogout };\n  loadPublicCareerPage();');
-    vm.runInNewContext(code, context); ready(); storage.set('ats_token', tokens.hiring);
+    vm.runInNewContext(code, context); ready();context.window.ATS_REQUISITION_APPROVAL_API.request=async(route,method,payload)=>{if(route!=='/save-and-submit'||!payload)return{ok:false,data:{success:false}};sent={...payload.document,formVersion:'S2-10',status:'DRAFT'};return{ok:false,data:{message:'Captured'}};};storage.set('ats_token', tokens.hiring);
     await context.window.__S210_TEST__.openCreateReqModal();
     const values = { 'create-req-job-title-input': job.id, 'create-req-dept-input': department.id, 'create-req-headcount-input': '2',
       'create-req-reason-input': 'REPLACEMENT', 'create-req-salary-min-input': '18000000', 'create-req-salary-max-input': '23000000',
@@ -328,18 +355,18 @@ async function main() {
     }
   });
   await test('49 Outside-range writes without justification reject safely and cannot disable validation', async () => {
-    const res = await create({ proposedSalaryMin: 14000000, requireJustification: false }); assert.equal(res.status, 400);
+    const res=await submitted({...valid,proposedSalaryMin:14000000,requireJustification:false},{},true);assert.ok(Object.hasOwn(res.outboundDocument,'requireJustification'));assert.equal(res.outboundDocument.requireJustification,false);assert.equal(res.status,400);
     assert.equal(res.data.code, 'SALARY_JUSTIFICATION_REQUIRED'); assert.equal(res.data.salaryRangeStatus, 'OUTSIDE_STANDARD_RANGE'); assertNoStandardSalary(res.data);
     assert.ok(!/15000000|25000000|15\.000\.000|25\.000\.000/.test(res.data.message));
     const incomplete = await api('POST', '/requisitions', tokens.hiring, { status: 'DRAFT' });
-    const update = await api('PUT', '/requisitions/' + incomplete.data.data.id, tokens.hiring, { ...valid, status: 'OPEN', proposedSalaryMax: 30000000 });
+    const update=await completed(incomplete.data.data.id,{...valid,proposedSalaryMax:30000000});
     assert.equal(update.status, 400); assert.equal(update.data.salaryRangeStatus, 'OUTSIDE_STANDARD_RANGE'); assertNoStandardSalary(update.data);
     assert.equal((await service.getRequisitionById(incomplete.data.data.id)).status, 'DRAFT');
   });
   await test('50 Justified outside salary saves and completes a draft with safe status', async () => {
     const res = await create({ status: 'DRAFT', proposedSalaryMax: 30000000, salaryJustification: 'Kinh nghiệm chuyên sâu' }); assert.equal(res.status, 201);
     assert.equal(res.data.salaryRangeStatus, 'OUTSIDE_STANDARD_RANGE'); assertNoStandardSalary(res.data);
-    const updated = await api('PUT', '/requisitions/' + res.data.data.id, tokens.hiring, { status: 'OPEN' }); assert.equal(updated.status, 200);
+    const updated=await completed(res.data.data.id);assert.equal(updated.status,201);
     assert.equal(updated.data.salaryRangeStatus, 'OUTSIDE_STANDARD_RANGE'); assertNoStandardSalary(updated.data);
   });
   await test('51 HR sees standards only while holding the existing salary-range permission', async () => {
@@ -375,8 +402,8 @@ async function main() {
         assert.match(created.data.message, /HR Manager/); assert.match(created.data.message, /thiết lập/); assertNoStandardSalary(created.data);
         assert.ok(!/15000000|25000000|15\.000\.000|25\.000\.000/.test(created.data.message));
         const partial = await create({ status: 'DRAFT' }); assert.equal(partial.status, 201);
-        const completed = await api('PUT', '/requisitions/' + partial.data.data.id, tokens.hiring, { status: 'OPEN' }); assert.equal(completed.status, 409);
-        assert.equal(completed.data.code, 'JOB_TITLE_SALARY_RANGE_UNAVAILABLE'); assertNoStandardSalary(completed.data); assert.equal((await service.getRequisitionById(partial.data.data.id)).status, 'DRAFT');
+        const result=await completed(partial.data.data.id);assert.equal(result.status,409);
+        assert.equal(result.data.code, 'JOB_TITLE_SALARY_RANGE_UNAVAILABLE'); assertNoStandardSalary(result.data); assert.equal((await service.getRequisitionById(partial.data.data.id)).status, 'DRAFT');
         const checked = await preview(18000000, 23000000); assert.equal(checked.status, 409); assertNoStandardSalary(checked.data);
       } finally { (await db.prepare('UPDATE job_titles SET min_salary=15000000,max_salary=25000000 WHERE id=?').run(job.id)); }
     }
@@ -443,6 +470,12 @@ async function main() {
     assert.equal(nodes.get('create-req-standard-salary').textContent, 'Dải lương đề xuất nằm trong chuẩn chức danh.');
     assert.ok(!/15\.000\.000|25\.000\.000|15000000|25000000/.test(nodes.get('create-req-standard-salary').textContent));
   });
-  console.log('S210_RESULT ' + JSON.stringify({ passed, failed, total: passed + failed })); process.exitCode = failed ? 1 : 0;
+
+  await test('60 Forged salary controls reach backend intact and cannot bypass validation or write records',async()=>{
+    const tables=['requisitions','requisition_open_policy','requisition_approval_workflows','requisition_approval_snapshots','requisition_approval_events'],counts=async()=>Promise.all(tables.map(async name=>(await db.prepare('SELECT COUNT(*) AS n FROM '+name).get()).n)),before=await counts();
+    for(const changes of [{proposedSalaryMin:14000000},{proposedSalaryMax:30000000}]){const payload={...valid,...changes,standardMin:0,standardMax:999999999,requireJustification:false},result=await submitted(payload,{},true);for(const field of ['standardMin','standardMax','requireJustification']){assert.ok(Object.hasOwn(result.outboundDocument,field));assert.deepEqual(result.outboundDocument[field],payload[field]);}assert.equal(result.status,400);assert.equal(result.data.code,'SALARY_JUSTIFICATION_REQUIRED');assert.equal(result.data.salaryRangeStatus,'OUTSIDE_STANDARD_RANGE');assertNoStandardSalary(result.data);assert.deepEqual(await counts(),before);}
+  });
+  console.log('S210_RESULT ' + JSON.stringify({ passed, failed, notApplicable, total: passed + failed + notApplicable })); process.exitCode = failed ? 1 : 0;
+
 }
 main().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => server.close());

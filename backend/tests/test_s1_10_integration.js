@@ -219,7 +219,7 @@ async function runTests() {
 
     assert.strictEqual(dbReqs.length, 2);
     for (const r of dbReqs) {
-      assert.strictEqual(r.handover_required, 1);
+      assert.strictEqual(r.handover_required, db.provider === 'postgres' ? true : 1);
       assert(r.handover_notes.includes('Cần bàn giao vị trí'));
     }
     console.log(`   ✓ Hệ thống phát hiện ${dbReqs.length} vị trí tuyển dụng phụ trách và cập nhật handover_required = 1 trong CSDL.`);

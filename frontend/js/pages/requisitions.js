@@ -44,7 +44,8 @@
 
         requisitionsTableBody.innerHTML = list.map(req => {
           const statusBadge = req.status === 'OPEN' ? 'badge-primary' : (req.status === 'IN_PROGRESS' ? 'badge-warning' : 'badge-neutral');
-          const statusText = req.status === 'PAUSED' ? 'Tạm dừng' : req.status === 'CANCELLED' ? 'Huỷ' : req.status === 'DRAFT' ? 'Nháp' : (req.status === 'OPEN' ? 'Đang mở' : (req.status === 'IN_PROGRESS' ? 'Đang tuyển' : 'Đã đóng'));
+          let statusText = req.status === 'PAUSED' ? 'Tạm dừng' : req.status === 'CANCELLED' ? 'Huỷ' : req.status === 'DRAFT' ? 'Nháp' : (req.status === 'OPEN' ? 'Đang mở' : (req.status === 'IN_PROGRESS' ? 'Đang tuyển' : 'Đã đóng'));
+          if(req.approvalStatus)statusText+=' — '+({NOT_SUBMITTED:'Chưa gửi',PENDING:'Chờ phê duyệt',APPROVED:'Đã duyệt',REJECTED:'Từ chối',NEEDS_INFO:'Yêu cầu bổ sung'}[req.approvalStatus]||req.approvalStatus)+(req.waitingFor?' ('+req.waitingFor+')':'');
           const isHandover = req.handover_required || req.handoverRequired;
           const handoverAlert = isHandover ? `<span class="badge badge-warning" style="margin-left: 6px;">Cần bàn giao</span>` : '';
           const dept = req.department || req.department_name || req.departmentName || '';
@@ -52,31 +53,31 @@
 
           return `
             <tr ${req.overdue?'style="background:var(--color-danger-light, #fff1f0);"':''}>
-              <td><code class="font-mono" style="font-weight: 600; color: var(--color-primary);">${req.code}</code></td>
+              <td><code class="font-mono" style="font-weight: 600; color: var(--color-primary);">${escapeDepartmentHtml(req.code || '')}</code></td>
               <td>
-                <div style="font-weight: 600; color: var(--color-text);">${req.formVersion === 'S2-10' ? escapeDepartmentHtml(req.title || 'Yêu cầu chưa đặt tên') : req.title}</div>
+                <div style="font-weight: 600; color: var(--color-text);">${escapeDepartmentHtml(req.title || 'Yêu cầu chưa đặt tên')}</div>
                 ${handoverAlert}
               </td>
-              <td>${req.formVersion === 'S2-10' ? escapeDepartmentHtml(dept) : dept}</td>
+              <td>${escapeDepartmentHtml(dept)}</td>
               <td style="text-align: center; font-weight: 600;">${req.headcount ?? '—'}</td>
               <td>${recName ? escapeDepartmentHtml(recName) : '<span style="color: var(--color-text-muted); font-style: italic;">Chưa phân công</span>'}${req.supportRecruiters?.length?'<div>Hỗ trợ: '+req.supportRecruiters.map(user=>escapeDepartmentHtml(user.name)).join(', ')+'</div>':''}</td>
-              <td><span class="badge ${statusBadge}">${statusText}</span></td>
+              <td><span class="badge ${statusBadge}">${escapeDepartmentHtml(statusText)}</span></td>
               ${requisitionTrackingEnabled?`<td><div>${req.daysOpen==null?'Chưa mở':(req.daysOpenEstimated?'~':'')+req.daysOpen+' ngày mở'}</div><div>${req.daysRemaining==null?'Chưa có ngày cần người':req.daysRemaining>=0?'Còn '+req.daysRemaining+' ngày':'Qua ngày cần người '+Math.abs(req.daysRemaining)+' ngày'}</div>${req.overdue?'<span class="badge badge-danger">Trễ hạn</span>':''}${req.paused?'<span class="badge badge-neutral">Đang tạm dừng</span>':''}</td>`:''}
               <td style="text-align: center;">
                 <div style="display: flex; gap: 6px; justify-content: center;">
-                  <button type="button" class="btn btn-outline btn-xs btn-detail-req" data-id="${req.id}">
+                  <button type="button" class="btn btn-outline btn-xs btn-detail-req" data-id="${escapeDepartmentHtml(req.id).replace(/"/g, '&quot;')}">
                     Chi tiết
                   </button>
-                  ${res.data.features?.requisitionOperations&&currentAuthenticatedUser?.roles?.some(role=>['ADMIN','HR_MANAGER','HIRING_MGR'].includes(role))?`<button type="button" class="btn btn-outline btn-xs btn-copy-req" data-id="${escapeDepartmentHtml(req.id)}">Sao chép</button>`:''}
-                  <button type="button" class="btn btn-outline btn-xs btn-edit-req" data-id="${req.id}">
+                  ${res.data.features?.requisitionOperations&&currentAuthenticatedUser?.roles?.some(role=>['ADMIN','HR_MANAGER','HIRING_MGR'].includes(role))?`<button type="button" class="btn btn-outline btn-xs btn-copy-req" data-id="${escapeDepartmentHtml(req.id).replace(/"/g, '&quot;')}">Sao chép</button>`:''}
+                  <button type="button" class="btn btn-outline btn-xs btn-edit-req" data-id="${escapeDepartmentHtml(req.id).replace(/"/g, '&quot;')}">
                     Sửa
                   </button>
                   ${isHandover ? `
-                    <button type="button" class="btn btn-outline btn-xs btn-reassign-req" data-id="${req.id}" data-code="${req.code}" data-title="${req.title}" style="color: var(--color-warning); border-color: var(--color-warning);">
+                    <button type="button" class="btn btn-outline btn-xs btn-reassign-req" data-id="${escapeDepartmentHtml(req.id).replace(/"/g, '&quot;')}" data-code="${escapeDepartmentHtml(req.code || '').replace(/"/g, '&quot;')}" data-title="${escapeDepartmentHtml(req.title).replace(/"/g, '&quot;')}" style="color: var(--color-warning); border-color: var(--color-warning);">
                       Bàn giao
                     </button>
                   ` : ''}
-                  <button type="button" class="btn btn-outline btn-xs btn-view-candidates-req" data-title="${req.title}">
+                  <button type="button" class="btn btn-outline btn-xs btn-view-candidates-req" data-title="${escapeDepartmentHtml(req.title).replace(/"/g, '&quot;')}">
                     Ứng viên
                   </button>
                 </div>
