@@ -260,24 +260,95 @@
           String(candidate.stage || 'APPLIED').toUpperCase() === newStage) return;
 
       const token = sessionStorage.getItem('ats_token');
-      const oldStage = candidate.stage || 'APPLIED';
+      if (!token) return;
+
+      let rejectionReasonId;
+
+      if (newStage === 'REJECTED') {
+        try {
+          const [permissionsRes, reasonRes] = await Promise.all([
+            window.ATS_API.getPermissionsApi(token),
+            window.ATS_API.getRecruitmentCatalogsApi(token, { type: 'REJECTION_REASON' })
+          ]);
+
+          const canUpdate =
+            permissionsRes.ok &&
+            Array.isArray(permissionsRes.data?.permissions) &&
+            permissionsRes.data.permissions.includes('candidate.update');
+
+          if (!canUpdate) {
+            showToast('error', 'Không có quyền', 'Bạn không có quyền cập nhật hồ sơ ứng viên.');
+            await loadCandidates();
+            return;
+          }
+
+          const reasons =
+            reasonRes.ok && reasonRes.data?.success
+              ? (reasonRes.data.items || []).filter(item => item.status === 'ACTIVE')
+              : [];
+
+          if (!reasons.length) {
+            showToast('error', 'Không có lý do', 'Không tìm thấy lý do từ chối đang hoạt động.');
+            await loadCandidates();
+            return;
+          }
+
+          const options = reasons
+            .map((item, index) => `${index + 1}. ${item.name}`)
+            .join('\n');
+
+          const choice = window.prompt(
+            'Chọn lý do từ chối ứng viên bằng cách nhập số tương ứng:\n\n' +
+            options +
+            '\n\nNhấn Cancel để hủy thao tác.'
+          );
+
+          if (choice === null) {
+            await loadCandidates();
+            return;
+          }
+
+          const selectedIndex = Number(choice.trim()) - 1;
+          if (
+            !choice.trim() ||
+            !Number.isInteger(selectedIndex) ||
+            selectedIndex < 0 ||
+            selectedIndex >= reasons.length
+          ) {
+            showToast('error', 'Lựa chọn không hợp lệ', 'Vui lòng chọn số trong danh sách lý do.');
+            await loadCandidates();
+            return;
+          }
+
+          rejectionReasonId = reasons[selectedIndex].id;
+          if (rejectionReasonId === undefined || rejectionReasonId === null || rejectionReasonId === '') {
+            showToast('error', 'Thiếu lý do', 'Không thể xác định mã lý do từ chối.');
+            await loadCandidates();
+            return;
+          }
+        } catch (error) {
+          console.error('Failed to load rejection reasons:', error);
+          showToast('error', 'Lỗi tải lý do', 'Không thể tải danh sách lý do từ chối.');
+          await loadCandidates();
+          return;
+        }
+      }
 
       try {
         const result = await window.ATS_API.updateCandidateStageApi(
-          token, candidateId, newStage
+          token, candidateId, newStage, undefined, rejectionReasonId
         );
 
         if (result.ok && result.data && result.data.success) {
           showToast('success', 'Cập nhật thành công', 'Đã chuyển giai đoạn ứng viên.');
-          await loadCandidates();
         } else {
           showToast(
             'error',
             'Không thể chuyển giai đoạn',
             (result.data && result.data.message) || 'Vui lòng kiểm tra quyền hoặc dữ liệu bắt buộc.'
           );
-          await loadCandidates();
         }
+        await loadCandidates();
       } catch (error) {
         console.error('Failed to update candidate stage:', error);
         showToast('error', 'Lỗi cập nhật', 'Không thể cập nhật giai đoạn ứng viên.');
