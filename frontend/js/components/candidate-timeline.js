@@ -1,6 +1,6 @@
 /**
  * SCRUM-117 (S5-07): Candidate Interaction Timeline Component
- * 
+ *
  * Hiển thị nhật ký toàn bộ tương tác với ứng viên:
  * - Nộp hồ sơ (Application)
  * - Chuyển giai đoạn (Stage transition)

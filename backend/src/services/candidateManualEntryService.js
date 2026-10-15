@@ -7,10 +7,10 @@ const RequisitionService = require('./requisitionService');
  * ==============================================================================
  * USER STORY S5-08 (SCRUM-118) - MANUAL CANDIDATE ENTRY SERVICE
  * ==============================================================================
- * 
+ *
  * Là Nhân viên tuyển dụng, tôi muốn thêm ứng viên thủ công vào một vị trí,
  * để đưa được ứng viên tìm từ LinkedIn vào cùng một pipeline.
- * 
+ *
  * Tiêu chí chấp nhận (Acceptance Criteria):
  *   • AC-01: Nhập tay thông tin và tải CV cho ứng viên tìm được từ nguồn khác
  *             (Họ tên, email, phone, requisition_id, source_id như LinkedIn/Headhunter,
@@ -53,7 +53,7 @@ class CandidateManualEntryService {
    * AC-02: Kiểm tra phát hiện trùng lặp hồ sơ ứng viên
    * - Trùng trên cùng vị trí tuyển dụng (Same position)
    * - Trùng ở các vị trí tuyển dụng khác (Cross position)
-   * 
+   *
    * @param {object} params
    * @param {string} params.email Email ứng viên
    * @param {string} [params.phoneNumber] Số điện thoại
@@ -403,7 +403,7 @@ class CandidateManualEntryService {
 
   /**
    * AC-01 & AC-02: Tạo mới ứng viên thủ công kèm CV và phát hiện trùng
-   * 
+   *
    * @param {object} data Thông tin ứng viên nhập tay
    * @param {object} [cvFile] Tệp CV đính kèm ({ filename, buffer, mimeType })
    * @param {object} currentUser Người dùng hiện tại
@@ -506,8 +506,8 @@ class CandidateManualEntryService {
 
     try {
       const catItem = await this.db.prepare(
-        `SELECT id, name, code FROM recruitment_catalog_items 
-         WHERE type = 'CANDIDATE_SOURCE' 
+        `SELECT id, name, code FROM recruitment_catalog_items
+         WHERE type = 'CANDIDATE_SOURCE'
            AND (id = ? OR UPPER(code) = UPPER(?) OR LOWER(name) = LOWER(?))
            AND status = 'ACTIVE' LIMIT 1`
       ).get(sourceId, sourceId, sourceId);

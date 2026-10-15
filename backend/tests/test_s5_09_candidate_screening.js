@@ -7,10 +7,10 @@ const CandidateScreeningController = require('../src/controllers/candidateScreen
  * ==============================================================================
  * TEST SUITE: USER STORY S5-09 / SCRUM-119
  * ==============================================================================
- * 
+ *
  * Nội dung: Là Nhân viên tuyển dụng, tôi muốn có hồ sơ mới được chấm điểm sàng lọc theo
  * tiêu chí bắt buộc của vị trí, để ưu tiên đọc trước những hồ sơ có khả năng phù hợp nhất.
- * 
+ *
  * Tiêu chí chấp nhận (Acceptance Criteria):
  *   • AC-01: Khai báo tiêu chí bắt buộc cho vị trí: số năm kinh nghiệm, bằng cấp, kỹ năng
  *   • AC-02: Hồ sơ mới được gắn điểm phù hợp và cờ Đạt hoặc Không đạt tiêu chí bắt buộc

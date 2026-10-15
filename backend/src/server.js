@@ -551,6 +551,8 @@ async function handleRequest(req, res) {
   }
   // 10. API: S1-05 Get Full RBAC Matrix (AC-01)
   if (req.method === 'GET' && (pathname === '/api/v1/rbac/matrix' || pathname === '/rbac/matrix' || pathname === '/api/v1/admin/roles-matrix' || pathname === '/admin/roles-matrix')) {
+    const user = await rbacMiddleware.authorize(req, res, authController.authService, 'role.read');
+    if (!user) return;
     const rawMatrix = (await rbacMiddleware.getRbacMatrix());
     const roles = (await db.prepare('SELECT id, code AS name, name AS description FROM roles ORDER BY code ASC').all());
     const permissions = (await db.prepare('SELECT id, code AS name, name AS description, module FROM permissions ORDER BY module, code ASC').all());
@@ -1794,7 +1796,7 @@ async function handleRequest(req, res) {
     let roles = [];
     if (userInfo) {
       roles = (await db.prepare(`
-        SELECT r.code, r.name 
+        SELECT r.code, r.name
         FROM user_roles ur
         JOIN roles r ON ur.role_id = r.id
         WHERE ur.user_id = ?
@@ -1899,7 +1901,7 @@ async function handleRequest(req, res) {
         if (candIds.length > 0) {
           const placeholders = candIds.map(() => '?').join(',');
           const srRows = await db.prepare(
-            `SELECT candidate_id, fit_score, mandatory_pass, experience_passed, education_passed, skills_passed, evaluation_details, evaluated_at 
+            `SELECT candidate_id, fit_score, mandatory_pass, experience_passed, education_passed, skills_passed, evaluation_details, evaluated_at
              FROM candidate_screening_results WHERE candidate_id IN (${placeholders})`
           ).all(...candIds);
           const srMap = new Map();

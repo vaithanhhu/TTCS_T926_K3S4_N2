@@ -1,0 +1,108 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),cp=require('node:child_process');
+const safety=require('../../scripts/git-safety'),{install}=require('../../scripts/install-git-hooks');
+const root=fs.mkdtempSync(path.join(os.tmpdir(),'ats-git-guard-')),sha='a'.repeat(40),old='b'.repeat(40),zero='0'.repeat(40),url='https://github.com/vaithanhhu/TTCS_T926_K3S4_N2.git',results=[];
+function test(name,fn){try{fn();results.push({name,status:'PASS'});}catch(error){results.push({name,status:'FAIL',message:error.message});}}
+function fixture(options={}) {
+ let remoteQueries=0;
+ const calls=[],blobs=new Map(),entries=(options.files||[]).map(([name,content],i)=>{const id=(i+1).toString(16).padStart(40,'0');blobs.set(id,Buffer.from(content));return{mode:'100644',sha:id,name};});
+ const git=(args,opts={})=>{calls.push(args);const key=args.join(' ');let status=0,stdout='';
+  if(key==='rev-parse --show-toplevel')stdout=root;
+  else if(args[0]==='rev-parse'&&args[1]==='--git-path')stdout=path.join(root,'absent',args[2]);
+  else if(args[0]==='symbolic-ref'){status=options.detached?1:0;stdout=options.detached?'':options.branch||'feature/candidates-fixture';}
+  else if(key==='ls-files -u -z')stdout=options.conflict?'100644 '+sha+' 1\tconflict.js\0':'';
+  else if(args[0]==='status')stdout=options.dirty?' M working.js\0':'';
+  else if(key==='ls-files --stage -z')stdout=entries.map(e=>e.mode+' '+e.sha+' 0\t'+e.name+'\0').join('');
+  else if(key==='diff --cached --name-only --no-renames --diff-filter=ACMT -z --')stdout=(options.stagedNames||entries.map(e=>e.name)).map(name=>name+'\0').join('');
+  else if(key==='ls-files --others --exclude-standard -z')stdout='';
+  else if(args[0]==='remote')stdout=options.remote||url;
+  else if(args[0]==='cat-file'){if(args[1]==='-t'){status=options.remoteCommitMissing?1:0;stdout='commit';}else stdout=args[1]==='-s'?String(blobs.get(args[2]).length):blobs.get(args[2]);}
+  else if(key==='rev-parse HEAD')stdout=sha;
+  else if(args[0]==='merge-base')status=options.nonFF?1:0;
+  else if(args[0]==='rev-list')stdout=options.outgoing?'c'.repeat(40):'';
+  else if(args[0]==='ls-tree'){const remoteTree=args[3]===old;status=remoteTree&&options.remoteTreeMissing?128:0;stdout=(remoteTree?(options.remoteContains?entries:options.remoteFiles||[]):options.historyFiles||entries).map(e=>e.mode+' blob '+e.sha+'\t'+e.name+'\0').join('');}
+  else if(args[0]==='ls-remote'){remoteQueries++;status=options.offline?128:options.existing?0:2;stdout=options.existing?(options.remoteMoves&&remoteQueries>1?sha:old)+'\t'+(options.remoteWrongRef?'refs/heads/other':args.at(-1)):'';}
+  else if(args[0]==='fetch'&&options.offline)status=128;
+  if(status!==0&&!opts.allowFailure)throw Object.assign(Error('GIT_COMMAND_FAILED'),{code:'GIT_COMMAND_FAILED'});
+  return{status,stdout};
+ };
+ return{git,calls,blobs,entries};
+}
+function run(command,args=[],options={},input=''){const f=fixture(options),messages=[];safety.execute(command,args,f.git,input,m=>messages.push(m));return{...f,messages};}
+function denied(command,args=[],options={},input=''){const f=fixture(options);assert.throws(()=>safety.execute(command,args,f.git,input,()=>{}));assert.equal(f.calls.some(a=>['push','switch','merge','stash','reset','clean'].includes(a[0])),false);return f;}
+const tuple=(destination='feature/candidates-fixture',local='refs/heads/feature/candidates-fixture',prior=zero)=>local+' '+sha+' refs/heads/'+destination+' '+prior+'\n';
+for(const branch of ['main','develop'])test('reject direct push '+branch,()=>denied('push',[],{branch}));
+for(const branch of ['main','develop'])test('hook rejects HEAD destination '+branch,()=>denied('pre-push',['origin',url],{},tuple(branch,'HEAD')));
+for(const flag of ['--force','-f','--force-with-lease','+HEAD:develop','HEAD:develop','--all','--mirror'])test('Sprint push rejects '+flag,()=>denied('push',[flag]));
+test('reject multi-ref hook input including protected ref',()=>denied('pre-push',['origin',url],{},tuple()+tuple('develop','HEAD')));
+test('reject multi-ref feature push',()=>denied('pre-push',['origin',url],{},tuple()+tuple()));
+test('reject non-fast-forward hook update',()=>denied('pre-push',['origin',url],{nonFF:true},tuple('feature/candidates-fixture','HEAD',old)));
+test('reject delete through hook',()=>denied('pre-push',['origin',url],{},'(delete) '+zero+' refs/heads/feature/candidates-fixture '+old+'\n'));
+test('accept feature pre-push with HEAD',()=>run('pre-push',['origin',url],{},tuple('feature/candidates-fixture','HEAD')));
+test('accept fix pre-push',()=>run('pre-push',['origin',url],{branch:'fix/auth-fixture'},tuple('fix/auth-fixture','refs/heads/fix/auth-fixture')));
+test('Sprint push pins exactly origin and current branch without implicit tags/submodule push',()=>{const f=run('push');assert.deepEqual(f.calls.find(a=>a[0]==='push'),['push','--porcelain','--no-follow-tags','--recurse-submodules=no','--','origin','HEAD:refs/heads/feature/candidates-fixture']);assert.ok(f.messages.at(-1).includes('/compare/develop...'));});
+test('reject altered push remote',()=>denied('push',[],{remote:'https://example.invalid/other.git'}));
+test('reject spoofed remote hook argument',()=>denied('pre-push',['origin','https://example.invalid/other.git'],{},tuple()));
+for(const file of ['.env','config/.env.production','ats.db','ats.db-wal','ats.db-shm','ats_test.db','.backup_sprint1/ats.db','backup/production.sql','secret.bak','db.dump','credentials.json','private_key.pem'])test('index rejects '+file,()=>denied('pre-commit',[],{files:[[file,'fixture']]}));
+test('safe env example allowed',()=>run('pre-commit',[],{files:[['.env.example','DATABASE_URL=postgresql://ats_app:CHANGE_ME@localhost/ats\nSMTP_PASSWORD=\nAPP_PORT=5051']]}));
+test('safe sample password placeholders and TTL metadata allowed',()=>run('pre-commit',[],{files:[['.env.example','SMTP_PASSWORD=your_app_password\nPASSWORD_RESET_TTL_MINUTES=30\nPASSWORD_RESET_OTP_TTL_MINUTES=5']]}));
+test('unseparated SMTP example placeholder allowed',()=>run('pre-commit',[],{files:[['.env.example','SMTP_PASSWORD=yourapppassword']]}));
+test('unsafe env example rejected',()=>denied('pre-commit',[],{files:[['.env.example','SMTP_PASSWORD='+['secret','credential','value'].join('-')]]}));
+test('uppercase sample filename cannot bypass content validation',()=>denied('pre-commit',[],{files:[['.ENV.EXAMPLE','smtp_password='+['secret','credential','value'].join('-')]]}));
+test('quoted safe env sample is allowed',()=>run('pre-commit',[],{files:[['.env.sample','SMTP_PASSWORD="CHANGE_ME"']]}));
+test('public PEM certificate allowed',()=>run('pre-commit',[],{files:[['ca.pem','-----BEGIN CERTIFICATE-----\nfixture\n-----END CERTIFICATE-----']]}));
+test('private key hidden as CRT rejected',()=>denied('pre-commit',[],{files:[['ca.crt','-----BEGIN '+'PRIVATE KEY-----\nfixture']]}));
+test('UTF16 LE and BE private keys cannot evade content scan',()=>{const content=Buffer.from('-----BEGIN '+'PRIVATE KEY-----\nfixture','utf16le');for(const [bom,body]of[[Buffer.from([255,254]),content],[Buffer.from([254,255]),Buffer.from(content).swap16()]])denied('pre-commit',[],{files:[['certificate.txt',Buffer.concat([bom,body])]]});});
+test('renamed SQLite content rejected',()=>denied('pre-commit',[],{files:[['image.png',Buffer.from('SQLite format 3\0fixture')]]}));
+test('SQL migrations and JSON config allowed',()=>run('pre-commit',[],{files:[['backend/src/db/migrations/011_postgres.sql','CREATE TABLE fixture(id TEXT);'],['config.json','{"enabled":true}']]}));
+test('high-confidence connection secret blocked without logging value',()=>{const secret=['actual','value','fixture'].join('-'),content='DATABASE_URL=postgresql://ats:'+secret+'@db.example/ats';assert.ok(safety.inspectContent('config.txt',content).issues.includes('CONNECTION_SECRET'));});
+test('synthetic unreachable test database URL allowed',()=>assert.equal(safety.inspectContent('test.js','postgresql://fake:fake@127.0.0.1:1/unreachable').issues.length,0));
+test('repository sample and unreachable connection fixtures contain only safe placeholders',()=>{for(const name of ['.env.example','backend/tests/test_local_demo.js'])assert.deepEqual(safety.inspectContent(name,fs.readFileSync(path.resolve(__dirname,'../..',name))).issues,[],name);});
+test('trace archives require review even when smaller than the large-blob threshold',()=>denied('pre-commit',[],{files:[['docs/evidence/browser/trace-ADMIN.zip',Buffer.from([80,75,3,4,0,0])]]}));
+test('weak literal password on real remote is still a connection secret',()=>assert.ok(safety.inspectContent('config.txt',['postgresql', '://ats:password@db.company.com/ats'].join('')).issues.includes('CONNECTION_SECRET')));
+test('security test source itself contains no high-confidence secret',()=>assert.deepEqual(safety.inspectContent('backend/tests/test_git_safety.js',fs.readFileSync(__filename)).issues,[]));
+test('dirty start never fetches or changes branch',()=>{const f=denied('start',['feature/another'],{dirty:true});assert.equal(f.calls.some(a=>a[0]==='fetch'),false);});
+test('dirty sync never stashes or fetches',()=>{const f=denied('sync',[],{dirty:true});assert.equal(f.calls.some(a=>a[0]==='fetch'),false);});
+test('unmerged index never loses data',()=>{const f=denied('sync',[],{conflict:true});assert.equal(f.calls.some(a=>a[0]==='fetch'),false);});
+test('offline push does not invoke push',()=>denied('push',[],{offline:true}));
+test('offline start does not switch branch',()=>denied('start',['feature/another'],{offline:true}));
+test('sync divergence does not merge/rebase/stash',()=>denied('sync',[],{nonFF:true}));
+test('clean start from develop switches only after fetch',()=>{const f=run('start',['feature/another'],{branch:'develop'});assert.ok(f.calls.findIndex(a=>a[0]==='fetch')<f.calls.findIndex(a=>a[0]==='switch'));});
+test('tracked secret found even without staged changes',()=>denied('check',[],{files:[['ats.db','fixture']]}));
+test('cleanup commit scans only staged additions and modifications',()=>{const f=run('pre-commit',[],{files:[['.env.example','SMTP_PASSWORD='+['legacy','secret','value'].join('-')],['legacy.js','postgresql://user:'+['legacy','secret'].join('-')+'@db.example/ats'],['large.json','x'.repeat(2*1024*1024+1)],['.gitignore','*.db\n']],stagedNames:['.gitignore']});assert.equal(f.calls.filter(a=>a[0]==='cat-file'&&a[1]==='blob').length,1);});
+test('deletion-only commit never reads removed blobs or unrelated secrets',()=>{const f=run('pre-commit',[],{files:[['.env','legacy']],stagedNames:[]});assert.equal(f.calls.some(a=>a[0]==='cat-file'),false);});
+test('repository audit and CI still reject unchanged sensitive files',()=>{for(const command of ['check','ci'])denied(command,[],{files:[['.env','legacy']],stagedNames:[]});});
+test('modified staged file is scanned as a complete index blob',()=>denied('pre-commit',[],{files:[['settings.js','postgresql://user:'+['new','secret','value'].join('-')+'@db.example/ats']],stagedNames:['settings.js']}));
+test('renamed secret is checked under its destination even when content is unchanged',()=>denied('pre-commit',[],{files:[['renamed.txt','-----BEGIN '+'PRIVATE KEY-----\nfixture']],stagedNames:['renamed.txt']}));
+test('renaming safe content into a prohibited runtime path is rejected',()=>denied('pre-commit',[],{files:[['backend/data/renamed.db','fixture']],stagedNames:['backend/data/renamed.db']}));
+test('copied file and filenames with whitespace are scanned without splitting',()=>denied('pre-commit',[],{files:[['copied file\nname.txt','-----BEGIN '+'PRIVATE KEY-----\nfixture']],stagedNames:['copied file\nname.txt']}));
+test('index mutation between selection and lookup fails closed',()=>denied('pre-commit',[],{files:[],stagedNames:['missing.js']}));
+test('safe staged rename passes and does not scan its removed source',()=>run('pre-commit',[],{files:[['renamed safe.js','const safe=true;']],stagedNames:['renamed safe.js']}));
+const largeFixture='x'.repeat(2*1024*1024+1);
+test('large blob in freshly verified remote tree is still fully read',()=>{const f=run('check',[],{files:[['evidence.json',largeFixture]],existing:true,remoteContains:true});assert.equal(f.calls.filter(a=>a[0]==='ls-remote').length,2);assert.equal(f.calls.filter(a=>a[0]==='cat-file'&&a[1]==='blob').length,1);assert.ok(f.messages.some(x=>x.startsWith('INFO VERIFIED_REMOTE_LARGE_BLOB')));assert.equal(f.calls.some(a=>a[0]==='fetch'||a[0]==='show-ref'),false);});
+test('old large blob renamed to a safe path is recognized by exact blob identity',()=>run('pre-commit',[],{files:[['renamed.json',largeFixture]],existing:true,remoteFiles:[{mode:'100644',sha:'1'.padStart(40,'0'),name:'old.json'}]}));
+test('new large blob is rejected when absent from verified remote tip',()=>denied('pre-commit',[],{files:[['new.json',largeFixture]],existing:true}));
+test('new large blob is rejected when remote branch does not exist',()=>denied('pre-commit',[],{files:[['new.json',largeFixture]]}));
+test('offline remote cannot authorize a size exception despite a local matching tree',()=>denied('check',[],{files:[['old.json',largeFixture]],existing:true,remoteContains:true,offline:true}));
+test('stale local object is not proof when remote tip object is missing',()=>denied('check',[],{files:[['old.json',largeFixture]],existing:true,remoteContains:true,remoteCommitMissing:true}));
+test('remote tree failure cannot authorize a size exception',()=>denied('check',[],{files:[['old.json',largeFixture]],existing:true,remoteContains:true,remoteTreeMissing:true}));
+test('wrong remote ref cannot authorize a size exception',()=>denied('check',[],{files:[['old.json',largeFixture]],existing:true,remoteContains:true,remoteWrongRef:true}));
+test('remote tip changing during verification fails closed',()=>denied('check',[],{files:[['old.json',largeFixture]],existing:true,remoteContains:true,remoteMoves:true}));
+test('large blob present only in local history is not grandfathered',()=>denied('pre-commit',[],{files:[['old.json',largeFixture]],existing:true,historyFiles:[{mode:'100644',sha:'1'.padStart(40,'0'),name:'old.json'}]}));
+test('verified old large credential is rejected without exposing its value',()=>{const secret=['nonpublic','credential','fixture'].join('-');const f=fixture({files:[['old.json',largeFixture+'\npostgresql://user:'+secret+'@db.company.com/ats']],existing:true,remoteContains:true});const messages=[];assert.throws(()=>safety.execute('check',[],f.git,'',m=>messages.push(m)),/SENSITIVE_FILES_FOUND/);assert.ok(messages.some(x=>x.includes('CONNECTION_SECRET')));assert.equal(messages.some(x=>x.includes(secret)),false);});
+test('verified large private key remains blocked even after a binary NUL',()=>denied('pre-commit',[],{files:[['old.json',largeFixture+'\0-----BEGIN '+'PRIVATE KEY-----\nfixture']],existing:true,remoteContains:true}));
+test('verified large SQLite content remains forbidden',()=>denied('pre-commit',[],{files:[['old.txt','SQLite format 3\0'+largeFixture]],existing:true,remoteContains:true}));
+test('remote presence never overrides prohibited database and evidence paths',()=>{for(const name of ['ats.db','backup/data.json','docs/evidence/trace.zip'])denied('pre-commit',[],{files:[[name,largeFixture]],existing:true,remoteContains:true});});
+test('detached CI can verify an explicit remote branch without trusting a caller SHA',()=>run('ci',['--remote-branch','feature/candidates-fixture'],{files:[['old.json',largeFixture]],detached:true,existing:true,remoteContains:true}));
+test('detached CI still rejects new large blobs',()=>denied('ci',['--remote-branch','feature/candidates-fixture'],{files:[['new.json',largeFixture]],detached:true,existing:true}));
+test('detached CI still requires a reachable verified remote',()=>denied('ci',['--remote-branch','feature/candidates-fixture'],{files:[['old.json',largeFixture]],detached:true,existing:true,remoteContains:true,offline:true}));
+test('detached CI still scans credentials in verified old blobs',()=>denied('ci',['--remote-branch','feature/candidates-fixture'],{files:[['old.json',largeFixture+'\n-----BEGIN '+'PRIVATE KEY-----\nfixture']],detached:true,existing:true,remoteContains:true}));
+test('CI rejects an explicit branch that differs from an attached HEAD',()=>denied('ci',['--remote-branch','feature/other'],{files:[['old.json',largeFixture]],existing:true,remoteContains:true}));
+test('CI branch hint cannot be a SHA or refspec and cannot be passed to pre-commit',()=>{denied('ci',['--remote-branch',sha]);denied('ci',['--remote-branch','HEAD:develop']);denied('pre-commit',['--remote-branch','feature/candidates-fixture']);});
+test('detached CI permits develop as a verified PR source branch',()=>run('ci',['--remote-branch','develop'],{files:[['old.json',largeFixture]],detached:true,existing:true,remoteContains:true}));
+test('history scan detects sensitive intermediate tree',()=>{const f=fixture({files:[['safe.js','const ok=true;']],outgoing:true,historyFiles:[{mode:'100644',sha:'1'.padStart(40,'0'),name:'.env'}]});assert.throws(()=>safety.execute('pre-push',['origin',url],f.git,tuple(),()=>{}),/SENSITIVE_FILES_FOUND/);});
+test('unknown command process exits nonzero',()=>{const r=cp.spawnSync(process.execPath,[path.resolve(__dirname,'../../scripts/git-safety.js'),'invalid'],{cwd:root,encoding:'utf8',windowsHide:true});assert.equal(r.status,1);assert.ok(r.stderr.includes('UNKNOWN_COMMAND'));});
+test('installer preserves existing custom hook',()=>{const dir=path.join(root,'install-preserve');fs.mkdirSync(path.join(dir,'.git/hooks'),{recursive:true});fs.mkdirSync(path.join(dir,'.githooks'));fs.mkdirSync(path.join(dir,'scripts'));fs.writeFileSync(path.join(dir,'scripts/git-safety.js'),'fixture');for(const name of ['pre-commit','pre-push'])fs.writeFileSync(path.join(dir,'.githooks',name),'#!/bin/sh\nexit 0\n');const existing=path.join(dir,'.git/hooks/pre-commit');fs.writeFileSync(existing,'custom hook');const invoke=(_,args)=>args[0]==='config'?{status:1,stdout:''}:{status:0,stdout:'.git/hooks'};assert.throws(()=>install(dir,invoke),/EXISTING_HOOK_REQUIRES_REVIEW/);assert.equal(fs.readFileSync(existing,'utf8'),'custom hook');assert.equal(fs.existsSync(path.join(dir,'.git/hooks/pre-push')),false);});
+test('installer refuses custom hooksPath',()=>assert.throws(()=>install(root,()=>({status:0,stdout:'custom'})),/EXISTING_HOOKS_CONFIGURATION_REQUIRES_REVIEW/));
+test('installer creates new hooks and standalone guard; rerun is idempotent',()=>{const dir=path.join(root,'install-new');fs.mkdirSync(path.join(dir,'.git/hooks'),{recursive:true});fs.mkdirSync(path.join(dir,'.githooks'));fs.mkdirSync(path.join(dir,'scripts'));const guard=fs.readFileSync(path.resolve(__dirname,'../../scripts/git-safety.js'));fs.writeFileSync(path.join(dir,'scripts/git-safety.js'),guard);const data='#!/bin/sh\nexit 0\n';for(const name of ['pre-commit','pre-push'])fs.writeFileSync(path.join(dir,'.githooks',name),data);const invoke=(_,args)=>args[0]==='config'?{status:1,stdout:''}:{status:0,stdout:'.git/hooks'};install(dir,invoke);install(dir,invoke);for(const name of ['pre-commit','pre-push'])assert.equal(fs.readFileSync(path.join(dir,'.git/hooks',name),'utf8'),data);assert.deepEqual(fs.readFileSync(path.join(dir,'.git/hooks/ats-git-safety.js')),guard);const result=cp.spawnSync(process.execPath,[path.join(dir,'.git/hooks/ats-git-safety.js'),'invalid'],{cwd:root,encoding:'utf8',windowsHide:true});assert.equal(result.status,1);assert.ok(result.stderr.includes('UNKNOWN_COMMAND'));});
+const report={passed:results.filter(r=>r.status==='PASS').length,failed:results.filter(r=>r.status==='FAIL').length,total:results.length,gitOperations:'MOCKED; no add/commit/push/merge/reset on any repository',results};
+console.log('GIT_SAFETY_RESULT '+JSON.stringify(report));process.exitCode=report.failed?1:0;

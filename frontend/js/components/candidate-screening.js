@@ -2,16 +2,16 @@
  * ==============================================================================
  * USER STORY S5-09 (SCRUM-119) - CANDIDATE SCREENING & SCORING COMPONENT
  * ==============================================================================
- * 
+ *
  * Là Nhân viên tuyển dụng, tôi muốn có hồ sơ mới được chấm điểm sàng lọc theo
  * tiêu chí bắt buộc của vị trí, để ưu tiên đọc trước những hồ sơ có khả năng
  * phù hợp nhất.
- * 
+ *
  * Tiêu chí chấp nhận (Acceptance Criteria):
  *   • AC-01: Khai báo tiêu chí bắt buộc cho vị trí: số năm kinh nghiệm, bằng cấp, kỹ năng
  *   • AC-02: Hồ sơ mới được gắn điểm phù hợp và cờ Đạt hoặc Không đạt tiêu chí bắt buộc
  *   • AC-03: Điểm chỉ để gợi ý sắp xếp, không tự động loại ứng viên
- * 
+ *
  * NGUYÊN TẮC: KHÔNG CHỈNH SỬA BẤT KỲ FILE HTML CŨ HOẶC FILE GIAO DIỆN CŨ NÀO.
  * Toàn bộ UI được tự động gắn (self-mounting) thông qua DOM MutationObserver.
  * ==============================================================================
@@ -159,10 +159,10 @@
             </div>
             <button type="button" id="close-criteria-modal-btn" class="modal-close" aria-label="Đóng">&times;</button>
           </div>
-          
+
           <form id="requisition-criteria-form" style="padding: 16px 20px;">
             <input type="hidden" id="criteria-requisition-id" />
-            
+
             <!-- Tiêu chí 1: Số năm kinh nghiệm -->
             <div class="form-group" style="margin-bottom: 14px;">
               <label for="criteria-min-exp" class="form-label" style="font-weight: 600;">
@@ -574,4 +574,3 @@
 
   console.log('[CandidateScreening] Frontend module initialized successfully (S5-09).');
 })();
-

@@ -2,10 +2,10 @@
  * ==============================================================================
  * USER STORY S5-08 (SCRUM-118) - FRONTEND CANDIDATE MANUAL ENTRY & DUPLICATE DETECTION
  * ==============================================================================
- * 
+ *
  * Là Nhân viên tuyển dụng, tôi muốn thêm ứng viên thủ công vào một vị trí,
  * để đưa được ứng viên tìm từ LinkedIn vào cùng một pipeline.
- * 
+ *
  * Tiêu chí chấp nhận (AC):
  *   • AC-01: Nhập tay thông tin và tải CV cho ứng viên tìm được từ nguồn khác (LinkedIn, Headhunter...)
  *   • AC-02: Ứng viên thêm tay vẫn đi qua đúng luồng phát hiện trùng (Realtime duplicate check & warning)
@@ -94,7 +94,7 @@
           Tệp CV đính kèm (PDF, DOCX &le; 10MB)
         </label>
         <div class="relative flex items-center border border-dashed border-gray-300 rounded-lg p-3 hover:border-blue-500 transition-colors bg-gray-50/50">
-          <input type="file" id="create-cand-cv-file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" 
+          <input type="file" id="create-cand-cv-file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                  class="absolute inset-0 opacity-0 cursor-pointer w-full h-full" />
           <div class="flex items-center space-x-2 text-sm text-gray-600 pointer-events-none w-full">
             <span class="text-blue-600 text-lg">📄</span>
@@ -334,4 +334,3 @@
     init: initManualEntryEnhancement
   };
 })();
-

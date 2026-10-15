@@ -14,7 +14,7 @@ const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'ats-local-regression-')
 
 function copySource(root) {
   fs.mkdirSync(root, { recursive: true });
-  for (const folder of ['backend', 'frontend']) fs.cpSync(path.join(source, folder), path.join(root, folder), {
+  for (const folder of ['backend', 'frontend', 'scripts', '.githooks'].filter(folder => fs.existsSync(path.join(source, folder)))) fs.cpSync(path.join(source, folder), path.join(root, folder), {
     recursive: true, filter(file) {
       const relative = path.relative(path.join(source, folder), file);
       return !relative.split(path.sep).some(part => ['data', 'node_modules', '.git', '.local'].includes(part))

@@ -29,7 +29,7 @@
     // Populate requisition filter dropdown if empty
     if (candidatesReqFilter && candidatesReqFilter.children.length <= 1 && currentRequisitionsList.length > 0) {
       candidatesReqFilter.innerHTML = `<option value="ALL">Tất cả vị trí ứng tuyển</option>` +
-        currentRequisitionsList.map(r => `<option value="${r.title}">${r.code} - ${r.title}</option>`).join('');
+        currentRequisitionsList.map(r => `<option value="${escapeHtml(r.title)}">${escapeHtml(r.code)} - ${escapeHtml(r.title)}</option>`).join('');
     }
 
     const search = candidatesSearchInput ? candidatesSearchInput.value.trim().toLowerCase() : '';
@@ -75,21 +75,21 @@
 
           return `
             <tr>
-              <td><code class="font-mono" style="font-weight: 600; color: var(--color-primary);">${code}</code></td>
+              <td><code class="font-mono" style="font-weight: 600; color: var(--color-primary);">${escapeHtml(code)}</code></td>
               <td>
-                <div style="font-weight: 600; color: var(--color-text);">${name}</div>
-                <div style="font-size: 0.75rem; color: var(--color-text-muted); font-family: monospace;">Mã: ${code}</div>
+                <div style="font-weight: 600; color: var(--color-text);">${escapeHtml(name)}</div>
+                <div style="font-size: 0.75rem; color: var(--color-text-muted); font-family: monospace;">Mã: ${escapeHtml(code)}</div>
               </td>
-              <td>${reqTitle}</td>
+              <td>${escapeHtml(reqTitle)}</td>
               <td>
-                <div style="font-size: 0.8rem; color: var(--color-text);">${c.email}</div>
-                <div style="font-size: 0.75rem; color: var(--color-text-muted);">${phone}</div>
+                <div style="font-size: 0.8rem; color: var(--color-text);">${escapeHtml(c.email)}</div>
+                <div style="font-size: 0.75rem; color: var(--color-text-muted);">${escapeHtml(phone)}</div>
               </td>
-              <td><span class="badge ${badgeClass}">${stageName}</span></td>
+              <td><span class="badge ${badgeClass}">${escapeHtml(stageName)}</span></td>
               <td>${appliedDate ? new Date(appliedDate).toLocaleDateString('vi-VN') : '—'}</td>
               <td style="color: #f59e0b; font-size: 0.85rem;">${stars}</td>
               <td style="text-align: center;">
-                <button type="button" class="btn btn-outline btn-xs" onclick="window.ATS_APP_HELPERS.viewCandidateDetails('${c.id}')">
+                <button type="button" class="btn btn-outline btn-xs" onclick="window.ATS_APP_HELPERS.viewCandidateDetails(${escapeHtml(JSON.stringify(c.id))})">
                   Chi tiết
                 </button>
               </td>

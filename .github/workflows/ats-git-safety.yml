@@ -1,0 +1,35 @@
+name: ATS Git Safety
+on:
+  pull_request:
+    branches: [develop, main]
+permissions:
+  contents: read
+jobs:
+  git-safety:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node scripts/git-safety.js ci --remote-branch "$ATS_PR_HEAD_REF"
+        env:
+          ATS_PR_HEAD_REF: ${{ github.head_ref }}
+      - run: node backend/tests/test_git_safety.js
+  isolated-regression:
+    needs: git-safety
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npx --no-install playwright install --with-deps chromium
+      - run: npm run test -- --all
