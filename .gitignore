@@ -57,3 +57,7 @@ frontend/public/company/
 test-artifacts/
 backend/data/*.db
 backend/data/cv_uploads/
+docs/evidence/**/*.json
+docs/evidence/**/*.zip
+docs/evidence/**/*.diff
+docs/evidence/**/*.patch

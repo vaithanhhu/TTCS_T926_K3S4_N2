@@ -20,11 +20,16 @@ function command(op, args = []) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [control, op, ...args], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     let output = '';
+    let errorOutput = '';
     child.stdout.on('data', chunk => { output += chunk; });
-    child.stderr.on('data', () => {});
+    child.stderr.on('data', chunk => { errorOutput += chunk; });
     child.once('error', () => reject(Error('AZURE_PROFILE_CONTROL_UNAVAILABLE')));
     child.once('close', code => {
-      if (code !== 0) return reject(Error('AZURE_PROFILE_COMMAND_FAILED_' + op.toUpperCase()));
+      if (code !== 0) {
+        const detail = errorOutput.trim().split(/\r?\n/).pop()?.trim();
+        const codeMatch = detail && /^[A-Z0-9_]+$/.test(detail) ? detail : null;
+        return reject(Error(codeMatch || ('AZURE_PROFILE_COMMAND_FAILED_' + op.toUpperCase())));
+      }
       try { resolve(JSON.parse(output)); } catch { reject(Error('AZURE_PROFILE_RESPONSE_INVALID')); }
     });
   });
