@@ -234,6 +234,7 @@
     "/js/pages/candidate-portal.js",
     "/js/components/requisition-detail.js",
     "/js/components/candidate-manual-entry.js",
+    "/js/components/candidate-screening.js",
     "/js/shared/page-lifecycle.js",
     "/js/shared/route-lifecycle.js"
   ],
