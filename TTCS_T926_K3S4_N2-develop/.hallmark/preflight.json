@@ -1,0 +1,22 @@
+{
+  "scannedAt": "2026-09-30",
+  "framework": "vanilla-spa",
+  "fontStack": "Space Grotesk + Plus Jakarta Sans + JetBrains Mono",
+  "palette": "OKLCH Cobalt (electric blue 256 + graphite)",
+  "microinteractionStance": "motion-cut",
+  "spacingScale": "4-pt",
+  "preserved": [
+    "API contracts",
+    "Database schema 9 tables",
+    "Integration tests (S1-01 to S1-10)",
+    "Session sliding logic",
+    "RBAC Default Deny"
+  ],
+  "introduced": [
+    "Hallmark Cobalt design tokens (OKLCH)",
+    "Macrostructure: Workbench",
+    "Lucide SVG icon system",
+    "8-state component discipline",
+    "58 slop-test gates"
+  ]
+}

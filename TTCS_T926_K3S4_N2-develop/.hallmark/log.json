@@ -1,0 +1,25 @@
+[
+  {
+    "date": "2026-09-30",
+    "macrostructure": "Workbench",
+    "theme": "Cobalt",
+    "genre": "modern-minimal",
+    "enrichment": "none",
+    "brief": "Internal Recruitment ATS · Enterprise system workbench with RBAC and session lifecycle",
+    "tokens": {
+      "palette": "100% OKLCH with Anchor Hue 256 (Electric Cobalt)",
+      "spacingScale": "4-pt base scale (--space-3xs to --space-3xl)",
+      "typography": "2+1 discipline: Space Grotesk (display), Plus Jakarta Sans (body), JetBrains Mono (code/mono)",
+      "radii": "System-tool strict tight radii (2px to 8px)",
+      "hairlines": "Single 1px hairlines (--color-rule) without heavy drop-shadows"
+    },
+    "components": {
+      "discipline": "8-state component coverage (default, hover, active, focus-visible, disabled, loading, empty, error)",
+      "layout": "Workbench layout with top enterprise navbar, drawer navigation, and clean card containers",
+      "icons": "100% Lucide-style inline SVGs replacing cartoon emojis across all buttons, badges, tables, and modals",
+      "overflow": "Strict html, body { overflow-x: clip }"
+    },
+    "slopGatesPassed": [1, 2, 3, 4, 16, 26, 29, 34, 37, 39, 45, 49],
+    "tests": "56/56 passing (100%) across all 10 integration suites (S1-01 to S1-10)"
+  }
+]

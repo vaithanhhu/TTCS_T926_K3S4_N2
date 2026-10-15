@@ -1,0 +1,13 @@
+CREATE TABLE requisition_recruiter_supports(requisition_id TEXT NOT NULL REFERENCES requisitions(id),user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,PRIMARY KEY(requisition_id,user_id));
+CREATE INDEX recruiter_support_user ON requisition_recruiter_supports(user_id,requisition_id);
+CREATE FUNCTION recruiter_membership_guard() RETURNS TRIGGER LANGUAGE plpgsql AS $$ BEGIN IF TG_TABLE_NAME='requisitions' THEN IF EXISTS(SELECT 1 FROM requisition_recruiter_supports WHERE requisition_id=NEW.id AND user_id=NEW.recruiter_id) THEN RAISE EXCEPTION 'DUPLICATE_RECRUITER_ASSIGNMENT';END IF;ELSE PERFORM id FROM requisitions WHERE id=NEW.requisition_id FOR UPDATE;IF EXISTS(SELECT 1 FROM requisitions WHERE id=NEW.requisition_id AND recruiter_id=NEW.user_id) THEN RAISE EXCEPTION 'DUPLICATE_RECRUITER_ASSIGNMENT';END IF;END IF;RETURN NEW;END;$$;
+CREATE TRIGGER recruiter_support_not_primary BEFORE INSERT OR UPDATE ON requisition_recruiter_supports FOR EACH ROW EXECUTE FUNCTION recruiter_membership_guard();
+CREATE TRIGGER recruiter_primary_not_support BEFORE UPDATE OF recruiter_id ON requisitions FOR EACH ROW EXECUTE FUNCTION recruiter_membership_guard();
+CREATE TABLE requisition_assignment_versions(requisition_id TEXT PRIMARY KEY REFERENCES requisitions(id),version INTEGER NOT NULL CHECK(version>=0));
+CREATE TABLE requisition_recruiter_events(id TEXT PRIMARY KEY,requisition_id TEXT NOT NULL REFERENCES requisitions(id),version INTEGER NOT NULL,actor_id TEXT NOT NULL,actor_name TEXT NOT NULL,changes_json TEXT NOT NULL,reason TEXT,created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(requisition_id,version));
+CREATE TABLE requisition_operation_requests(actor_id TEXT NOT NULL,request_id TEXT NOT NULL,operation TEXT NOT NULL CHECK(operation IN ('COPY','ASSIGN')),fingerprint TEXT NOT NULL,response_json TEXT NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(actor_id,request_id));
+CREATE FUNCTION recruiter_history_guard() RETURNS TRIGGER LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'RECRUITER_HISTORY_IMMUTABLE';END;$$;
+CREATE TRIGGER recruiter_events_immutable BEFORE UPDATE OR DELETE ON requisition_recruiter_events FOR EACH ROW EXECUTE FUNCTION recruiter_history_guard();
+CREATE TRIGGER recruiter_events_no_truncate BEFORE TRUNCATE ON requisition_recruiter_events FOR EACH STATEMENT EXECUTE FUNCTION recruiter_history_guard();
+CREATE TRIGGER operation_requests_immutable BEFORE UPDATE OR DELETE ON requisition_operation_requests FOR EACH ROW EXECUTE FUNCTION recruiter_history_guard();
+CREATE TRIGGER operation_requests_no_truncate BEFORE TRUNCATE ON requisition_operation_requests FOR EACH STATEMENT EXECUTE FUNCTION recruiter_history_guard();

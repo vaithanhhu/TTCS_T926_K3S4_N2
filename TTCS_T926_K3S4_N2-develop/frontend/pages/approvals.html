@@ -1,0 +1,67 @@
+<div id="approvals-view" class="hidden">
+          <div class="view-header">
+            <div class="view-title-group">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h2>Trung tâm Phê duyệt Tuyển dụng</h2>
+                <span id="approvals-total-badge" class="badge badge-warning font-mono">0 yêu cầu chờ duyệt</span>
+              </div>
+              <p>Dành cho Trưởng phòng Nhân sự, Trưởng bộ phận và Cấp quản lý xem xét và ra quyết định</p>
+            </div>
+          </div>
+
+          <!-- Pending Offers Section -->
+          <div class="panel-card" style="margin-bottom: var(--space-6);">
+            <div class="panel-header">
+              <div class="panel-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                <span>Đề xuất Offer chờ phê duyệt</span>
+              </div>
+              <span class="badge badge-warning" id="pending-offers-badge">0 offer</span>
+            </div>
+            <div class="table-wrapper">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Mã Offer</th>
+                    <th>Ứng viên</th>
+                    <th>Vị trí tuyển dụng</th>
+                    <th>Mức lương đề xuất</th>
+                    <th>Ngày đi làm</th>
+                    <th>Trạng thái</th>
+                    <th style="text-align: center;">Hành động phê duyệt</th>
+                  </tr>
+                </thead>
+                <tbody id="approvals-offers-table-body">
+                  <tr><td colspan="7" style="text-align: center; color: var(--color-text-muted); padding: 24px;">Đang tải danh sách offer cần duyệt...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Requisitions Overview Section -->
+          <div class="panel-card">
+            <div class="panel-header">
+              <div class="panel-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="7" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+                <span>Vị trí Tuyển dụng đang hoạt động & tiến độ</span>
+              </div>
+            </div>
+            <div class="table-wrapper">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Mã</th>
+                    <th>Vị trí</th>
+                    <th>Phòng ban</th>
+                    <th style="text-align: center;">Chỉ tiêu</th>
+                    <th>Trạng thái</th>
+                    <th style="text-align: center;">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody id="approvals-reqs-table-body">
+                  <tr><td colspan="6" style="text-align: center; color: var(--color-text-muted); padding: 24px;">Đang tải danh sách vị trí...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>

@@ -1,0 +1,48 @@
+<div id="offer-detail-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="off-detail-title">
+    <div class="modal-card" style="max-width: 580px;">
+      <div class="modal-header">
+        <h3 id="off-detail-title" class="modal-title">Chi Tiết Thư Mời Nhận Việc (Offer)</h3>
+        <button type="button" id="close-offer-detail-modal" class="modal-close" aria-label="Đóng">&times;</button>
+      </div>
+      <p class="modal-desc">Xem xét chế độ đãi ngộ, phê duyệt thư mời và xác nhận tuyển dụng.</p>
+
+      <div class="modal-body">
+        <div style="background: var(--color-bg-page); border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 14px; margin-bottom: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>Mã Offer: <code class="font-mono" id="off-detail-code" style="color: var(--color-primary); font-weight: 600;">OFF001</code></div>
+            <span id="off-detail-status-badge" class="badge badge-warning">Chờ duyệt</span>
+          </div>
+          <div style="margin-top: 8px; font-weight: 600; font-size: 1.05rem;" id="off-detail-cand-name">Nguyễn Văn An</div>
+          <div style="color: var(--color-text-secondary); margin-top: 4px;">Vị trí: <span id="off-detail-req-title">Senior Backend Engineer</span></div>
+          <div style="margin-top: 8px; font-size: 1.1rem; color: var(--color-primary); font-weight: 700;">
+            Lương đề xuất: <span id="off-detail-salary">25.000.000 đ</span>/tháng
+          </div>
+          <div style="color: var(--color-text-muted); font-size: 0.825rem; margin-top: 4px;">
+            Ngày dự kiến bắt đầu: <span id="off-detail-start-date" style="font-weight: 600; color: var(--color-text);"></span>
+          </div>
+          <div style="color: var(--color-text-muted); font-size: 0.825rem; margin-top: 2px;">
+            Người phê duyệt: <span id="off-detail-approver" style="font-weight: 600; color: var(--color-text);"></span>
+          </div>
+        </div>
+
+        <input type="hidden" id="off-detail-id" />
+
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <button type="button" id="btn-action-approve-offer" class="btn btn-primary btn-block" style="background: var(--color-success); border-color: var(--color-success);">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>Phê duyệt Offer (Chấp thuận tuyển dụng - Hired)</span>
+          </button>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <button type="button" id="btn-action-send-offer" class="btn btn-outline btn-sm">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+              <span>Đánh dấu Đã gửi Offer</span>
+            </button>
+            <button type="button" id="btn-action-reject-offer" class="btn btn-outline btn-sm" style="color: var(--color-danger); border-color: var(--color-danger);">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+              <span>Từ chối Offer</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>

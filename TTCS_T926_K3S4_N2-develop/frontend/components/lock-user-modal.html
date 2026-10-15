@@ -1,0 +1,44 @@
+<div id="lock-user-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="lock-user-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="lock-user-title" class="modal-title" style="color: var(--color-danger);">Khóa tài khoản nhân viên</h3>
+        <button type="button" id="close-lock-user-modal" class="modal-close" aria-label="Đóng">&times;</button>
+      </div>
+      <p class="modal-desc">Tài khoản bị khóa sẽ không thể đăng nhập và bị thu hồi tất cả các phiên làm việc hiện tại.</p>
+
+      <div class="modal-body">
+        <div style="background: var(--color-danger-bg); border: 1px solid var(--color-danger-border); border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 14px; font-size: 0.85rem;">
+          <div style="color: var(--color-danger-text);">Tài khoản: <strong id="lock-user-name" style="color: var(--color-text);"></strong> (<span id="lock-user-email" class="font-mono"></span>)</div>
+          <input type="hidden" id="lock-user-id" />
+        </div>
+
+        <div id="lock-user-alert" class="alert-box hidden" role="alert">
+          <div class="alert-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+          </div>
+          <div class="alert-content">
+            <p id="lock-user-alert-msg" style="margin: 0;"></p>
+          </div>
+        </div>
+
+        <div id="lock-self-warning" class="hidden" style="background: var(--color-danger-bg); border: 1px solid var(--color-danger-border); border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 14px; font-size: 0.825rem; color: var(--color-danger-text);">
+          <strong>Cảnh báo:</strong> Bạn không thể tự khóa tài khoản quản trị của chính mình.
+        </div>
+
+        <form id="lock-user-form">
+          <div class="form-group">
+            <label for="lock-reason-input" class="form-label">Lý do khóa tài khoản <span class="required">*</span></label>
+            <textarea id="lock-reason-input" class="form-input" rows="3" placeholder="Nhập lý do chi tiết (ví dụ: Nhân viên nghỉ việc theo quyết định số...)" required style="height: auto; resize: vertical;"></textarea>
+            <small style="color: var(--color-text-muted); font-size: 0.775rem; margin-top: 4px; display: block;">Lý do này sẽ được ghi nhận vào nhật ký kiểm toán hệ thống.</small>
+          </div>
+
+          <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 10px;">
+            <button type="button" id="cancel-lock-user-btn" class="btn btn-outline btn-sm">Hủy bỏ</button>
+            <button type="submit" id="lock-user-submit-btn" class="btn btn-danger btn-sm">
+              <span>Xác nhận khóa tài khoản</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>

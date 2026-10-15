@@ -1,0 +1,47 @@
+<div id="reassign-handover-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="reassign-handover-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="reassign-handover-title" class="modal-title">Bàn giao & Phân công lại Recruiter</h3>
+        <button type="button" id="close-reassign-handover-modal" class="modal-close" aria-label="Đóng">&times;</button>
+      </div>
+      <p class="modal-desc">Chỉ định chuyên viên mới tiếp nhận vị trí tuyển dụng để gỡ bỏ cảnh báo bàn giao.</p>
+
+      <div class="modal-body">
+        <div style="background: var(--color-bg-page); border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 14px; font-size: 0.85rem;">
+          <div>Mã vị trí: <strong id="handover-req-code" class="font-mono" style="color: var(--color-primary);"></strong></div>
+          <div style="margin-top: 2px;">Tiêu đề: <strong id="handover-req-title"></strong></div>
+          <input type="hidden" id="handover-req-id" />
+        </div>
+
+        <div id="reassign-handover-alert" class="alert-box hidden" role="alert">
+          <div class="alert-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+          </div>
+          <div class="alert-content">
+            <p id="reassign-handover-alert-msg" style="margin: 0;"></p>
+          </div>
+        </div>
+
+        <form id="reassign-handover-form">
+          <div class="form-group">
+            <label for="handover-new-recruiter-select" class="form-label">Chọn Recruiter mới tiếp nhận <span class="required">*</span></label>
+            <select id="handover-new-recruiter-select" class="form-input" required>
+              <option value="">-- Chọn nhân sự tiếp quản --</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="handover-notes-input" class="form-label">Ghi chú biên bản bàn giao</label>
+            <textarea id="handover-notes-input" class="form-input" rows="2" placeholder="Ghi nhận tiến độ bàn giao hồ sơ ứng viên..." style="height: auto;"></textarea>
+          </div>
+
+          <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 10px;">
+            <button type="button" id="cancel-reassign-handover-btn" class="btn btn-outline btn-sm">Hủy bỏ</button>
+            <button type="submit" id="submit-reassign-handover-btn" class="btn btn-primary btn-sm">
+              <span>Xác nhận bàn giao</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>

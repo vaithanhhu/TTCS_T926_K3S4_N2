@@ -1,0 +1,141 @@
+<div id="bulk-import-user-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="bulk-import-user-title">
+    <div class="modal-card" style="width: min(960px, 96vw); max-width: 960px;">
+      <div class="modal-header">
+        <h3 id="bulk-import-user-title" class="modal-title">Nhập danh sách nhân sự từ Excel</h3>
+        <button type="button" id="close-bulk-import-user-modal" class="modal-close" aria-label="Đóng">&times;</button>
+      </div>
+
+      <p class="modal-desc">
+        Tải tệp mẫu, điền dữ liệu nhân sự, xem trước lỗi theo từng dòng rồi thực hiện nhập.
+        Dòng lỗi sẽ bị bỏ qua, dòng hợp lệ vẫn được tạo tài khoản.
+      </p>
+
+      <div class="modal-body">
+        <div id="bulk-import-alert" class="alert-box hidden" role="alert">
+          <div class="alert-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+          </div>
+          <div class="alert-content">
+            <p id="bulk-import-alert-msg" style="margin: 0;"></p>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-bottom: 16px;">
+          <div style="flex: 1; min-width: 260px;">
+            <label for="bulk-import-file-input" class="form-label">
+              Tệp Excel (.xlsx)
+            </label>
+
+            <input
+              type="file"
+              id="bulk-import-file-input"
+              class="form-input"
+              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            />
+          </div>
+
+          <button type="button" id="download-bulk-template-btn" class="btn btn-outline btn-sm">
+            Tải tệp mẫu
+          </button>
+
+          <button type="button" id="preview-bulk-import-btn" class="btn btn-primary btn-sm" disabled>
+            Xem trước
+          </button>
+        </div>
+
+        <div
+          id="bulk-import-selected-file"
+          class="hidden"
+          style="font-size: 0.825rem; color: var(--color-text-muted); margin-bottom: 14px;">
+        </div>
+
+        <div id="bulk-import-preview-summary" class="hidden" style="margin-bottom: 14px;">
+          <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+            <span class="badge badge-primary">
+              Tổng:
+              <strong id="bulk-import-total-rows">0</strong>
+            </span>
+
+            <span class="badge">
+              Hợp lệ:
+              <strong id="bulk-import-valid-rows">0</strong>
+            </span>
+
+            <span class="badge">
+              Có lỗi:
+              <strong id="bulk-import-invalid-rows">0</strong>
+            </span>
+          </div>
+        </div>
+
+        <div
+          id="bulk-import-preview-container"
+          class="hidden"
+          style="overflow-x: auto; overflow-y: auto; max-height: 360px; margin-bottom: 16px;">
+
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width: 70px;">Dòng</th>
+                <th>Họ và tên</th>
+                <th>Email</th>
+                <th>Chức danh</th>
+                <th>Phòng ban</th>
+                <th>Vai trò</th>
+                <th style="min-width: 220px;">Kết quả kiểm tra</th>
+              </tr>
+            </thead>
+
+            <tbody id="bulk-import-preview-body">
+            </tbody>
+          </table>
+        </div>
+
+        <div
+          id="bulk-import-report"
+          class="hidden"
+          style="margin-bottom: 16px; padding: 14px; background: var(--color-bg-page); border: 1px solid var(--color-border); border-radius: var(--radius-sm);">
+
+          <h4 style="font-size: 14px; margin-bottom: 8px;">
+            Báo cáo nhập nhân sự
+          </h4>
+
+          <div style="display: flex; flex-wrap: wrap; gap: 16px; font-size: 0.875rem;">
+            <span>
+              Tổng:
+              <strong id="bulk-import-report-total">0</strong>
+            </span>
+
+            <span>
+              Đã nhập:
+              <strong id="bulk-import-report-imported">0</strong>
+            </span>
+
+            <span>
+              Bỏ qua:
+              <strong id="bulk-import-report-skipped">0</strong>
+            </span>
+          </div>
+
+          <p
+            id="bulk-import-report-message"
+            style="margin: 8px 0 0; font-size: 0.825rem; color: var(--color-text-muted);">
+          </p>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 8px;">
+          <button type="button" id="cancel-bulk-import-btn" class="btn btn-outline btn-sm">
+            Đóng
+          </button>
+
+          <button type="button" id="confirm-bulk-import-btn" class="btn btn-primary btn-sm" disabled>
+            Nhập các dòng hợp lệ
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>

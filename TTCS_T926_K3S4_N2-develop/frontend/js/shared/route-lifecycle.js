@@ -1,0 +1,62 @@
+/** Navigation activates retained pages without rebinding their listeners. */
+function leaveActivePage() {
+  window.ATS_REQUISITION_APPROVAL_UI?.leave();
+  window.ATS_REQUISITION_TRACKING?.leave();
+  window.ATS_REQUISITION_OPERATIONS_UI?.leave();
+  window.ATS_REQUISITION_LIFECYCLE_UI?.leave();
+    window.ATS_JOB_POSTING_DRAFT_UI?.leave();
+  window.ATS_JOB_PUBLICATION_UI?.leave();
+  window.ATS_REQUISITION_FORM_UI?.leave();
+  window.ATS_PUBLIC_JOBS_PAGE?.leave();
+  window.ATS_CANDIDATE_DETAILS?.leave();
+  window.ATS_HEADCOUNT_BUDGET_UI?.leave();
+  if (currentActiveView === 'approval-configurations') window.ATS_APPROVAL_CONFIGURATION_PAGE?.leave();
+  if (currentActiveView === 'change-password') {
+    document.body.appendChild(changePwdModal);
+    changePwdModal.classList.remove('password-page-form');
+  }
+  window.ATS_MOBILE_NAVIGATION.close();
+  window.ATS_ACTION_MENU.close();
+  closeCreateUserResultDialog();
+  document.querySelectorAll('.modal-overlay').forEach(modal => modal.classList.add('hidden'));
+  if (resendCooldownTimer) { clearInterval(resendCooldownTimer); resendCooldownTimer = null; }
+  if (currentActiveView === 'careerPage') clearCareerPagePreviewObjectUrls();
+  if (typeof auditDebounceTimer !== 'undefined') clearTimeout(auditDebounceTimer);
+}
+
+function activateRoute(route) {
+  leaveActivePage();
+  Object.values(views).forEach(view => view?.classList.add('hidden'));
+  document.getElementById('public-jobs-view')?.classList.add('hidden');
+  const publicPage = !route.auth;
+  loginView.classList.toggle('hidden', !publicPage);
+  appShell.classList.toggle('hidden', publicPage);
+  appShell.classList.remove('error-only-shell');
+  appShell.classList.remove('password-only-shell');
+  window.ATS_MOBILE_NAVIGATION.updateActions();
+  if (route.view === 'change-password') {
+    currentActiveView = route.view;
+    appShell.classList.toggle('password-only-shell', Boolean(currentAuthenticatedUser?.mustChangePassword));
+    openChangePwdModal();
+    return;
+  }
+  if (publicPage) {
+    currentActiveView = route.view;
+    if(route.view==='public-jobs'){loginView.classList.add('hidden');document.getElementById('public-jobs-view').classList.remove('hidden');window.ATS_PUBLIC_JOBS_PAGE.load();return;}
+    if (route.view === 'forgot-password') {
+      forgotModal.classList.remove('hidden');
+      if (otpForm && !otpForm.classList.contains('hidden')) resumeResendCooldown();
+    } else if (route.view === 'reset-password') {
+      resetModal.classList.remove('hidden');
+      const query = new URLSearchParams(window.location.search);
+      const token = query.get('token') || query.get('reset_token');
+      if (token) {
+        resetTokenInput.value = token;
+        window.history.replaceState({}, '', '/reset-password');
+      }
+    }
+    return;
+  }
+  activateView(route.view);
+  if(route.view==='approvals')window.ATS_JOB_PUBLICATION_UI?.loadQueue();
+}

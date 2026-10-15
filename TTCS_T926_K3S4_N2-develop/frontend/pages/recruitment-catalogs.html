@@ -1,0 +1,141 @@
+<div id="recruitment-catalogs-view" class="hidden">
+          <div class="view-header">
+            <div class="view-title-group">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h2>Danh mục dùng chung tuyển dụng</h2>
+                <span id="recruitment-catalog-total-badge" class="badge badge-primary font-mono">0 giá trị</span>
+              </div>
+              <p>Quản lý nguồn ứng viên, lý do loại hồ sơ, địa điểm và hình thức làm việc</p>
+            </div>
+
+            <button type="button" id="recruitment-catalog-new-btn" class="btn btn-primary btn-sm">
+               Thêm giá trị
+            </button>
+          </div>
+
+          <div class="filter-toolbar">
+            <div class="toolbar-filters">
+              <div style="min-width: 280px;">
+                <select id="recruitment-catalog-type-filter" class="form-input">
+                  <option value="CANDIDATE_SOURCE">Nguồn ứng viên</option>
+                  <option value="REJECTION_REASON">Lý do loại hồ sơ</option>
+                  <option value="WORK_LOCATION">Địa điểm làm việc</option>
+                  <option value="WORK_MODE">Hình thức làm việc</option>
+                </select>
+              </div>
+            </div>
+
+            <button type="button" id="recruitment-catalog-refresh-btn" class="btn btn-outline btn-sm">
+              Làm mới
+            </button>
+          </div>
+
+          <div style="display: grid; grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); gap: 16px; align-items: start;">
+            <div class="panel-card" style="padding: 0; overflow: hidden;">
+              <div class="table-responsive">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 90px;">Thứ tự</th>
+                      <th>Mã</th>
+                      <th>Tên hiển thị</th>
+                      <th style="width: 110px;">Trạng thái</th>
+                      <th style="width: 190px;">Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody id="recruitment-catalog-table-body">
+                    <tr>
+                      <td colspan="5" style="text-align: center; padding: 24px; color: var(--color-text-muted);">
+                        Chưa tải dữ liệu.
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="panel-card" style="padding: 16px;">
+              <h3 id="recruitment-catalog-form-title" style="margin-top: 0;">Thêm giá trị danh mục</h3>
+
+              <div id="recruitment-catalog-form-alert" class="alert-box hidden" role="alert">
+                <div class="alert-content">
+                  <p id="recruitment-catalog-form-alert-msg" style="margin: 0;"></p>
+                </div>
+              </div>
+
+              <form id="recruitment-catalog-form">
+                <input type="hidden" id="recruitment-catalog-id-input" />
+
+                <div class="form-group">
+                  <label for="recruitment-catalog-type-input" class="form-label">
+                    Loại danh mục
+                  </label>
+                  <select id="recruitment-catalog-type-input" class="form-input" required>
+                    <option value="CANDIDATE_SOURCE">Nguồn ứng viên</option>
+                    <option value="REJECTION_REASON">Lý do loại hồ sơ</option>
+                    <option value="WORK_LOCATION">Địa điểm làm việc</option>
+                    <option value="WORK_MODE">Hình thức làm việc</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label for="recruitment-catalog-code-input" class="form-label">
+                    Mã <span class="required">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="recruitment-catalog-code-input"
+                    class="form-input"
+                    placeholder="Ví dụ: LINKEDIN"
+                    required
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label for="recruitment-catalog-name-input" class="form-label">
+                    Tên hiển thị <span class="required">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="recruitment-catalog-name-input"
+                    class="form-input"
+                    placeholder="Ví dụ: LinkedIn"
+                    required
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label for="recruitment-catalog-order-input" class="form-label">
+                    Thứ tự hiển thị
+                  </label>
+                  <input
+                    type="number"
+                    id="recruitment-catalog-order-input"
+                    class="form-input"
+                    min="0"
+                    value="0"
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label for="recruitment-catalog-status-input" class="form-label">
+                    Trạng thái
+                  </label>
+                  <select id="recruitment-catalog-status-input" class="form-input">
+                    <option value="ACTIVE">Đang áp dụng</option>
+                    <option value="INACTIVE">Ngừng áp dụng</option>
+                  </select>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
+                  <button type="button" id="recruitment-catalog-reset-btn" class="btn btn-outline btn-sm">
+                    Làm lại
+                  </button>
+                  <button type="submit" id="recruitment-catalog-save-btn" class="btn btn-primary btn-sm">
+                    Lưu danh mục
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>

@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Đăng nhập — Hệ thống Tuyển dụng Nội bộ (ATS)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="ats-background">
+    <div class="glow-orb orb-1"></div>
+    <div class="glow-orb orb-2"></div>
+  </div>
+
+  <!-- ROLE-BASED NAVIGATION HEADER (S1-06 AC-01, AC-02, AC-03) -->
+  <header id="app-navbar" class="app-navbar hidden">
+    <div class="nav-container">
+      <div class="nav-brand">
+        <div class="brand-logo-small">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+            <circle cx="9" cy="7" r="4"></circle>
+            <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+          </svg>
+        </div>
+        <span class="nav-brand-title">INTERNAL ATS</span>
+      </div>
+
+      <!-- Desktop Navigation Menu (AC-01 & AC-02) -->
+      <nav id="desktop-nav-menu" class="desktop-nav" aria-label="Menu chính">
+        <!-- Dynamic menu items injected by JS -->
+      </nav>
+
+      <!-- User Profile Badge & Mobile Hamburger -->
+      <div class="nav-actions">
+        <div class="user-chip-mini">
+          <span class="user-chip-avatar" id="nav-user-avatar">U</span>
+          <span class="user-chip-name" id="nav-user-name">User</span>
+          <span class="badge badge-role font-mono" id="nav-user-role">ROLE</span>
+        </div>
+        <button type="button" id="hamburger-btn" class="hamburger-btn" aria-label="Mở menu di động (AC-03)">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MOBILE NAVIGATION DRAWER (AC-03 Responsive >= 360px) -->
+  <div id="mobile-nav-drawer" class="mobile-drawer hidden">
+    <div class="drawer-backdrop" id="drawer-backdrop"></div>
+    <div class="drawer-content">
+      <div class="drawer-header">
+        <strong class="drawer-title">Menu Điều Hướng (AC-01)</strong>
+        <button type="button" id="close-drawer-btn" class="modal-close" aria-label="Đóng menu">&times;</button>
+      </div>
+      <div class="drawer-user-info">
+        <span class="badge badge-role" id="drawer-user-role">ROLE</span>
+        <strong id="drawer-user-name">User Name</strong>
+        <small id="drawer-user-email">email@company.com</small>
+      </div>
+      <nav id="mobile-nav-items" class="drawer-nav" aria-label="Menu di động">
+        <!-- Injected by JS -->
+      </nav>
+      <div class="drawer-footer">
+        <button type="button" id="drawer-logout-btn" class="btn btn-secondary btn-block btn-sm">
+          🚪 Đăng xuất an toàn (AC-02 S1-02)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <main class="main-container">
+    <!-- LOGIN VIEW -->
+    <div id="login-view" class="card-wrapper">
+      <header class="brand-header">
+        <div class="brand-logo">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+            <circle cx="9" cy="7" r="4"></circle>
+            <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+          </svg>
+        </div>
+        <div>
+          <span class="badge badge-primary">SPRINT 1 · S1-01</span>
+          <h1 class="brand-title">Hệ thống Tuyển dụng Nội bộ</h1>
+          <p class="brand-subtitle">Cổng xác thực tập trung cho 7 vai trò nghiệp vụ doanh nghiệp</p>
+        </div>
+      </header>
+
+      <section class="auth-card" aria-labelledby="form-heading">
+        <div class="card-inner">
+          <h2 id="form-heading" class="card-title">Đăng nhập tài khoản</h2>
+          <p class="card-desc">Sử dụng email công ty và mật khẩu được cấp</p>
+
+          <!-- Alert Banner -->
+          <div id="alert-box" class="alert-box hidden" role="alert">
+            <div class="alert-icon" id="alert-icon">⚠️</div>
+            <div class="alert-content">
+              <strong id="alert-title">Thông báo</strong>
+              <p id="alert-message">Email hoặc mật khẩu không chính xác.</p>
+            </div>
+          </div>
+
+          <form id="login-form" novalidate>
+            <div class="form-group">
+              <label for="email" class="form-label">Email công ty <span class="required">*</span></label>
+              <div class="input-container">
+                <span class="input-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect width="20" height="16" x="2" y="4" rx="2"></rect>
+                    <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path>
+                  </svg>
+                </span>
+                <input 
+                  type="email" 
+                  id="email" 
+                  name="email" 
+                  class="form-input" 
+                  placeholder="nhanvien@company.com" 
+                  required 
+                  autocomplete="username"
+                />
+              </div>
+              <span id="email-error" class="field-error"></span>
+            </div>
+
+            <div class="form-group">
+              <div class="label-row">
+                <label for="password" class="form-label">Mật khẩu <span class="required">*</span></label>
+                <button type="button" id="open-forgot-pwd-btn" class="link-btn">Quên mật khẩu?</button>
+              </div>
+              <div class="input-container">
+                <span class="input-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                  </svg>
+                </span>
+                <input 
+                  type="password" 
+                  id="password" 
+                  name="password" 
+                  class="form-input" 
+                  placeholder="••••••••" 
+                  required 
+                  autocomplete="current-password"
+                />
+                <button type="button" id="toggle-pwd-btn" class="toggle-password" aria-label="Hiện/ẩn mật khẩu">
+                  <svg id="eye-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                  </svg>
+                </button>
+              </div>
+              <span id="password-error" class="field-error"></span>
+            </div>
+
+            <button type="submit" id="submit-btn" class="btn btn-primary btn-block">
+              <span id="btn-text">Đăng nhập</span>
+              <span id="btn-spinner" class="spinner hidden"></span>
+            </button>
+          </form>
+
+          <!-- Quick Test Presets for S1-01 & S1-03 Demonstration -->
+          <div class="demo-section">
+            <div class="demo-divider">
+              <span>DEMO NHANH 7 VAI TRÒ NGHIỆP VỤ (AC-01)</span>
+            </div>
+            <p class="demo-instruction">Bấm chọn vai trò để tự động điền email và mật khẩu mẫu:</p>
+            <div class="role-grid">
+              <button type="button" class="role-chip" data-email="admin@company.com" data-role="Admin">
+                <span class="role-chip-code">Admin</span>
+                <span class="role-chip-name">Quản trị HT</span>
+              </button>
+              <button type="button" class="role-chip" data-email="hrmanager@company.com" data-role="HR Manager">
+                <span class="role-chip-code">HR Mgr</span>
+                <span class="role-chip-name">TP Nhân sự</span>
+              </button>
+              <button type="button" class="role-chip" data-email="recruiter@company.com" data-role="Recruiter">
+                <span class="role-chip-code">Recruiter</span>
+                <span class="role-chip-name">Tuyển dụng</span>
+              </button>
+              <button type="button" class="role-chip" data-email="hiringmgr@company.com" data-role="Hiring Manager">
+                <span class="role-chip-code">Hiring Mgr</span>
+                <span class="role-chip-name">Trưởng BP</span>
+              </button>
+              <button type="button" class="role-chip" data-email="interviewer@company.com" data-role="Interviewer">
+                <span class="role-chip-code">Interviewer</span>
+                <span class="role-chip-name">Phỏng vấn</span>
+              </button>
+              <button type="button" class="role-chip" data-email="approver@company.com" data-role="Approver">
+                <span class="role-chip-code">Approver</span>
+                <span class="role-chip-name">Cấp Duyệt</span>
+              </button>
+              <button type="button" class="role-chip" data-email="candidate@example.com" data-role="Candidate">
+                <span class="role-chip-code">Candidate</span>
+                <span class="role-chip-name">Ứng viên</span>
+              </button>
+            </div>
+
+            <div class="test-triggers">
+              <button type="button" id="trigger-wrong-email-btn" class="btn btn-outline btn-sm">
+                🔍 Thử đăng nhập sai email (AC-02 S1-01)
+              </button>
+              <button type="button" id="trigger-lock-btn" class="btn btn-outline btn-danger btn-sm">
+                🔒 Thử nhập sai 5 lần để khóa tạm 15 phút (AC-03 S1-01)
+              </button>
+              <button type="button" id="trigger-forgot-demo-btn" class="btn btn-outline btn-info btn-sm">
+                ✉️ Thử quên mật khẩu & nhận link 30 phút (AC-01 S1-03)
+              </button>
+              <button type="button" id="trigger-forgot-nonexistent-btn" class="btn btn-outline btn-sm">
+                🛡️ Thử quên mật khẩu với email không tồn tại (AC-03 S1-03)
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- POST-LOGIN ROLE LANDING VIEW (AC-01) -->
+    <div id="dashboard-view" class="card-wrapper hidden">
+      <section class="auth-card landing-card">
+        <div class="card-inner">
+          <div class="success-banner">
+            <div class="success-icon">✓</div>
+            <div>
+              <span class="badge badge-success">ĐĂNG NHẬP THÀNH CÔNG (AC-01)</span>
+              <h2 class="landing-welcome">Chào mừng, <span id="user-display-name">Người dùng</span>!</h2>
+              <p class="landing-meta" id="user-display-email">email@company.com</p>
+            </div>
+          </div>
+
+          <div class="user-info-grid">
+            <div class="info-card">
+              <span class="info-label">Chức danh</span>
+              <strong class="info-value" id="user-display-title">—</strong>
+            </div>
+            <div class="info-card">
+              <span class="info-label">Phòng ban / Đơn vị</span>
+              <strong class="info-value" id="user-display-dept">—</strong>
+            </div>
+            <div class="info-card">
+              <span class="info-label">Vai trò được cấp</span>
+              <div class="roles-badge-container" id="user-display-roles">
+                <!-- Roles injected by JS -->
+              </div>
+            </div>
+            <div class="info-card highlight-card">
+              <span class="info-label">Trang chủ mặc định theo vai trò (AC-01)</span>
+              <strong class="info-value font-mono" id="user-display-home">/dashboard</strong>
+            </div>
+            <div class="info-card session-card">
+              <span class="info-label">Trạng thái phiên đăng nhập (S1-02)</span>
+              <div class="session-status-row">
+                <span class="status-indicator online"></span>
+                <span id="session-status-text">Đang hoạt động (Tự động gia hạn)</span>
+              </div>
+              <small class="session-expiry-text">Hết hạn vào: <span id="session-expiry-time">—</span></small>
+            </div>
+            <div class="info-card rbac-card" style="grid-column: 1 / -1;">
+              <span class="info-label">Quyền hạn thực tế nạp từ CSDL (S1-05 RBAC): <strong id="user-perms-count">0 quyền</strong></span>
+              <div class="roles-badge-container" id="user-display-perms" style="margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px;">
+                <!-- Permissions injected by JS -->
+              </div>
+            </div>
+          </div>
+
+          <div class="role-workspace-box" id="role-workspace-preview">
+            <!-- Dynamic workspace description according to role -->
+          </div>
+
+          <!-- S1-05 RBAC Permission Matrix & Default Deny Testing Panel -->
+          <div class="s105-control-panel" style="margin-top: 16px; padding: 16px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px;">
+            <span class="demo-subheading" style="color: #60a5fa; font-weight: 600; display: block; margin-bottom: 8px;">KIỂM THỬ S1-05 · PHÂN QUYỀN RBAC & CƠ CHẾ DEFAULT DENY:</span>
+            <p style="font-size: 13px; color: #94a3b8; margin-bottom: 12px;">Bấm nút để gửi request gọi các API được bảo vệ. Nếu tài khoản không có quyền trong CSDL, hệ thống sẽ chặn với <strong>HTTP 403 Forbidden</strong> theo chuẩn Default Deny:</p>
+            <div class="s102-btn-group" style="display: flex; flex-wrap: wrap; gap: 8px;">
+              <button type="button" id="test-user-create-btn" class="btn btn-outline btn-sm">
+                🛡️ Thử tạo User (Cần: user.create)
+              </button>
+              <button type="button" id="test-candidate-list-btn" class="btn btn-outline btn-sm">
+                📋 Thử xem Ứng viên (Cần: candidate.read)
+              </button>
+              <button type="button" id="test-interview-list-btn" class="btn btn-outline btn-sm">
+                🗓️ Thử xem Phỏng vấn (Cần: interview.read)
+              </button>
+              <button type="button" id="view-rbac-matrix-btn" class="btn btn-outline btn-info btn-sm">
+                📊 Xem Ma trận RBAC 7 vai trò từ CSDL
+              </button>
+              <button type="button" id="trigger-err-401-btn" class="btn btn-outline btn-warning btn-sm">
+                ⚠️ Xem Trang lỗi 401 (S1-07)
+              </button>
+              <button type="button" id="trigger-err-403-btn" class="btn btn-outline btn-danger btn-sm">
+                ⛔ Xem Trang lỗi 403 (S1-07)
+              </button>
+              <button type="button" id="trigger-err-404-btn" class="btn btn-outline btn-sm">
+                🔍 Xem Trang lỗi 404 (S1-07)
+              </button>
+              <button type="button" id="open-users-management-btn" class="btn btn-outline btn-info btn-sm">
+                👥 Quản lý Người dùng (S1-08)
+              </button>
+            </div>
+            <div id="rbac-test-output" class="hidden" style="margin-top: 12px; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 12px; line-height: 1.5;"></div>
+          </div>
+
+          <!-- S1-02 & S1-04 Interactive Controls -->
+          <div class="s102-control-panel">
+            <span class="demo-subheading">THAO TÁC TÀI KHOẢN & PHIÊN LÀM VIỆC:</span>
+            <div class="s102-btn-group">
+              <button type="button" id="open-change-pwd-btn" class="btn btn-primary btn-sm">
+                🔑 Đổi mật khẩu (S1-04)
+              </button>
+              <button type="button" id="renew-session-btn" class="btn btn-outline btn-sm">
+                🔄 Kiểm tra gia hạn tự động (AC-01 S1-02)
+              </button>
+              <button type="button" id="simulate-expired-btn" class="btn btn-outline btn-warning btn-sm">
+                ⏰ Giả lập phiên hết hạn (AC-03 S1-02)
+              </button>
+              <button type="button" id="logout-btn" class="btn btn-secondary btn-sm">
+                🚪 Đăng xuất an toàn server-side (AC-02 S1-02)
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- USERS MANAGEMENT VIEW (S1-08 AC-01, AC-02, AC-03, AC-04) -->
+    <div id="users-view" class="card-wrapper hidden" style="max-width: 1040px; width: 100%;">
+      <section class="auth-card users-card" style="width: 100%;">
+        <div class="card-inner" style="padding: 24px;">
+          <!-- View Header -->
+          <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 20px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 16px;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="badge badge-primary">S1-08 QUẢN TRỊ TÀI KHOẢN NỘI BỘ</span>
+                <span id="users-total-badge" class="badge badge-role font-mono">0 tài khoản</span>
+              </div>
+              <h2 style="font-size: 1.35rem; font-weight: 700; color: #f8fafc; margin-top: 6px;">Danh sách Tài khoản & Phân quyền Nhân sự</h2>
+            </div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+              <button type="button" id="users-back-dashboard-btn" class="btn btn-outline btn-sm">
+                ◀ Về Dashboard
+              </button>
+              <button type="button" id="open-create-user-modal-btn" class="btn btn-primary btn-sm">
+                ➕ Tạo tài khoản mới (AC-01)
+              </button>
+            </div>
+          </div>
+
+          <!-- Search & Filter Toolbar (AC-03) -->
+          <div class="users-toolbar" style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; background: rgba(0, 0, 0, 0.2); padding: 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.06);">
+            <div style="flex: 1; min-width: 220px;">
+              <input type="text" id="users-search-input" class="form-input" style="height: 38px; font-size: 13px;" placeholder="🔍 Tìm theo tên, email, phòng ban... (AC-03)" />
+            </div>
+            <div style="width: 170px;">
+              <select id="users-role-filter" class="form-input" style="height: 38px; font-size: 13px;">
+                <option value="ALL">Tất cả vai trò</option>
+                <option value="ADMIN">Quản trị HT (ADMIN)</option>
+                <option value="HR_MANAGER">TP Nhân sự (HR_MANAGER)</option>
+                <option value="RECRUITER">Tuyển dụng (RECRUITER)</option>
+                <option value="HIRING_MGR">Trưởng BP (HIRING_MGR)</option>
+                <option value="INTERVIEWER">Phỏng vấn (INTERVIEWER)</option>
+                <option value="APPROVER">Cấp Duyệt (APPROVER)</option>
+                <option value="CANDIDATE">Ứng viên (CANDIDATE)</option>
+              </select>
+            </div>
+            <div style="width: 160px;">
+              <select id="users-status-filter" class="form-input" style="height: 38px; font-size: 13px;">
+                <option value="ALL">Tất cả trạng thái</option>
+                <option value="ACTIVE">Hoạt động (ACTIVE)</option>
+                <option value="LOCKED">Đã khóa (LOCKED)</option>
+              </select>
+            </div>
+            <div>
+              <button type="button" id="users-search-btn" class="btn btn-outline btn-sm" style="height: 38px;">
+                Lọc / Làm mới
+              </button>
+            </div>
+          </div>
+
+          <!-- Users Table Container (AC-04) -->
+          <div id="users-table-container" style="overflow-x: auto; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; background: rgba(0, 0, 0, 0.15);">
+            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px;">
+              <thead style="background: rgba(255, 255, 255, 0.06); border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+                <tr>
+                  <th style="padding: 10px 12px;">Họ và tên</th>
+                  <th style="padding: 10px 12px;">Email tài khoản</th>
+                  <th style="padding: 10px 12px;">Chức danh / Phòng ban</th>
+                  <th style="padding: 10px 12px;">Vai trò</th>
+                  <th style="padding: 10px 12px;">Trạng thái</th>
+                  <th style="padding: 10px 12px; text-align: center;">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="users-table-body">
+                <!-- Dynamically loaded rows -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Pagination Bar (AC-04) -->
+          <div id="users-pagination-bar" style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; margin-top: 16px; font-size: 13px; color: #94a3b8;">
+            <div id="users-page-info">
+              Hiển thị 0 - 0 trên 0 tài khoản
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 12px;">Số dòng / trang:</span>
+              <select id="users-limit-select" class="form-input" style="height: 32px; width: 68px; padding: 2px 6px; font-size: 12px;">
+                <option value="10">10</option>
+                <option value="20" selected>20</option>
+                <option value="50">50</option>
+              </select>
+              <button type="button" id="users-prev-btn" class="btn btn-outline btn-xs" disabled>
+                ◀ Trước
+              </button>
+              <span id="users-current-page-badge" class="badge badge-role font-mono" style="padding: 4px 8px;">1 / 1</span>
+              <button type="button" id="users-next-btn" class="btn btn-outline btn-xs" disabled>
+                Sau ▶
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ERROR VIEW (S1-07 AC-01, AC-02, AC-03) -->
+    <div id="error-view" class="card-wrapper hidden">
+      <section class="auth-card error-card">
+        <div class="card-inner" style="text-align: center; padding: 36px 24px;">
+          <div class="error-badge-row" style="display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 16px;">
+            <span class="error-code-badge font-mono" id="error-code-display" style="font-size: 3rem; font-weight: 800; color: #ef4444; line-height: 1;">403</span>
+            <span class="error-icon-big" id="error-icon-display" style="font-size: 2.6rem;">⛔</span>
+          </div>
+          <h2 class="error-heading" id="error-heading-display" style="font-size: 1.4rem; font-weight: 700; color: #f8fafc; margin-bottom: 10px;">Truy cập bị từ chối</h2>
+          <p class="error-message" id="error-message-display" style="font-size: 0.95rem; color: #94a3b8; max-width: 460px; margin: 0 auto 20px; line-height: 1.6;">
+            Bạn không có quyền truy cập vào chức năng hoặc tài nguyên này theo ma trận phân quyền hệ thống.
+          </p>
+
+          <div class="error-details-box" id="error-details-box" style="display: inline-block; padding: 8px 16px; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; margin-bottom: 24px;">
+            <span style="font-size: 0.75rem; color: #64748b; margin-right: 6px;">Mã lỗi kỹ thuật:</span>
+            <code id="error-code-raw" style="color: #cbd5e1; font-size: 0.85rem;">FORBIDDEN_PERMISSION_DENIED</code>
+          </div>
+
+          <div class="error-actions-group" style="display: flex; flex-wrap: wrap; gap: 12px; justify-content: center;">
+            <button type="button" id="error-primary-btn" class="btn btn-primary">
+              <span id="error-primary-btn-text">Về trang chủ của tôi (AC-03)</span>
+            </button>
+            <button type="button" id="error-secondary-btn" class="btn btn-outline">
+              <span id="error-secondary-btn-text">Quay lại trang trước</span>
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- MODAL: QUÊN MẬT KHẨU (S1-03 AC-01 & AC-03) -->
+    <div id="forgot-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="forgot-title">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 id="forgot-title" class="modal-title">Khôi phục mật khẩu (S1-03)</h3>
+          <button type="button" id="close-forgot-modal" class="modal-close" aria-label="Đóng">&times;</button>
+        </div>
+        <p class="modal-desc">Nhập email công ty để nhận liên kết đặt lại có hiệu lực trong 30 phút (AC-01).</p>
+        
+        <div id="forgot-alert" class="alert-box hidden" role="alert">
+          <div class="alert-icon">ℹ️</div>
+          <div class="alert-content">
+            <p id="forgot-alert-msg"></p>
+          </div>
+        </div>
+
+        <form id="forgot-form">
+          <div class="form-group">
+            <label for="forgot-email" class="form-label">Email tài khoản</label>
+            <input type="email" id="forgot-email" class="form-input" placeholder="nhanvien@company.com" required />
+          </div>
+          <button type="submit" id="forgot-submit-btn" class="btn btn-primary btn-block">
+            <span>Gửi liên kết đặt lại mật khẩu</span>
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL: ĐẶT LẠI MẬT KHẨU (S1-03 AC-01 & AC-02) -->
+    <div id="reset-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="reset-title">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 id="reset-title" class="modal-title">Đặt lại mật khẩu mới</h3>
+          <button type="button" id="close-reset-modal" class="modal-close" aria-label="Đóng">&times;</button>
+        </div>
+        <p class="modal-desc">Liên kết chỉ có thể sử dụng 1 lần duy nhất (AC-02). Mật khẩu tối thiểu 8 ký tự gồm chữ và số.</p>
+
+        <div id="reset-alert" class="alert-box hidden" role="alert">
+          <div class="alert-icon">⚠️</div>
+          <div class="alert-content">
+            <p id="reset-alert-msg"></p>
+          </div>
+        </div>
+
+        <form id="reset-form">
+          <input type="hidden" id="reset-token-input" />
+          <div class="form-group">
+            <label for="reset-new-password" class="form-label">Mật khẩu mới</label>
+            <input type="password" id="reset-new-password" class="form-input" placeholder="Tối thiểu 8 ký tự (chữ + số)" required />
+          </div>
+          <div class="form-group">
+            <label for="reset-confirm-password" class="form-label">Xác nhận mật khẩu mới</label>
+            <input type="password" id="reset-confirm-password" class="form-input" placeholder="Nhập lại mật khẩu mới" required />
+          </div>
+          <button type="submit" id="reset-submit-btn" class="btn btn-primary btn-block">
+            <span>Xác nhận đặt lại mật khẩu</span>
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL: ĐỔI MẬT KHẨU TRONG PHIÊN ĐĂNG NHẬP (S1-04 AC-01, AC-02, AC-03) -->
+    <div id="change-pwd-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="change-pwd-title">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 id="change-pwd-title" class="modal-title">Đổi mật khẩu trong phiên (S1-04)</h3>
+          <button type="button" id="close-change-pwd-modal" class="modal-close" aria-label="Đóng">&times;</button>
+        </div>
+        <p class="modal-desc">Bắt buộc nhập mật khẩu hiện tại (AC-01). Mật khẩu mới tối thiểu 8 ký tự có cả chữ và số (AC-02). Đổi xong sẽ thu hồi toàn bộ các phiên đăng nhập khác (AC-03).</p>
+
+        <div id="change-pwd-alert" class="alert-box hidden" role="alert">
+          <div class="alert-icon">⚠️</div>
+          <div class="alert-content">
+            <p id="change-pwd-alert-msg"></p>
+          </div>
+        </div>
+
+        <form id="change-pwd-form">
+          <div class="form-group">
+            <label for="change-current-pwd" class="form-label">Mật khẩu hiện tại * (AC-01)</label>
+            <input type="password" id="change-current-pwd" class="form-input" placeholder="Nhập mật khẩu hiện tại" required autocomplete="current-password" />
+          </div>
+          <div class="form-group">
+            <label for="change-new-pwd" class="form-label">Mật khẩu mới * (AC-02)</label>
+            <input type="password" id="change-new-pwd" class="form-input" placeholder="Tối thiểu 8 ký tự (chữ + số)" required autocomplete="new-password" />
+          </div>
+          <div class="form-group">
+            <label for="change-confirm-pwd" class="form-label">Xác nhận mật khẩu mới *</label>
+            <input type="password" id="change-confirm-pwd" class="form-input" placeholder="Nhập lại mật khẩu mới" required autocomplete="new-password" />
+          </div>
+          <button type="submit" id="change-pwd-submit-btn" class="btn btn-primary btn-block">
+            <span>Xác nhận đổi mật khẩu</span>
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL: XEM MA TRẬN RBAC 7 VAI TRÒ TỪ CSDL (S1-05 AC-01) -->
+    <div id="rbac-matrix-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="rbac-matrix-title">
+      <div class="modal-card" style="max-width: 750px; width: 95%;">
+        <div class="modal-header">
+          <h3 id="rbac-matrix-title" class="modal-title">Ma trận phân quyền 7 vai trò (S1-05 RBAC Matrix)</h3>
+          <button type="button" id="close-rbac-matrix-modal" class="modal-close" aria-label="Đóng">&times;</button>
+        </div>
+        <p class="modal-desc">Dữ liệu được nạp trực tiếp từ 2 bảng <code>permissions</code> và <code>role_permissions</code> trong CSDL SQLite thật.</p>
+        
+        <div id="rbac-matrix-table-container" style="max-height: 400px; overflow-y: auto; margin-top: 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px;">
+          <!-- Dynamically filled table -->
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: TẠO TÀI KHOẢN MỚI (S1-08 AC-01 & AC-02) -->
+    <div id="create-user-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="create-user-title">
+      <div class="modal-card" style="max-width: 540px; width: 95%;">
+        <div class="modal-header">
+          <h3 id="create-user-title" class="modal-title">Tạo tài khoản nội bộ mới (S1-08)</h3>
+          <button type="button" id="close-create-user-modal" class="modal-close" aria-label="Đóng">&times;</button>
+        </div>
+        <p class="modal-desc">Hệ thống sẽ cấp mật khẩu tạm thời an toàn và gửi email kích hoạt (AC-01). Email trùng sẽ bị từ chối (AC-02).</p>
+
+        <div id="create-user-alert" class="alert-box hidden" role="alert">
+          <div class="alert-icon">⚠️</div>
+          <div class="alert-content">
+            <p id="create-user-alert-msg"></p>
+          </div>
+        </div>
+
+        <!-- Success Notification Box showing Temp Password -->
+        <div id="create-user-success-box" class="hidden" style="margin-bottom: 16px; padding: 14px; background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.4); border-radius: 8px;">
+          <h4 style="color: #4ade80; font-size: 14px; font-weight: 700; margin-bottom: 6px;">✓ TẠO TÀI KHOẢN THÀNH CÔNG (AC-01)</h4>
+          <p style="font-size: 13px; color: #cbd5e1; margin-bottom: 8px;">Tài khoản đã được lưu vào CSDL. Mật khẩu tạm được sinh ngẫu nhiên:</p>
+          <div style="background: rgba(0, 0, 0, 0.4); padding: 8px 12px; border-radius: 6px; font-family: monospace; font-size: 15px; color: #60a5fa; font-weight: 700;" id="created-temp-pwd-display">
+            Ats@Temp1234
+          </div>
+          <button type="button" id="view-created-activation-email-btn" class="btn btn-outline btn-xs" style="margin-top: 10px;">
+            ✉️ Mở xem Email kích hoạt mô phỏng
+          </button>
+        </div>
+
+        <form id="create-user-form">
+          <div class="form-group">
+            <label for="create-user-fullname" class="form-label">Họ và tên nhân sự *</label>
+            <input type="text" id="create-user-fullname" class="form-input" placeholder="Nguyễn Văn A" required />
+          </div>
+          <div class="form-group">
+            <label for="create-user-email" class="form-label">Email công ty * (AC-02)</label>
+            <input type="email" id="create-user-email" class="form-input" placeholder="nhansu@company.com" required />
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div class="form-group">
+              <label for="create-user-jobtitle" class="form-label">Chức danh</label>
+              <input type="text" id="create-user-jobtitle" class="form-input" placeholder="Senior Engineer" />
+            </div>
+            <div class="form-group">
+              <label for="create-user-department" class="form-label">Phòng ban / Đơn vị</label>
+              <input type="text" id="create-user-department" class="form-input" placeholder="Phòng Phát Triển Phần Mềm" />
+            </div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div class="form-group">
+              <label for="create-user-phone" class="form-label">Số điện thoại</label>
+              <input type="text" id="create-user-phone" class="form-input" placeholder="0901234567" />
+            </div>
+            <div class="form-group">
+              <label for="create-user-role" class="form-label">Vai trò ban đầu *</label>
+              <select id="create-user-role" class="form-input" required>
+                <option value="INTERVIEWER">Thành viên Phỏng vấn (INTERVIEWER)</option>
+                <option value="RECRUITER">Chuyên viên Tuyển dụng (RECRUITER)</option>
+                <option value="HIRING_MGR">Trưởng bộ phận (HIRING_MGR)</option>
+                <option value="HR_MANAGER">Trưởng phòng Nhân sự (HR_MANAGER)</option>
+                <option value="APPROVER">Cấp Phê duyệt (APPROVER)</option>
+                <option value="ADMIN">Quản trị viên (ADMIN)</option>
+                <option value="CANDIDATE">Ứng viên (CANDIDATE)</option>
+              </select>
+            </div>
+          </div>
+          <button type="submit" id="create-user-submit-btn" class="btn btn-primary btn-block">
+            <span>Tạo tài khoản & Cấp mật khẩu tạm (AC-01)</span>
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL: SỬA THÔNG TIN TÀI KHOẢN (S1-08 AC-03) -->
+    <div id="edit-user-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="edit-user-title">
+      <div class="modal-card" style="max-width: 500px; width: 95%;">
+        <div class="modal-header">
+          <h3 id="edit-user-title" class="modal-title">Cập nhật thông tin tài khoản (AC-03)</h3>
+          <button type="button" id="close-edit-user-modal" class="modal-close" aria-label="Đóng">&times;</button>
+        </div>
+        <p class="modal-desc">Sửa thông tin hồ sơ nhân sự trong CSDL. Quyền yêu cầu: <code>user.update</code>.</p>
+
+        <div id="edit-user-alert" class="alert-box hidden" role="alert">
+          <div class="alert-icon">⚠️</div>
+          <div class="alert-content">
+            <p id="edit-user-alert-msg"></p>
+          </div>
+        </div>
+
+        <form id="edit-user-form">
+          <input type="hidden" id="edit-user-id" />
+          <div class="form-group">
+            <label class="form-label">Email tài khoản</label>
+            <input type="text" id="edit-user-email" class="form-input" disabled style="opacity: 0.7; cursor: not-allowed;" />
+          </div>
+          <div class="form-group">
+            <label for="edit-user-fullname" class="form-label">Họ và tên *</label>
+            <input type="text" id="edit-user-fullname" class="form-input" required />
+          </div>
+          <div class="form-group">
+            <label for="edit-user-jobtitle" class="form-label">Chức danh</label>
+            <input type="text" id="edit-user-jobtitle" class="form-input" />
+          </div>
+          <div class="form-group">
+            <label for="edit-user-department" class="form-label">Phòng ban</label>
+            <input type="text" id="edit-user-department" class="form-input" />
+          </div>
+          <div class="form-group">
+            <label for="edit-user-phone" class="form-label">Số điện thoại</label>
+            <input type="text" id="edit-user-phone" class="form-input" />
+          </div>
+          <button type="submit" id="edit-user-submit-btn" class="btn btn-primary btn-block">
+            <span>Lưu thay đổi (AC-03)</span>
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL: GÁN VÀ THU HỒI VAI TRÒ (S1-09 AC-01, AC-02, AC-03) -->
+    <div id="assign-roles-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="assign-roles-title">
+      <div class="modal-card" style="max-width: 560px; width: 95%;">
+        <div class="modal-header">
+          <h3 id="assign-roles-title" class="modal-title">🛡️ Phân quyền & Gán vai trò (S1-09)</h3>
+          <button type="button" id="close-assign-roles-modal" class="modal-close" aria-label="Đóng">&times;</button>
+        </div>
+        <p class="modal-desc">
+          Người dùng có thể giữ nhiều vai trò cùng lúc và sở hữu hợp nhất toàn bộ quyền (AC-01). Thay đổi có hiệu lực ngay ở thao tác kế tiếp (AC-02).
+        </p>
+
+        <!-- User Target Information Banner -->
+        <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; padding: 10px 14px; margin-bottom: 14px; font-size: 13px;">
+          <div style="color: #cbd5e1;">Tài khoản: <strong id="assign-roles-user-name" style="color: #60a5fa;"></strong> (<span id="assign-roles-user-email" class="font-mono"></span>)</div>
+          <input type="hidden" id="assign-roles-user-id" />
+        </div>
+
+        <div id="assign-roles-alert" class="alert-box hidden" role="alert">
+          <div class="alert-icon">⚠️</div>
+          <div class="alert-content">
+            <p id="assign-roles-alert-msg"></p>
+          </div>
+        </div>
+
+        <div id="assign-roles-self-warning" class="hidden" style="background: rgba(234, 179, 8, 0.15); border: 1px solid rgba(234, 179, 8, 0.4); border-radius: 6px; padding: 10px 12px; margin-bottom: 14px; font-size: 12px; color: #fef08a;">
+          ⚠️ <strong>Ràng buộc AC-03:</strong> Bạn đang phân quyền cho chính tài khoản của mình. Hệ thống sẽ chặn hành vi tự thu hồi vai trò <strong>ADMIN</strong> để chống mất quyền quản trị.
+        </div>
+
+        <form id="assign-roles-form">
+          <div class="form-group">
+            <label class="form-label" style="margin-bottom: 8px;">Danh sách vai trò hệ thống (chọn một hoặc nhiều vai trò - AC-01):</label>
+            <div id="assign-roles-checkbox-container" style="display: flex; flex-direction: column; gap: 8px; max-height: 250px; overflow-y: auto; padding: 10px; background: rgba(0, 0, 0, 0.2); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 6px;">
+              <!-- Dynamic checkboxes rendered here -->
+            </div>
+          </div>
+
+          <div style="margin-top: 14px; display: flex; justify-content: flex-end; gap: 10px;">
+            <button type="button" id="cancel-assign-roles-btn" class="btn btn-outline btn-sm">
+              Hủy bỏ
+            </button>
+            <button type="submit" id="assign-roles-submit-btn" class="btn btn-primary btn-sm">
+              <span>Lưu phân quyền (AC-02)</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL: KHÓA TÀI KHOẢN (S1-10 AC-01 & AC-02) -->
+    <div id="lock-user-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="lock-user-title">
+      <div class="modal-card" style="max-width: 500px; width: 95%;">
+        <div class="modal-header">
+          <h3 id="lock-user-title" class="modal-title">🔒 Khóa tài khoản nhân sự (S1-10)</h3>
+          <button type="button" id="close-lock-user-modal" class="modal-close" aria-label="Đóng">&times;</button>
+        </div>
+        <p class="modal-desc">
+          Tài khoản bị khóa sẽ không thể đăng nhập và bị thu hồi ngay lập tức mọi phiên làm việc đang mở (AC-01).
+        </p>
+
+        <!-- Target Info -->
+        <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 6px; padding: 10px 14px; margin-bottom: 14px; font-size: 13px;">
+          <div style="color: #fca5a5;">Tài khoản cần khóa: <strong id="lock-user-name" style="color: #ffffff;"></strong> (<span id="lock-user-email" class="font-mono"></span>)</div>
+          <input type="hidden" id="lock-user-id" />
+        </div>
+
+        <div id="lock-user-alert" class="alert-box hidden" role="alert">
+          <div class="alert-icon">⚠️</div>
+          <div class="alert-content">
+            <p id="lock-user-alert-msg"></p>
+          </div>
+        </div>
+
+        <div id="lock-self-warning" class="hidden" style="background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.5); border-radius: 6px; padding: 10px 12px; margin-bottom: 14px; font-size: 12px; color: #fca5a5;">
+          ⛔ <strong>Cảnh báo bảo vệ:</strong> Bạn không thể tự khóa tài khoản quản trị của chính mình.
+        </div>
+
+        <form id="lock-user-form">
+          <div class="form-group">
+            <label for="lock-reason-input" class="form-label">Lý do khóa tài khoản * (AC-02 - Bắt buộc ghi nhận):</label>
+            <textarea id="lock-reason-input" class="form-input" rows="3" placeholder="Nhập lý do chi tiết (ví dụ: Nhân sự nghỉ việc theo quyết định số..., đình chỉ công tác, hoặc vi phạm chính sách bảo mật...)" required style="resize: vertical;"></textarea>
+            <small style="color: #94a3b8; font-size: 11px; margin-top: 4px; display: block;">Lý do này sẽ được lưu vào CSDL và nhật ký bảo mật hệ thống (Audit Logs).</small>
+          </div>
+
+          <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 10px;">
+            <button type="button" id="cancel-lock-user-btn" class="btn btn-outline btn-sm">
+              Hủy bỏ
+            </button>
+            <button type="submit" id="lock-user-submit-btn" class="btn btn-sm" style="background: #dc2626; color: #ffffff; border: 1px solid #ef4444;">
+              <span>🔒 Xác nhận khóa tài khoản (AC-01)</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL: CẢNH BÁO BÀN GIAO VỊ TRÍ TUYỂN DỤNG (S1-10 AC-03) -->
+    <div id="handover-warning-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="handover-warning-title">
+      <div class="modal-card" style="max-width: 650px; width: 95%;">
+        <div class="modal-header">
+          <h3 id="handover-warning-title" class="modal-title" style="color: #facc15;">⚠️ Cảnh báo bàn giao vị trí tuyển dụng (AC-03)</h3>
+          <button type="button" id="close-handover-modal" class="modal-close" aria-label="Đóng">&times;</button>
+        </div>
+        <p class="modal-desc" style="color: #fef08a;">
+          Tài khoản đã bị khóa thành công. Tuy nhiên, nhân sự này đang phụ trách các vị trí tuyển dụng dưới đây. Vui lòng phân công lại để không làm gián đoạn pipeline tuyển dụng:
+        </p>
+
+        <div id="handover-requisitions-container" style="max-height: 280px; overflow-y: auto; margin: 14px 0; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; background: rgba(0, 0, 0, 0.25);">
+          <!-- Dynamically filled table/list -->
+        </div>
+
+        <div style="text-align: right; margin-top: 14px;">
+          <button type="button" id="acknowledge-handover-btn" class="btn btn-primary btn-sm">
+            Đã ghi nhận bàn giao & Đóng
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SIMULATED EMAIL INBOX DRAWER (AC-01 DEMO CONVENIENCE) -->
+    <div id="email-inbox-drawer" class="email-drawer hidden">
+      <div class="email-drawer-header">
+        <div class="email-badge-row">
+          <span class="badge badge-primary">MÔ PHỎNG HỘP THƯ EMAIL (S1-03)</span>
+          <button type="button" id="close-email-drawer" class="modal-close">&times;</button>
+        </div>
+        <strong id="email-subject">🔐 [ATS] Yêu cầu đặt lại mật khẩu của bạn</strong>
+      </div>
+      <div class="email-body">
+        <p>Xin chào <strong id="email-recipient">nhanvien@company.com</strong>,</p>
+        <p style="margin-top: 6px;">Hệ thống nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn. Liên kết dưới đây có hiệu lực trong <strong>30 phút</strong> và chỉ sử dụng được <strong>1 lần duy nhất</strong> (AC-01 & AC-02):</p>
+        <div class="email-action-box">
+          <a href="#" id="email-reset-link" class="btn btn-primary btn-sm">👉 Bấm vào đây để đặt lại mật khẩu</a>
+        </div>
+        <small class="email-expiry-notice">Thời hạn hết hiệu lực: <span id="email-expiry-display">30 phút tới</span></small>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer-note">
+    <p>Hệ thống Tuyển dụng Nội bộ — ATS © 2026 · Chuẩn bảo mật OWASP · Password Hashing Scrypt & Database SQLite</p>
+  </footer>
+
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,69 @@
+<div id="referral-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="referral-modal-title">
+  <div class="modal-card" style="max-width: 580px;">
+    <div class="modal-header">
+      <h3 id="referral-modal-title" class="modal-title">🤝 Giới Thiệu Ứng Viên Nội Bộ</h3>
+      <button type="button" id="close-referral-modal" class="modal-close" aria-label="Đóng">&times;</button>
+    </div>
+    <p class="modal-desc">Giới thiệu ứng viên tiềm năng cho các vị trí đang tuyển dụng trong công ty.</p>
+
+    <div class="modal-body">
+      <form id="referral-form" novalidate>
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label for="referral-req-select" class="form-label">
+            Vị trí tuyển dụng <span style="color:#ef4444;">*</span>
+          </label>
+          <select id="referral-req-select" name="requisitionId" class="form-input" required>
+            <option value="">-- Chọn vị trí đang tuyển dụng --</option>
+          </select>
+          <small class="form-error hidden" id="err-referral-req" style="color:#ef4444;display:block;margin-top:2px;"></small>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label for="referral-fullname" class="form-label">
+            Họ và tên ứng viên <span style="color:#ef4444;">*</span>
+          </label>
+          <input type="text" id="referral-fullname" name="fullName" class="form-input" placeholder="Nguyễn Văn B" required />
+          <small class="form-error hidden" id="err-referral-fullname" style="color:#ef4444;display:block;margin-top:2px;"></small>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label for="referral-email" class="form-label">
+            Email ứng viên <span style="color:#ef4444;">*</span>
+          </label>
+          <input type="email" id="referral-email" name="email" class="form-input" placeholder="nguyenvanb@example.com" required />
+          <small class="form-error hidden" id="err-referral-email" style="color:#ef4444;display:block;margin-top:2px;"></small>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label for="referral-phone" class="form-label">
+            Số điện thoại <span style="color:#ef4444;">*</span>
+          </label>
+          <input type="tel" id="referral-phone" name="phoneNumber" class="form-input" placeholder="0987654321" required />
+          <small class="form-error hidden" id="err-referral-phone" style="color:#ef4444;display:block;margin-top:2px;"></small>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label for="referral-notes" class="form-label">
+            Ghi chú giới thiệu (Lý do đề xuất, điểm mạnh của ứng viên)
+          </label>
+          <textarea id="referral-notes" name="notes" class="form-input" rows="3" placeholder="Ứng viên có 3 năm kinh nghiệm làm việc cùng tôi tại..."></textarea>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 16px;">
+          <label for="referral-cvfile" class="form-label">
+            Tải lên CV đính kèm (PDF hoặc DOCX, tối đa 10MB) <span style="color:#ef4444;">*</span>
+          </label>
+          <input type="file" id="referral-cvfile" name="cvFile" class="form-input" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required />
+          <small class="form-error hidden" id="err-referral-cvfile" style="color:#ef4444;display:block;margin-top:2px;"></small>
+        </div>
+
+        <div id="referral-alert" class="alert hidden" style="margin-bottom: 14px; padding: 10px; border-radius: 4px;"></div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 8px;">
+          <button type="button" id="btn-cancel-referral" class="btn btn-outline">Hủy bỏ</button>
+          <button type="submit" id="btn-submit-referral" class="btn btn-primary">Gửi giới thiệu</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
