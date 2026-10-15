@@ -722,8 +722,35 @@ async function runTestSuite() {
 
   recordPass('Test 21: Controller xử lý POST /api/v1/candidates/manual với CV base64 thành công (201)');
 
+  // TEST 22: Chặn triệt để ứng viên trùng email (kien@gmail.com) và số điện thoại (+84/0...) vào cùng một vị trí (AC-02)
+  const firstCand = await service.createManualCandidate({
+    fullName: 'Nguyễn Văn Kiên',
+    email: 'kien@gmail.com',
+    phoneNumber: '0987654321',
+    requisitionId: 'req-frontend',
+    sourceId: 'LINKEDIN'
+  }, null, recruiterAssigned);
+  assert.equal(firstCand.success, true);
+  assert.equal(firstCand.statusCode, 201);
+
+  // Thử thêm lại ứng viên trùng y hệt email và định dạng số điện thoại quốc tế (+84 987 654 321) vào cùng vị trí
+  const dupCandSameReq = await service.createManualCandidate({
+    fullName: 'Kiên Nguyễn',
+    email: 'KIEN@GMAIL.COM ', // test trim và case-insensitive
+    phoneNumber: '+84 987 654 321', // test phone format normalization
+    requisitionId: 'req-frontend',
+    sourceId: 'LINKEDIN'
+  }, null, recruiterAssigned);
+
+  assert.equal(dupCandSameReq.success, false);
+  assert.equal(dupCandSameReq.statusCode, 409);
+  assert.equal(dupCandSameReq.code, 'DUPLICATE_CANDIDATE_IN_POSITION');
+  assert.ok(dupCandSameReq.message.includes('đã có hồ sơ đang xử lý tại vị trí'));
+
+  recordPass('Test 22: AC-02 Chặn triệt để ứng viên trùng kien@gmail.com và định dạng số điện thoại khác nhau vào cùng một vị trí (HTTP 409)');
+
   console.log('\n================================================================');
-  console.log(`KẾT QUẢ TEST SUITE S5-08: HOÀN THÀNH XUẤT SẮC ${passCount}/21 TESTS`);
+  console.log(`KẾT QUẢ TEST SUITE S5-08: HOÀN THÀNH XUẤT SẮC ${passCount}/22 TESTS`);
   console.log('Tất cả các tiêu chí AC-01, AC-02, IDOR & RBAC đã được xác minh 100%!');
   console.log('================================================================\n');
 }

@@ -30,11 +30,15 @@ class CandidateManualEntryService {
   }
 
   /**
-   * Chuẩn hoá chuỗi số điện thoại (chỉ giữ lại các chữ số)
+   * Chuẩn hoá chuỗi số điện thoại (chỉ giữ lại các chữ số, chuẩn hoá tiền tố quốc tế Việt Nam)
    */
   normalizePhoneNumber(phone) {
     if (!phone || typeof phone !== 'string') return '';
-    return phone.replace(/[\s\.\-\(\)\+]/g, '').trim();
+    let digits = phone.replace(/\D/g, '').trim();
+    if (digits.startsWith('84') && digits.length === 11) {
+      digits = '0' + digits.slice(2);
+    }
+    return digits;
   }
 
   /**
@@ -75,17 +79,19 @@ class CandidateManualEntryService {
     const params = [];
 
     if (normEmail) {
-      conditions.push('LOWER(c.email) = ?');
+      conditions.push('LOWER(TRIM(c.email)) = ?');
       params.push(normEmail);
     }
 
-    if (normPhone && normPhone.length >= 8) {
-      // Chuẩn hoá cả phone trong DB để so sánh chính xác
+    if (normPhone && normPhone.length >= 7) {
+      const suffix = normPhone.slice(-7);
       conditions.push(
         `(c.phone_number IS NOT NULL AND c.phone_number <> '' AND ` +
-        `REPLACE(REPLACE(REPLACE(REPLACE(c.phone_number, ' ', ''), '-', ''), '.', ''), '+', '') = ?)`
+        `(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(c.phone_number, ' ', ''), '-', ''), '.', ''), '+', ''), '(', ''), ')', '') = ? ` +
+        `OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(c.phone_number, ' ', ''), '-', ''), '.', ''), '+', ''), '(', ''), ')', '') LIKE ? ` +
+        `OR c.phone_number LIKE ?))`
       );
-      params.push(normPhone);
+      params.push(normPhone, '%' + suffix, '%' + suffix);
     }
 
     let rows = [];
@@ -119,8 +125,18 @@ class CandidateManualEntryService {
     const crossPositionMatches = [];
 
     for (const row of rows) {
-      const isEmailMatch = normEmail && this.normalizeEmail(row.email) === normEmail;
-      const isPhoneMatch = normPhone && this.normalizePhoneNumber(row.phone_number) === normPhone;
+      const dbNormEmail = this.normalizeEmail(row.email);
+      const dbNormPhone = this.normalizePhoneNumber(row.phone_number);
+
+      const isEmailMatch = Boolean(normEmail && dbNormEmail && normEmail === dbNormEmail);
+      const isPhoneMatch = Boolean(normPhone && dbNormPhone && (
+        normPhone === dbNormPhone ||
+        (normPhone.length >= 7 && dbNormPhone.length >= 7 && normPhone.slice(-7) === dbNormPhone.slice(-7))
+      ));
+
+      if (!isEmailMatch && !isPhoneMatch) {
+        continue;
+      }
 
       const matchDetail = {
         candidateId: row.id,
@@ -135,7 +151,13 @@ class CandidateManualEntryService {
         matchField: isEmailMatch && isPhoneMatch ? 'BOTH' : isEmailMatch ? 'EMAIL' : 'PHONE'
       };
 
-      if (requisitionId && row.requisition_id === requisitionId) {
+      const isSamePosition = Boolean(
+        requisitionId &&
+        row.requisition_id &&
+        String(row.requisition_id).trim().toLowerCase() === String(requisitionId).trim().toLowerCase()
+      );
+
+      if (isSamePosition) {
         samePositionMatches.push(matchDetail);
       } else {
         crossPositionMatches.push(matchDetail);
@@ -152,7 +174,7 @@ class CandidateManualEntryService {
       samePositionMatches,
       crossPositionMatches,
       summary: {
-        totalMatches: rows.length,
+        totalMatches: samePositionMatches.length + crossPositionMatches.length,
         samePositionCount: samePositionMatches.length,
         crossPositionCount: crossPositionMatches.length
       }
