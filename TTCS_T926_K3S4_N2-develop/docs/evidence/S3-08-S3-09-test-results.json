@@ -1,0 +1,544 @@
+{
+  "date": "2026-10-09",
+  "branch": "feature/s2-bulk-user-import",
+  "head": "d962ef3a9da49d42b595dba85ca3daa3404454db",
+  "baseline": {
+    "sprint1": 56,
+    "sprint2": 32,
+    "s210": 59,
+    "s305": 36,
+    "s306": 46,
+    "s307": 51,
+    "failed": 0
+  },
+  "isolated": {
+    "results": [
+      {
+        "script": "test:sprint1",
+        "status": "PASS",
+        "passed": 56,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:final-rbac-open",
+        "status": "PASS",
+        "passed": 33,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:requisition-access",
+        "status": "PASS",
+        "passed": 16,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:ats-e2e",
+        "status": "PASS",
+        "passed": 51,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:rbac",
+        "status": "PASS",
+        "passed": 47,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:s3-02",
+        "status": "PASS",
+        "passed": 93,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:s3-01",
+        "status": "PASS",
+        "passed": 108,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:postgres",
+        "status": "PASS",
+        "passed": 15,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:postgres:live",
+        "status": "NOT RUN",
+        "passed": null,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:review-updates",
+        "status": "PASS",
+        "passed": 22,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:s1-01",
+        "status": "PASS",
+        "passed": 8,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:s1-02",
+        "status": "PASS",
+        "passed": 5,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:s1-03",
+        "status": "PASS",
+        "passed": 5,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:s1-03:email",
+        "status": "PASS",
+        "passed": 49,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:s1-04",
+        "status": "PASS",
+        "passed": 5,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:s1-05",
+        "status": "PASS",
+        "passed": 6,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:s1-06",
+        "status": "PASS",
+        "passed": 3,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:s1-07",
+        "status": "PASS",
+        "passed": 4,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:s1-08",
+        "status": "PASS",
+        "passed": 5,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:s1-09",
+        "status": "PASS",
+        "passed": 7,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:s1-10",
+        "status": "PASS",
+        "passed": 8,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:otp",
+        "status": "PASS",
+        "passed": 8,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:sprint2",
+        "status": "PASS",
+        "passed": 32,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:s2-10",
+        "status": "PASS",
+        "passed": 59,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:routing",
+        "status": "PASS",
+        "passed": 182,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:user-ux",
+        "status": "PASS",
+        "passed": 87,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:datetime-dashboard",
+        "status": "PASS",
+        "passed": 28,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:avatar",
+        "status": "PASS",
+        "passed": 21,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:mobile-shell",
+        "status": "PASS",
+        "passed": 53,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:layout",
+        "status": "PASS",
+        "passed": 45,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:coverage:sprint1",
+        "status": "PASS",
+        "passed": 23,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:coverage:sprint2",
+        "status": "PASS",
+        "passed": 25,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:career-upload",
+        "status": "PASS",
+        "passed": 24,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:user-roles-avatar",
+        "status": "PASS",
+        "passed": 17,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:reapproval",
+        "status": "PASS",
+        "passed": 94,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:s3-03",
+        "status": "PASS",
+        "passed": 29,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:s3-04",
+        "status": "PASS",
+        "passed": 55,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:s3-05",
+        "status": "PASS",
+        "passed": 36,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:s3-06",
+        "status": "PASS",
+        "passed": 46,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:s3-07",
+        "status": "PASS",
+        "passed": 51,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:s3-08",
+        "status": "PASS",
+        "passed": 27,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "test:s3-09",
+        "status": "PASS",
+        "passed": 41,
+        "failed": 0,
+        "exitCode": 0
+      },
+      {
+        "script": "backend/tests/test_postgres_startup.js",
+        "status": "PASS",
+        "passed": 11,
+        "failed": 0,
+        "exitCode": 0
+      }
+    ],
+    "suitePass": 42,
+    "suiteNotRun": 1,
+    "caseExecutions": 1540,
+    "caseExecutionsExcludingDuplicateSprint1Aggregate": 1484,
+    "failed": 0,
+    "s308": {
+      "sqlite": 12,
+      "embeddedPostgres": 12,
+      "httpFrontend": 3,
+      "total": 27
+    },
+    "s309": {
+      "sqlite": 19,
+      "embeddedPostgres": 19,
+      "httpFrontend": 3,
+      "total": 41
+    }
+  },
+  "neon": {
+    "migration": 7,
+    "target": {
+      "database": "ats_staging",
+      "schema": "public"
+    },
+    "checksum": "e8d022f82237153295733ceb27b57ada016cbbca0b3f6aea5d6ef67a5213b614",
+    "oldRequisitionFingerprintBefore": "9519375474a1a282bd3a947df9442435",
+    "oldRequisitionFingerprintAfter": "9519375474a1a282bd3a947df9442435",
+    "oldRequisitionDataUnchanged": true,
+    "oldDomainCountsChanged": [],
+    "smoke": {
+      "transaction": "ROLLBACK_ONLY",
+      "passed": [
+        "S308-combined-primary-support-date-filters-clock-and-pagination",
+        "S308-scoped-results-and-filter-options",
+        "S309-unapproved-source-denied",
+        "S309-approved-assigned-source-copies-exact-content-into-DRAFT",
+        "S309-idempotent-create-no-duplicate",
+        "S309-support-edit-with-RBAC-and-no-source-budget-history-mutation",
+        "S309-stale-version-denied",
+        "S309-hidden-salary-public-payload-does-not-leak",
+        "S307-pause-unpublish-remains-compatible-with-new-fields",
+        "rollback-removes-all-fixtures-and-keeps-domain-counts"
+      ],
+      "status": "PASS",
+      "cases": 10,
+      "fixtureCountAfter": 0,
+      "domainCountsUnchanged": true
+    },
+    "readiness": {
+      "mode": "READ_ONLY_STARTUP_AND_HTTP",
+      "passed": [
+        "actual-Neon-startup-with-S308-S309-enabled",
+        "anonymous-draft-and-tracking-APIs-blocked",
+        "public-postings-read-has-no-rollback-fixture",
+        "exact-read-write-grants-with-no-interviewer-candidate-escalation",
+        "schema-types-and-no-historical-clock-backfill-verified"
+      ],
+      "grants": [
+        {
+          "role": "APPROVER",
+          "permission": "job_posting.read"
+        },
+        {
+          "role": "HIRING_MGR",
+          "permission": "job_posting.read"
+        },
+        {
+          "role": "HR_MANAGER",
+          "permission": "job_posting.manage"
+        },
+        {
+          "role": "HR_MANAGER",
+          "permission": "job_posting.read"
+        },
+        {
+          "role": "RECRUITER",
+          "permission": "job_posting.manage"
+        },
+        {
+          "role": "RECRUITER",
+          "permission": "job_posting.read"
+        }
+      ],
+      "columns": [
+        {
+          "table_name": "job_postings",
+          "column_name": "application_deadline",
+          "data_type": "date"
+        },
+        {
+          "table_name": "job_postings",
+          "column_name": "salary_max",
+          "data_type": "numeric"
+        },
+        {
+          "table_name": "job_postings",
+          "column_name": "salary_min",
+          "data_type": "numeric"
+        },
+        {
+          "table_name": "job_postings",
+          "column_name": "show_salary",
+          "data_type": "boolean"
+        },
+        {
+          "table_name": "job_postings",
+          "column_name": "source_submission_id",
+          "data_type": "text"
+        },
+        {
+          "table_name": "job_postings",
+          "column_name": "version",
+          "data_type": "integer"
+        },
+        {
+          "table_name": "job_postings",
+          "column_name": "work_location_id",
+          "data_type": "text"
+        },
+        {
+          "table_name": "job_postings",
+          "column_name": "work_mode_id",
+          "data_type": "text"
+        },
+        {
+          "table_name": "requisitions",
+          "column_name": "opened_at",
+          "data_type": "timestamp with time zone"
+        }
+      ],
+      "status": "PASS",
+      "cases": 5
+    }
+  },
+  "syntax": {
+    "passed": 135,
+    "total": 135
+  },
+  "protectedFiles": [
+    {
+      "file": "backend/src/db/migrations/006_requisition_lifecycle_postgres.sql",
+      "before": "35dc9759c5b46ed17e1b17988a011e1284815c873449b9c656f90e3686a50f8b",
+      "after": "35dc9759c5b46ed17e1b17988a011e1284815c873449b9c656f90e3686a50f8b"
+    },
+    {
+      "file": "backend/src/db/migrations/006_requisition_lifecycle_sqlite.sql",
+      "before": "cc392189e186ce33d08f9037b1b7ba019ac830fd1a6352a7ff3d79ced1a67b05",
+      "after": "cc392189e186ce33d08f9037b1b7ba019ac830fd1a6352a7ff3d79ced1a67b05"
+    },
+    {
+      "file": "backend/data/ats.db",
+      "before": "abd32cc663be58a45dec262bca0effb6bef1ce28a76a9d45523e7ca54d4e28df",
+      "after": "abd32cc663be58a45dec262bca0effb6bef1ce28a76a9d45523e7ca54d4e28df"
+    },
+    {
+      "file": "backend/data/ats.db-shm",
+      "before": "cecda1c8fa43f56a689bcbb27d85403ebfa92af7b06fdeb292ee671eb2a65b71",
+      "after": "cecda1c8fa43f56a689bcbb27d85403ebfa92af7b06fdeb292ee671eb2a65b71"
+    },
+    {
+      "file": "backend/data/ats.db-wal",
+      "before": "f4a470fe8d70acb02cafaf3d85412ac8c3bc44e2473b5d5f2f915af5207f1228",
+      "after": "f4a470fe8d70acb02cafaf3d85412ac8c3bc44e2473b5d5f2f915af5207f1228"
+    },
+    {
+      "file": "backend/data/ats_test.db",
+      "before": "67442a892d6f897d396d22a4007b6bddb525202db8c3bc46f072646f56dd722a",
+      "after": "67442a892d6f897d396d22a4007b6bddb525202db8c3bc46f072646f56dd722a"
+    },
+    {
+      "file": "backend/src/db/migrations/001_postgres.sql",
+      "before": "e9c5a6926c196c523d1ac4e8a808d467b37a85e15f17f8732746803c4dacab2b",
+      "after": "e9c5a6926c196c523d1ac4e8a808d467b37a85e15f17f8732746803c4dacab2b"
+    },
+    {
+      "file": "backend/src/db/migrations/002_approval_configurations_postgres.sql",
+      "before": "46f949e9d7d6a06316aa20ea62a9c0f45be29cd8f242c401d3925ff1c3f9b477",
+      "after": "46f949e9d7d6a06316aa20ea62a9c0f45be29cd8f242c401d3925ff1c3f9b477"
+    },
+    {
+      "file": "backend/src/db/migrations/002_approval_configurations_sqlite.sql",
+      "before": "33318e32b4c4ae377c555312050074377295db94682235a6f2d597ab9b57cee2",
+      "after": "33318e32b4c4ae377c555312050074377295db94682235a6f2d597ab9b57cee2"
+    },
+    {
+      "file": "backend/src/db/migrations/003_requisition_approvals_postgres.sql",
+      "before": "41c375f22d61439ddd61a18ca9adba1a8d3ceb31297c4c35a49c55d52797d0a7",
+      "after": "41c375f22d61439ddd61a18ca9adba1a8d3ceb31297c4c35a49c55d52797d0a7"
+    },
+    {
+      "file": "backend/src/db/migrations/003_requisition_approvals_sqlite.sql",
+      "before": "126d26d938aba06c01627a188b87f49536688d43439c2ac44b0b7963b3860296",
+      "after": "126d26d938aba06c01627a188b87f49536688d43439c2ac44b0b7963b3860296"
+    },
+    {
+      "file": "backend/src/db/migrations/004_headcount_budgets_postgres.sql",
+      "before": "ad3d7325abe16a58705ca4ceac6b55c65dd310ce0d7d17f2aa76d2c821852831",
+      "after": "ad3d7325abe16a58705ca4ceac6b55c65dd310ce0d7d17f2aa76d2c821852831"
+    },
+    {
+      "file": "backend/src/db/migrations/004_headcount_budgets_sqlite.sql",
+      "before": "d7e157a79ba0d566aeb189316120f24f626781a5442550c0764619cca770c9b3",
+      "after": "d7e157a79ba0d566aeb189316120f24f626781a5442550c0764619cca770c9b3"
+    },
+    {
+      "file": "backend/src/db/migrations/005_requisition_operations_postgres.sql",
+      "before": "d09d66b45fb3be952a249c4e12e092d41062d994c25060dc2ff0f0d173f31f1c",
+      "after": "d09d66b45fb3be952a249c4e12e092d41062d994c25060dc2ff0f0d173f31f1c"
+    },
+    {
+      "file": "backend/src/db/migrations/005_requisition_operations_sqlite.sql",
+      "before": "67557fe293740e0ace62f7fba85c265d5fc2b25eac9f3e1f5397c6c0d426cdbf",
+      "after": "67557fe293740e0ace62f7fba85c265d5fc2b25eac9f3e1f5397c6c0d426cdbf"
+    }
+  ],
+  "oldTestsChanged": [],
+  "browser": {
+    "status": "NOT RUN",
+    "reason": "No connected browser instances"
+  },
+  "multiConnectionPostgresStress": {
+    "status": "NOT RUN",
+    "reason": "PGlite integration pool serializes transactions; Neon smoke is rollback-only and not a stress run"
+  },
+  "gitWrites": false,
+  "diffCheck": "PASS"
+}
