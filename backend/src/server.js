@@ -1887,6 +1887,19 @@ async function handleRequest(req, res) {
     return;
   }
 
+  // S5-08 (SCRUM-118): Candidate Manual Entry & Duplicate Detection API
+  if (
+    pathname === '/api/v1/candidates/manual' ||
+    pathname === '/candidates/manual' ||
+    pathname === '/api/v1/candidates/check-duplicate' ||
+    pathname === '/candidates/check-duplicate'
+  ) {
+    const CandidateManualEntryService = require('./services/candidateManualEntryService');
+    const CandidateManualEntryController = require('./controllers/candidateManualEntryController');
+    await new CandidateManualEntryController(new CandidateManualEntryService(db), rbacMiddleware, authController.authService).handle(req, res, parsedUrl, parseBody);
+    return;
+  }
+
   // 13.7.1 API: Create Candidate
   if (req.method === 'POST' && (pathname === '/api/v1/candidates' || pathname === '/candidates')) {
     const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.create'));
@@ -1894,6 +1907,36 @@ async function handleRequest(req, res) {
     try {
       const body = await parseBody(req);
       if (isCandidateOnly(user)) Object.assign(body, { email: user.email, fullName: user.fullName, stage: 'NEW', notes: null, rejectionReasonId: null });
+
+      // S5-08 (SCRUM-118): Kiểm tra chống trùng lặp ứng viên trên cùng vị trí (AC-02)
+      const CandidateManualEntryService = require('./services/candidateManualEntryService');
+      const manualEntryService = new CandidateManualEntryService(db);
+      const dupCheck = await manualEntryService.checkDuplicateCandidate({
+        email: body.email,
+        phoneNumber: body.phoneNumber || body.phone,
+        requisitionId: body.requisitionId
+      });
+
+      if (dupCheck.hasSamePositionDuplicate) {
+        const match = dupCheck.samePositionMatches[0];
+        const matchFieldText = match.matchField === 'BOTH'
+          ? 'email và số điện thoại'
+          : match.matchField === 'EMAIL' ? 'email' : 'số điện thoại';
+        res.writeHead(409, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({
+          success: false,
+          statusCode: 409,
+          code: 'DUPLICATE_CANDIDATE_IN_POSITION',
+          message: `Ứng viên với ${matchFieldText} này đã có hồ sơ đang xử lý tại vị trí "${match.requisitionTitle || 'này'}".`,
+          data: {
+            duplicateType: 'SAME_POSITION',
+            matchField: match.matchField,
+            existingCandidate: match
+          }
+        }));
+        return;
+      }
+
       const result = (await requisitionService.createCandidate(body,user));
       res.writeHead(result.statusCode || 201, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
