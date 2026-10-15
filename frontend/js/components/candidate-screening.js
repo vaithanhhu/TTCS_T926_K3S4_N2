@@ -574,3 +574,4 @@
 
   console.log('[CandidateScreening] Frontend module initialized successfully (S5-09).');
 })();
+
