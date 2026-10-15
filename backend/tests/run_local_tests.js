@@ -53,7 +53,7 @@ async function execute(args, cwd, log, env = environment) {
 
 async function main() {
   const requested = process.argv.slice(2);
-  const available = Object.keys(manifest.scripts).filter(name => name.startsWith('test:') && !['test:local', 'test:postgres:live', 'test:s3-10:pg-live', 'test:qa-s3-06:pg-live', 'test:qa-s3-batch:pg-live'].includes(name));
+  const available = Object.keys(manifest.scripts).filter(name => name.startsWith('test:') && !['test:local', 'test:azure', 'test:postgres:live', 'test:s3-10:pg-live', 'test:qa-s3-06:pg-live', 'test:qa-s3-batch:pg-live'].includes(name));
   const scripts = requested.includes('--all') ? available : requested.length ? requested : ['test:local-demo', 'test:sprint1', 'test:sprint2', 'test:s2-10', ...available.filter(name => /^test:s3-\d\d$/.test(name))];
   if (!fs.existsSync(npm) || scripts.some(name => !available.includes(name))) throw new Error('INVALID_LOCAL_TEST_COMMAND');
   const cache = path.join(directory, 'dependencies');
