@@ -334,3 +334,4 @@
     init: initManualEntryEnhancement
   };
 })();
+
