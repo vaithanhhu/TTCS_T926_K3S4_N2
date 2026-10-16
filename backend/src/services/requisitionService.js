@@ -1721,11 +1721,19 @@ class RequisitionService {
   }
 
   async createInterview(data = {}, actor = null) {
+    return this.#scheduleInterview(data, actor, false);
+  }
+
+  async previewInterview(data = {}, actor = null) {
+    return this.#scheduleInterview(data, actor, true);
+  }
+
+  async #scheduleInterview(data, actor, preview) {
     if (!actor?.id) return {success:false,statusCode:403,code:'INTERVIEW_ACTOR_REQUIRED'};
-    return this.db.transaction(async()=>{
+    const action = async()=>{
       const rbac=new (require('../middlewares/rbacMiddleware'))(this.db);
       if(!await rbac.getAuthorizedActor(actor.id,'interview.create'))return{success:false,statusCode:403,code:'FORBIDDEN_PERMISSION_DENIED',message:'Bạn không có quyền tạo lịch phỏng vấn.'};
-      const candidate=await this.db.prepare('SELECT id,requisition_id FROM candidates WHERE id=?'+(this.db.provider==='postgres'?' FOR UPDATE':'')).get(data.candidateId);
+      const candidate=await this.db.prepare('SELECT id,requisition_id FROM candidates WHERE id=?'+(this.db.provider==='postgres' && !preview?' FOR UPDATE':'')).get(data.candidateId);
       if(!candidate)return{success:false,statusCode:404,code:'CANDIDATE_NOT_FOUND',message:'Không tìm thấy ứng viên.'};
       if(candidate.requisition_id&&data.requisitionId&&candidate.requisition_id!==data.requisitionId)return{success:false,statusCode:400,code:'INTERVIEW_REQUISITION_MISMATCH',message:'Vị trí phỏng vấn không khớp hồ sơ ứng tuyển.'};
 
@@ -1740,7 +1748,7 @@ class RequisitionService {
         interviewerIds = [data.interviewerId];
       }
       if (interviewerIds.some(id => typeof id !== 'string' || !id.trim())) return {success:false,statusCode:400,code:'INTERVIEW_ASSIGNEE_INVALID'};
-      if (this.db.provider === 'postgres') {
+      if (this.db.provider === 'postgres' && !preview) {
         for (const userId of [...interviewerIds].sort()) await this.db.prepare('SELECT pg_advisory_xact_lock(hashtextextended(?,0))').get('interview-scheduling:user:'+userId);
       }
       const fresh=await rbac.getAuthorizedActor(actor.id,'interview.create');
@@ -1751,15 +1759,16 @@ class RequisitionService {
           return { success: false, statusCode: 400, code: 'INTERVIEW_ASSIGNEE_INVALID', message: 'Người phỏng vấn phải đang hoạt động và có quyền đánh giá.' };
         }
       }
-      return this.#createInterviewCore({...data, interviewerId: interviewerIds[0] || data.interviewerId || null, requisitionId: data.requisitionId || candidate.requisition_id});
-    });
+      return this.#createInterviewCore({...data, interviewerId: interviewerIds[0] || data.interviewerId || null, requisitionId: data.requisitionId || candidate.requisition_id}, preview);
+    };
+    return preview ? action() : this.db.transaction(action);
   }
 
-  async #createInterviewCore(data) {
+  async #createInterviewCore(data, preview = false) {
     const candidateId = data.candidateId;
     const hasSchedulingPayload = ['interviewerIds','durationMinutes','interviewFormat','meetingRoom','meetingLink'].some(key => Object.hasOwn(data,key));
     if (!candidateId) return { success: false, statusCode: 400, code: 'CANDIDATE_REQUIRED', message: 'Vui lòng chọn ứng viên.' };
-    const candidate = await this.db.prepare('SELECT id, requisition_id FROM candidates WHERE id = ?' + (this.db.provider === 'postgres' ? ' FOR UPDATE' : '')).get(candidateId);
+    const candidate = await this.db.prepare('SELECT id, requisition_id FROM candidates WHERE id = ?' + (this.db.provider === 'postgres' && !preview ? ' FOR UPDATE' : '')).get(candidateId);
     if (!candidate) return { success: false, statusCode: 404, code: 'CANDIDATE_NOT_FOUND', message: 'Không tìm thấy ứng viên.' };
 
     const policyRequisitionId = data.requisitionId || candidate.requisition_id;
@@ -1839,6 +1848,8 @@ class RequisitionService {
     }
     const conflict = await this.checkInterviewConflict(candidateId, interviewerIds, startMs, durationMinutes);
     if (conflict) return conflict;
+
+    if (preview) return {success:true,statusCode:200};
 
     return this.db.transaction(async () => {
       const id = 'int-' + crypto.randomUUID();

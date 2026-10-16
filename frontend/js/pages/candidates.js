@@ -68,6 +68,7 @@
 
   async function loadCandidates() {
     const request = ++candidateSearchSequence;
+    window.ATS_BULK_INTERVIEWS?.refresh([]);
     const token = sessionStorage.getItem('ats_token');
     if (!token) return;
 
@@ -146,6 +147,7 @@
             </tr>
           `;
         }).join('');
+        window.ATS_BULK_INTERVIEWS?.refresh(list);
         window.CandidateSlaModule?.renderTableBadges();
       }
     } catch (e) {
