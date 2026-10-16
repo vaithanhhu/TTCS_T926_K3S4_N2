@@ -39,9 +39,19 @@
           const candName = (iv.candidate && iv.candidate.fullName) ? iv.candidate.fullName : (iv.candidate_name || 'Ứng viên');
           const reqTitle = (iv.requisition && iv.requisition.title) ? iv.requisition.title : (iv.requisition_title || 'Vị trí');
           const interviewer = (iv.interviewer && iv.interviewer.fullName) ? iv.interviewer.fullName : (iv.interviewer_name || 'Hội đồng tuyển dụng');
+          let interviewerDisplay = interviewer;
+          if (Array.isArray(iv.interviewers) && iv.interviewers.length > 1) {
+            interviewerDisplay = `${interviewer} (+${iv.interviewers.length - 1})`;
+          }
           const schedTime = iv.scheduledTime || iv.scheduled_time || iv.scheduled_at;
           const location = iv.locationOrLink || iv.location || 'Online Google Meet';
           const code = iv.code || (iv.id ? iv.id.toUpperCase() : 'PV');
+          const isOnline = (iv.interviewFormat || iv.interview_format) !== 'IN_PERSON';
+          const formatBadge = (iv.interviewFormat || iv.interview_format)
+            ? `<span class="badge" style="background: ${isOnline ? '#f3e8ff' : '#e0f2fe'}; color: ${isOnline ? '#6b21a8' : '#0369a1'}; margin-right: 4px; font-size: 0.7rem;">${isOnline ? '💻 Online' : '🏢 Trực tiếp'}</span>`
+            : '';
+          const durationMins = iv.durationMinutes || iv.duration_minutes;
+          const durationBadge = durationMins ? `<span style="font-size: 0.75rem; color: var(--color-text-muted);">(${durationMins}p)</span>` : '';
 
           return `
             <tr>
@@ -55,14 +65,17 @@
                     data-interview-index="${index}"
                     style="width: 32px; height: 32px; font-size: 0.75rem;"
                   >${escapeHtml(interviewer.charAt(0).toUpperCase())}</div>
-                  <span>${escapeHtml(interviewer)}</span>
+                  <span>${escapeHtml(interviewerDisplay)}</span>
                 </div>
               </td>
               <td>
-                <div style="font-weight: 600;">${new Date(schedTime).toLocaleDateString('vi-VN')}</div>
-                <div style="font-size: 0.775rem; color: var(--color-text-muted);">${new Date(schedTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</div>
+                <div style="font-weight: 600;">${new Date(schedTime).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</div>
+                <div style="font-size: 0.775rem; color: var(--color-text-muted);">${new Date(schedTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' })}</div>
               </td>
-              <td>${escapeHtml(location)}</td>
+              <td>
+                <div>${formatBadge}${durationBadge}</div>
+                <div style="font-size: 0.8rem; margin-top: 2px;">${escapeHtml(location)}</div>
+              </td>
               <td><span class="badge ${statusBadge}">${statusText}</span></td>
               <td style="text-align: center;">
                 <button type="button" class="btn btn-outline btn-xs" onclick="window.ATS_APP_HELPERS.viewInterviewDetails(${escapeHtml(JSON.stringify(iv.id))})">

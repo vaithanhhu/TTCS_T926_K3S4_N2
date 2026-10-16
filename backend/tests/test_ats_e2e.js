@@ -192,8 +192,8 @@ async function main() {
     await test('Candidate own profile interview and offers readback are scoped at backend', async () => {
       const candidate = await api('POST', '/candidates', 'RECRUITER', { fullName: 'E2E Candidate', email: 'candidate@example.com',requisitionId:'req-001' }); assert.equal(candidate.status, 201);
       const other = await api('POST', '/candidates', 'RECRUITER', { fullName: 'E2E Other', email: 'other@example.test',requisitionId:'req-001' }); assert.equal(other.status, 201);
-      for (const id of [candidate.data.data.id, other.data.data.id]) {
-        assert.equal((await api('POST', '/interviews', 'RECRUITER', { candidateId: id, interviewerId: 'usr-interviewer', roundName: 'E2E', scheduledTime: '2027-01-01T12:00:00Z' })).status, 201);
+      for (const [slot, id] of [candidate.data.data.id, other.data.data.id].entries()) {
+        assert.equal((await api('POST', '/interviews', 'RECRUITER', { candidateId: id, interviewerId: 'usr-interviewer', roundName: 'E2E', scheduledTime: '2027-01-01T' + String(12 + slot * 2).padStart(2,'0') + ':00:00Z' })).status, 201);
         assert.equal((await api('POST', '/offers', 'RECRUITER', { candidateId: id, salaryMonthly: 18000000, startDate: '2027-01-01' })).status, 201);
       }
       for (const [route, key] of [['/candidates', 'candidates'], ['/interviews', 'interviews'], ['/offers', 'offers']]) {
@@ -204,8 +204,8 @@ async function main() {
     });
     await test('Interview scheduling grants follow confirmed roles without expanding evaluator permissions', async () => {
       const candidateId = (await api('GET', '/candidates', 'ADMIN')).data.candidates[0].id;
-      for (const [role] of fixtures) {
-        const response = await api('POST', '/interviews', role, { candidateId, interviewerId: 'usr-interviewer', scheduledTime: '2027-01-02T12:00:00Z' }); assert.equal(response.status, ['ADMIN', 'HR_MANAGER', 'RECRUITER'].includes(role) ? 201 : 403, role);
+      for (const [slot, [role]] of fixtures.entries()) {
+        const response = await api('POST', '/interviews', role, { candidateId, interviewerId: 'usr-interviewer', scheduledTime: '2027-01-02T' + String(8 + slot * 2).padStart(2,'0') + ':00:00Z' }); assert.equal(response.status, ['ADMIN', 'HR_MANAGER', 'RECRUITER'].includes(role) ? 201 : 403, role);
         assert.equal(runtimes[role].nodes.get('open-create-interview-modal-btn').classList.contains('hidden'), !['ADMIN', 'HR_MANAGER', 'RECRUITER'].includes(role), role);
       }
     });
@@ -254,9 +254,9 @@ async function main() {
       for (const [role, id] of fixtures) assert.equal(await rbac.hasPermission(id, 'interview.create'), ['ADMIN', 'HR_MANAGER', 'RECRUITER'].includes(role));
       assert.equal(await rbac.hasPermission('usr-hr-mgr', 'approval_configuration.manage'), true);
     });
-    for (const email of ['candidate@example.com', 'other@example.test']) {
+    for (const [slot, email] of ['candidate@example.com', 'other@example.test'].entries()) {
       const created = await service.createCandidate({ fullName: 'PG E2E', email }); assert.equal(created.success, true);
-      await service.createInterview({ candidateId: created.data.id, interviewerId: 'usr-interviewer', scheduledTime: '2027-01-01T12:00:00Z' });
+      await service.createInterview({ candidateId: created.data.id, interviewerId: 'usr-interviewer', scheduledTime: '2027-01-01T' + String(12 + slot * 2).padStart(2,'0') + ':00:00Z' }, {id:'usr-admin'});
       await service.createOffer({ candidateId: created.data.id, salaryMonthly: 18000000, startDate: '2027-01-01' });
     }
     const candidateViewer = await rbac.getAuthorizedActor('usr-admin', 'candidate.read');

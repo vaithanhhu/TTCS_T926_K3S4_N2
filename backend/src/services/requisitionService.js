@@ -1240,20 +1240,72 @@ class RequisitionService {
   /**
    * Get interviews list
    */
+  async hasInterviewSchedulingColumns() {
+    const columns = this.db.provider === 'postgres'
+      ? await this.db.prepare("SELECT column_name AS name FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='interviews'").all()
+      : await this.db.prepare('PRAGMA table_info(interviews)').all();
+    const ready = ['duration_minutes', 'interview_format', 'meeting_room', 'meeting_link'].every(name => columns.some(column => column.name === name));
+    if (!ready) return false;
+    const tables = this.db.provider === 'postgres'
+      ? await this.db.prepare("SELECT table_name AS name FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='interview_interviewers'").all()
+      : await this.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='interview_interviewers'").all();
+    return tables.length === 1;
+  }
+
   async getInterviews(options = {}) {
     if(options.viewer){const fresh=await new(require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(options.viewer.id,options.evaluationsOnly?'interview.evaluation.read':'interview.read');if(!fresh)return{success:false,statusCode:403,code:'INTERVIEW_FORBIDDEN',message:'Bạn không có quyền xem lịch phỏng vấn.',interviews:[]};options={...options,viewer:fresh};}
     const conditions=[],params=[];
     if (options.candidateEmail) { conditions.push('LOWER(c.email)=LOWER(?)');params.push(options.candidateEmail); }
     const viewer=options.viewer;
+    const hasColumns = await this.hasInterviewSchedulingColumns();
     if (viewer && !viewer.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role)) && !(options.evaluationsOnly && viewer.roles.includes('APPROVER'))) {
       const scopes=[];
       if (viewer.roles.includes('HIRING_MGR')) {scopes.push(this.hiringRequisitionScope());params.push(viewer.id,viewer.id,viewer.id);}
       if(viewer.roles.includes('RECRUITER')){const scope=this.recruiterScope('r',viewer.id),candidateScope=this.recruiterScope('candidate_position',viewer.id);scopes.push('('+scope.condition+' AND EXISTS(SELECT 1 FROM requisitions candidate_position WHERE candidate_position.id=c.requisition_id AND '+candidateScope.condition+'))');params.push(...scope.params,...candidateScope.params);}
-      if (viewer.roles.includes('INTERVIEWER')) {scopes.push('i.interviewer_id=?');params.push(viewer.id);}
+      if (viewer.roles.includes('INTERVIEWER')) {
+        if (hasColumns && !options.evaluationsOnly) {
+          scopes.push('(i.interviewer_id=? OR EXISTS (SELECT 1 FROM interview_interviewers ii WHERE ii.interview_id=i.id AND ii.user_id=?))');
+          params.push(viewer.id, viewer.id);
+        } else {
+          scopes.push('i.interviewer_id=?');
+          params.push(viewer.id);
+        }
+      }
       if (viewer.roles.includes('CANDIDATE')) {scopes.push('LOWER(c.email)=LOWER(?)');params.push(viewer.email);}
       conditions.push(scopes.length?'('+scopes.join(' OR ')+')':'1=0');
     }
-    const stmt = this.db.prepare(`
+    const stmt = this.db.prepare(hasColumns ? `
+      SELECT
+        i.id,
+        i.round_name,
+        i.scheduled_time,
+        i.location_or_link,
+        i.duration_minutes,
+        i.interview_format,
+        i.meeting_room,
+        i.meeting_link,
+        i.status,
+        i.feedback,
+        i.score,
+        i.created_at,
+        c.id AS candidate_id,
+        c.full_name AS candidate_name,
+        c.email AS candidate_email,
+        c.phone_number AS candidate_phone,
+        r.id AS requisition_id,
+        r.title AS requisition_title,
+        r.department_id,
+        r.department_name,
+        u.id AS interviewer_id,
+        u.full_name AS interviewer_name,
+        u.email AS interviewer_email
+      FROM interviews i
+      LEFT JOIN candidates c ON i.candidate_id = c.id
+      LEFT JOIN requisitions r ON COALESCE(i.requisition_id,c.requisition_id) = r.id
+      LEFT JOIN users u ON i.interviewer_id = u.id
+      ${conditions.length?'WHERE '+conditions.join(' AND '):''}
+      ORDER BY i.scheduled_time DESC
+    ` : `
       SELECT
         i.id,
         i.round_name,
@@ -1281,37 +1333,94 @@ class RequisitionService {
       ${conditions.length?'WHERE '+conditions.join(' AND '):''}
       ORDER BY i.scheduled_time DESC
     `);
-
     const rows = (await stmt.all(...params));
+
+    const interviewIds = rows.map(r => r.id);
+    let interviewerMap = new Map();
+    if (hasColumns && interviewIds.length > 0) {
+      {
+        const placeholders = interviewIds.map(() => '?').join(',');
+        const assignees = await this.db.prepare(`
+          SELECT ii.interview_id, ii.user_id, ii.role, u.full_name, u.email
+          FROM interview_interviewers ii
+          JOIN users u ON u.id = ii.user_id
+          WHERE ii.interview_id IN (${placeholders})
+          ORDER BY ii.role DESC, u.full_name ASC
+        `).all(...interviewIds);
+        for (const a of assignees) {
+          if (!interviewerMap.has(a.interview_id)) interviewerMap.set(a.interview_id, []);
+          interviewerMap.get(a.interview_id).push({
+            id: a.user_id,
+            fullName: a.full_name,
+            email: a.email,
+            role: a.role
+          });
+        }
+      }
+    }
+
+    const calendarOnly = new Set();
+    if (viewer?.roles.includes('INTERVIEWER') && !viewer.roles.some(role => ['ADMIN','HR_MANAGER'].includes(role)) && !(options.evaluationsOnly && viewer.roles.includes('APPROVER'))) {
+      for (const row of rows) {
+        if (row.interviewer_id === viewer.id || !interviewerMap.get(row.id)?.some(member => member.id === viewer.id)) continue;
+        let internalRead = false;
+        if (viewer.roles.includes('HIRING_MGR')) internalRead = await this.canReadHiringRequisition(row.requisition_id,viewer.id);
+        if (!internalRead && viewer.roles.includes('RECRUITER')) {
+          const candidate = await this.db.prepare('SELECT requisition_id FROM candidates WHERE id=?').get(row.candidate_id);
+          internalRead = await this.recruiterAssigned(row.requisition_id,viewer.id) && await this.recruiterAssigned(candidate?.requisition_id,viewer.id);
+        }
+        if (!internalRead) calendarOnly.add(row.id);
+      }
+    }
+
     return {
       success: true,
       total: rows.length,
-      interviews: rows.map(r => ({
-        id: r.id,
-        roundName: r.round_name,
-        scheduledTime: r.scheduled_time,
-        locationOrLink: r.location_or_link,
-        status: r.status,
-        feedback: viewer?.roles.every(role=>role==='CANDIDATE')?null:r.feedback,
-        score: viewer?.roles.every(role=>role==='CANDIDATE')?null:r.score,
-        createdAt: r.created_at,
-        candidate: {
-          id: r.candidate_id,
-          fullName: r.candidate_name,
-          email: r.candidate_email,
-          phone: r.candidate_phone
-        },
-        requisition: {
-          id: r.requisition_id,
-          title: r.requisition_title,
-          departmentName: r.department_name
-        },
-        interviewer: r.interviewer_id ? {
+      interviews: rows.map(r => {
+        const interviewers = interviewerMap.get(r.id) || (r.interviewer_id ? [{
           id: r.interviewer_id,
           fullName: r.interviewer_name,
-          email: r.interviewer_email
-        } : null
-      }))
+          email: r.interviewer_email,
+          role: 'PRIMARY'
+        }] : []);
+        const hideEvaluation = calendarOnly.has(r.id) || viewer?.roles.every(role => role === 'CANDIDATE');
+        const ownApplication = viewer?.roles.includes('CANDIDATE') && typeof viewer.email === 'string' && typeof r.candidate_email === 'string' && viewer.email.toLowerCase() === r.candidate_email.toLowerCase();
+        return {
+          id: r.id,
+          roundName: r.round_name,
+          scheduledTime: this.parseInterviewTimestamp(r.scheduled_time) === null ? r.scheduled_time : new Date(this.parseInterviewTimestamp(r.scheduled_time)).toISOString(),
+          durationMinutes: r.duration_minutes || 60,
+          interviewFormat: r.interview_format || ((typeof r.location_or_link === 'string' && r.location_or_link.trim() && !/^https?:\/\//i.test(r.location_or_link.trim())) ? 'IN_PERSON' : 'ONLINE'),
+          meetingRoom: r.meeting_room || null,
+          meetingLink: r.meeting_link || null,
+          locationOrLink: r.location_or_link || r.meeting_room || r.meeting_link || 'Google Meet Online',
+          status: r.status,
+          feedback: hideEvaluation?null:r.feedback,
+          score: hideEvaluation?null:r.score,
+          createdAt: r.created_at,
+          candidate: calendarOnly.has(r.id) && !ownApplication ? {id:r.candidate_id,fullName:r.candidate_name} : {
+            id: r.candidate_id,
+            fullName: r.candidate_name,
+            email: r.candidate_email,
+            phone: r.candidate_phone
+          },
+          requisition: {
+            id: r.requisition_id,
+            title: r.requisition_title,
+            departmentName: r.department_name
+          },
+          interviewer: r.interviewer_id ? {
+            id: r.interviewer_id,
+            fullName: r.interviewer_name,
+            email: r.interviewer_email
+          } : (interviewers[0] ? {
+            id: interviewers[0].id,
+            fullName: interviewers[0].fullName,
+            email: interviewers[0].email
+          } : null),
+          interviewers: calendarOnly.has(r.id) ? interviewers.map(({email,...member}) => member) : interviewers
+        };
+      })
     };
   }
 
@@ -1553,56 +1662,279 @@ class RequisitionService {
   /**
    * Schedule new interview
    */
-  async createInterview(data = {}, actor = null) {
-    if(actor)return this.db.transaction(async()=>{
-      const rbac=new (require('../middlewares/rbacMiddleware'))(this.db);
-      if(!await rbac.getAuthorizedActor(actor.id,'interview.create'))return{success:false,statusCode:403,code:'FORBIDDEN_PERMISSION_DENIED',message:'Bạn không có quyền tạo lịch phỏng vấn.'};
-      const candidate=await this.db.prepare('SELECT id,requisition_id FROM candidates WHERE id=?').get(data.candidateId);
-      if(!candidate)return{success:false,statusCode:404,code:'CANDIDATE_NOT_FOUND',message:'Không tìm thấy ứng viên.'};
-      if(candidate.requisition_id&&data.requisitionId&&candidate.requisition_id!==data.requisitionId)return{success:false,statusCode:400,code:'INTERVIEW_REQUISITION_MISMATCH',message:'Vị trí phỏng vấn không khớp hồ sơ ứng tuyển.'};
-      const fresh=await rbac.getAuthorizedActor(actor.id,'interview.create');
-      if(!fresh.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))){const access=await this.candidateAccess(data.candidateId,fresh);if(!access.success)return access;}
-      if(data.interviewerId&&!await rbac.getAuthorizedActor(data.interviewerId,'interview.evaluate'))return{success:false,statusCode:400,code:'INTERVIEW_ASSIGNEE_INVALID',message:'Người phỏng vấn phải đang hoạt động và có quyền đánh giá.'};
-      return this.createInterview({...data,requisitionId:data.requisitionId||candidate.requisition_id},null);
-    });
-    const policyRequisitionId=data.requisitionId||(await this.db.prepare('SELECT requisition_id FROM candidates WHERE id=?').get(data.candidateId))?.requisition_id;
-    if(policyRequisitionId)await this.openPolicy.notDraft(policyRequisitionId);
-    const candidateId = data.candidateId;
-    const requisitionId = data.requisitionId || null;
-    const interviewerId = data.interviewerId || null;
-    const roundName = data.roundName || 'Phỏng vấn chuyên môn';
-    const scheduledTime = data.scheduledTime;
-    const locationOrLink = data.locationOrLink || 'Google Meet Online';
-
-    if (!candidateId) return { success: false, statusCode: 400, message: 'Vui lòng chọn ứng viên.' };
-    if (!scheduledTime) return { success: false, statusCode: 400, message: 'Vui lòng chọn thời gian phỏng vấn.' };
-
-    const id = 'int-' + crypto.randomUUID();
-    const stmt = this.db.prepare(`
-      INSERT INTO interviews (id, candidate_id, requisition_id, interviewer_id, round_name, scheduled_time, location_or_link, status, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'SCHEDULED', datetime('now'))
-    `);
-    (await stmt.run(id, candidateId, requisitionId, interviewerId, roundName, scheduledTime, locationOrLink));
-
-    // Update candidate stage to INTERVIEW
-    (await this.db.prepare("UPDATE candidates SET stage = 'INTERVIEW' WHERE id = ?").run(candidateId));
-
-    return { success: true, statusCode: 201, message: 'Lên lịch phỏng vấn thành công.', data: { id } };
+  parseInterviewTimestamp(value) {
+    if (value instanceof Date) return Number.isFinite(value.getTime()) ? value.getTime() : null;
+    if (typeof value !== 'string') return null;
+    const match = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?(Z|[+-]\d{2}:?\d{2})?$/i.exec(value.trim());
+    if (!match) return null;
+    const [,year,month,day,hour,minute,second = '00',fraction = '',offset = '+07:00'] = match;
+    const calendar = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+    if (calendar.getUTCFullYear() !== Number(year) || calendar.getUTCMonth() !== Number(month) - 1 || calendar.getUTCDate() !== Number(day) || Number(hour) > 23 || Number(minute) > 59 || Number(second) > 59) return null;
+    if (offset.toUpperCase() !== 'Z' && (Number(offset.slice(1,3)) > 23 || Number(offset.replace(':','').slice(3)) > 59)) return null;
+    const result = Date.parse(year + '-' + month + '-' + day + 'T' + hour + ':' + minute + ':' + second + (fraction ? '.' + fraction : '') + offset);
+    return Number.isFinite(result) ? result : null;
   }
 
-  /**
-   * Update interview status / score / feedback
-   */
+  async checkInterviewConflict(candidateId, interviewerIds, startMs, durationMinutes) {
+    const endMs = startMs + durationMinutes * 60 * 1000;
+    const hasColumns = await this.hasInterviewSchedulingColumns();
+    const candInterviews = await this.db.prepare(hasColumns
+      ? "SELECT id, scheduled_time, duration_minutes FROM interviews WHERE candidate_id = ? AND status = 'SCHEDULED'"
+      : "SELECT id, scheduled_time FROM interviews WHERE candidate_id = ? AND status = 'SCHEDULED'"
+    ).all(candidateId);
+    for (const iv of candInterviews) {
+      const s = this.parseInterviewTimestamp(iv.scheduled_time);
+      if (s !== null) {
+        const dur = (hasColumns && Number(iv.duration_minutes)) || 60;
+        const e = s + dur * 60 * 1000;
+        if (Math.max(startMs, s) < Math.min(endMs, e)) {
+          return { success: false, statusCode: 409, code: 'INTERVIEW_CANDIDATE_CONFLICT', message: 'Ứng viên đã có lịch phỏng vấn khác trong khoảng thời gian này.' };
+        }
+      }
+    }
+    if (interviewerIds.length > 0) {
+      const placeholders = interviewerIds.map(() => '?').join(',');
+      const intInterviews = await this.db.prepare(hasColumns ? `
+        SELECT DISTINCT i.id, i.scheduled_time, i.duration_minutes, u.id AS user_id, u.full_name
+        FROM interviews i
+        LEFT JOIN interview_interviewers ii ON ii.interview_id = i.id
+        JOIN users u ON u.id = COALESCE(ii.user_id, i.interviewer_id)
+        WHERE i.status = 'SCHEDULED' AND u.id IN (${placeholders})
+      ` : `
+        SELECT DISTINCT i.id, i.scheduled_time, u.id AS user_id, u.full_name
+        FROM interviews i
+        JOIN users u ON u.id = i.interviewer_id
+        WHERE i.status = 'SCHEDULED' AND u.id IN (${placeholders})
+      `).all(...interviewerIds);
+      for (const iv of intInterviews) {
+        const s = this.parseInterviewTimestamp(iv.scheduled_time);
+        if (s !== null) {
+          const dur = (hasColumns && Number(iv.duration_minutes)) || 60;
+          const e = s + dur * 60 * 1000;
+          if (Math.max(startMs, s) < Math.min(endMs, e)) {
+            return { success: false, statusCode: 409, code: 'INTERVIEW_INTERVIEWER_CONFLICT', message: 'Người phỏng vấn ' + (iv.full_name || '') + ' đã có lịch phỏng vấn khác trong khoảng thời gian này.' };
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  async createInterview(data = {}, actor = null) {
+    if (!actor?.id) return {success:false,statusCode:403,code:'INTERVIEW_ACTOR_REQUIRED'};
+    return this.db.transaction(async()=>{
+      const rbac=new (require('../middlewares/rbacMiddleware'))(this.db);
+      if(!await rbac.getAuthorizedActor(actor.id,'interview.create'))return{success:false,statusCode:403,code:'FORBIDDEN_PERMISSION_DENIED',message:'Bạn không có quyền tạo lịch phỏng vấn.'};
+      const candidate=await this.db.prepare('SELECT id,requisition_id FROM candidates WHERE id=?'+(this.db.provider==='postgres'?' FOR UPDATE':'')).get(data.candidateId);
+      if(!candidate)return{success:false,statusCode:404,code:'CANDIDATE_NOT_FOUND',message:'Không tìm thấy ứng viên.'};
+      if(candidate.requisition_id&&data.requisitionId&&candidate.requisition_id!==data.requisitionId)return{success:false,statusCode:400,code:'INTERVIEW_REQUISITION_MISMATCH',message:'Vị trí phỏng vấn không khớp hồ sơ ứng tuyển.'};
+
+
+      let interviewerIds = [];
+      if (Object.hasOwn(data,'interviewerIds') && !Array.isArray(data.interviewerIds)) return {success:false,statusCode:400,code:'INTERVIEW_ASSIGNEES_INVALID'};
+      if (Array.isArray(data.interviewerIds)) {
+        if (data.interviewerIds.length === 0) return { success: false, statusCode: 400, code: 'INTERVIEW_ASSIGNEES_REQUIRED', message: 'Vui lòng chọn ít nhất một người phỏng vấn.' };
+        if (new Set(data.interviewerIds).size !== data.interviewerIds.length) return { success: false, statusCode: 400, code: 'INTERVIEW_ASSIGNEES_DUPLICATE', message: 'Danh sách người phỏng vấn có người bị trùng lặp.' };
+        interviewerIds = data.interviewerIds;
+      } else if (data.interviewerId) {
+        interviewerIds = [data.interviewerId];
+      }
+      if (interviewerIds.some(id => typeof id !== 'string' || !id.trim())) return {success:false,statusCode:400,code:'INTERVIEW_ASSIGNEE_INVALID'};
+      if (this.db.provider === 'postgres') {
+        for (const userId of [...interviewerIds].sort()) await this.db.prepare('SELECT pg_advisory_xact_lock(hashtextextended(?,0))').get('interview-scheduling:user:'+userId);
+      }
+      const fresh=await rbac.getAuthorizedActor(actor.id,'interview.create');
+      if(!fresh)return{success:false,statusCode:403,code:'FORBIDDEN_PERMISSION_DENIED'};
+      if(!fresh.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))){const access=await this.candidateAccess(data.candidateId,fresh);if(!access.success)return access;}
+      for (const uid of interviewerIds) {
+        if (!await rbac.getAuthorizedActor(uid, 'interview.evaluate')) {
+          return { success: false, statusCode: 400, code: 'INTERVIEW_ASSIGNEE_INVALID', message: 'Người phỏng vấn phải đang hoạt động và có quyền đánh giá.' };
+        }
+      }
+      return this.#createInterviewCore({...data, interviewerId: interviewerIds[0] || data.interviewerId || null, requisitionId: data.requisitionId || candidate.requisition_id});
+    });
+  }
+
+  async #createInterviewCore(data) {
+    const candidateId = data.candidateId;
+    const hasSchedulingPayload = ['interviewerIds','durationMinutes','interviewFormat','meetingRoom','meetingLink'].some(key => Object.hasOwn(data,key));
+    if (!candidateId) return { success: false, statusCode: 400, code: 'CANDIDATE_REQUIRED', message: 'Vui lòng chọn ứng viên.' };
+    const candidate = await this.db.prepare('SELECT id, requisition_id FROM candidates WHERE id = ?' + (this.db.provider === 'postgres' ? ' FOR UPDATE' : '')).get(candidateId);
+    if (!candidate) return { success: false, statusCode: 404, code: 'CANDIDATE_NOT_FOUND', message: 'Không tìm thấy ứng viên.' };
+
+    const policyRequisitionId = data.requisitionId || candidate.requisition_id;
+    if (policyRequisitionId) await this.openPolicy.notDraft(policyRequisitionId);
+
+    let scheduledTime = data.scheduledTime;
+    if (!scheduledTime) return { success: false, statusCode: 400, code: 'SCHEDULED_TIME_REQUIRED', message: 'Vui lòng chọn thời gian phỏng vấn.' };
+
+    const startMs = this.parseInterviewTimestamp(scheduledTime);
+    if (startMs === null) return { success: false, statusCode: 400, code: 'INVALID_SCHEDULED_TIME', message: 'Thời gian phỏng vấn không hợp lệ.' };
+    if (startMs < Date.now()) return { success: false, statusCode: 400, code: 'SCHEDULED_TIME_IN_PAST', message: 'Không được đặt lịch phỏng vấn trong quá khứ.' };
+
+    scheduledTime = new Date(startMs).toISOString();
+
+    let durationMinutes = 60;
+    if (data.durationMinutes !== undefined && data.durationMinutes !== null && data.durationMinutes !== '') {
+      const dur = Number(data.durationMinutes);
+      if (!Number.isInteger(dur) || dur < 15 || dur > 480) {
+        return { success: false, statusCode: 400, code: 'INVALID_DURATION', message: 'Thời lượng phỏng vấn không hợp lệ.' };
+      }
+      durationMinutes = dur;
+    }
+
+    let interviewFormat = 'ONLINE';
+    if (data.interviewFormat !== undefined && data.interviewFormat !== null) {
+      if (!['ONLINE', 'IN_PERSON'].includes(data.interviewFormat)) {
+        return { success: false, statusCode: 400, code: 'INVALID_INTERVIEW_FORMAT', message: 'Hình thức phỏng vấn không hợp lệ.' };
+      }
+      interviewFormat = data.interviewFormat;
+    } else if (typeof data.locationOrLink === 'string' && !/^https?:\/\//i.test(data.locationOrLink.trim()) && data.locationOrLink.trim()) {
+      interviewFormat = 'IN_PERSON';
+    }
+
+    let meetingRoom = typeof data.meetingRoom === 'string' ? data.meetingRoom.trim() : null;
+    let meetingLink = typeof data.meetingLink === 'string' ? data.meetingLink.trim() : null;
+
+    if (!hasSchedulingPayload && !meetingLink && interviewFormat === 'ONLINE' && typeof data.locationOrLink === 'string' && data.locationOrLink.trim()) {
+      meetingLink = data.locationOrLink.trim();
+    }
+    if (!hasSchedulingPayload && !meetingRoom && interviewFormat === 'IN_PERSON' && typeof data.locationOrLink === 'string' && data.locationOrLink.trim()) {
+      meetingRoom = data.locationOrLink.trim();
+    }
+
+    if (interviewFormat === 'IN_PERSON' && hasSchedulingPayload) {
+      if (!meetingRoom) {
+        return { success: false, statusCode: 400, code: 'MEETING_ROOM_REQUIRED', message: 'Vui lòng nhập phòng phỏng vấn trực tiếp.' };
+      }
+    }
+
+    if (interviewFormat === 'ONLINE' && hasSchedulingPayload) {
+      if (!meetingLink) {
+        return { success: false, statusCode: 400, code: 'MEETING_LINK_REQUIRED', message: 'Vui lòng nhập liên kết họp trực tuyến hợp lệ.' };
+      }
+    }
+
+    if (meetingLink && interviewFormat === 'ONLINE') {
+      try {
+        const url = new URL(meetingLink);
+        if (!['http:', 'https:'].includes(url.protocol) || !url.hostname || url.username || url.password) throw Error('INVALID_URL');
+      } catch { return {success:false,statusCode:400,code:'INVALID_MEETING_LINK'}; }
+    }
+
+    let interviewerIds = [];
+    if (Array.isArray(data.interviewerIds)) {
+      if (data.interviewerIds.length === 0) return { success: false, statusCode: 400, code: 'INTERVIEW_ASSIGNEES_REQUIRED', message: 'Vui lòng chọn ít nhất một người phỏng vấn.' };
+      if (new Set(data.interviewerIds).size !== data.interviewerIds.length) return { success: false, statusCode: 400, code: 'INTERVIEW_ASSIGNEES_DUPLICATE', message: 'Danh sách người phỏng vấn có người bị trùng lặp.' };
+      interviewerIds = data.interviewerIds;
+    } else if (data.interviewerId) {
+      interviewerIds = [data.interviewerId];
+    } else if (data.durationMinutes !== undefined || data.interviewFormat !== undefined || data.meetingRoom !== undefined || data.meetingLink !== undefined) {
+      return { success: false, statusCode: 400, code: 'INTERVIEW_ASSIGNEES_REQUIRED', message: 'Vui lòng chọn ít nhất một người phỏng vấn.' };
+    }
+
+    if (hasSchedulingPayload) {
+      try { await require('../db/migrate-interview-scheduling').verify(this.db); }
+      catch { return {success:false,statusCode:503,code:'INTERVIEW_SCHEDULING_MIGRATION_REQUIRED'}; }
+    }
+    const conflict = await this.checkInterviewConflict(candidateId, interviewerIds, startMs, durationMinutes);
+    if (conflict) return conflict;
+
+    return this.db.transaction(async () => {
+      const id = 'int-' + crypto.randomUUID();
+      const primaryInterviewerId = interviewerIds[0] || data.interviewerId || null;
+      const locationOrLink = data.locationOrLink || (interviewFormat === 'IN_PERSON' ? meetingRoom : meetingLink) || 'Google Meet Online';
+      const roundName = (typeof data.roundName === 'string' && data.roundName.trim()) ? data.roundName.trim() : 'Phỏng vấn chuyên môn';
+      const requisitionId = data.requisitionId || candidate.requisition_id || null;
+
+      const hasColumns = await this.hasInterviewSchedulingColumns();
+      if (hasColumns) {
+        await this.db.prepare(`
+          INSERT INTO interviews (
+            id, candidate_id, requisition_id, interviewer_id,
+            round_name, scheduled_time, location_or_link, status,
+            duration_minutes, interview_format, meeting_room, meeting_link,
+            created_at
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, 'SCHEDULED', ?, ?, ?, ?, datetime('now'))
+        `).run(
+          id, candidateId, requisitionId, primaryInterviewerId,
+          roundName, scheduledTime, locationOrLink,
+          durationMinutes, interviewFormat, meetingRoom, meetingLink
+        );
+
+        for (const uid of interviewerIds) {
+          await this.db.prepare(`
+            INSERT INTO interview_interviewers (interview_id, user_id, role)
+            VALUES (?, ?, ?)
+            ON CONFLICT (interview_id, user_id) DO NOTHING
+          `).run(id, uid, uid === primaryInterviewerId ? 'PRIMARY' : 'INTERVIEWER');
+        }
+      } else {
+        await this.db.prepare(`
+          INSERT INTO interviews (
+            id, candidate_id, requisition_id, interviewer_id,
+            round_name, scheduled_time, location_or_link, status,
+            created_at
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, 'SCHEDULED', datetime('now'))
+        `).run(
+          id, candidateId, requisitionId, primaryInterviewerId,
+          roundName, scheduledTime, locationOrLink
+        );
+      }
+
+      await this.db.prepare("UPDATE candidates SET stage = 'INTERVIEW' WHERE id = ?").run(candidateId);
+
+      return {
+        success: true,
+        statusCode: 201,
+        message: 'Lên lịch phỏng vấn thành công.',
+        id,
+        candidateId,
+        requisitionId,
+        interviewerId: primaryInterviewerId,
+        interviewerIds,
+        roundName,
+        scheduledTime,
+        durationMinutes,
+        interviewFormat,
+        meetingRoom,
+        meetingLink,
+        locationOrLink,
+        data: {
+          id,
+          candidateId,
+          requisitionId,
+          interviewerId: primaryInterviewerId,
+          interviewerIds,
+          roundName,
+          scheduledTime,
+          durationMinutes,
+          interviewFormat,
+          meetingRoom,
+          meetingLink,
+          locationOrLink
+        }
+      };
+    });
+  }
+
   async updateInterviewStatus(id, status, feedback, score, actor = null, permission = 'interview.evaluate') {
-    if(actor)return this.db.transaction(async()=>{
+    if (!actor?.id) return {success:false,statusCode:403,code:'INTERVIEW_ACTOR_REQUIRED'};
+    return this.db.transaction(async()=>{
       const fresh=await new (require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(actor.id,permission);
       if(!fresh)return{success:false,statusCode:403,code:'FORBIDDEN_PERMISSION_DENIED',message:'Bạn không có quyền cập nhật lịch hoặc đánh giá.'};
       const row=await this.db.prepare('SELECT id,interviewer_id,candidate_id,requisition_id FROM interviews WHERE id=?'+(this.db.provider==='postgres'?' FOR UPDATE':'')).get(id);
-      if(!row)return{success:false,statusCode:404,code:'INTERVIEW_NOT_FOUND',message:'Không tìm thấy lịch phỏng vấn.'};
-      if(permission==='interview.evaluate'&&!fresh.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))&&(!fresh.roles.includes('INTERVIEWER')||row.interviewer_id!==fresh.id))return{success:false,statusCode:403,code:'INTERVIEW_ASSIGNEE_REQUIRED',message:'Bạn chỉ được đánh giá vòng phỏng vấn được phân công.'};
+      if(!row)return{success:false,statusCode:404,code:'INTERVIEW_NOT_FOUND'};
+      const isAssigned = row.interviewer_id === fresh.id;
+      if(permission==='interview.evaluate'&&!fresh.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))&&(!fresh.roles.includes('INTERVIEWER')||!isAssigned))return{success:false,statusCode:403,code:'INTERVIEW_ASSIGNEE_REQUIRED',message:'Bạn chỉ được đánh giá vòng phỏng vấn được phân công.'};
       if(permission==='interview.update'&&!fresh.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))){const access=await this.candidateAccess(row.candidate_id,fresh);if(!access.success)return access;if(!await this.recruiterAssigned(row.requisition_id||access.row.requisition_id,fresh.id))return{success:false,statusCode:403,code:'INTERVIEW_OUT_OF_SCOPE',message:'Lịch phỏng vấn không thuộc vị trí được giao.'};}
-      return this.updateInterviewStatus(id,status,feedback,score,null);
+      return this.#updateInterviewStatusCore(id,status,feedback,score);
     });
+  }
+
+  async #updateInterviewStatusCore(id,status,feedback,score) {
     if (!['SCHEDULED','COMPLETED','CANCELLED'].includes(status)) return {success:false,statusCode:400,code:'INVALID_INTERVIEW_STATUS',message:'Trạng thái phỏng vấn không hợp lệ.'};
     const hasScore = score !== undefined && score !== null && score !== '';
     if (hasScore && (!['number','string'].includes(typeof score) || typeof score === 'string' && !score.trim() || !Number.isSafeInteger(Number(score)))) return {success:false,statusCode:400,code:'INVALID_INTERVIEW_SCORE',message:'Điểm đánh giá phải là số nguyên hợp lệ.'};
