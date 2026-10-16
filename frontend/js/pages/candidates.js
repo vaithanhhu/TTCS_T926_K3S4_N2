@@ -23,7 +23,7 @@
   }
 
 
-  let candidateSearchPage = 1, candidateSearchSequence = 0, candidateSavedFilters = [],candidateSearchReady=false,candidateAppliedFilters={};
+  let candidateSearchPage = 1, candidateSearchSequence = 0, candidateSavedFilters = [],candidateSearchReady=false,candidateAppliedFilters={},candidateMergeSelection=[];
   const candidateFilterInputs = {search:'candidates-search-input',stage:'candidates-stage-filter',requisitionId:'candidates-req-filter',sourceId:'candidate-source-filter',tag:'candidate-tag-filter',submittedFrom:'candidate-date-from',submittedTo:'candidate-date-to',ratingMin:'candidate-rating-min',ratingMax:'candidate-rating-max'};
   function readCandidateFilters() { return Object.fromEntries(Object.entries(candidateFilterInputs).map(([key,id]) => [key,document.getElementById(id)?.value || ''])); }
   function resetCandidateSearch() { candidateSearchPage=1;return loadCandidates(); }
@@ -143,11 +143,13 @@
                 <button type="button" class="btn btn-outline btn-xs" onclick="window.ATS_APP_HELPERS.viewCandidateDetails(${escapeHtml(JSON.stringify(c.id))})">
                   Chi tiết
                 </button>
+                <button type="button" class="btn btn-outline btn-xs candidate-merge-select" data-candidate-id="${escapeHtml(c.id)}">Chọn gộp</button>
               </td>
             </tr>
           `;
         }).join('');
-        window.ATS_BULK_INTERVIEWS?.refresh(list);
+window.ATS_BULK_INTERVIEWS?.refresh(list);
+candidatesTableBody.querySelectorAll('.candidate-merge-select').forEach(button => button.addEventListener('click', () => selectCandidateForMerge(button.dataset.candidateId)));
         window.CandidateSlaModule?.renderTableBadges();
       }
     } catch (e) {
@@ -158,6 +160,12 @@
       if (candidatesTableBody) candidatesTableBody.innerHTML = '<tr><td colspan="8">Không thể tải dữ liệu. Vui lòng thử lại.</td></tr>';
     }
   }
+
+  function candidateMergeTools(){let node=document.getElementById('candidate-merge-tools');if(!node){node=document.createElement('section');node.id='candidate-merge-tools';node.className='mb-4';const table=candidatesTableBody?.closest('table');table?.parentElement?.insertBefore(node,table);}return node;}
+  async function selectCandidateForMerge(id){candidateMergeSelection=candidateMergeSelection.filter(item=>item!==id);candidateMergeSelection.push(id);if(candidateMergeSelection.length<2){const row=currentCandidatesList.find(item=>item.id===id);candidateMergeTools().textContent=`Đã chọn ${row?.fullName||row?.full_name||id}. Chọn hồ sơ thứ hai để so sánh.`;return;}const [firstId,secondId]=candidateMergeSelection.slice(-2);candidateMergeSelection=[];const token=sessionStorage.getItem('ats_token'),result=await window.ATS_API.candidateMergeApi(token,'/compare','POST',{firstId,secondId});if(!result.ok){candidateMergeTools().textContent=result.data?.message||'Không thể tải hồ sơ để so sánh.';return;}renderCandidateMergeComparison(result.data.data);}
+  function renderCandidateMergeComparison(data){const left=data.first,right=data.second,fields=[['Họ tên','full_name'],['Email','email'],['Điện thoại','phone_number'],['Trạng thái','stage'],['Vị trí','requisition_id'],['Công ty hiện tại','current_company'],['Kinh nghiệm (năm)','experience_years'],['Lương mong muốn','expected_salary'],['Ghi chú','notes']];const rows=fields.map(([label,key])=>{const a=left[key]??'',b=right[key]??'',same=String(a).trim().toLowerCase()===String(b).trim().toLowerCase();return `<tr><th>${escapeHtml(label)}</th><td style="${same?'':'background:#fff1d6'}">${escapeHtml(a||'Chưa có thông tin')}</td><td style="${same?'':'background:#fff1d6'}">${escapeHtml(b||'Chưa có thông tin')}</td></tr>`;}).join('');const modal=document.createElement('div');modal.className='modal-overlay';modal.id='candidate-merge-modal';modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');modal.innerHTML=`<div class="modal-content" style="max-width:1000px;width:95%;max-height:90vh;overflow:auto"><h2>So sánh hồ sơ ứng viên</h2><p>Thông tin khác nhau được tô màu. Chọn hồ sơ chính; lịch sử của hồ sơ phụ sẽ được gắn vào hồ sơ chính.</p><table class="data-table"><thead><tr><th>Thông tin</th><th>${escapeHtml(left.full_name)} (${escapeHtml(left.id)})</th><th>${escapeHtml(right.full_name)} (${escapeHtml(right.id)})</th></tr></thead><tbody>${rows}<tr><th>Lịch sử (phỏng vấn, offer, CV, chuyển giai đoạn, ghi chú, thẻ)</th><td>${escapeHtml(JSON.stringify(left.related))}</td><td>${escapeHtml(JSON.stringify(right.related))}</td></tr></tbody></table><fieldset><legend>Hồ sơ chính</legend><label><input type="radio" name="candidate-merge-primary" value="${escapeHtml(left.id)}" checked> ${escapeHtml(left.full_name)}</label><br><label><input type="radio" name="candidate-merge-primary" value="${escapeHtml(right.id)}"> ${escapeHtml(right.full_name)}</label></fieldset><p id="candidate-merge-error" role="alert"></p><button type="button" class="btn btn-outline" id="candidate-merge-cancel">Hủy</button> <button type="button" class="btn btn-primary" id="candidate-merge-confirm">Xác nhận gộp</button></div>`;document.body.appendChild(modal);modal.querySelector('#candidate-merge-cancel').onclick=()=>modal.remove();modal.querySelector('#candidate-merge-confirm').onclick=async()=>{const primaryId=modal.querySelector('[name="candidate-merge-primary"]:checked').value,secondaryId=primaryId===left.id?right.id:left.id,button=modal.querySelector('#candidate-merge-confirm'),token=sessionStorage.getItem('ats_token');button.disabled=true;const result=await window.ATS_API.candidateMergeApi(token,'','POST',{primaryId,secondaryId});if(!result.ok){modal.querySelector('#candidate-merge-error').textContent=result.data?.message||'Không thể gộp hồ sơ.';button.disabled=false;return;}modal.remove();showToast('success','Gộp hồ sơ','Đã gộp thành công. Có thể hoàn tác trong 24 giờ.');loadCandidateMergeUndoList();loadCandidates();};}
+  async function loadCandidateMergeUndoList(){const node=candidateMergeTools(),token=sessionStorage.getItem('ats_token'),result=await window.ATS_API.candidateMergeApi(token,'/recent','GET');if(!result.ok)return;const rows=result.data?.data?.rows||[];if(!rows.length){if(!candidateMergeSelection.length)node.innerHTML='';return;}node.innerHTML=`<div class="card p-3"><strong>Gộp gần đây</strong>${rows.map(row=>`<div class="flex items-center justify-between py-2"><span>${escapeHtml(row.primary_candidate_id)} ← ${escapeHtml(row.secondary_candidate_id)} · ${escapeHtml(row.merged_at)}</span><button class="btn btn-outline btn-xs candidate-merge-undo" data-event-id="${escapeHtml(row.id)}">Hoàn tác (24 giờ)</button></div>`).join('')}</div>`;node.querySelectorAll('.candidate-merge-undo').forEach(button=>button.onclick=async()=>{if(!confirm('Bạn có chắc muốn hoàn tác lần gộp này?'))return;button.disabled=true;const result=await window.ATS_API.candidateMergeApi(token,`/${encodeURIComponent(button.dataset.eventId)}/undo`,'POST',{});if(!result.ok){showToast('danger','Hoàn tác gộp hồ sơ',result.data?.message||'Không thể hoàn tác.');button.disabled=false;return;}showToast('success','Hoàn tác gộp hồ sơ','Đã hoàn tác thành công.');loadCandidateMergeUndoList();loadCandidates();});}
+  loadCandidateMergeUndoList();
 
   if (candidatesExportBtn) {
     candidatesExportBtn.addEventListener('click', async () => {

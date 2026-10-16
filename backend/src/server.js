@@ -51,6 +51,7 @@ async function initializeApplication() {
   if (config.REQUISITION_TRACKING_ENABLED || config.JOB_POSTING_DRAFTS_ENABLED) await require('./db/migrate-requisition-tracking-job-drafts').verify(db);
   if(config.JOB_POSTING_PUBLICATION_ENABLED)await require('./db/migrate-job-publication').verify(db);
   if(config.CANDIDATE_PORTAL_ENABLED)await require('./db/migrate-candidate-portal').verify(db);
+  await require('./db/migrate-candidate-merges').migrate(db);
   if (!isTestEnv) {
     try {
       const SlaNotificationService = require('./services/slaNotificationService');
@@ -2051,6 +2052,12 @@ async function handleRequest(req, res) {
   }
 
   // S5-08 (SCRUM-118): Candidate Manual Entry & Duplicate Detection API
+  if (pathname.startsWith('/api/v1/candidates/merge') || pathname.startsWith('/candidates/merge')) {
+    const CandidateMergeController = require('./controllers/candidateMergeController');
+    await new CandidateMergeController(db, rbacMiddleware, authController.authService).handle(req, res, parsedUrl, parseBody);
+    return;
+  }
+
   if (
     pathname === '/api/v1/candidates/manual' ||
     pathname === '/candidates/manual' ||
@@ -2074,33 +2081,19 @@ async function handleRequest(req, res) {
       // S5-08 (SCRUM-118): Kiểm tra chống trùng lặp ứng viên trên cùng vị trí (AC-02)
       const CandidateManualEntryService = require('./services/candidateManualEntryService');
       const manualEntryService = new CandidateManualEntryService(db);
-      const dupCheck = await manualEntryService.checkDuplicateCandidate({
-        email: body.email,
-        phoneNumber: body.phoneNumber || body.phone,
-        requisitionId: body.requisitionId
+      const result = await db.transaction(async () => {
+        await manualEntryService.lockDuplicateIdentities(body.email, body.phoneNumber || body.phone);
+        const dupCheck = await manualEntryService.checkDuplicateCandidate({ email: body.email, phoneNumber: body.phoneNumber || body.phone, requisitionId: body.requisitionId });
+        if (dupCheck.hasSamePositionDuplicate) {
+          const match = dupCheck.samePositionMatches[0];
+          const matchFieldText = match.matchField === 'BOTH' ? 'email và số điện thoại' : match.matchField === 'EMAIL' ? 'email' : 'số điện thoại';
+          return { success: false, statusCode: 409, code: 'DUPLICATE_CANDIDATE_IN_POSITION', message: `Ứng viên với ${matchFieldText} này đã có hồ sơ đang xử lý tại vị trí "${match.requisitionTitle || 'này'}".`, data: { duplicateType: 'SAME_POSITION', matchField: match.matchField, existingCandidate: match } };
+        }
+        return requisitionService.createCandidate(body,user);
       });
-
-      if (dupCheck.hasSamePositionDuplicate) {
-        const match = dupCheck.samePositionMatches[0];
-        const matchFieldText = match.matchField === 'BOTH'
-          ? 'email và số điện thoại'
-          : match.matchField === 'EMAIL' ? 'email' : 'số điện thoại';
-        res.writeHead(409, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({
-          success: false,
-          statusCode: 409,
-          code: 'DUPLICATE_CANDIDATE_IN_POSITION',
-          message: `Ứng viên với ${matchFieldText} này đã có hồ sơ đang xử lý tại vị trí "${match.requisitionTitle || 'này'}".`,
-          data: {
-            duplicateType: 'SAME_POSITION',
-            matchField: match.matchField,
-            existingCandidate: match
-          }
-        }));
-        return;
+      if (!result.success && result.code === 'DUPLICATE_CANDIDATE_IN_POSITION') {
+        res.writeHead(409, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(result)); return;
       }
-
-      const result = (await requisitionService.createCandidate(body,user));
 
       // S5-09: Tự động chấm điểm hồ sơ mới theo tiêu chí sàng lọc bắt buộc của vị trí (AC-02)
       const createdId = result.data?.id || result.candidate?.id || result.id;
