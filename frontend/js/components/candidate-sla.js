@@ -547,38 +547,60 @@
     }
 
     // 2. Render trực tiếp Banner cảnh báo quá hạn SLA chi tiết tại Modal Body
+    // Vị trí chuẩn: Ngay bên dưới box thông tin tổng quan ứng viên (tên, email, sđt) và ngay trên mục Sàng lọc tiêu chí / Chuyển vòng
     let banner = modal.querySelector('#sla-candidate-modal-banner');
     if (isOverdue) {
       if (!banner) {
         banner = document.createElement('div');
         banner.id = 'sla-candidate-modal-banner';
         banner.style.cssText = `
-          background: #fff7ed; border-left: 5px solid #ea580c; border: 1px solid #fed7aa;
-          padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; display: flex;
-          align-items: flex-start; gap: 12px; color: #9a3412; font-family: inherit;
+          background: #fff1f2; border: 1px solid #fecdd3; border-left: 5px solid #e11d48;
+          padding: 12px 16px; border-radius: 8px; margin-bottom: 14px; display: flex;
+          align-items: flex-start; gap: 12px; color: #9f1239; font-family: inherit;
+          box-shadow: 0 2px 4px rgba(225, 29, 72, 0.08);
         `;
-        
-        const modalBody = modal.querySelector('.modal-body') || modal.querySelector('.dialog-body') || modal;
-        if (modalBody) {
-          modalBody.insertBefore(banner, modalBody.firstChild);
-        }
       }
 
       banner.innerHTML = `
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ea580c" stroke-width="2.2" style="flex-shrink: 0; margin-top: 2px;">
-          <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>
-          <line x1="4" y1="22" x2="4" y2="15"></line>
-        </svg>
+        <div style="background: #ffe4e6; border-radius: 50%; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#e11d48" stroke-width="2.3">
+            <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>
+            <line x1="4" y1="22" x2="4" y2="15"></line>
+          </svg>
+        </div>
         <div style="flex: 1;">
-          <div style="font-weight: 700; font-size: 0.9rem; margin-bottom: 3px; color: #c2410c;">
-            🚩 CẢNH BÁO QUÁ HẠN SLA (${days}/${limit} ngày)
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+            <strong style="font-weight: 700; font-size: 0.925rem; color: #be123c; display: flex; align-items: center; gap: 6px;">
+              <span>🚩 CẢNH BÁO QUÁ HẠN SLA (${days}/${limit} NGÀY)</span>
+            </strong>
+            <span style="background: #e11d48; color: #ffffff; font-size: 0.7rem; font-weight: 700; padding: 2px 8px; border-radius: 9999px; text-transform: uppercase;">
+              BREACHED (+${days - limit > 0 ? days - limit : 1} ngày)
+            </span>
           </div>
-          <div style="font-size: 0.825rem; line-height: 1.45; color: #431407;">
-            Hồ sơ này đã ở giai đoạn <strong>${escapeHtml(stageName)}</strong> trong <strong>${days} ngày</strong>, vượt quá ngưỡng SLA quy định (<strong>${limit} ngày</strong> chưa mở xem hoặc xử lý). Recruiter phụ trách vui lòng sàng lọc hoặc chuyển vòng tuyển dụng ngay để tránh để hồ sơ nằm im.
+          <div style="font-size: 0.825rem; line-height: 1.5; color: #4c0519;">
+            Hồ sơ này đã ở giai đoạn <strong>${escapeHtml(stageName)}</strong> trong <strong>${days} ngày</strong>, vượt quá ngưỡng SLA cam kết (<strong>${limit} ngày</strong> chưa được mở xem hoặc xử lý). Recruiter phụ trách vui lòng ưu tiên sàng lọc hồ sơ hoặc chuyển vòng tuyển dụng ngay để tránh để hồ sơ nằm im.
           </div>
         </div>
       `;
       banner.style.display = 'flex';
+
+      // Chèn banner vào vị trí đẹp nhất: Sau box thông tin cá nhân (overview box) và trước mục Sàng lọc / Pipeline Stage
+      const modalBody = modal.querySelector('.modal-body') || modal.querySelector('.dialog-body') || modal;
+      const screeningCard = modalBody.querySelector('#cand-screening-detail-card');
+      const overviewBox = modalBody.querySelector('div[style*="cand-detail-avatar"]') || modalBody.children[0];
+
+      if (screeningCard) {
+        modalBody.insertBefore(banner, screeningCard);
+      } else {
+        const firstPanel = modalBody.querySelector('.panel-card');
+        if (firstPanel) {
+          modalBody.insertBefore(banner, firstPanel);
+        } else if (overviewBox && overviewBox.nextSibling) {
+          modalBody.insertBefore(banner, overviewBox.nextSibling);
+        } else {
+          modalBody.prepend(banner);
+        }
+      }
     } else if (banner) {
       banner.style.display = 'none';
     }
@@ -586,6 +608,7 @@
 
   // Hooking vào hàm mở chi tiết hồ sơ ứng viên để render tức thì
   function installViewDetailsHook() {
+    // 1. Hook vào window.ATS_APP_HELPERS.viewCandidateDetails
     if (window.ATS_APP_HELPERS && typeof window.ATS_APP_HELPERS.viewCandidateDetails === 'function') {
       if (!window.ATS_APP_HELPERS.viewCandidateDetails.__slaHooked__) {
         const origViewDetails = window.ATS_APP_HELPERS.viewCandidateDetails;
@@ -593,10 +616,10 @@
           window.__CURRENT_ACTIVE_CANDIDATE_ID__ = id;
           try {
             const res = await origViewDetails.apply(this, arguments);
-            // Render trực tiếp SLA ra màn hình modal ngay khi mở
-            setTimeout(() => {
-              handleCandidateDetailModal(id);
-            }, 50);
+            // Render trực tiếp SLA ra màn hình modal ngay khi mở (retry liên tục các mốc thời gian để đón DOM)
+            [10, 50, 150, 300, 600].forEach(delay => {
+              setTimeout(() => handleCandidateDetailModal(id), delay);
+            });
             return res;
           } catch (e) {
             handleCandidateDetailModal(id);
@@ -605,6 +628,22 @@
         };
         window.ATS_APP_HELPERS.viewCandidateDetails.__slaHooked__ = true;
       }
+    }
+
+    // 2. Tự động gắn hook vào MutationObserver trên candidate-detail-modal
+    const modal = document.getElementById('candidate-detail-modal');
+    if (modal && !modal.__slaObserverAttached__) {
+      const modalObserver = new MutationObserver(() => {
+        if (!modal.classList.contains('hidden') && modal.style.display !== 'none') {
+          const idInput = modal.querySelector('#cand-detail-id');
+          const candId = (idInput && idInput.value) || window.__CURRENT_ACTIVE_CANDIDATE_ID__;
+          if (candId) {
+            handleCandidateDetailModal(candId);
+          }
+        }
+      });
+      modalObserver.observe(modal, { attributes: true, attributeFilter: ['class', 'style'] });
+      modal.__slaObserverAttached__ = true;
     }
   }
 
