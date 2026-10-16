@@ -44,6 +44,7 @@ module.exports = {
   REQUISITION_OPERATIONS_ENABLED: process.env.REQUISITION_OPERATIONS_ENABLED === 'true',
   REQUISITION_APPROVAL_ENABLED: process.env.REQUISITION_APPROVAL_ENABLED === 'true',
   CANDIDATE_PORTAL_ENABLED: process.env.CANDIDATE_PORTAL_ENABLED === 'true',
+  CANDIDATE_STAGE_TRANSITIONS_ENABLED: process.env.CANDIDATE_STAGE_TRANSITIONS_ENABLED === 'true',
   DB_PATH: isTestEnv
     ? path.join(__dirname, '..', '..', 'data', 'ats_test.db')
     : (process.env.DB_PATH ? path.resolve(process.env.DB_PATH) : path.join(__dirname, '..', '..', 'data', 'ats.db')),

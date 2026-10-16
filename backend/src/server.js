@@ -2008,6 +2008,18 @@ async function handleRequest(req, res) {
     return;
   }
 
+  // S5-03: Candidate Stage Transitions, History & Exceptions
+  if (
+    pathname === '/api/v1/recruitment-catalogs/rejection-reasons' ||
+    pathname === '/recruitment-catalogs/rejection-reasons' ||
+    /^\/(?:api\/v1\/)?candidates\/[^/]+\/(?:history|stage-history|stage-exception-request|stage-exceptions)$/.test(pathname) ||
+    /^\/(?:api\/v1\/)?stage-exceptions\/[^/]+\/decide$/.test(pathname)
+  ) {
+    const CandidateStageController = require('./controllers/candidateStageController');
+    await new CandidateStageController(db, rbacMiddleware, authController.authService).handle(req, res, parsedUrl, parseBody);
+    return;
+  }
+
   // 13.7.2 API: Update Candidate Stage
   if (req.method === 'PUT' && ((pathname.startsWith('/api/v1/candidates/') && pathname.endsWith('/stage')) || (pathname.startsWith('/candidates/') && pathname.endsWith('/stage')))) {
     const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.update'));
@@ -2017,7 +2029,9 @@ async function handleRequest(req, res) {
       const body = await parseBody(req);
       const isCatalogUpdate = Object.hasOwn(body, 'rejectionReasonId');
       if (isCatalogUpdate && !(await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.update'))) return;
-      const result = (await requisitionService.updateCandidateStage(candId, body.stage, isCatalogUpdate ? body.notes : undefined, isCatalogUpdate ? body.rejectionReasonId : undefined,user));
+      const notesToPass = body.notes !== undefined ? body.notes : (isCatalogUpdate ? body.notes : undefined);
+      const reasonToPass = body.rejectionReasonId !== undefined ? body.rejectionReasonId : undefined;
+      const result = (await requisitionService.updateCandidateStage(candId, body.stage, notesToPass, reasonToPass, user));
       res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
