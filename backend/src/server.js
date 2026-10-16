@@ -51,6 +51,15 @@ async function initializeApplication() {
   if (config.REQUISITION_TRACKING_ENABLED || config.JOB_POSTING_DRAFTS_ENABLED) await require('./db/migrate-requisition-tracking-job-drafts').verify(db);
   if(config.JOB_POSTING_PUBLICATION_ENABLED)await require('./db/migrate-job-publication').verify(db);
   if(config.CANDIDATE_PORTAL_ENABLED)await require('./db/migrate-candidate-portal').verify(db);
+  try {
+    const SlaNotificationService = require('./services/slaNotificationService');
+    const slaService = new SlaNotificationService(db);
+    if (!isTestEnv) {
+      slaService.runDailySlaCheck().catch(e => console.warn('[SLA Daily Job] Note:', e.message));
+    }
+  } catch (slaErr) {
+    // Bỏ qua lỗi khởi tạo SLA
+  }
 }
 
 const avatarService = new AvatarService();
@@ -1877,6 +1886,14 @@ async function handleRequest(req, res) {
     return;
   }
 
+  // S5-10 (SCRUM-120): Candidate SLA Notification & Monitoring API
+  if (pathname.startsWith('/api/v1/sla/') || pathname === '/api/v1/sla') {
+    const SlaNotificationService = require('./services/slaNotificationService');
+    const SlaNotificationController = require('./controllers/slaNotificationController');
+    await new SlaNotificationController(new SlaNotificationService(db), rbacMiddleware, authController.authService).handle(req, res, parsedUrl, parseBody);
+    return;
+  }
+
   if(req.method==='GET'&&/^\/(?:api\/v1\/)?candidates\/[^/]+$/.test(pathname)){const user=await rbacMiddleware.authorize(req,res,authController.authService,'candidate.read');if(!user)return;let candidateId;try{candidateId=decodeURIComponent(pathname.split('/').at(-1));}catch{res.writeHead(400,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:'BAD_REQUEST',message:'Mã hồ sơ không hợp lệ.'}));return;}const result=await requisitionService.getCandidateById(candidateId,user);res.writeHead(result.statusCode||200,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(result));return;}
 
   // 13.7 API: Candidates List (Real SQLite Data)
@@ -1924,6 +1941,20 @@ async function handleRequest(req, res) {
         }
       } catch (err) {
         // Bảng screening results chưa tồn tại
+      }
+
+      // S5-10: Gắn trạng thái SLA vào danh sách ứng viên
+      try {
+        const SlaNotificationService = require('./services/slaNotificationService');
+        const slaService = new SlaNotificationService(db);
+        const slaConfigs = (await slaService.getSlaConfigurations()).data || [];
+        const cfgMap = {};
+        for (const sc of slaConfigs) cfgMap[sc.stage] = sc;
+        for (const c of result.candidates) {
+          c.sla = await slaService.calculateCandidateSla(c, cfgMap);
+        }
+      } catch (slaErr) {
+        // Bỏ qua lỗi tính SLA nếu chưa migrate
       }
     }
 
