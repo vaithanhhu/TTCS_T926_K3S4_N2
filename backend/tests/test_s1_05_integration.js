@@ -66,11 +66,20 @@ async function runTests() {
     // TEST 1: AC-01 - MA TRẬN PHÂN QUYỀN 7 VAI TRÒ TỪ CSDL THẬT
     // -------------------------------------------------------------
     totalTests++;
+    const matrixAdminToken = await loginUser('admin@company.com');
+    const matrixCandidateToken = await loginUser('candidate@example.com');
+    for (const matrixPath of ['/api/v1/rbac/matrix','/rbac/matrix','/api/v1/admin/roles-matrix','/admin/roles-matrix']) {
+      assert.strictEqual((await request({hostname:'localhost',port:TEST_PORT,path:matrixPath,method:'GET'})).status,401);
+      assert.strictEqual((await request({hostname:'localhost',port:TEST_PORT,path:matrixPath,method:'GET',headers:{Authorization:'Bearer invalid-test-token'}})).status,401);
+      assert.strictEqual((await request({hostname:'localhost',port:TEST_PORT,path:matrixPath,method:'GET',headers:{Authorization:`Bearer ${matrixCandidateToken}`}})).status,403);
+      assert.strictEqual((await request({hostname:'localhost',port:TEST_PORT,path:matrixPath,method:'GET',headers:{Authorization:`Bearer ${matrixAdminToken}`}})).status,200);
+    }
     const matrixRes = await request({
       hostname: 'localhost',
       port: TEST_PORT,
       path: '/api/v1/rbac/matrix',
-      method: 'GET'
+      method: 'GET',
+      headers: {Authorization:`Bearer ${matrixAdminToken}`}
     });
 
     assert.strictEqual(matrixRes.status, 200);

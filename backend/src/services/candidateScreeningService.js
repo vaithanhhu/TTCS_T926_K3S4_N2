@@ -5,11 +5,11 @@ const RequisitionService = require('./requisitionService');
  * ==============================================================================
  * USER STORY S5-09 (SCRUM-119) - CANDIDATE SCREENING & SCORING SERVICE
  * ==============================================================================
- * 
+ *
  * Là Nhân viên tuyển dụng, tôi muốn có hồ sơ mới được chấm điểm sàng lọc theo
  * tiêu chí bắt buộc của vị trí, để ưu tiên đọc trước những hồ sơ có khả năng
  * phù hợp nhất.
- * 
+ *
  * Tiêu chí chấp nhận (Acceptance Criteria):
  *   • AC-01: Khai báo tiêu chí bắt buộc cho vị trí: số năm kinh nghiệm, bằng cấp, kỹ năng
  *   • AC-02: Hồ sơ mới được gắn điểm phù hợp và cờ Đạt hoặc Không đạt tiêu chí bắt buộc
@@ -167,7 +167,7 @@ class CandidateScreeningService {
 
   /**
    * AC-01: Khai báo / Cập nhật bộ tiêu chí bắt buộc cho vị trí tuyển dụng
-   * 
+   *
    * @param {string} requisitionId Mã vị trí tuyển dụng
    * @param {object} criteria Thông tin tiêu chí
    * @param {number} criteria.minExperienceYears Số năm kinh nghiệm tối thiểu bắt buộc
@@ -460,7 +460,7 @@ class CandidateScreeningService {
   /**
    * AC-02: Hàm tính toán điểm phù hợp và cờ Đạt/Không đạt tiêu chí bắt buộc
    * (Độc lập, không thay đổi stage của ứng viên)
-   * 
+   *
    * @param {object} candidate Hồ sơ ứng viên
    * @param {object} criteria Bộ tiêu chí của vị trí
    * @param {object} [extra] Dữ liệu bổ sung ({ cvText, tags })
@@ -468,8 +468,8 @@ class CandidateScreeningService {
    */
   calculateScreeningScore(candidate, criteria, extra = {}) {
     const minExpYears = criteria.minExperienceYears || 0;
-    const candidateExpYears = typeof candidate.experience_years === 'number' 
-      ? candidate.experience_years 
+    const candidateExpYears = typeof candidate.experience_years === 'number'
+      ? candidate.experience_years
       : parseInt(candidate.experience_years, 10) || 0;
 
     const reqEduCode = criteria.requiredEducation || 'NONE';
@@ -540,8 +540,8 @@ class CandidateScreeningService {
         passed: expPassed,
         score: expScore,
         maxScore: weightExp,
-        summary: expPassed 
-          ? `Đạt: ${candidateExpYears} năm (Yêu cầu: ${minExpYears} năm)` 
+        summary: expPassed
+          ? `Đạt: ${candidateExpYears} năm (Yêu cầu: ${minExpYears} năm)`
           : `Không đạt: ${candidateExpYears} năm (Thiếu ${minExpYears - candidateExpYears} năm)`
       },
       education: {
@@ -552,8 +552,8 @@ class CandidateScreeningService {
         passed: eduPassed,
         score: eduScore,
         maxScore: weightEdu,
-        summary: eduPassed 
-          ? `Đạt: ${EDUCATION_LEVELS[candidateEduCode]?.label || candidateEduCode}` 
+        summary: eduPassed
+          ? `Đạt: ${EDUCATION_LEVELS[candidateEduCode]?.label || candidateEduCode}`
           : `Không đạt: ${EDUCATION_LEVELS[candidateEduCode]?.label || candidateEduCode} (Yêu cầu tối thiểu: ${EDUCATION_LEVELS[reqEduCode]?.label || reqEduCode})`
       },
       skills: {
@@ -564,8 +564,8 @@ class CandidateScreeningService {
         score: skillsScore,
         maxScore: weightSkills,
         matchCount: `${skillResult.matchedSkills.length}/${requiredSkills.length}`,
-        summary: skillsPassed 
-          ? `Đạt: Đủ ${requiredSkills.length} kỹ năng bắt buộc` 
+        summary: skillsPassed
+          ? `Đạt: Đủ ${requiredSkills.length} kỹ năng bắt buộc`
           : `Không đạt: Thiếu ${skillResult.missingSkills.length} kỹ năng (${skillResult.missingSkills.join(', ')})`
       }
     };
@@ -584,7 +584,7 @@ class CandidateScreeningService {
    * AC-02 & AC-03: Thực hiện chấm điểm sàng lọc cho một ứng viên
    * - Lưu kết quả điểm số và cờ Đạt/Không đạt vào bảng candidate_screening_results
    * - KHÔNG TỰ ĐỘNG LOẠI ỨNG VIÊN (Stage vẫn được giữ nguyên)
-   * 
+   *
    * @param {string} candidateId Mã ứng viên
    * @param {object} currentUser Người dùng thực hiện
    */
@@ -595,7 +595,7 @@ class CandidateScreeningService {
 
     // 1. Tìm hồ sơ ứng viên
     const candidate = await this.db.prepare(
-      `SELECT c.*, r.title AS requisition_title 
+      `SELECT c.*, r.title AS requisition_title
        FROM candidates c
        LEFT JOIN requisitions r ON r.id = c.requisition_id
        WHERE c.id = ?`
@@ -763,7 +763,7 @@ class CandidateScreeningService {
   /**
    * AC-03: Lấy danh sách hồ sơ ứng viên được sắp xếp theo điểm phù hợp (Fit score cao nhất lên đầu)
    * Giúp Nhân viên tuyển dụng ưu tiên đọc trước các hồ sơ có khả năng phù hợp nhất.
-   * 
+   *
    * @param {string} requisitionId Mã vị trí tuyển dụng
    * @param {object} currentUser Người dùng hiện tại
    * @param {object} [options] Bộ lọc và phân trang
@@ -801,7 +801,7 @@ class CandidateScreeningService {
     }
 
     const sql = `
-      SELECT 
+      SELECT
         c.id, c.full_name, c.email, c.phone_number, c.requisition_id, c.stage,
         c.experience_years, c.current_company, c.expected_salary, c.source_id, c.created_at,
         sr.fit_score, sr.mandatory_pass, sr.experience_passed, sr.education_passed, sr.skills_passed,
@@ -856,4 +856,3 @@ class CandidateScreeningService {
 }
 
 module.exports = CandidateScreeningService;
-

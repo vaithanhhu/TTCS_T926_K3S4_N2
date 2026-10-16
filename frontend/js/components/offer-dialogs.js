@@ -16,8 +16,8 @@
     if (candSelect) {
       candSelect.innerHTML = `<option value="">-- Chọn ứng viên --</option>` +
         currentCandidatesList.map(c => `
-          <option value="${c.id}" ${c.id === preselectedCandidateId ? 'selected' : ''}>
-            ${c.fullName || c.full_name} (${formatCandCode(c)}) - ${c.requisition_title || (c.requisition && c.requisition.title) || 'Vị trí'}
+          <option value="${escapeHtml(c.id)}" ${c.id === preselectedCandidateId ? 'selected' : ''}>
+            ${escapeHtml(c.fullName || c.full_name)} (${escapeHtml(formatCandCode(c))}) - ${escapeHtml(c.requisition_title || (c.requisition && c.requisition.title) || 'Vị trí')}
           </option>
         `).join('');
     }
@@ -25,7 +25,7 @@
     const reqSelect = document.getElementById('create-offer-req-select');
     if (reqSelect) {
       reqSelect.innerHTML = `<option value="">-- Theo vị trí tuyển dụng --</option>` +
-        currentRequisitionsList.map(r => `<option value="${r.id}">${r.code} - ${r.title}</option>`).join('');
+        currentRequisitionsList.map(r => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.code)} - ${escapeHtml(r.title)}</option>`).join('');
     }
 
     const approverSelect = document.getElementById('create-offer-approver-select');

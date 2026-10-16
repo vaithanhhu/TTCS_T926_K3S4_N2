@@ -2,7 +2,7 @@
  * ==============================================================================
  * USER STORY S5-09 (SCRUM-119) - CANDIDATE SCREENING CONTROLLER
  * ==============================================================================
- * 
+ *
  * Endpoints:
  *   • GET  /api/v1/requisitions/:id/screening-criteria : Xem tiêu chí bắt buộc
  *   • PUT  /api/v1/requisitions/:id/screening-criteria : Khai báo tiêu chí bắt buộc
@@ -114,4 +114,3 @@ class CandidateScreeningController {
 }
 
 module.exports = CandidateScreeningController;
-

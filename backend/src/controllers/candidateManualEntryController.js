@@ -4,11 +4,11 @@ const { parseMultipartOrJson } = require('../utils/formParser');
  * ==============================================================================
  * USER STORY S5-08 (SCRUM-118) - CANDIDATE MANUAL ENTRY CONTROLLER
  * ==============================================================================
- * 
+ *
  * Endpoints:
  *   • POST /api/v1/candidates/manual: Thêm ứng viên thủ công kèm tệp CV
  *   • POST /api/v1/candidates/check-duplicate: Kiểm tra trùng lặp thời gian thực
- * 
+ *
  * Phân quyền: Yêu cầu quyền 'candidate.create' kết hợp kiểm tra IDOR trong Service.
  * ==============================================================================
  */
@@ -115,9 +115,9 @@ class CandidateManualEntryController {
         }
 
         // Chuyển đổi cờ xác nhận sang boolean
-        const confirmDuplicate = fields.confirmDuplicate === true || 
-                                fields.confirmDuplicate === 'true' || 
-                                fields.confirmDuplicate === 1 || 
+        const confirmDuplicate = fields.confirmDuplicate === true ||
+                                fields.confirmDuplicate === 'true' ||
+                                fields.confirmDuplicate === 1 ||
                                 fields.confirmDuplicate === '1';
 
         const payload = {

@@ -8,10 +8,10 @@ const CandidateManualEntryController = require('../src/controllers/candidateManu
  * ==============================================================================
  * TEST SUITE: USER STORY S5-08 / SCRUM-118
  * ==============================================================================
- * 
+ *
  * Nội dung: Là Nhân viên tuyển dụng, tôi muốn thêm ứng viên thủ công vào một vị trí,
  * để đưa được ứng viên tìm từ LinkedIn vào cùng một pipeline.
- * 
+ *
  * Tiêu chí chấp nhận (Acceptance Criteria):
  *   • AC-01: Nhập tay thông tin và tải CV cho ứng viên tìm được từ nguồn khác
  *             (Họ tên, email, phone, requisition_id, source_id như LinkedIn/Headhunter,
