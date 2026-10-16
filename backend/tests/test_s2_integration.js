@@ -351,7 +351,18 @@ async function main() {
     assert.equal(nodes.get('job-title-salary-fields').disabled, true); assert.equal(nodes.get('job-title-salary-fields').classList.contains('hidden'), true);
     assert.equal(nodes.get('job-title-list').innerHTML.includes('Dải lương:'), false);
   });
-  await test('Existing candidate stage UI omits new catalog fields when no reason is selected', async () => {
+  await test('Non-rejection candidate stage UI preserves stage-only payload without a reason', async () => {
+    const { nodes, storage, apiMock } = uiHarness;
+    storage.set('ats_token', tokens.hiring);
+    nodes.get('cand-detail-id').value = 'cand-ui'; nodes.get('cand-detail-change-stage-select').value = 'SCREENING';
+    nodes.get('cand-detail-rejection-reason-select').value = '';
+    let argumentsSent;
+    apiMock.updateCandidateStageApi = async (...args) => { argumentsSent = args; return { ok: false, data: { message: 'Captured' } }; };
+    await nodes.get('cand-detail-save-stage-btn').listeners.click();
+    assert.ok(argumentsSent); assert.equal(argumentsSent[3], undefined); assert.equal(argumentsSent[4], undefined);
+    assert.equal(argumentsSent[0], tokens.hiring); assert.equal(argumentsSent[1], 'cand-ui'); assert.equal(argumentsSent[2], 'SCREENING');
+  });
+  await test('Rejected candidate without a reason never calls the stage mutation API', async () => {
     const { nodes, storage, apiMock } = uiHarness;
     storage.set('ats_token', tokens.hiring);
     nodes.get('cand-detail-id').value = 'cand-ui'; nodes.get('cand-detail-change-stage-select').value = 'REJECTED';
@@ -359,7 +370,9 @@ async function main() {
     let argumentsSent;
     apiMock.updateCandidateStageApi = async (...args) => { argumentsSent = args; return { ok: false, data: { message: 'Captured' } }; };
     await nodes.get('cand-detail-save-stage-btn').listeners.click();
-    assert.ok(argumentsSent); assert.equal(argumentsSent[3], undefined); assert.equal(argumentsSent[4], undefined);
+    assert.equal(argumentsSent, undefined);
+    assert.equal(nodes.get('cand-detail-change-stage-select').value, 'REJECTED');
+    assert.equal(nodes.get('cand-detail-rejection-reason-select').value, '');
   });
   await test('Career preview and public rendering use the same function and keep introduction as text', async () => {
     const { context, makeNode } = uiHarness;
