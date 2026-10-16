@@ -14,6 +14,9 @@ class CandidateSearchService {
     if(db.provider==='sqlite')db.function('ats_candidate_search_fold',{deterministic:true},fold);
   }
   folded(column) { return this.db.provider==='sqlite'?'ats_candidate_search_fold('+column+')':'LOWER(NORMALIZE('+column+',NFC))'; }
+  async hasMergeColumn() {
+    try { await this.db.prepare('SELECT merged_into_id FROM candidates LIMIT 0').all(); return true; } catch { return false; }
+  }
 
   normalize(input = {}) {
     if (!input || typeof input !== 'object' || Array.isArray(input)) throw fail('INVALID_FILTER','Điều kiện lọc không hợp lệ.');
@@ -97,6 +100,7 @@ class CandidateSearchService {
     const visibility = this.requisitions.candidateVisibility(actor);
     const internal = this.requisitions.candidateVisibility({...actor,roles:actor.roles.filter(role => role !== 'CANDIDATE')});
     const where = [], params = [];
+    if (await this.hasMergeColumn()) where.push('c.merged_into_id IS NULL');
     if (visibility) { where.push(visibility.condition); params.push(...visibility.params); }
     if (filters.sourceId || filters.tag || filters.ratingMin !== undefined || filters.ratingMax !== undefined) {
       if (internal) { where.push(internal.condition); params.push(...internal.params); }
