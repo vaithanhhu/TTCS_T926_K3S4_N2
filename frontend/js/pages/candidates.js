@@ -22,14 +22,59 @@
     return 'CAND-001';
   }
 
+
+  let candidateSearchPage = 1, candidateSearchSequence = 0, candidateSavedFilters = [],candidateSearchReady=false,candidateAppliedFilters={};
+  const candidateFilterInputs = {search:'candidates-search-input',stage:'candidates-stage-filter',requisitionId:'candidates-req-filter',sourceId:'candidate-source-filter',tag:'candidate-tag-filter',submittedFrom:'candidate-date-from',submittedTo:'candidate-date-to',ratingMin:'candidate-rating-min',ratingMax:'candidate-rating-max'};
+  function readCandidateFilters() { return Object.fromEntries(Object.entries(candidateFilterInputs).map(([key,id]) => [key,document.getElementById(id)?.value || ''])); }
+  function resetCandidateSearch() { candidateSearchPage=1;return loadCandidates(); }
+  function setCandidateSearchMessage(message) { const node=document.getElementById('candidate-search-message');if(node)node.textContent=message; }
+  function setCandidateFilterValue(node,value) {
+    if (node.tagName === 'SELECT' && value && ![...node.options].some(option=>option.value===value)) {
+      const option=document.createElement('option');option.value=value;option.textContent='Điều kiện đã lưu (không còn trong lựa chọn hiện tại)';node.appendChild(option);
+    }
+    node.value=value;
+  }
+  async function loadCandidateFilterChoices(token,request) {
+    if (!window.ATS_API.candidateSearchOptionsApi || !window.ATS_API.candidateFiltersApi) return;
+    const [choices,saved] = await Promise.all([window.ATS_API.candidateSearchOptionsApi(token),window.ATS_API.candidateFiltersApi(token)]);
+    if(request !== candidateSearchSequence || token !== sessionStorage.getItem('ats_token'))return;
+    if(choices.ok) {
+      for(const [id,rows,label] of [['candidates-req-filter',choices.data.requisitions,'title'],['candidate-source-filter',choices.data.sources,'name']]) {
+        const node=document.getElementById(id);if(!node)continue;const value=node.value;
+        node.innerHTML='<option value="ALL">Tất cả</option>'+(rows || []).map(row=>'<option value="'+escapeHtml(row.id)+'">'+escapeHtml(row[label])+'</option>').join('');setCandidateFilterValue(node,value || 'ALL');
+      }
+      const tags=document.getElementById('candidate-tag-options');if(tags)tags.innerHTML=(choices.data.tags || []).map(row=>'<option value="'+escapeHtml(row.name)+'"></option>').join('');
+    } else setCandidateSearchMessage(choices.data?.message || 'Không thể tải lựa chọn bộ lọc.');
+    candidateSavedFilters=saved.ok ? saved.data.filters || [] : [];
+    const select=document.getElementById('candidate-filter-saved');if(select){const value=select.value;select.innerHTML='<option value="">Chọn bộ lọc</option>'+candidateSavedFilters.map(row=>'<option value="'+escapeHtml(row.id)+'">'+escapeHtml(row.name)+'</option>').join('');select.value=value;}
+    if(!saved.ok)setCandidateSearchMessage(saved.data?.message || 'Không thể tải bộ lọc đã lưu.');
+  }
+  document.getElementById('candidate-prev-page')?.addEventListener('click',()=>{candidateSearchPage=Math.max(1,candidateSearchPage-1);loadCandidates();});
+  document.getElementById('candidate-next-page')?.addEventListener('click',()=>{candidateSearchPage++;loadCandidates();});
+  for(const id of ['candidate-source-filter','candidate-tag-filter','candidate-date-from','candidate-date-to','candidate-rating-min','candidate-rating-max'])document.getElementById(id)?.addEventListener('change',resetCandidateSearch);
+  document.getElementById('candidate-filter-reset')?.addEventListener('click',()=>{for(const [key,id]of Object.entries(candidateFilterInputs)){const node=document.getElementById(id);if(node)node.value=['stage','sourceId','requisitionId'].includes(key)?'ALL':'';}resetCandidateSearch();});
+  document.getElementById('candidate-filter-apply')?.addEventListener('click',()=>{const saved=candidateSavedFilters.find(row=>row.id===document.getElementById('candidate-filter-saved').value);if(!saved)return;for(const [key,id]of Object.entries(candidateFilterInputs)){const node=document.getElementById(id);if(node)setCandidateFilterValue(node,saved.filters[key] || (['stage','sourceId','requisitionId'].includes(key)?'ALL':''));}resetCandidateSearch();});
+  async function mutateCandidateFilter(method) {
+    const token=sessionStorage.getItem('ats_token');if(!token)return;
+    const id=document.getElementById('candidate-filter-saved')?.value;
+    if(method==='DELETE'&&!id)return;
+    const result=await window.ATS_API.candidateFiltersApi(token,method,method==='POST'?{name:document.getElementById('candidate-filter-name').value,filters:readCandidateFilters()}:undefined,id && method==='DELETE'?id:undefined);
+    if(token!==sessionStorage.getItem('ats_token'))return;
+    if(!result.ok){setCandidateSearchMessage(result.data?.message || 'Không thể cập nhật bộ lọc.');return;}
+    loadCandidateFilterChoices(token,candidateSearchSequence);
+  }
+  document.getElementById('candidate-filter-save')?.addEventListener('click',()=>mutateCandidateFilter('POST'));
+  document.getElementById('candidate-filter-delete')?.addEventListener('click',()=>mutateCandidateFilter('DELETE'));
+
   async function loadCandidates() {
+    const request = ++candidateSearchSequence;
     const token = sessionStorage.getItem('ats_token');
     if (!token) return;
 
     // Populate requisition filter dropdown if empty
     if (candidatesReqFilter && candidatesReqFilter.children.length <= 1 && currentRequisitionsList.length > 0) {
       candidatesReqFilter.innerHTML = `<option value="ALL">Tất cả vị trí ứng tuyển</option>` +
-        currentRequisitionsList.map(r => `<option value="${escapeHtml(r.title)}">${escapeHtml(r.code)} - ${escapeHtml(r.title)}</option>`).join('');
+        currentRequisitionsList.map(r => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.code)} - ${escapeHtml(r.title)}</option>`).join('');
     }
 
     const search = candidatesSearchInput ? candidatesSearchInput.value.trim().toLowerCase() : '';
@@ -41,24 +86,28 @@
     }
 
     try {
-      const res = await window.ATS_API.getCandidatesApi(token, { search, stage });
+      const res = await window.ATS_API.getCandidatesApi(token, { ...readCandidateFilters(), search, stage, requisitionId:reqFilter, advanced:true, page:candidateSearchPage, pageSize:50 });
+      if (request !== candidateSearchSequence || token !== sessionStorage.getItem('ats_token')) return;
+      if (!res.ok || !res.data?.success) throw new Error(res.data?.message || 'Không thể tìm kiếm ứng viên.');
       if (res.ok && res.data && res.data.success) {
         let list = res.data.candidates || res.data.data || [];
-
-        // Apply requisition filter if selected
-        if (reqFilter && reqFilter !== 'ALL') {
-          list = list.filter(c => {
-            const reqTitle = (c.requisition && c.requisition.title) ? c.requisition.title : (c.requisition_title || '');
-            return reqTitle.toLowerCase().includes(reqFilter.toLowerCase());
-          });
-        }
 
         currentCandidatesList = list;
         window.ATS_TALENT_POOL?.refreshCandidates(list);
         if (candidatesTotalBadge) {
-          candidatesTotalBadge.textContent = `${list.length} ứng viên`;
+          candidatesTotalBadge.textContent = `${res.data.total ?? list.length} ứng viên`;
         }
 
+        const total = res.data.total ?? list.length;
+        document.getElementById('candidate-page-label')?.replaceChildren(document.createTextNode('Trang '+candidateSearchPage));
+        if (document.getElementById('candidate-prev-page')) document.getElementById('candidate-prev-page').disabled = candidateSearchPage === 1;
+        if (document.getElementById('candidate-next-page')) document.getElementById('candidate-next-page').disabled = candidateSearchPage * 50 >= total;
+        setCandidateSearchMessage('');
+        const enabled=res.data.features?.candidateSearch===true;
+        candidateSearchReady=enabled;candidateAppliedFilters={...readCandidateFilters(),search,stage,requisitionId:reqFilter};
+        document.getElementById('candidate-advanced-filters')?.classList.toggle('hidden',!enabled);
+        if(enabled)loadCandidateFilterChoices(token,request);
+        else setCandidateSearchMessage('Tìm kiếm nâng cao và bộ lọc đã lưu cần migration S5-05 được phê duyệt. Danh sách hiện hữu vẫn hoạt động.');
         if (list.length === 0) {
           candidatesTableBody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--color-text-muted); padding: 24px;">Không tìm thấy hồ sơ ứng viên phù hợp.</td></tr>`;
           return;
@@ -67,7 +116,7 @@
         candidatesTableBody.innerHTML = list.map(c => {
           const badgeClass = STAGE_BADGES[c.stage] || 'badge-neutral';
           const stageName = c.statusLabel || STAGE_LABELS[c.stage] || c.stage || '—';
-          const stars = c.status && !c.stage ? '—' : '★'.repeat(c.rating || 4) + '☆'.repeat(5 - (c.rating || 4));
+          const stars = c.interviewAverage == null ? '—' : escapeHtml(Number(c.interviewAverage).toFixed(2));
           const name = c.fullName || c.full_name || 'Ứng viên';
           const phone = c.phoneNumber || c.phone || '';
           const reqTitle = (c.requisition && c.requisition.title) ? c.requisition.title : (c.requisition_title || 'Chưa gắn vị trí');
@@ -99,18 +148,41 @@
         }).join('');
       }
     } catch (e) {
-      console.error('Failed to load candidates:', e);
+      if (request !== candidateSearchSequence || token !== sessionStorage.getItem('ats_token')) return;
+      currentCandidatesList = [];
+      if (candidatesTotalBadge) candidatesTotalBadge.textContent = '—';
+      setCandidateSearchMessage(e.message);
+      if (candidatesTableBody) candidatesTableBody.innerHTML = '<tr><td colspan="8">Không thể tải dữ liệu. Vui lòng thử lại.</td></tr>';
     }
   }
 
   if (candidatesExportBtn) {
-    candidatesExportBtn.addEventListener('click', () => {
+    candidatesExportBtn.addEventListener('click', async () => {
       if (!currentCandidatesList || currentCandidatesList.length === 0) {
         showToast('warning', 'Xuất dữ liệu', 'Không có dữ liệu ứng viên để xuất.');
         return;
       }
-      const headers = ['Mã UV', 'Họ và tên', 'Vị trí ứng tuyển', 'Email', 'Điện thoại', 'Giai đoạn', 'Ngày nộp', 'Đánh giá'];
-      const rows = currentCandidatesList.map(c => [
+      let exportList=currentCandidatesList;
+      if(candidateSearchReady){
+        const token=sessionStorage.getItem('ats_token'),sequence=candidateSearchSequence,filters={...candidateAppliedFilters};
+        candidatesExportBtn.disabled=true;
+        try{
+          const all=new Map();let total=null;
+          for(let page=1;total===null||page<=Math.ceil(total/100);page++){
+            const result=await window.ATS_API.getCandidatesApi(token,{...filters,advanced:true,page,pageSize:100});
+            if(token!==sessionStorage.getItem('ats_token')||sequence!==candidateSearchSequence)return;
+            if(!result.ok||!result.data?.success||result.data.features?.candidateSearch!==true)throw new Error(result.data?.message || 'Không thể tải dữ liệu xuất.');
+            if(total===null)total=result.data.total;
+            else if(total!==result.data.total)throw new Error('Dữ liệu đã thay đổi. Vui lòng làm mới và xuất lại.');
+            for(const candidate of result.data.candidates || [])all.set(candidate.id,candidate);
+          }
+          if(all.size!==total)throw new Error('Dữ liệu đã thay đổi. Vui lòng làm mới và xuất lại.');
+          exportList=[...all.values()];
+        }catch(error){showToast('danger','Xuất dữ liệu',error.message);return;}
+        finally{candidatesExportBtn.disabled=false;}
+      }
+      const headers = ['Mã UV', 'Họ và tên', 'Vị trí ứng tuyển', 'Email', 'Điện thoại', 'Giai đoạn', 'Ngày nộp', 'Điểm PV trung bình'];
+      const rows = exportList.map(c => [
         formatCandCode(c),
         c.fullName || c.full_name || '',
         (c.requisition && c.requisition.title) ? c.requisition.title : (c.requisition_title || ''),
@@ -118,18 +190,18 @@
         c.phoneNumber || c.phone || '',
         c.statusLabel || STAGE_LABELS[c.stage] || c.stage || '—',
         (c.createdAt || c.created_at) ? new Date(c.createdAt || c.created_at).toLocaleDateString('vi-VN') : '',
-        c.status && !c.stage ? '—' : (c.rating || 4) + ' sao'
+        c.interviewAverage == null ? '—' : Number(c.interviewAverage).toFixed(2)
       ]);
       exportTableToCsv('danh_sach_ung_vien.csv', headers, rows);
     });
   }
 
-  if (candidatesRefreshBtn) candidatesRefreshBtn.addEventListener('click', loadCandidates);
-  if (candidatesStageFilter) candidatesStageFilter.addEventListener('change', loadCandidates);
-  if (candidatesReqFilter) candidatesReqFilter.addEventListener('change', loadCandidates);
+  if (candidatesRefreshBtn) candidatesRefreshBtn.addEventListener('click', resetCandidateSearch);
+  if (candidatesStageFilter) candidatesStageFilter.addEventListener('change', resetCandidateSearch);
+  if (candidatesReqFilter) candidatesReqFilter.addEventListener('change', resetCandidateSearch);
   if (candidatesSearchInput) {
     candidatesSearchInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') loadCandidates();
+      if (e.key === 'Enter') resetCandidateSearch();
     });
   }
 

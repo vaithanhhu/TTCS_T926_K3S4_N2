@@ -1112,6 +1112,10 @@ class RequisitionService {
     const conditions = [];
     const params = [];
     if(options.candidateId){conditions.push('c.id=?');params.push(options.candidateId);}
+    if (Array.isArray(options.candidateIds)) {
+      conditions.push(options.candidateIds.length ? `c.id IN (${options.candidateIds.map(() => '?').join(',')})` : '1=0');
+      params.push(...options.candidateIds);
+    }
 
     const visibility = this.candidateVisibility(options.viewer);
     if (visibility) {
