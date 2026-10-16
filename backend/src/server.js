@@ -51,6 +51,15 @@ async function initializeApplication() {
   if (config.REQUISITION_TRACKING_ENABLED || config.JOB_POSTING_DRAFTS_ENABLED) await require('./db/migrate-requisition-tracking-job-drafts').verify(db);
   if(config.JOB_POSTING_PUBLICATION_ENABLED)await require('./db/migrate-job-publication').verify(db);
   if(config.CANDIDATE_PORTAL_ENABLED)await require('./db/migrate-candidate-portal').verify(db);
+  if (!isTestEnv) {
+    try {
+      const SlaNotificationService = require('./services/slaNotificationService');
+      const slaService = new SlaNotificationService(db);
+      slaService.runDailySlaCheck().catch(e => console.warn('[SLA Daily Job] Note:', e.message));
+    } catch (slaErr) {
+      // Bỏ qua lỗi khởi tạo SLA
+    }
+  }
 }
 
 const avatarService = new AvatarService();
@@ -1880,7 +1889,41 @@ async function handleRequest(req, res) {
     return;
   }
 
-  if(req.method==='GET'&&/^\/(?:api\/v1\/)?candidates\/[^/]+$/.test(pathname)){const user=await rbacMiddleware.authorize(req,res,authController.authService,'candidate.read');if(!user)return;let candidateId;try{candidateId=decodeURIComponent(pathname.split('/').at(-1));}catch{res.writeHead(400,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:'BAD_REQUEST',message:'Mã hồ sơ không hợp lệ.'}));return;}const result=await requisitionService.getCandidateById(candidateId,user);res.writeHead(result.statusCode||200,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(result));return;}
+  // S5-10 (SCRUM-120): Candidate SLA Notification & Monitoring API
+  if (pathname.startsWith('/api/v1/sla/') || pathname === '/api/v1/sla') {
+    const SlaNotificationService = require('./services/slaNotificationService');
+    const SlaNotificationController = require('./controllers/slaNotificationController');
+    await new SlaNotificationController(new SlaNotificationService(db), rbacMiddleware, authController.authService).handle(req, res, parsedUrl, parseBody);
+    return;
+  }
+
+  if(req.method==='GET'&&/^\/(?:api\/v1\/)?candidates\/[^/]+$/.test(pathname)){
+    const user=await rbacMiddleware.authorize(req,res,authController.authService,'candidate.read');
+    if(!user)return;
+    let candidateId;
+    try{candidateId=decodeURIComponent(pathname.split('/').at(-1));}catch{
+      res.writeHead(400,{'Content-Type':'application/json; charset=utf-8'});
+      res.end(JSON.stringify({success:false,code:'BAD_REQUEST',message:'Mã hồ sơ không hợp lệ.'}));
+      return;
+    }
+    const result=await requisitionService.getCandidateById(candidateId,user);
+    const candObj = result && result.success ? (result.data || result.candidate) : null;
+    if (candObj) {
+      try {
+        const SlaNotificationService = require('./services/slaNotificationService');
+        const slaService = new SlaNotificationService(db);
+        const sla = await slaService.calculateCandidateSla(candObj);
+        candObj.sla = sla;
+        candObj.is_sla_violated = Boolean(sla && sla.isOverdue);
+        candObj.sla_status = sla ? sla.flag : 'ON_TRACK';
+        candObj.isOverdue = Boolean(sla && sla.isOverdue);
+        candObj.slaStatus = sla ? sla.flag : 'ON_TRACK';
+      } catch (slaErr) {}
+    }
+    res.writeHead(result.statusCode||200,{'Content-Type':'application/json; charset=utf-8'});
+    res.end(JSON.stringify(result));
+    return;
+  }
 
   // 13.7 API: Candidates List (Real SQLite Data)
   if (req.method === 'GET' && (pathname === '/api/v1/candidates' || pathname === '/candidates')) {
@@ -1927,6 +1970,27 @@ async function handleRequest(req, res) {
         }
       } catch (err) {
         // Bảng screening results chưa tồn tại
+      }
+    }
+
+    // S5-10: Gắn SLA status và thông tin vi phạm SLA vào danh sách ứng viên
+    if (result && result.success && Array.isArray(result.candidates) && result.candidates.length > 0) {
+      try {
+        const SlaNotificationService = require('./services/slaNotificationService');
+        const slaService = new SlaNotificationService(db);
+        const slaConfigs = await slaService.getSlaConfigs();
+        const cfgMap = {};
+        for (const sc of slaConfigs) cfgMap[sc.stage] = sc;
+        for (const c of result.candidates) {
+          const sla = await slaService.calculateCandidateSla(c, cfgMap);
+          c.sla = sla;
+          c.is_sla_violated = Boolean(sla && sla.isOverdue);
+          c.sla_status = sla ? sla.flag : 'ON_TRACK';
+          c.isOverdue = Boolean(sla && sla.isOverdue);
+          c.slaStatus = sla ? sla.flag : 'ON_TRACK';
+        }
+      } catch (slaErr) {
+        // Bỏ qua lỗi tính SLA nếu chưa migrate
       }
     }
 
