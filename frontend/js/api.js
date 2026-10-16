@@ -853,6 +853,79 @@ async function updateCandidateStageApi(token, id, stage, notes, rejectionReasonI
   }
 }
 
+async function getRejectionReasonsApi(token) {
+  try {
+    const response = await fetch(`${API_BASE}/recruitment-catalogs/rejection-reasons`, {
+      method: 'GET',
+      headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi lấy danh mục lý do loại.' } };
+  }
+}
+
+async function getCandidateStageHistoryApi(token, candidateId) {
+  try {
+    const response = await fetch(`${API_BASE}/candidates/${encodeURIComponent(candidateId)}/history`, {
+      method: 'GET',
+      headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi lấy lịch sử chuyển giai đoạn.' } };
+  }
+}
+
+async function requestInterviewSkipExceptionApi(token, candidateId, reason) {
+  try {
+    const response = await fetch(`${API_BASE}/candidates/${encodeURIComponent(candidateId)}/stage-exception-request`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify({ reason })
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi gửi yêu cầu ngoại lệ.' } };
+  }
+}
+
+async function getCandidateStageExceptionsApi(token, candidateId) {
+  try {
+    const response = await fetch(`${API_BASE}/candidates/${encodeURIComponent(candidateId)}/stage-exceptions`, {
+      method: 'GET',
+      headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi lấy danh sách ngoại lệ.' } };
+  }
+}
+
+async function decideInterviewSkipExceptionApi(token, exceptionId, action, comment) {
+  try {
+    const response = await fetch(`${API_BASE}/stage-exceptions/${encodeURIComponent(exceptionId)}/decide`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify({ action, comment })
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi xử lý yêu cầu ngoại lệ.' } };
+  }
+}
+
 async function createInterviewApi(token, interviewData) {
   try {
     const response = await fetch(`${API_BASE}/interviews`, {
@@ -1667,6 +1740,11 @@ window.ATS_API = {
   getCandidatesApi,
   createCandidateApi,
   updateCandidateStageApi,
+  getRejectionReasonsApi,
+  getCandidateStageHistoryApi,
+  requestInterviewSkipExceptionApi,
+  getCandidateStageExceptionsApi,
+  decideInterviewSkipExceptionApi,
   getInterviewsApi,
   createInterviewApi,
   updateInterviewStatusApi,

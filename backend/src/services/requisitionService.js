@@ -1505,6 +1505,11 @@ class RequisitionService {
    * Update candidate stage / pipeline status
    */
   async updateCandidateStage(id, stage, notes, rejectionReasonId,actor=null) {
+    if (require('../config/config').CANDIDATE_STAGE_TRANSITIONS_ENABLED) {
+      const CandidateStageService = require('./candidateStageService');
+      const stageService = new CandidateStageService(this.db);
+      return stageService.updateStage(id, stage, { notes, rejectionReasonId }, actor);
+    }
     if(actor)return this.db.transaction(async()=>{const access=await this.candidateAccess(id,actor,'candidate.update');if(!access.success)return access;await this.db.prepare('SELECT id FROM requisitions WHERE id=?'+(this.db.provider==='postgres'?' FOR SHARE':'')).get(access.row.requisition_id);const checked=await this.candidateAccess(id,actor,'candidate.update');if(!checked.success)return checked;return this.updateCandidateStage(id,stage,notes,rejectionReasonId,null);});
     await this.openPolicy.notDraft((await this.db.prepare('SELECT requisition_id FROM candidates WHERE id=?').get(id))?.requisition_id);
     if (!id) return { success: false, statusCode: 400, message: 'Thiếu mã ứng viên.' };
