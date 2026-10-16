@@ -130,6 +130,21 @@ async function main() {
     await Promise.resolve();
     assert.equal(received.length,2);
   });
+  await test('frontend/routes.json and package.json remain valid without conflict markers or missing files', () => {
+    for (const relative of ['frontend/routes.json', 'package.json']) {
+      const text = fs.readFileSync(path.join(root, relative), 'utf8');
+      assert.equal(/^(<{7}|={7}|>{7})/m.test(text), false, relative);
+      JSON.parse(text);
+    }
+    const routes = JSON.parse(fs.readFileSync(path.join(root, 'frontend/routes.json'), 'utf8'));
+    for (const key of ['scripts', 'fragments']) {
+      assert.ok(Array.isArray(routes[key]), key);
+      assert.equal(new Set(routes[key]).size, routes[key].length, key);
+      for (const entry of routes[key]) {
+        assert.equal(fs.existsSync(path.join(root, 'frontend', entry.replace(/^\//, ''))), true, entry);
+      }
+    }
+  });
   console.log('LOCAL_RUNNER_RESULT ' + JSON.stringify({ passed: results.length, failed: 0, results }));
 }
 

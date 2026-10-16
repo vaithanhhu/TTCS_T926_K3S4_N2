@@ -93,6 +93,7 @@
         let list = res.data.candidates || res.data.data || [];
 
         currentCandidatesList = list;
+        window.ATS_TALENT_POOL?.refreshCandidates(list);
         if (candidatesTotalBadge) {
           candidatesTotalBadge.textContent = `${res.data.total ?? list.length} ứng viên`;
         }
@@ -123,7 +124,7 @@
           const appliedDate = c.createdAt || c.created_at || c.applied_at;
 
           return `
-            <tr>
+            <tr data-id="${escapeHtml(c.id)}">
               <td><code class="font-mono" style="font-weight: 600; color: var(--color-primary);">${escapeHtml(code)}</code></td>
               <td>
                 <div style="font-weight: 600; color: var(--color-text);">${escapeHtml(name)}</div>
@@ -145,6 +146,7 @@
             </tr>
           `;
         }).join('');
+        window.CandidateSlaModule?.renderTableBadges();
       }
     } catch (e) {
       if (request !== candidateSearchSequence || token !== sessionStorage.getItem('ats_token')) return;

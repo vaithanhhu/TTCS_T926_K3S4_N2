@@ -1784,3 +1784,6 @@ window.ATS_API.candidateSearchOptionsApi = async function(token) {
 window.ATS_API.candidateFiltersApi = async function(token,method='GET',body,id) {
   try { const response = await fetch(API_BASE+'/candidate-filters'+(id ? '/'+encodeURIComponent(id) : ''),{method,cache:'no-store',headers:{Authorization:'Bearer '+token,...(body ? {'Content-Type':'application/json'} : {})},...(body ? {body:JSON.stringify(body)} : {})});return {ok:response.ok,data:await response.json()}; } catch { return {ok:false,data:{message:'Không thể lưu hoặc tải bộ lọc.'}}; }
 };
+window.ATS_API.talentPoolApi = async function(token,path='',method='GET',body) {
+  try { const response = await fetch(API_BASE+'/talent-pool'+path,{method,cache:'no-store',headers:{Authorization:'Bearer '+token,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});return {ok:response.ok,data:await response.json()}; } catch { return {ok:false,data:{message:'Không thể kết nối kho ứng viên.'}}; }
+};

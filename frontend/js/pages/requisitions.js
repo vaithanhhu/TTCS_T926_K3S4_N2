@@ -33,6 +33,7 @@
         if(requisitionTrackingEnabled){const p=res.data.pagination;if(p.currentPage>Math.max(1,p.totalPages)){requisitionPage=Math.max(1,p.totalPages);return loadRequisitions();}document.getElementById('req-page-info').textContent=p.totalItems===0?'0 yêu cầu':p.currentPage+' / '+p.totalPages+' — '+p.totalItems+' yêu cầu';document.getElementById('req-prev-page').disabled=p.currentPage<=1;document.getElementById('req-next-page').disabled=p.currentPage>=p.totalPages;window.ATS_API.requisitionTrackingOptionsApi(token).then(result=>{if(!isCurrent())return;document.getElementById('req-tracking-options-message').textContent=result.ok?'':result.data?.message||'Không tải được bộ lọc.';if(!result.ok)return;for(const [key,id,title] of [['departments','req-department-filter','Tất cả phòng ban'],['recruiters','req-recruiter-filter','Recruiter chính hoặc hỗ trợ']]){const select=document.getElementById(id),selected=select.value;select.textContent='';const empty=document.createElement('option');empty.value='';empty.textContent=title;select.appendChild(empty);for(const item of result.data.data[key]){const option=document.createElement('option');option.value=item.id;option.textContent=item.name;select.appendChild(option);}select.value=selected;}});}
         const list = res.data.requisitions || res.data.data || [];
         currentRequisitionsList = list;
+        window.ATS_TALENT_POOL?.refreshRequisitions(list);
         if (requisitionsTotalBadge) {
           requisitionsTotalBadge.textContent = `${res.data.total??list.length} vị trí`;
         }
