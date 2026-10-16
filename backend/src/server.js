@@ -2166,6 +2166,11 @@ async function handleRequest(req, res) {
       if (interview.interviewer) {
         Object.assign(interview.interviewer, avatarService.getAvatarUrls(interview.interviewer.id));
       }
+      if (Array.isArray(interview.interviewers)) {
+        for (const iv of interview.interviewers) {
+          Object.assign(iv, avatarService.getAvatarUrls(iv.id));
+        }
+      }
     }
     res.writeHead(result.statusCode||200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(result));
@@ -2211,8 +2216,9 @@ async function handleRequest(req, res) {
       const evaluating=Object.hasOwn(body,'feedback')||Object.hasOwn(body,'score')||(!user.permissions.includes('interview.update')&&user.roles.includes('INTERVIEWER'));
       if(!await rbacMiddleware.authorize(req,res,authController.authService,evaluating?'interview.evaluate':'interview.update'))return;
       if(evaluating&&!user.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))){
-        const assigned=await db.prepare('SELECT id FROM interviews WHERE id=? AND interviewer_id=?').get(intId,user.id);
-        if(!user.roles.includes('INTERVIEWER')||!assigned){res.writeHead(403,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:'INTERVIEW_ASSIGNEE_REQUIRED',message:'Bạn chỉ được đánh giá vòng phỏng vấn được phân công.'}));return;}
+        const assigned=await db.prepare('SELECT id,interviewer_id FROM interviews WHERE id=?').get(intId);
+        if(!assigned){res.writeHead(404,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:'INTERVIEW_NOT_FOUND'}));return;}
+        if(!user.roles.includes('INTERVIEWER')||assigned.interviewer_id!==user.id){res.writeHead(403,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:'INTERVIEW_ASSIGNEE_REQUIRED',message:'Bạn chỉ được đánh giá vòng phỏng vấn được phân công.'}));return;}
       }
       const result = (await requisitionService.updateInterviewStatus(intId, body.status, body.feedback, body.score,user,evaluating?'interview.evaluate':'interview.update'));
       res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
