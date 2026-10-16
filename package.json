@@ -102,6 +102,8 @@
     "test:referral-auth": "node backend/tests/test_referral_authorization.js",
     "migrate:s5-03": "node backend/src/db/migrate-candidate-stage-transitions.js",
     "test:s5-03": "node backend/tests/test_s5_03_stage_transition.js",
+    "migrate:s5-06": "node backend/src/db/migrate-talent-pool.js",
+    "test:s5-06": "node backend/tests/test_s5_06_talent_pool.js",
     "test:s5-07": "node backend/tests/test_s5_07_candidate_timeline.js",
     "test:s5-08": "node backend/tests/test_s5_08_candidate_manual_entry.js",
     "test:s5-09": "node backend/tests/test_s5_09_candidate_screening.js"

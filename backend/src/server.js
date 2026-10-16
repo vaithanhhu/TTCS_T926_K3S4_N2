@@ -1880,6 +1880,10 @@ async function handleRequest(req, res) {
     return;
   }
 
+  if (/^\/(?:api\/v1\/)?talent-pool(?:\/(?:suggestions|availability))?$/.test(pathname)) {
+    await new (require('./controllers/talentPoolController'))(new (require('./services/talentPoolService'))(db),rbacMiddleware,authController.authService).handle(req,res,parsedUrl,parseBody);
+    return;
+  }
   if(req.method==='GET'&&/^\/(?:api\/v1\/)?candidates\/[^/]+$/.test(pathname)){const user=await rbacMiddleware.authorize(req,res,authController.authService,'candidate.read');if(!user)return;let candidateId;try{candidateId=decodeURIComponent(pathname.split('/').at(-1));}catch{res.writeHead(400,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:'BAD_REQUEST',message:'Mã hồ sơ không hợp lệ.'}));return;}const result=await requisitionService.getCandidateById(candidateId,user);res.writeHead(result.statusCode||200,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(result));return;}
 
   // 13.7 API: Candidates List (Real SQLite Data)

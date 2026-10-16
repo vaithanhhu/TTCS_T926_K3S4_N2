@@ -54,6 +54,7 @@
         }
 
         currentCandidatesList = list;
+        window.ATS_TALENT_POOL?.refreshCandidates(list);
         if (candidatesTotalBadge) {
           candidatesTotalBadge.textContent = `${list.length} ứng viên`;
         }
