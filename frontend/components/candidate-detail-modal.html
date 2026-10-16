@@ -50,11 +50,69 @@
           </div>
           <div id="cand-detail-rejection-reason-group" class="form-group hidden" style="margin-top: 10px; margin-bottom: 0;">
             <label for="cand-detail-rejection-reason-select" class="form-label">
-              Lý do loại hồ sơ
+              Lý do loại hồ sơ <span style="color: #ef4444;">*</span>
             </label>
             <select id="cand-detail-rejection-reason-select" class="form-input">
               <option value="">-- Chọn lý do loại --</option>
             </select>
+            <div id="cand-detail-rejection-notes-group" class="hidden" style="margin-top: 8px;">
+              <label for="cand-detail-rejection-notes-input" class="form-label" style="font-size: 0.8rem;">
+                Giải thích chi tiết (Bắt buộc khi chọn lý do "Khác") <span style="color: #ef4444;">*</span>
+              </label>
+              <textarea id="cand-detail-rejection-notes-input" class="form-input" rows="2" placeholder="Nhập lý do chi tiết vì sao loại ứng viên..."></textarea>
+            </div>
+          </div>
+
+          <!-- S5-03: Exception Request / Decision Banner for Skipping Interview -->
+          <div id="cand-detail-exception-banner" class="hidden" style="margin-top: 12px; padding: 12px; border-radius: 6px; border: 1px solid #f59e0b; background: #fffbeb;">
+            <div style="display: flex; gap: 8px; align-items: flex-start;">
+              <span style="font-size: 1.25rem; line-height: 1;">⚠️</span>
+              <div style="flex: 1; font-size: 0.85rem;">
+                <div style="font-weight: 600; color: #b45309;" id="cand-detail-exception-title">
+                  Chặn đi thẳng tới Đề xuất offer do chưa qua Phỏng vấn
+                </div>
+                <div style="color: #92400e; margin-top: 2px;" id="cand-detail-exception-desc">
+                  Quy định yêu cầu hồ sơ phải trải qua vòng Phỏng vấn hoặc có xác nhận phê duyệt ngoại lệ từ Trưởng phòng Nhân sự (HR Manager).
+                </div>
+                <!-- Recruiter Request Box -->
+                <div id="cand-detail-exception-recruiter-box" class="hidden" style="margin-top: 8px;">
+                  <textarea id="cand-detail-exception-reason-input" class="form-input form-input-sm" rows="2" placeholder="Nhập lý do đề xuất bỏ qua vòng phỏng vấn gửi Trưởng phòng..."></textarea>
+                  <div style="margin-top: 6px; display: flex; justify-content: flex-end;">
+                    <button type="button" id="cand-detail-send-exception-btn" class="btn btn-warning btn-xs">
+                      📤 Gửi yêu cầu phê duyệt ngoại lệ
+                    </button>
+                  </div>
+                </div>
+                <!-- Pending Status Box -->
+                <div id="cand-detail-exception-pending-box" class="hidden" style="margin-top: 8px; padding: 6px 8px; background: #fef3c7; border-radius: 4px; font-weight: 500; color: #92400e;">
+                  ⏳ Yêu cầu bỏ qua phỏng vấn đang chờ Trưởng phòng Nhân sự xem xét.
+                </div>
+                <!-- HR Manager Decision Box -->
+                <div id="cand-detail-exception-manager-box" class="hidden" style="margin-top: 8px;">
+                  <div id="cand-detail-exception-manager-info" style="margin-bottom: 6px; font-style: italic; color: #78350f;"></div>
+                  <input type="text" id="cand-detail-exception-comment-input" class="form-input form-input-sm" placeholder="Ý kiến / Ghi chú phê duyệt của Trưởng phòng..." style="margin-bottom: 6px;" />
+                  <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                    <button type="button" id="cand-detail-reject-exception-btn" class="btn btn-outline btn-xs" style="color: #dc2626; border-color: #dc2626;">
+                      ✕ Từ chối ngoại lệ
+                    </button>
+                    <button type="button" id="cand-detail-approve-exception-btn" class="btn btn-success btn-xs">
+                      ✓ Phê duyệt ngoại lệ
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- S5-03: Nhật ký chuyển giai đoạn & Lý do loại (Audit History) -->
+        <div class="panel-card" style="padding: 14px; margin-bottom: 14px;">
+          <div style="font-weight: 600; font-size: 0.875rem; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+            <span>🕒 Nhật ký chuyển giai đoạn (Audit History)</span>
+            <span id="cand-detail-history-count" style="font-size: 0.75rem; color: var(--color-text-muted);"></span>
+          </div>
+          <div id="cand-detail-history-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 220px; overflow-y: auto;">
+            <span style="font-size: 0.8rem; color: var(--color-text-muted);">Đang tải lịch sử...</span>
           </div>
         </div>
 
