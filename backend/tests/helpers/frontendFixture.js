@@ -27,6 +27,13 @@ function domCompatibility(document) {
     if(!element.firstChild)Object.defineProperty(element,'firstChild',{configurable:true,get(){return this.children[0]||null;}});
     if(!element.insertBefore)element.insertBefore=function(child,reference){if(reference!=null&&!this.children.includes(reference))throw new Error('Reference node is not a child');if(child===reference)return child;if(child.parentNode){const siblings=child.parentNode.children,index=siblings.indexOf(child);if(index>=0)siblings.splice(index,1);}child.parentNode=this;this.children.splice(reference==null?this.children.length:this.children.indexOf(reference),0,child);return child;};
     if(!element.prepend)element.prepend=function(child){this.insertBefore(child,this.firstChild);};
+    if(!element.closest)element.closest=function(selector){
+      const matches=new Set(document.querySelectorAll?.(selector)||[]);
+      for(let node=this;node;node=node.parentElement||node.parentNode){
+        if(node.matches?node.matches(selector):matches.has(node)||/^[a-z][\w-]*$/i.test(selector)&&String(node.tagName||node.nodeName||'').toLowerCase()===selector.toLowerCase())return node;
+      }
+      return null;
+    };
     const names=new Set((element.getAttribute?.('class')||element.className||'').split(/\s+/).filter(Boolean));
     for(const method of ['add','remove','toggle'])if(element.classList?.[method]){
       const original=element.classList[method].bind(element.classList);
@@ -38,7 +45,7 @@ function domCompatibility(document) {
   }
   const get=document.getElementById.bind(document),create=document.createElement.bind(document);
   document.getElementById=id=>enhance(get(id));
-  document.createElement=(...args)=>enhance(create(...args));
+  document.createElement=(name,...args)=>{const element=enhance(create(name,...args));if(element&&!element.tagName)element.tagName=String(name).toUpperCase();return element;};
   enhance(document.body);enhance(document.documentElement);
   return {MutationObserver};
 }

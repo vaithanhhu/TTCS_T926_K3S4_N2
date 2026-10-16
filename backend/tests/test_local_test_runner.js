@@ -114,6 +114,15 @@ async function main() {
     const target = document.getElementById('fixture'), child = document.createElement('div'), received = [];
     target.prepend(child);
     assert.equal(target.firstChild, child);
+    const table=document.createElement('table'),section=document.createElement('section');
+    table.prepend(target);
+    assert.equal(table.closest('table'),table);
+    assert.equal(child.closest('table'),table);
+    assert.equal(child.closest('section'),null);
+    section.prepend(child);
+    assert.equal(child.closest('table'),null);
+    assert.equal(child.closest('section'),section);
+    assert.equal(document.createElement('div').closest('table'),null);
     const observer = new MutationObserver(records => received.push(...records));
     observer.observe(target,{attributes:true,attributeFilter:['class'],attributeOldValue:true});
     target.setAttribute('data-ignored','value');

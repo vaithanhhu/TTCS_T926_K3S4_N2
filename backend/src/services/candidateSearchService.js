@@ -15,7 +15,10 @@ class CandidateSearchService {
   }
   folded(column) { return this.db.provider==='sqlite'?'ats_candidate_search_fold('+column+')':'LOWER(NORMALIZE('+column+',NFC))'; }
   async hasMergeColumn() {
-    try { await this.db.prepare('SELECT merged_into_id FROM candidates LIMIT 0').all(); return true; } catch { return false; }
+    const columns=this.db.provider==='postgres'
+      ?await this.db.prepare("SELECT column_name AS name FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='candidates'").all()
+      :await this.db.prepare('PRAGMA table_info(candidates)').all();
+    return columns.some(column=>column.name==='merged_into_id');
   }
 
   normalize(input = {}) {
