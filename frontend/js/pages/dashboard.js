@@ -85,9 +85,9 @@
               const deptName = r.department || r.department_name || r.departmentName || '';
               return `
                 <tr>
-                  <td><code class="font-mono" style="font-weight: 600; color: var(--color-primary);">${r.code}</code></td>
-                  <td><strong>${r.title}</strong></td>
-                  <td>${deptName}</td>
+                  <td><code class="font-mono" style="font-weight: 600; color: var(--color-primary);">${escapeHtml(r.code)}</code></td>
+                  <td><strong>${escapeHtml(r.title)}</strong></td>
+                  <td>${escapeHtml(deptName)}</td>
                   <td style="text-align: center; font-weight: 600;">${r.headcount}</td>
                   <td><span class="badge ${statusBadge}">${statusText}</span></td>
                 </tr>
@@ -112,8 +112,8 @@
               return `
                 <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--color-border-subtle);">
                   <div>
-                    <div style="font-weight: 600; color: var(--color-text); font-size: 0.85rem;">${candName}</div>
-                    <div style="font-size: 0.775rem; color: var(--color-text-muted);">${reqTitle} ${interviewer ? '· PV: ' + interviewer : ''}</div>
+                    <div style="font-weight: 600; color: var(--color-text); font-size: 0.85rem;">${escapeHtml(candName)}</div>
+                    <div style="font-size: 0.775rem; color: var(--color-text-muted);">${escapeHtml(reqTitle)} ${escapeHtml(interviewer ? '· PV: ' + interviewer : '')}</div>
                   </div>
                   <div style="text-align: right;">
                     <span class="badge badge-warning font-mono" style="font-size: 0.725rem;">${new Date(schedTime).toLocaleDateString('vi-VN')}</span>
@@ -141,7 +141,7 @@
                   return `
                     <div>
                       <div style="display: flex; justify-content: space-between; font-size: 0.825rem; margin-bottom: 4px;">
-                        <strong>${dName}</strong>
+                        <strong>${escapeHtml(dName)}</strong>
                         <span style="color: var(--color-text-secondary);">${reqCount} vị trí · ${totalHc} chỉ tiêu</span>
                       </div>
                       <div style="height: 6px; background: var(--color-bg-subtle); border-radius: var(--radius-full); overflow: hidden;">

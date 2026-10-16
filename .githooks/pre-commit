@@ -1,0 +1,3 @@
+#!/bin/sh
+hooks=$(git rev-parse --git-path hooks) || exit 1
+exec node "$hooks/ats-git-safety.js" pre-commit

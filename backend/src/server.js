@@ -551,6 +551,8 @@ async function handleRequest(req, res) {
   }
   // 10. API: S1-05 Get Full RBAC Matrix (AC-01)
   if (req.method === 'GET' && (pathname === '/api/v1/rbac/matrix' || pathname === '/rbac/matrix' || pathname === '/api/v1/admin/roles-matrix' || pathname === '/admin/roles-matrix')) {
+    const user = await rbacMiddleware.authorize(req, res, authController.authService, 'role.read');
+    if (!user) return;
     const rawMatrix = (await rbacMiddleware.getRbacMatrix());
     const roles = (await db.prepare('SELECT id, code AS name, name AS description FROM roles ORDER BY code ASC').all());
     const permissions = (await db.prepare('SELECT id, code AS name, name AS description, module FROM permissions ORDER BY module, code ASC').all());
@@ -1794,7 +1796,7 @@ async function handleRequest(req, res) {
     let roles = [];
     if (userInfo) {
       roles = (await db.prepare(`
-        SELECT r.code, r.name 
+        SELECT r.code, r.name
         FROM user_roles ur
         JOIN roles r ON ur.role_id = r.id
         WHERE ur.user_id = ?
@@ -1866,6 +1868,7 @@ async function handleRequest(req, res) {
     pathname.startsWith('/api/v1/candidates/documents/') ||
     /^\/api\/v1\/candidates\/[^/]+\/(?:parse-cv|notes|tags(?:\/[^/]+)?)$/.test(pathname)
   )){await new(require('./controllers/candidatePortalController'))(new(require('./services/candidatePortalService'))(db),rbacMiddleware,authController.authService).handle(req,res,parsedUrl,parseBody);return;}
+  if(pathname.startsWith('/api/v1/requisition-operations/')){if(!config.REQUISITION_OPERATIONS_ENABLED){res.writeHead(404,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:'S305_S306_DISABLED',message:'Chức năng sao chép/phân công chưa được bật.'}));return;}const {RequisitionOperationsService}=require('./services/requisitionOperationsService');await new(require('./controllers/requisitionOperationsController'))(new RequisitionOperationsService(db),rbacMiddleware,authController.authService).handle(req,res,parsedUrl,parseBody);return;}
   // S5-09 (SCRUM-119): Candidate Mandatory Screening & Scoring API
   if (
     /^\/(?:api\/v1\/)?requisitions\/[^/]+\/(?:screening-criteria|screen-all|screening-candidates)$/.test(pathname) ||
@@ -1899,7 +1902,7 @@ async function handleRequest(req, res) {
         if (candIds.length > 0) {
           const placeholders = candIds.map(() => '?').join(',');
           const srRows = await db.prepare(
-            `SELECT candidate_id, fit_score, mandatory_pass, experience_passed, education_passed, skills_passed, evaluation_details, evaluated_at 
+            `SELECT candidate_id, fit_score, mandatory_pass, experience_passed, education_passed, skills_passed, evaluation_details, evaluated_at
              FROM candidate_screening_results WHERE candidate_id IN (${placeholders})`
           ).all(...candIds);
           const srMap = new Map();

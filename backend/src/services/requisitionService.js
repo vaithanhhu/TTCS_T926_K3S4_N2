@@ -1359,7 +1359,7 @@ class RequisitionService {
       total: rows.length,
       offers: rows.map(r => ({
         id: r.id,
-        ...(viewer?{capabilities:{canApprove:viewer.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))||viewer.roles.includes('APPROVER')&&r.approver_id===viewer.id,canSend:viewer.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))||viewer.roles.includes('RECRUITER')&&r.in_recruiter_scope===1,canAccept:viewer.roles.every(role=>role==='CANDIDATE')&&r.candidate_email.toLowerCase()===viewer.email.toLowerCase()}}:{}),
+        ...(viewer?{capabilities:{canApprove:viewer.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))||viewer.roles.includes('APPROVER')&&r.approver_id===viewer.id,canSend:viewer.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))||viewer.roles.includes('RECRUITER')&&r.in_recruiter_scope===1,canAccept:r.status==='SENT'&&viewer.roles.every(role=>role==='CANDIDATE')&&r.candidate_email.toLowerCase()===viewer.email.toLowerCase()}}:{}),
         salaryMonthly: r.salary_monthly,
         startDate: r.start_date,
         status: r.status,
@@ -1594,6 +1594,9 @@ class RequisitionService {
       if(permission==='interview.update'&&!fresh.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))){const access=await this.candidateAccess(row.candidate_id,fresh);if(!access.success)return access;if(!await this.recruiterAssigned(row.requisition_id||access.row.requisition_id,fresh.id))return{success:false,statusCode:403,code:'INTERVIEW_OUT_OF_SCOPE',message:'Lịch phỏng vấn không thuộc vị trí được giao.'};}
       return this.updateInterviewStatus(id,status,feedback,score,null);
     });
+    if (!['SCHEDULED','COMPLETED','CANCELLED'].includes(status)) return {success:false,statusCode:400,code:'INVALID_INTERVIEW_STATUS',message:'Trạng thái phỏng vấn không hợp lệ.'};
+    const hasScore = score !== undefined && score !== null && score !== '';
+    if (hasScore && (!['number','string'].includes(typeof score) || typeof score === 'string' && !score.trim() || !Number.isSafeInteger(Number(score)))) return {success:false,statusCode:400,code:'INVALID_INTERVIEW_SCORE',message:'Điểm đánh giá phải là số nguyên hợp lệ.'};
     await this.openPolicy.notDraft((await this.db.prepare('SELECT COALESCE(x.requisition_id,c.requisition_id) AS requisition_id FROM interviews x LEFT JOIN candidates c ON c.id=x.candidate_id WHERE x.id=?').get(id))?.requisition_id);
     if (!id) return { success: false, statusCode: 400, message: 'Thiếu mã phỏng vấn.' };
     const stmt = this.db.prepare(`
@@ -1601,7 +1604,7 @@ class RequisitionService {
       SET status = ?, feedback = COALESCE(?, feedback), score = COALESCE(?, score)
       WHERE id = ?
     `);
-    const res = (await stmt.run(status, feedback || null, score ? parseInt(score, 10) : null, id));
+    const res = (await stmt.run(status, feedback || null, hasScore ? Number(score) : null, id));
     if (res.changes === 0) return { success: false, statusCode: 404, message: 'Không tìm thấy lịch phỏng vấn.' };
     return { success: true, statusCode: 200, message: 'Cập nhật lịch phỏng vấn thành công.' };
   }
@@ -1651,25 +1654,32 @@ class RequisitionService {
    */
   async updateOfferStatus(id, status, actor = null) {
     if(actor)return this.db.transaction(async()=>{
-      const candidateResponse=actor.roles.every(role=>role==='CANDIDATE')&&status==='ACCEPTED';
+      const rbac=new (require('../middlewares/rbacMiddleware'))(this.db);
+      const reader=await rbac.getAuthorizedActor(actor.id,'offer.read');
+      if(!reader)return{success:false,statusCode:403,code:'FORBIDDEN_PERMISSION_DENIED',message:'Bạn không có quyền cập nhật Offer.'};
+      const candidateResponse=reader.roles.length>0&&reader.roles.every(role=>role==='CANDIDATE')&&status==='ACCEPTED';
       const permission=candidateResponse?'offer.read':['APPROVED','REJECTED'].includes(status)?'offer.approve':'offer.create';
-      const fresh=await new (require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(actor.id,permission);
+      const fresh=await rbac.getAuthorizedActor(actor.id,permission);
       if(!fresh)return{success:false,statusCode:403,code:'FORBIDDEN_PERMISSION_DENIED',message:'Bạn không có quyền cập nhật Offer.'};
       actor={...actor,...fresh};
-      const row=await this.db.prepare('SELECT o.id,o.approver_id,o.candidate_id,c.email,r.recruiter_id,r.id AS requisition_id FROM offers o JOIN candidates c ON c.id=o.candidate_id LEFT JOIN requisitions r ON r.id=COALESCE(o.requisition_id,c.requisition_id) WHERE o.id=?'+(this.db.provider==='postgres'?' FOR UPDATE OF o':'')).get(id);
+      const row=await this.db.prepare('SELECT o.id,o.status,o.approver_id,o.candidate_id,c.email,r.recruiter_id,r.id AS requisition_id FROM offers o JOIN candidates c ON c.id=o.candidate_id LEFT JOIN requisitions r ON r.id=COALESCE(o.requisition_id,c.requisition_id) WHERE o.id=?'+(this.db.provider==='postgres'?' FOR UPDATE OF o':'')).get(id);
       if(!row)return{success:false,statusCode:404,code:'OFFER_NOT_FOUND',message:'Không tìm thấy Offer.'};
       if(!actor.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))){
         if(!candidateResponse&&!['APPROVED','REJECTED'].includes(status)){const access=await this.candidateAccess(row.candidate_id,actor);if(!access.success)return access;}
         const allowed=candidateResponse?row.email.toLowerCase()===actor.email.toLowerCase():['APPROVED','REJECTED'].includes(status)?row.approver_id===actor.id:await this.recruiterAssigned(row.requisition_id,actor.id);
         if(!allowed)return{success:false,statusCode:403,code:'OFFER_OUT_OF_SCOPE',message:'Offer không thuộc phạm vi xử lý của bạn.'};
       }
+      if(status==='ACCEPTED'&&row.status!=='SENT')return{success:false,statusCode:409,code:'OFFER_NOT_SENT',message:'Chỉ được chấp nhận Offer đã gửi.'};
       return this.updateOfferStatus(id,status,null);
     });
     await this.openPolicy.notDraft((await this.db.prepare('SELECT COALESCE(x.requisition_id,c.requisition_id) AS requisition_id FROM offers x LEFT JOIN candidates c ON c.id=x.candidate_id WHERE x.id=?').get(id))?.requisition_id);
     if (!id) return { success: false, statusCode: 400, message: 'Thiếu mã offer.' };
-    const stmt = this.db.prepare(`UPDATE offers SET status = ? WHERE id = ?`);
-    const res = (await stmt.run(status, id));
-    if (res.changes === 0) return { success: false, statusCode: 404, message: 'Không tìm thấy offer.' };
+    const stmt = this.db.prepare(`UPDATE offers SET status = ? WHERE id = ? AND (? <> 'ACCEPTED' OR status = 'SENT')`);
+    const res = (await stmt.run(status, id, status));
+    if (res.changes === 0) {
+      if (status==='ACCEPTED' && await this.db.prepare('SELECT id FROM offers WHERE id=?').get(id)) return {success:false,statusCode:409,code:'OFFER_NOT_SENT',message:'Chỉ được chấp nhận Offer đã gửi.'};
+      return { success: false, statusCode: 404, message: 'Không tìm thấy offer.' };
+    }
 
     if (status === 'APPROVED') {
       const off = (await this.db.prepare('SELECT candidate_id FROM offers WHERE id = ?').get(id));

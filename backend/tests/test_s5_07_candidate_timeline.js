@@ -6,10 +6,10 @@ const CandidateTimelineService = require('../src/services/candidateTimelineServi
  * ==============================================================================
  * TEST SUITE: USER STORY S5-07 / SCRUM-117
  * ==============================================================================
- * 
+ *
  * Nội dung: Là Nhân viên tuyển dụng, tôi muốn xem nhật ký toàn bộ tương tác với một ứng viên,
  * để biết ai đã liên hệ ứng viên này và nói gì trước khi mình gọi.
- * 
+ *
  * Tiêu chí chấp nhận (Acceptance Criteria):
  *   • AC-01: Dòng thời gian gồm: nộp hồ sơ, chuyển giai đoạn, email đã gửi, lịch phỏng vấn, đánh giá
  *   • AC-02: Sắp xếp mới nhất trước (DESC by timestamp)

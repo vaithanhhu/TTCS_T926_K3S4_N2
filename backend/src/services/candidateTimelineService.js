@@ -4,10 +4,10 @@ const RequisitionService = require('./requisitionService');
  * ==============================================================================
  * USER STORY S5-07 (SCRUM-117) - CANDIDATE INTERACTION TIMELINE SERVICE
  * ==============================================================================
- * 
+ *
  * Là Nhân viên tuyển dụng, tôi muốn xem nhật ký toàn bộ tương tác với một ứng viên,
  * để biết ai đã liên hệ ứng viên này và nói gì trước khi mình gọi.
- * 
+ *
  * Tiêu chí chấp nhận (AC):
  * • Dòng thời gian gồm: nộp hồ sơ, chuyển giai đoạn, email đã gửi, lịch phỏng vấn, đánh giá
  * • Sắp xếp mới nhất trước (DESC by timestamp)
@@ -50,7 +50,7 @@ class CandidateTimelineService {
     let candidate;
     try {
       candidate = await this.db.prepare(
-        `SELECT c.*, r.title AS requisition_title, r.code AS requisition_code, 
+        `SELECT c.*, r.title AS requisition_title, r.code AS requisition_code,
                 r.department_name, r.recruiter_id, r.hiring_manager_id
          FROM candidates c
          LEFT JOIN requisitions r ON r.id = c.requisition_id
@@ -236,7 +236,7 @@ class CandidateTimelineService {
     // ==========================================================================
     try {
       const statusHistory = await this.db.prepare(
-        `SELECT h.id, h.candidate_id, h.before_stage, h.after_stage, h.actor_name, 
+        `SELECT h.id, h.candidate_id, h.before_stage, h.after_stage, h.actor_name,
                 h.action, h.reason, h.notes, h.created_at,
                 r.title AS requisition_title
          FROM candidate_status_history h

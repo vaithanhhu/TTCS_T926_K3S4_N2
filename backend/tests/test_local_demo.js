@@ -11,7 +11,7 @@ const root = path.resolve(__dirname, '../..');
 const output = process.env.ATS_E2E_ARTIFACTS || path.join(root, 'test-artifacts/local-demo');
 const flags = require('../src/config/local-demo').flags;
 const users = { ADMIN: ['admin@company.com', '/admin'], HR_MANAGER: ['hrmanager@company.com', '/dashboard'], HIRING_MGR: ['hiringmgr@company.com', '/hiring'], APPROVER: ['approver@company.com', '/approvals'], RECRUITER: ['recruiter@company.com', '/recruitment'], INTERVIEWER: ['interviewer@company.com', '/interviews'], CANDIDATE: ['candidate@example.com', '/candidate'] };
-const environment = { ...process.env, DATABASE_URL: 'postgres://invalid:invalid@127.0.0.1:1/never-connect', DB_PROVIDER: 'postgres', EMAIL_MODE: 'smtp', SMTP_HOST: 'never-connect.invalid' };
+const environment = { ...process.env, DATABASE_URL: 'postgres://invalid:CHANGE_ME@127.0.0.1:1/never-connect', DB_PROVIDER: 'postgres', EMAIL_MODE: 'smtp', SMTP_HOST: 'never-connect.invalid' };
 const run = () => spawnSync(process.execPath, ['backend/src/db/setup-local.js'], { cwd: root, env: environment, encoding: 'utf8', windowsHide: true, timeout: 90000 });
 async function wait(predicate) {
   const deadline = Date.now() + 15000;
@@ -63,7 +63,7 @@ async function main() {
     assert.match(result.stderr, /EEXIST/);
     fs.unlinkSync(lock);
   });
-  fs.writeFileSync(path.join(root, '.env'), 'DB_PROVIDER=postgres\nDATABASE_URL=postgres://invalid:invalid@127.0.0.1:1/never-connect\nEMAIL_MODE=smtp\nSMTP_HOST=never-connect.invalid\nPORT=1\n');
+  fs.writeFileSync(path.join(root, '.env'), 'DB_PROVIDER=postgres\nDATABASE_URL=postgres://invalid:CHANGE_ME@127.0.0.1:1/never-connect\nEMAIL_MODE=smtp\nSMTP_HOST=never-connect.invalid\nPORT=1\n');
   const listener = net.createServer();
   await new Promise(resolve => listener.listen(0, '127.0.0.1', resolve));
   const port = listener.address().port;

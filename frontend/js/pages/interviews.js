@@ -45,27 +45,27 @@
 
           return `
             <tr>
-              <td><code class="font-mono" style="font-weight: 600; color: var(--color-primary);">${code}</code></td>
-              <td><strong>${candName}</strong></td>
-              <td>${reqTitle}</td>
+              <td><code class="font-mono" style="font-weight: 600; color: var(--color-primary);">${escapeHtml(code)}</code></td>
+              <td><strong>${escapeHtml(candName)}</strong></td>
+              <td>${escapeHtml(reqTitle)}</td>
               <td>
                 <div style="display: flex; align-items: center; gap: 8px;">
                   <div
                     class="user-avatar-circle interview-interviewer-avatar"
                     data-interview-index="${index}"
                     style="width: 32px; height: 32px; font-size: 0.75rem;"
-                  >${interviewer.charAt(0).toUpperCase()}</div>
-                  <span>${interviewer}</span>
+                  >${escapeHtml(interviewer.charAt(0).toUpperCase())}</div>
+                  <span>${escapeHtml(interviewer)}</span>
                 </div>
               </td>
               <td>
                 <div style="font-weight: 600;">${new Date(schedTime).toLocaleDateString('vi-VN')}</div>
                 <div style="font-size: 0.775rem; color: var(--color-text-muted);">${new Date(schedTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</div>
               </td>
-              <td>${location}</td>
+              <td>${escapeHtml(location)}</td>
               <td><span class="badge ${statusBadge}">${statusText}</span></td>
               <td style="text-align: center;">
-                <button type="button" class="btn btn-outline btn-xs" onclick="window.ATS_APP_HELPERS.viewInterviewDetails('${iv.id}')">
+                <button type="button" class="btn btn-outline btn-xs" onclick="window.ATS_APP_HELPERS.viewInterviewDetails(${escapeHtml(JSON.stringify(iv.id))})">
                   Chi tiết
                 </button>
               </td>

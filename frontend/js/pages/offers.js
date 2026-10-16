@@ -43,14 +43,14 @@
 
           return `
             <tr>
-              <td><code class="font-mono" style="font-weight: 600; color: var(--color-primary);">${code}</code></td>
-              <td><strong>${candName}</strong></td>
-              <td>${reqTitle}</td>
+              <td><code class="font-mono" style="font-weight: 600; color: var(--color-primary);">${escapeHtml(code)}</code></td>
+              <td><strong>${escapeHtml(candName)}</strong></td>
+              <td>${escapeHtml(reqTitle)}</td>
               <td style="font-weight: 600; color: var(--color-primary);">${salaryVal ? Number(salaryVal).toLocaleString('vi-VN') + ' đ' : 'Thỏa thuận'}</td>
               <td>${startDateVal ? new Date(startDateVal).toLocaleDateString('vi-VN') : 'Thỏa thuận'}</td>
-              <td><span class="badge ${statusBadge}">${statusText}</span></td>
+              <td><span class="badge ${statusBadge}">${escapeHtml(statusText)}</span></td>
               <td style="text-align: center;">
-                <button type="button" class="btn btn-outline btn-xs" onclick="window.ATS_APP_HELPERS.viewOfferDetails('${o.id}')">
+                <button type="button" class="btn btn-outline btn-xs" onclick="window.ATS_APP_HELPERS.viewOfferDetails(${escapeHtml(JSON.stringify(o.id))})">
                   Hồ sơ
                 </button>
               </td>

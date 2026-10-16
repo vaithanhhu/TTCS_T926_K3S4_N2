@@ -1,6 +1,6 @@
 /**
  * SCRUM-117 (S5-07): Candidate Timeline Controller
- * 
+ *
  * Endpoint: GET /api/v1/candidates/:id/timeline
  * Phân quyền: Yêu cầu 'candidate.read' kết hợp kiểm tra IDOR trong Service.
  */
@@ -75,4 +75,3 @@ class CandidateTimelineController {
 }
 
 module.exports = CandidateTimelineController;
-

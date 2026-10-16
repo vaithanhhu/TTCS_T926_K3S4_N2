@@ -415,5 +415,6 @@ function getEmailService(db) {
 
 module.exports = {
   EmailService,
-  getEmailService
+  getEmailService,
+  escapeEmailHtml
 };
