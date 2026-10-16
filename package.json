@@ -102,7 +102,8 @@
                     "test:referral-auth":  "node backend/tests/test_referral_authorization.js",
                     "test:s5-07":  "node backend/tests/test_s5_07_candidate_timeline.js",
                     "test:s5-08":  "node backend/tests/test_s5_08_candidate_manual_entry.js",
-                    "test:s5-09":  "node backend/tests/test_s5_09_candidate_screening.js"
+                    "test:s5-09":  "node backend/tests/test_s5_09_candidate_screening.js",
+                    "test:s5-10":  "node backend/tests/test_s5_10_sla_notification.js"
                 },
     "keywords":  [
                      "ats",

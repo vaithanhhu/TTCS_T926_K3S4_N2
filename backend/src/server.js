@@ -51,14 +51,14 @@ async function initializeApplication() {
   if (config.REQUISITION_TRACKING_ENABLED || config.JOB_POSTING_DRAFTS_ENABLED) await require('./db/migrate-requisition-tracking-job-drafts').verify(db);
   if(config.JOB_POSTING_PUBLICATION_ENABLED)await require('./db/migrate-job-publication').verify(db);
   if(config.CANDIDATE_PORTAL_ENABLED)await require('./db/migrate-candidate-portal').verify(db);
-  try {
-    const SlaNotificationService = require('./services/slaNotificationService');
-    const slaService = new SlaNotificationService(db);
-    if (!isTestEnv) {
+  if (!isTestEnv) {
+    try {
+      const SlaNotificationService = require('./services/slaNotificationService');
+      const slaService = new SlaNotificationService(db);
       slaService.runDailySlaCheck().catch(e => console.warn('[SLA Daily Job] Note:', e.message));
+    } catch (slaErr) {
+      // Bỏ qua lỗi khởi tạo SLA
     }
-  } catch (slaErr) {
-    // Bỏ qua lỗi khởi tạo SLA
   }
 }
 
