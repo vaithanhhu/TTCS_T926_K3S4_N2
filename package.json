@@ -113,7 +113,9 @@
     "test:s5-10": "node backend/tests/test_s5_10_sla_notification.js",
     "test:s6-01": "node backend/tests/test_s6_01_candidate_excel_export.js",
     "migrate:s6-02": "node backend/src/db/migrate-interview-scheduling.js",
-    "test:s6-02": "node backend/tests/test_s6_02_interview_scheduling.js"
+    "test:s6-02": "node backend/tests/test_s6_02_interview_scheduling.js",
+    "migrate:s6-03": "node backend/src/db/migrate-bulk-interviews.js",
+    "test:s6-03": "node backend/tests/test_s6_03_bulk_interviews.js"
   },
   "keywords": [
     "ats",

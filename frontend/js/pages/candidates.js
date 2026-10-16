@@ -68,6 +68,7 @@
 
   async function loadCandidates() {
     const request = ++candidateSearchSequence;
+    window.ATS_BULK_INTERVIEWS?.refresh([]);
     const token = sessionStorage.getItem('ats_token');
     if (!token) return;
 
@@ -147,7 +148,8 @@
             </tr>
           `;
         }).join('');
-        candidatesTableBody.querySelectorAll('.candidate-merge-select').forEach(button => button.addEventListener('click', () => selectCandidateForMerge(button.dataset.candidateId)));
+window.ATS_BULK_INTERVIEWS?.refresh(list);
+candidatesTableBody.querySelectorAll('.candidate-merge-select').forEach(button => button.addEventListener('click', () => selectCandidateForMerge(button.dataset.candidateId)));
         window.CandidateSlaModule?.renderTableBadges();
       }
     } catch (e) {

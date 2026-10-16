@@ -1787,6 +1787,13 @@ window.ATS_API.candidateFiltersApi = async function(token,method='GET',body,id) 
 window.ATS_API.talentPoolApi = async function(token,path='',method='GET',body) {
   try { const response = await fetch(API_BASE+'/talent-pool'+path,{method,cache:'no-store',headers:{Authorization:'Bearer '+token,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});return {ok:response.ok,data:await response.json()}; } catch { return {ok:false,data:{message:'Không thể kết nối kho ứng viên.'}}; }
 };
+window.ATS_API.bulkInterviewsApi = async function(token,action,body) {
+  try {
+    const response=await fetch(API_BASE+'/interviews/'+action,{method:body?'POST':'GET',cache:'no-store',headers:{Authorization:'Bearer '+token,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});
+    return {ok:response.ok,status:response.status,data:await response.json()};
+  }catch{return {ok:false,status:0,data:{message:'Mất kết nối. Dùng lại yêu cầu hiện tại để kiểm tra kết quả, không tạo đợt mới.'}};}
+};
+
 window.ATS_API.candidateMergeApi = async function(token,path,method='POST',body) {
   try { const response=await fetch(API_BASE+'/candidates/merge'+path,{method,cache:'no-store',headers:{Authorization:'Bearer '+token,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});return {ok:response.ok,status:response.status,data:await response.json()}; }
   catch { return {ok:false,status:0,data:{success:false,message:'Không thể kết nối tới chức năng gộp hồ sơ.'}}; }

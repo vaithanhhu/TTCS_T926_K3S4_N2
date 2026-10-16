@@ -37,6 +37,10 @@ class CandidateTimelineService {
       };
     }
 
+    const actor=await new(require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(currentUser.id,'candidate.read');
+    if(!actor)return {success:false,statusCode:403,code:'CANDIDATE_FORBIDDEN',message:'Bạn không có quyền xem nhật ký ứng viên.'};
+    currentUser=actor;
+
     if (!candidateId || typeof candidateId !== 'string' || !candidateId.trim()) {
       return {
         success: false,
@@ -145,11 +149,18 @@ class CandidateTimelineService {
 
     // 4. Xác định danh sách ID hồ sơ liên quan theo email (Hồ sơ hợp nhất - Multi-Application)
     const relatedCandidateIds = [candidate.id];
+    const timelineViewer={...actor,roles:actor.roles.filter(role=>['ADMIN','HR_MANAGER','RECRUITER','HIRING_MGR','INTERVIEWER'].includes(role))};
+    const timelineVisibility=this.requisitions.candidateVisibility(timelineViewer);
+    const hiddenApplication=candidate.email && timelineVisibility
+      ? await this.db.prepare(`SELECT c.id FROM candidates c LEFT JOIN requisitions r ON r.id=c.requisition_id WHERE LOWER(c.email)=LOWER(?) AND NOT COALESCE(${timelineVisibility.condition},FALSE) LIMIT 1`).get(candidate.email,...timelineVisibility.params)
+      : null;
+    const allowLegacyEmail=!hiddenApplication;
     if (candidate.email && options.includeHistoricalApplications !== false) {
       try {
+        const visibility=timelineVisibility;
         const related = await this.db.prepare(
-          `SELECT id FROM candidates WHERE LOWER(email) = LOWER(?) AND id <> ?`
-        ).all(candidate.email, candidate.id);
+          `SELECT c.id FROM candidates c LEFT JOIN requisitions r ON r.id=c.requisition_id WHERE LOWER(c.email)=LOWER(?) AND c.id<>?${visibility?' AND '+visibility.condition:''}`
+        ).all(candidate.email,candidate.id,...(visibility?.params || []));
         for (const row of (related || [])) {
           relatedCandidateIds.push(row.id);
         }
@@ -285,8 +296,8 @@ class CandidateTimelineService {
         const emailLogs = await this.db.prepare(
           `SELECT id, recipient, subject, template_name, status, error_message, sent_at
            FROM email_logs
-           WHERE LOWER(recipient) = LOWER(?)`
-        ).all(candidate.email);
+           WHERE LOWER(recipient) = LOWER(?) AND ?=1 AND (template_name IS NULL OR template_name <> 'S603_INTERVIEW_INVITATION')`
+        ).all(candidate.email,allowLegacyEmail?1:0);
 
         for (const m of (emailLogs || [])) {
           const dedupeKey = `${m.template_name}-${m.sent_at}`;
@@ -322,12 +333,19 @@ class CandidateTimelineService {
         const outboxEmails = await this.db.prepare(
           `SELECT id, recipient, subject, template_name, status, error_message, sent_at, created_at
            FROM email_outbox
-           WHERE LOWER(recipient) = LOWER(?)`
-        ).all(candidate.email);
+           WHERE LOWER(recipient) = LOWER(?) AND ?=1 AND (template_name IS NULL OR template_name <> 'S603_INTERVIEW_INVITATION')`
+        ).all(candidate.email,allowLegacyEmail?1:0);
+
+        const deliverySchema=this.db.provider==='postgres'
+          ? await this.db.prepare("SELECT to_regclass('interview_invitation_deliveries') AS name").get()
+          : await this.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='interview_invitation_deliveries'").get();
+        if(deliverySchema?.name){
+          outboxEmails.push(...await this.db.prepare(`SELECT o.id,o.recipient,o.subject,o.template_name,o.status,o.error_message,o.sent_at,o.created_at FROM email_outbox o JOIN interview_invitation_deliveries d ON d.outbox_id=o.id JOIN interviews i ON i.id=d.interview_id WHERE LOWER(o.recipient)=LOWER(?) AND o.template_name='S603_INTERVIEW_INVITATION' AND i.candidate_id IN (${relatedCandidateIds.map(()=>'?').join(',')})`).all(candidate.email,...relatedCandidateIds));
+        }
 
         for (const m of (outboxEmails || [])) {
           const timestamp = m.sent_at || m.created_at;
-          const dedupeKey = `${m.template_name}-${timestamp}`;
+          const dedupeKey = m.template_name==='S603_INTERVIEW_INVITATION'?m.id:`${m.template_name}-${timestamp}`;
           if (!processedEmailKeys.has(dedupeKey)) {
             processedEmailKeys.add(dedupeKey);
             const statusText = m.status === 'SENT' ? 'Đã gửi thành công' : (m.status === 'FAILED' ? 'Gửi thất bại' : 'Đang xử lý');

@@ -2182,6 +2182,30 @@ async function handleRequest(req, res) {
     res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:true,evaluations:result.interviews.map(row=>({id:row.id,candidate:row.candidate,requisition:row.requisition,interviewer:row.interviewer,feedback:row.feedback,score:row.score}))}));return;
   }
 
+  if (/^\/(?:api\/v1\/)?interviews\/(?:bulk-preview|bulk-create|batches\/[^/]+(?:\/retry)?)$/.test(pathname)) {
+    const user=await rbacMiddleware.authorize(req,res,authController.authService,'interview.create');
+    if(!user)return;
+    const service=new(require('./services/bulkInterviewService'))(db);
+    let result;
+    try{
+      if(req.method==='POST' && pathname.endsWith('/bulk-preview'))result=await service.preview(await parseBody(req),user);
+      else if(req.method==='POST' && pathname.endsWith('/bulk-create'))result=await service.create(await parseBody(req),user);
+      else if(req.method==='GET' && !pathname.endsWith('/retry'))result=await service.status(pathname.split('/').at(-1),user);
+      else if(req.method==='POST' && pathname.endsWith('/retry'))result=await service.retry(pathname.split('/').at(-2),user);
+      else result={success:false,statusCode:405,code:'METHOD_NOT_ALLOWED'};
+      if(result.success && req.method==='POST' && result.batchId){
+        try{const delivered=await new(require('./services/interviewInvitationWorker'))(db).deliver(result.batchId,user);if(delivered.success)result={...result,deliveries:delivered.deliveries};}
+        catch{result.deliveryPending=true;}
+      }
+    }catch(error){
+      const known=error instanceof require('./services/approvalConfigurationService').ApprovalConfigurationError;
+      const invalid=error.message==='Invalid JSON';
+      result={success:false,statusCode:known?error.statusCode:invalid?400:503,code:known?error.code:invalid?'BAD_REQUEST':'BULK_INTERVIEW_UNAVAILABLE',message:known?error.message:invalid?'Dữ liệu không hợp lệ.':'Không thể xử lý lịch hàng loạt. Vui lòng thử lại.'};
+    }
+    res.writeHead(result.statusCode || 200,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});
+    res.end(JSON.stringify(result));return;
+  }
+
   // 13.8.1 API: Create Interview
   if (req.method === 'POST' && (pathname === '/api/v1/interviews' || pathname === '/interviews')) {
     const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'interview.create'));

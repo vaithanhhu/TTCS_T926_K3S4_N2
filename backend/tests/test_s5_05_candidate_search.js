@@ -70,6 +70,20 @@ async function run(db,provider){
   await check('missing prerequisite fails and rolls back without ledger',async()=>{await assert.rejects(()=>db.transaction(async()=>{await db.exec('DROP TABLE candidate_tags');await migrate(db);}));assert.equal((await service.availability(viewer)).enabled,false);assert.equal(Number((await db.prepare('SELECT COUNT(*) AS n FROM candidate_tags').get()).n),4);});
   await check('migration repeat preserves grants',async()=>{const before=await db.prepare('SELECT * FROM role_permissions ORDER BY role_id,permission_id').all();await migrate(db);await migrate(db);assert.deepEqual(await db.prepare('SELECT * FROM role_permissions ORDER BY role_id,permission_id').all(),before);});
   await check('availability true with matching schema ledger',async()=>assert.equal((await service.availability(viewer)).enabled,true));
+  await check('pre-merge schema supports repeated searches in one transaction',async()=>{
+    await db.transaction(async()=>{
+      if(db.provider==='postgres')await db.exec('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+      assert.equal(await service.hasMergeColumn(),false);
+      for(let index=0;index<2;index++)assert.deepEqual((await service.searchRows({search:'Alice'},viewer)).candidates.map(row=>row.id),['ca']);
+      assert.equal(Number((await db.prepare('SELECT COUNT(*) AS n FROM candidates').get()).n),4);
+    });
+  });
+  await check('merge schema metadata errors are propagated',async()=>{
+    const prepare=db.prepare,error=new Error('S505_METADATA_FAILURE');
+    db.prepare=()=>{throw error;};
+    try{await assert.rejects(()=>service.hasMergeColumn(),actual=>actual===error);}finally{db.prepare=prepare;}
+    assert.equal((await search({search:'Alice'})).total,1);
+  });
   for(const [name,value]of [['name','Alice'],['email','same@example.invalid'],['phone','090111'],['cover letter','Kubernetes'],['company compatibility','Acme']])await check('search '+name,async()=>assert.deepEqual((await search({search:value})).candidates.map(row=>row.id),['ca']));
   await check('literal SQL payload and wildcard',async()=>{for(const search of ["%' OR 1=1 --",'%','_'])assert.equal((await service.search({search},viewer)).total,0);});
   await check('Vietnamese case-insensitive name and cover letter',async()=>{await db.prepare("UPDATE candidates SET full_name=?,cover_letter=? WHERE id='ca'").run('ĐỨC Nguyễn'.normalize('NFD'),'Kỹ sư ĐIỆN'.normalize('NFD'));try{assert.equal((await search({search:'đức'})).total,1);assert.equal((await search({search:'kỹ sư điện'})).total,1);}finally{await db.prepare("UPDATE candidates SET full_name='Alice Nguyen',cover_letter='Kubernetes contributor' WHERE id='ca'").run();}});
@@ -117,6 +131,29 @@ async function run(db,provider){
     const request=async(url,authorization,method='GET',body={})=>{let status,data;await controller.handle({method,headers:{authorization}}, {writeHead(code){status=code;},end(value){data=JSON.parse(value);}},new URL(url,'http://localhost'),async()=>body);return{status,data};};
     for(const prefix of ['/api/v1','']){assert.equal((await request(prefix+'/candidate-search','Bearer recruiter')).data.total,2);assert.equal((await request(prefix+'/candidate-search')).status,401);assert.equal((await request(prefix+'/candidate-search?page=0','Bearer recruiter')).status,400);assert.equal((await request(prefix+'/candidate-search-options','Bearer recruiter')).status,200);}
     assert.equal((await request('/api/v1/candidate-search','Bearer recruiter','POST')).status,405);
+  });
+  await check('merge column is detected after schema changes without recreating service',async()=>{
+    assert.equal(await service.hasMergeColumn(),false);
+    await db.exec('ALTER TABLE candidates ADD COLUMN merged_into_id TEXT REFERENCES candidates(id) ON DELETE SET NULL');
+    assert.equal(await service.hasMergeColumn(),true);
+    assert.equal((await search({})).total,2);
+  });
+  await check('merged candidates are excluded from results counts and pagination',async()=>{
+    await db.prepare("UPDATE candidates SET merged_into_id='ca' WHERE id='cc'").run();
+    try{
+      const result=await search({pageSize:'1'});
+      assert.equal(result.total,1);assert.deepEqual(result.candidates.map(row=>row.id),['ca']);
+      assert.equal((await search({search:'Carol'})).total,0);
+      assert.deepEqual((await search({page:'2',pageSize:'1'})).candidates,[]);
+    }finally{await db.prepare("UPDATE candidates SET merged_into_id=NULL WHERE id='cc'").run();}
+    assert.equal((await search({})).total,2);
+  });
+  await check('post-merge schema supports repeated searches in one transaction',async()=>{
+    await db.transaction(async()=>{
+      if(db.provider==='postgres')await db.exec('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+      for(let index=0;index<2;index++)assert.equal((await service.searchRows({},viewer)).total,2);
+      assert.equal(Number((await db.prepare('SELECT COUNT(*) AS n FROM candidates').get()).n),4);
+    });
   });
   await check('checksum tampering rejected',async()=>{await db.prepare("UPDATE ats_candidate_search_migrations SET checksum='wrong'").run();await assert.rejects(()=>migrate(db),/S505_CHECKSUM_MISMATCH/);});
   await check('availability false after checksum drift',async()=>assert.equal((await service.availability(viewer)).enabled,false));

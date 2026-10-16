@@ -1,0 +1,19 @@
+<div id="bulk-interview-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="bulk-interview-title"><div class="modal-card" style="width:min(960px,96vw);max-height:90vh;overflow:auto;padding:20px;background:var(--color-bg-card,#fff);border-radius:12px">
+    <div style="display:flex;justify-content:space-between"><h2 id="bulk-interview-title">Đặt lịch hàng loạt</h2><button type="button" id="bulk-close-button" class="modal-close" aria-label="Đóng">×</button></div>
+    <p>Giờ Việt Nam (Asia/Ho_Chi_Minh). Chỉ các ứng viên đã chọn trên trang hiện tại.</p>
+    <p id="bulk-interview-message" role="status" aria-live="polite"></p>
+    <form id="bulk-interview-form"><fieldset id="bulk-interview-config" style="border:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px">
+      <label>Vòng phỏng vấn<input class="form-input" id="bulk-roundName" name="roundName" required maxlength="120" value="Vòng 1 - Kỹ thuật chuyên môn"></label>
+      <label>Bắt đầu<input class="form-input" id="bulk-windowStart" name="windowStart" type="datetime-local" required></label>
+      <label>Kết thúc khung giờ<input class="form-input" id="bulk-windowEnd" name="windowEnd" type="datetime-local" required></label>
+      <label>Thời lượng mỗi ca (phút)<input class="form-input" id="bulk-durationMinutes" name="durationMinutes" type="number" min="15" max="480" step="1" value="30" required></label>
+      <label>Nghỉ giữa ca (phút)<input class="form-input" id="bulk-breakMinutes" name="breakMinutes" type="number" min="0" max="480" step="1" value="0" required></label>
+      <label>Hình thức<select class="form-input" id="bulk-interviewFormat" name="interviewFormat"><option value="ONLINE">Trực tuyến</option><option value="IN_PERSON">Trực tiếp</option></select></label>
+      <label id="bulk-link-label">Liên kết HTTP(S)<input class="form-input" id="bulk-meetingLink" name="meetingLink" type="url" required></label>
+      <label id="bulk-room-label" hidden>Phòng họp<input class="form-input" id="bulk-meetingRoom" name="meetingRoom" disabled></label>
+      <label>Người phỏng vấn chính<select class="form-input" id="bulk-primaryInterviewer" name="primaryInterviewer" required></select></label>
+      <fieldset><legend>Người phỏng vấn phối hợp</legend><div id="bulk-interview-panel"></div></fieldset>
+    </fieldset><button id="bulk-preview-button" class="btn btn-primary" type="submit">Xem trước</button></form>
+    <section id="bulk-interview-preview" hidden><div style="overflow:auto"><table style="min-width:650px"><thead><tr><th>STT</th><th>Ứng viên</th><th>Vòng</th><th>Bắt đầu</th><th>Kết thúc</th><th>Hội đồng</th><th>Phòng/link</th></tr></thead><tbody id="bulk-interview-slots"></tbody></table></div>
+      <button id="bulk-back-button" type="button" class="btn btn-outline">Quay lại cấu hình</button><button id="bulk-confirm-button" type="button" class="btn btn-primary">Xác nhận tạo lịch</button>
+    </section><button id="bulk-retry-email" type="button" class="btn btn-outline hidden" hidden>Thử gửi lại email thất bại</button></div></div>

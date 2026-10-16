@@ -288,6 +288,15 @@ async function runTestSuite() {
   const actorInterviewer = { id: 'usr-int', roles: ['INTERVIEWER'] };
   const actorCandidate = { id: 'usr-candidate', roles: ['CANDIDATE'] };
 
+  require('../src/config/config').REQUISITION_OPERATIONS_ENABLED=true;
+  db.exec("ALTER TABLE users ADD COLUMN must_change_password INTEGER DEFAULT 0; ALTER TABLE users ADD COLUMN locked_until TEXT; CREATE TABLE permissions(id TEXT PRIMARY KEY,code TEXT); CREATE TABLE role_permissions(role_id TEXT,permission_id TEXT); INSERT INTO permissions VALUES('timeline-read','candidate.read');");
+  for(const [user,role] of [[actorAdmin,'ADMIN'],[actorHr,'HR_MANAGER'],[actorPrimaryRecruiter,'RECRUITER'],[actorSupportRecruiter,'RECRUITER'],[actorUnassignedRecruiter,'RECRUITER'],[actorHiringMgr,'HIRING_MGR'],[actorInterviewer,'INTERVIEWER'],[actorCandidate,'CANDIDATE']]){
+    db.prepare('INSERT OR IGNORE INTO roles(id,code) VALUES(?,?)').run('role-'+role,role);
+    db.prepare('INSERT INTO user_roles(user_id,role_id) VALUES(?,?)').run(user.id,'role-'+role);
+  }
+  for(const role of ['ADMIN','HR_MANAGER','RECRUITER','HIRING_MGR','INTERVIEWER','CANDIDATE'])db.prepare('INSERT INTO role_permissions(role_id,permission_id) VALUES(?,?)').run('role-'+role,'timeline-read');
+  db.prepare('INSERT INTO requisition_recruiter_supports(requisition_id,user_id) VALUES(?,?)').run('req-02',actorPrimaryRecruiter.id);
+
   try {
     // --------------------------------------------------------------------------
     // TEST 1: AC-01 - ĐẦY ĐỦ 5 NHÓM SỰ KIỆN TƯƠNG TÁC
@@ -440,6 +449,33 @@ async function runTestSuite() {
     assert.strictEqual(currentNote.actorName, 'Nguyễn Thị Tuyển Dụng');
 
     recordPass('AC-08: Dòng thời gian hợp nhất đa hồ sơ cung cấp trọn vẹn bối cảnh cho Recruiter trước cuộc gọi');
+
+    totalTests++;
+    assert.strictEqual((await timelineService.getCandidateTimeline('cand-current',null)).statusCode,401);
+    assert.strictEqual((await timelineService.getCandidateTimeline('cand-current',{id:'missing',roles:['ADMIN']})).statusCode,403);
+    assert.strictEqual((await timelineService.getCandidateTimeline('cand-current',{...actorUnassignedRecruiter,roles:['ADMIN']})).statusCode,403);
+    recordPass('Actor và role giả không vượt service authorization');
+
+    totalTests++;
+    db.prepare("UPDATE users SET status='LOCKED' WHERE id=?").run(actorPrimaryRecruiter.id);
+    assert.strictEqual((await timelineService.getCandidateTimeline('cand-current',actorPrimaryRecruiter)).statusCode,403);
+    db.prepare("UPDATE users SET status='ACTIVE' WHERE id=?").run(actorPrimaryRecruiter.id);
+    db.prepare("DELETE FROM role_permissions WHERE role_id='role-RECRUITER'").run();
+    assert.strictEqual((await timelineService.getCandidateTimeline('cand-current',actorPrimaryRecruiter)).statusCode,403);
+    db.prepare("INSERT INTO role_permissions VALUES('role-RECRUITER','timeline-read')").run();
+    recordPass('LOCKED và thu hồi grant có hiệu lực ngay');
+
+    totalTests++;
+    db.prepare("DELETE FROM requisition_recruiter_supports WHERE requisition_id='req-02' AND user_id=?").run(actorPrimaryRecruiter.id);
+    const scoped=await timelineService.getCandidateTimeline('cand-current',actorPrimaryRecruiter);
+    assert.strictEqual(scoped.success,true);
+    assert.ok(!scoped.data.timeline.some(event=>event.details?.candidateId==='cand-past'));
+    assert.ok(!scoped.data.timeline.some(event=>event.id==='interview-inv-past-01' || event.id==='evaluation-inv-past-01'));
+    assert.ok(!JSON.stringify(scoped).includes('Distributed Systems'));
+    assert.strictEqual(scoped.data.timeline.filter(event=>event.eventType==='EMAIL_SENT').length,0);
+    const global=await timelineService.getCandidateTimeline('cand-current',actorHr);
+    assert.ok(global.data.timeline.some(event=>event.eventType==='EVALUATION_SUBMITTED' && event.details?.score===4));
+    recordPass('Application cùng email ngoài scope không lộ history hoặc đánh giá; HR vẫn xem được');
 
     console.log('\n================================================================');
     console.log(`🎉 KẾT QUẢ: ${passCount}/${totalTests} BÀI TEST ĐẠT (100% PASS)!`);
