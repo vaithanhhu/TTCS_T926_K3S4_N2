@@ -1904,16 +1904,17 @@ async function handleRequest(req, res) {
       return;
     }
     const result=await requisitionService.getCandidateById(candidateId,user);
-    if (result && result.success && result.candidate) {
+    const candObj = result && result.success ? (result.data || result.candidate) : null;
+    if (candObj) {
       try {
         const SlaNotificationService = require('./services/slaNotificationService');
         const slaService = new SlaNotificationService(db);
-        const sla = await slaService.calculateCandidateSla(result.candidate);
-        result.candidate.sla = sla;
-        result.candidate.is_sla_violated = Boolean(sla && sla.isOverdue);
-        result.candidate.sla_status = sla ? sla.flag : 'ON_TRACK';
-        result.candidate.isOverdue = Boolean(sla && sla.isOverdue);
-        result.candidate.slaStatus = sla ? sla.flag : 'ON_TRACK';
+        const sla = await slaService.calculateCandidateSla(candObj);
+        candObj.sla = sla;
+        candObj.is_sla_violated = Boolean(sla && sla.isOverdue);
+        candObj.sla_status = sla ? sla.flag : 'ON_TRACK';
+        candObj.isOverdue = Boolean(sla && sla.isOverdue);
+        candObj.slaStatus = sla ? sla.flag : 'ON_TRACK';
       } catch (slaErr) {}
     }
     res.writeHead(result.statusCode||200,{'Content-Type':'application/json; charset=utf-8'});
