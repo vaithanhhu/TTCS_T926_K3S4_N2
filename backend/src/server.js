@@ -1930,6 +1930,34 @@ async function handleRequest(req, res) {
     return;
   }
 
+  // S6-01 (SCRUM-84): Export Candidate List to Excel (.xlsx)
+  if (req.method === 'GET' && (pathname === '/api/v1/candidates/export-excel' || pathname === '/candidates/export-excel')) {
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.read'));
+    if (!user) return;
+    try {
+      const CandidateExportService = require('./services/candidateExportService');
+      const CandidateSearchService = require('./services/candidateSearchService');
+      const exportService = new CandidateExportService(db, requisitionService, new CandidateSearchService(db));
+      const filters = Object.fromEntries(parsedUrl.searchParams);
+      const { filename, buffer, count } = await exportService.exportCandidatesToExcel(filters, user);
+
+      res.writeHead(200, {
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': `attachment; filename="${encodeURIComponent(filename)}"`,
+        'Content-Length': buffer.length,
+        'X-Total-Count': String(count),
+        'X-Export-Filename': filename
+      });
+      res.end(buffer);
+      return;
+    } catch (exportErr) {
+      console.error('[Export Candidate Excel Error]:', exportErr);
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, code: 'CANDIDATE_EXPORT_FAILED', message: 'Không thể xuất danh sách ứng viên ra tệp Excel.' }));
+      return;
+    }
+  }
+
   // 13.7 API: Candidates List (Real SQLite Data)
   if (req.method === 'GET' && (pathname === '/api/v1/candidates' || pathname === '/candidates')) {
     const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.read'));
