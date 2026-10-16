@@ -1880,6 +1880,10 @@ async function handleRequest(req, res) {
     return;
   }
 
+  if (/^\/(?:api\/v1\/)?(?:candidate-search(?:-options|-availability)?|candidate-filters(?:\/[^/]+)?)$/.test(pathname)) {
+    await new (require('./controllers/candidateSearchController'))(new (require('./services/candidateSearchService'))(db),rbacMiddleware,authController.authService).handle(req,res,parsedUrl,parseBody);
+    return;
+  }
   if(req.method==='GET'&&/^\/(?:api\/v1\/)?candidates\/[^/]+$/.test(pathname)){const user=await rbacMiddleware.authorize(req,res,authController.authService,'candidate.read');if(!user)return;let candidateId;try{candidateId=decodeURIComponent(pathname.split('/').at(-1));}catch{res.writeHead(400,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:'BAD_REQUEST',message:'Mã hồ sơ không hợp lệ.'}));return;}const result=await requisitionService.getCandidateById(candidateId,user);res.writeHead(result.statusCode||200,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(result));return;}
 
   // 13.7 API: Candidates List (Real SQLite Data)
@@ -1893,7 +1897,20 @@ async function handleRequest(req, res) {
       viewer: user
     };
     if (isCandidateOnly(user)) options.candidateEmail = user.email;
-    const result = (await requisitionService.getCandidates(options));
+    let result;
+    if(parsedUrl.searchParams.get('advanced')==='1'){
+      const searchService=new(require('./services/candidateSearchService'))(db);
+      try{
+        const enabled=(await searchService.availability(user)).enabled;
+        const filters=Object.fromEntries(parsedUrl.searchParams);
+        if(!enabled&&['sourceId','tag','submittedFrom','submittedTo','ratingMin','ratingMax'].some(key=>filters[key]!==undefined&&filters[key]!==''&&filters[key]!=='ALL')){
+          result={success:false,statusCode:503,code:'S505_MIGRATION_REQUIRED',message:'Cần áp dụng migration S5-05 được phê duyệt trước khi sử dụng bộ lọc nâng cao.'};
+        }else{
+          result=enabled?await searchService.search(filters,user):await requisitionService.getCandidates(options);
+          result.features={...result.features,candidateSearch:enabled};
+        }
+      }catch(error){result=error.statusCode?error:{success:false,statusCode:503,code:'CANDIDATE_SEARCH_UNAVAILABLE',message:'Chưa thể tìm kiếm ứng viên. Vui lòng thử lại.'};}
+    }else result=await requisitionService.getCandidates(options);
 
     // S5-09: Gắn kết quả điểm sàng lọc tiêu chí bắt buộc vào danh sách ứng viên
     if (result && result.success && Array.isArray(result.candidates) && result.candidates.length > 0) {
@@ -1922,6 +1939,7 @@ async function handleRequest(req, res) {
             });
           }
           for (const c of result.candidates) {
+            if(parsedUrl.searchParams.get('advanced')==='1'&&!Object.hasOwn(c,'stage'))continue;
             c.screening = srMap.get(c.id) || null;
           }
         }

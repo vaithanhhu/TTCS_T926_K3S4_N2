@@ -77,7 +77,7 @@
                       Bàn giao
                     </button>
                   ` : ''}
-                  <button type="button" class="btn btn-outline btn-xs btn-view-candidates-req" data-title="${escapeDepartmentHtml(req.title).replace(/"/g, '&quot;')}">
+                  <button type="button" class="btn btn-outline btn-xs btn-view-candidates-req" data-id="${escapeDepartmentHtml(req.id).replace(/"/g, '&quot;')}" data-title="${escapeDepartmentHtml(req.title).replace(/"/g, '&quot;')}">
                     Ứng viên
                   </button>
                 </div>
@@ -108,7 +108,15 @@
         document.querySelectorAll('.btn-view-candidates-req').forEach(btn => {
           btn.addEventListener('click', () => {
             const reqTitle = btn.getAttribute('data-title');
-            if (candidatesSearchInput) candidatesSearchInput.value = reqTitle;
+            const reqId = btn.getAttribute('data-id');
+            if (candidatesSearchInput) candidatesSearchInput.value = '';
+            if (candidatesReqFilter) {
+              if (!Array.from(candidatesReqFilter.children).some(option=>option.value===reqId)) {
+                const option=document.createElement('option');option.value=reqId;option.textContent=reqTitle;candidatesReqFilter.appendChild(option);
+              }
+              candidatesReqFilter.value=reqId;
+            }
+            candidateSearchPage=1;
             switchView('candidates');
             showToast('info', 'Ứng viên theo vị trí', `Đang lọc danh sách ứng viên cho vị trí: "${reqTitle}"`);
           });
