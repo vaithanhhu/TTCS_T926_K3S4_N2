@@ -59,6 +59,7 @@ class SlaNotificationService {
    * Tự động khởi tạo bảng dữ liệu cấu hình SLA, nhật ký vi phạm và nhắc việc
    */
   ensureTables() {
+    if (this.db && this.db.__slaTablesInitialized) return;
     const isPostgres = this.db.provider === 'postgres';
 
     // 1. Bảng cấu hình SLA theo giai đoạn (Stage SLA Configuration)
@@ -195,6 +196,7 @@ class SlaNotificationService {
       `);
 
       this.seedDefaultConfigurationsSync();
+      if (this.db) this.db.__slaTablesInitialized = true;
     } catch (err) {
       console.warn('[SlaNotificationService] Table initialization note:', err.message);
     }
@@ -277,6 +279,11 @@ class SlaNotificationService {
         message: 'Lỗi khi đọc cấu hình SLA: ' + err.message
       };
     }
+  }
+
+  async getSlaConfigs(requisitionId = null) {
+    const res = await this.getSlaConfigurations(requisitionId);
+    return res && Array.isArray(res.data) ? res.data : [];
   }
 
   /**
@@ -404,11 +411,12 @@ class SlaNotificationService {
       warningDays = configMap[stage].warningDays;
     } else {
       try {
+        const reqId = candidate.requisition_id || candidate.requisitionId || (candidate.requisition && candidate.requisition.id) || null;
         const found = await this.db.prepare(
           `SELECT threshold_days, warning_days FROM sla_configurations 
            WHERE stage = ? AND (requisition_id = ? OR requisition_id IS NULL)
            ORDER BY requisition_id DESC LIMIT 1`
-        ).get(stage, candidate.requisition_id || null);
+        ).get(stage, reqId);
         if (found) {
           thresholdDays = Number(found.threshold_days);
           warningDays = Number(found.warning_days);
@@ -435,7 +443,8 @@ class SlaNotificationService {
     }
 
     if (!stageEntryTime || isNaN(stageEntryTime.getTime())) {
-      stageEntryTime = candidate.created_at ? new Date(candidate.created_at) : new Date();
+      const createdRaw = candidate.created_at || candidate.createdAt;
+      stageEntryTime = createdRaw ? new Date(createdRaw) : new Date();
     }
 
     // 3. Tính số ngày đã trôi qua

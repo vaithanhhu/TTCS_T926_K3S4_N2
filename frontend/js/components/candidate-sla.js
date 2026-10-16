@@ -34,7 +34,26 @@
 
   // Lấy token xác thực
   function getAuthToken() {
-    return localStorage.getItem('token') || sessionStorage.getItem('token') || sessionStorage.getItem('ats_token') || '';
+    try {
+      if (typeof localStorage !== 'undefined' && localStorage.getItem('token')) return localStorage.getItem('token');
+      if (typeof sessionStorage !== 'undefined') {
+        return sessionStorage.getItem('token') || sessionStorage.getItem('ats_token') || '';
+      }
+    } catch {}
+    return '';
+  }
+
+  function canUseSla() {
+    const token = getAuthToken();
+    if (!token) return false;
+    try {
+      const user = (typeof currentAuthenticatedUser !== 'undefined' && currentAuthenticatedUser)
+        || (typeof sessionStorage !== 'undefined' ? JSON.parse(sessionStorage.getItem('ats_user') || 'null') : null);
+      if (user && Array.isArray(user.roles)) {
+        return user.roles.some(r => ['ADMIN', 'HR_MANAGER', 'RECRUITER'].includes(r));
+      }
+    } catch {}
+    return true;
   }
 
   function getHeaders() {
@@ -50,10 +69,11 @@
   // ============================================================================
 
   async function fetchSlaConfigs() {
+    if (!canUseSla()) return null;
     try {
       const res = await fetch('/api/v1/sla/configs', { headers: getHeaders() });
+      const data = await res.json().catch(() => null);
       if (!res.ok) return null;
-      const data = await res.json();
       if (data && data.success && Array.isArray(data.data)) {
         slaConfigsCache = data.data;
         return data.data;
@@ -65,10 +85,11 @@
   }
 
   async function fetchOverdueCandidates() {
+    if (!canUseSla()) return [];
     try {
       const res = await fetch('/api/v1/sla/overdue-candidates?includeAll=true', { headers: getHeaders() });
+      const data = await res.json().catch(() => null);
       if (!res.ok) return [];
-      const data = await res.json();
       if (data && data.success && data.data && Array.isArray(data.data.candidates)) {
         overdueCandidatesCache.clear();
         for (const c of data.data.candidates) {
@@ -88,12 +109,11 @@
   }
 
   async function fetchCandidateSlaDirect(candidateId) {
-    if (!candidateId) return null;
+    if (!candidateId || !canUseSla()) return null;
     try {
-      const token = getAuthToken();
       const res = await fetch(`/api/v1/candidates/${encodeURIComponent(candidateId)}`, { headers: getHeaders() });
-      if (res.ok) {
-        const data = await res.json();
+      const data = await res.json().catch(() => null);
+      if (res.ok && data) {
         const cand = data.data || data.candidate;
         if (cand && (cand.sla || cand.is_sla_violated !== undefined)) {
           const slaData = cand.sla || {
@@ -114,10 +134,11 @@
   }
 
   async function fetchRecruiterReminders() {
+    if (!canUseSla()) return [];
     try {
       const res = await fetch('/api/v1/sla/reminders?unreadOnly=false&limit=20', { headers: getHeaders() });
+      const data = await res.json().catch(() => null);
       if (!res.ok) return [];
-      const data = await res.json();
       if (data && data.success && data.data && Array.isArray(data.data.reminders)) {
         unreadReminders = data.data.reminders;
         updateBellBadge(data.data.unreadCount || 0);
@@ -130,11 +151,13 @@
   }
 
   async function markReminderAsRead(reminderId) {
+    if (!canUseSla()) return;
     try {
       const res = await fetch(`/api/v1/sla/reminders/${encodeURIComponent(reminderId)}/read`, {
         method: 'PUT',
         headers: getHeaders()
       });
+      await res.json().catch(() => null);
       if (res.ok) {
         await fetchRecruiterReminders();
       }
@@ -144,11 +167,13 @@
   }
 
   async function markAllRemindersAsRead() {
+    if (!canUseSla()) return;
     try {
       const res = await fetch('/api/v1/sla/reminders/read-all', {
         method: 'PUT',
         headers: getHeaders()
       });
+      await res.json().catch(() => null);
       if (res.ok) {
         await fetchRecruiterReminders();
       }
@@ -267,11 +292,12 @@
     // Gắn sự kiện nút chuông
     const bellBtn = container.querySelector('#sla-bell-btn');
     const popover = container.querySelector('#sla-reminders-popover');
-    bellBtn.addEventListener('click', (e) => {
+    bellBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
       isBellOpen = !isBellOpen;
       popover.style.display = isBellOpen ? 'block' : 'none';
       if (isBellOpen) {
+        await fetchRecruiterReminders();
         renderRemindersList();
       }
     });
@@ -389,8 +415,11 @@
       let sla = overdueCandidatesCache.get(candId);
       let isOverdue = Boolean(sla && sla.isOverdue);
 
-      if (!isOverdue && window.currentCandidatesList && Array.isArray(window.currentCandidatesList)) {
-        const item = window.currentCandidatesList.find(c => c && (c.id === candId));
+      const candidatesList = (typeof currentCandidatesList !== 'undefined' && Array.isArray(currentCandidatesList))
+        ? currentCandidatesList
+        : (Array.isArray(window.currentCandidatesList) ? window.currentCandidatesList : null);
+      if (!isOverdue && candidatesList) {
+        const item = candidatesList.find(c => c && (c.id === candId));
         if (item) {
           isOverdue = Boolean(item.is_sla_violated || item.isOverdue || (item.sla && item.sla.isOverdue));
           if (isOverdue && !sla) {
@@ -454,9 +483,15 @@
     const directId = row.getAttribute('data-id') || row.getAttribute('data-candidate-id');
     if (directId) return directId;
 
-    // Trích xuất từ nút "Chi tiết" onclick="window.ATS_APP_HELPERS.viewCandidateDetails('xxx')"
+    const detailBtn = row.querySelector('[onclick*="viewCandidateDetails"]');
+    if (detailBtn) {
+      const onclickAttr = detailBtn.getAttribute('onclick') || '';
+      const match = onclickAttr.match(/viewCandidateDetails\(['"]([^'"]+)['"]\)/);
+      if (match && match[1]) return match[1];
+    }
+
     const html = row.innerHTML || '';
-    const match = html.match(/viewCandidateDetails\(['"]([^'"]+)['"]\)/);
+    const match = html.match(/viewCandidateDetails\((?:['"]|&quot;|&#39;)([^'"&]+)(?:['"]|&quot;|&#39;)\)/);
     if (match && match[1]) return match[1];
 
     const link = row.querySelector('a[href*="candidate"]');
@@ -493,8 +528,11 @@
     // Lấy thông tin SLA của ứng viên này (từ cache hoặc API)
     let sla = overdueCandidatesCache.get(candId);
     if (!sla) {
-      if (window.currentCandidatesList && Array.isArray(window.currentCandidatesList)) {
-        const item = window.currentCandidatesList.find(c => c && c.id === candId);
+      const candidatesList = (typeof currentCandidatesList !== 'undefined' && Array.isArray(currentCandidatesList))
+        ? currentCandidatesList
+        : (Array.isArray(window.currentCandidatesList) ? window.currentCandidatesList : null);
+      if (candidatesList) {
+        const item = candidatesList.find(c => c && c.id === candId);
         if (item) {
           sla = item.sla || {
             isOverdue: Boolean(item.is_sla_violated || item.isOverdue || (item.sla && item.sla.isOverdue)),

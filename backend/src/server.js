@@ -1897,7 +1897,6 @@ async function handleRequest(req, res) {
     await new (require('./controllers/candidateSearchController'))(new (require('./services/candidateSearchService'))(db),rbacMiddleware,authController.authService).handle(req,res,parsedUrl,parseBody);
     return;
   }
-  if(req.method==='GET'&&/^\/(?:api\/v1\/)?candidates\/[^/]+$/.test(pathname)){const user=await rbacMiddleware.authorize(req,res,authController.authService,'candidate.read');if(!user)return;let candidateId;try{candidateId=decodeURIComponent(pathname.split('/').at(-1));}catch{res.writeHead(400,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:'BAD_REQUEST',message:'Mã hồ sơ không hợp lệ.'}));return;}const result=await requisitionService.getCandidateById(candidateId,user);res.writeHead(result.statusCode||200,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(result));return;}
   // S5-10 (SCRUM-120): Candidate SLA Notification & Monitoring API
   if (pathname.startsWith('/api/v1/sla/') || pathname === '/api/v1/sla') {
     const SlaNotificationService = require('./services/slaNotificationService');
@@ -1917,7 +1916,7 @@ async function handleRequest(req, res) {
     }
     const result=await requisitionService.getCandidateById(candidateId,user);
     const candObj = result && result.success ? (result.data || result.candidate) : null;
-    if (candObj) {
+    if (candObj && Object.hasOwn(candObj, 'stage')) {
       try {
         const SlaNotificationService = require('./services/slaNotificationService');
         const slaService = new SlaNotificationService(db);
@@ -2005,6 +2004,7 @@ async function handleRequest(req, res) {
         const cfgMap = {};
         for (const sc of slaConfigs) cfgMap[sc.stage] = sc;
         for (const c of result.candidates) {
+          if (!Object.hasOwn(c, 'stage')) continue;
           const sla = await slaService.calculateCandidateSla(c, cfgMap);
           c.sla = sla;
           c.is_sla_violated = Boolean(sla && sla.isOverdue);

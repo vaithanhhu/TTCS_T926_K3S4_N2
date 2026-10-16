@@ -235,11 +235,8 @@
     "/js/components/requisition-detail.js",
     "/js/components/candidate-manual-entry.js",
     "/js/components/candidate-screening.js",
-"/js/components/candidate-screening.js",
-"/js/components/talent-pool.js",
-"/js/components/candidate-sla.js",
-"/js/shared/page-lifecycle.js",
-"/js/shared/route-lifecycle.js"
+    "/js/components/talent-pool.js",
+    "/js/components/candidate-sla.js",
     "/js/shared/page-lifecycle.js",
     "/js/shared/route-lifecycle.js"
   ],
