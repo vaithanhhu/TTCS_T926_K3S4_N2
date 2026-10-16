@@ -49,6 +49,11 @@ class CandidateManualEntryService {
     return email.trim().toLowerCase();
   }
 
+  async supportsMergeColumn() {
+    try { await this.db.prepare('SELECT merged_into_id FROM candidates LIMIT 0').all(); return true; }
+    catch { return false; }
+  }
+
   /**
    * AC-02: Kiểm tra phát hiện trùng lặp hồ sơ ứng viên
    * - Trùng trên cùng vị trí tuyển dụng (Same position)
@@ -96,14 +101,15 @@ class CandidateManualEntryService {
 
     let rows = [];
     if (conditions.length > 0) {
-      const sql = `
+    const mergeFilter = await this.supportsMergeColumn() ? ' AND c.merged_into_id IS NULL' : '';
+    const sql = `
         SELECT c.id, c.full_name, c.email, c.phone_number, c.stage, c.requisition_id,
                c.source_id, c.created_at,
                r.title AS requisition_title, r.code AS requisition_code, r.status AS requisition_status
         FROM candidates c
         LEFT JOIN requisitions r ON r.id = c.requisition_id
         WHERE (${conditions.join(' OR ')})
-          AND (c.stage IS NULL OR c.stage <> 'WITHDRAWN')
+          AND (c.stage IS NULL OR c.stage <> 'WITHDRAWN')${mergeFilter}
       `;
 
       try {
@@ -115,7 +121,7 @@ class CandidateManualEntryService {
                  c.source_id, c.created_at
           FROM candidates c
           WHERE (${conditions.join(' OR ')})
-            AND (c.stage IS NULL OR c.stage <> 'WITHDRAWN')
+            AND (c.stage IS NULL OR c.stage <> 'WITHDRAWN')${mergeFilter}
         `;
         rows = await this.db.prepare(fallbackSql).all(...params);
       }
@@ -409,7 +415,22 @@ class CandidateManualEntryService {
    * @param {object} currentUser Người dùng hiện tại
    * @returns {object} Kết quả tạo ứng viên
    */
+  async lockDuplicateIdentities(email, phoneNumber) {
+    if (this.db.provider !== 'postgres') return;
+    const phone = this.normalizePhoneNumber(phoneNumber);
+    const keys = [this.normalizeEmail(email) && `email:${this.normalizeEmail(email)}`, phone.length >= 7 && `phone:${phone.slice(-7)}`].filter(Boolean).sort();
+    for (const key of keys) await this.db.prepare('SELECT pg_advisory_xact_lock(hashtextextended(?,0))').get(key);
+  }
+
   async createManualCandidate(data = {}, cvFile = null, currentUser = null) {
+    const work = async () => {
+      await this.lockDuplicateIdentities(data.email, data.phoneNumber || data.phone);
+      return this.createManualCandidateWithinTransaction(data, cvFile, currentUser);
+    };
+    return typeof this.db.transaction === 'function' ? this.db.transaction(work) : work();
+  }
+
+  async createManualCandidateWithinTransaction(data = {}, cvFile = null, currentUser = null) {
     // 1. Kiểm tra tính hợp lệ của dữ liệu đầu vào
     const valResult = this.validateCandidateData(data);
     if (!valResult.success) return valResult;
