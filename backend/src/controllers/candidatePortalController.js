@@ -19,10 +19,6 @@ class CandidatePortalController {
   }
 
   getClientIp(req) {
-    const forwarded = req.headers['x-forwarded-for'];
-    if (forwarded) {
-      return forwarded.split(',')[0].trim();
-    }
     return req.socket?.remoteAddress || '127.0.0.1';
   }
 
@@ -47,8 +43,10 @@ class CandidatePortalController {
         };
         const publicationService = new (require('../services/jobPostingPublicationService'))(this.service.db);
         const all = await publicationService.publicList(query);
-        const page = Math.max(1, parseInt(parsedUrl.searchParams.get('page') || '1', 10));
-        const pageSize = Math.max(1, Math.min(50, parseInt(parsedUrl.searchParams.get('pageSize') || '10', 10)));
+        const requestedPage = Number(parsedUrl.searchParams.get('page') || '1');
+        const requestedSize = Number(parsedUrl.searchParams.get('pageSize') || '10');
+        const page = Number.isSafeInteger(requestedPage) ? Math.max(1,requestedPage) : 1;
+        const pageSize = Number.isSafeInteger(requestedSize) ? Math.max(1,Math.min(50,requestedSize)) : 10;
         const total = all.length;
         const items = all.slice((page - 1) * pageSize, page * pageSize);
         return this.send(res, 200, {
@@ -229,11 +227,12 @@ class CandidatePortalController {
 
       return this.send(res, 404, { success: false, code: 'NOT_FOUND', message: 'Tài nguyên không tồn tại.' });
     } catch (err) {
-      console.error('[CandidatePortalController Error]', err);
-      return this.send(res, err.statusCode || 500, {
+      const status = err instanceof URIError ? 400 : Number.isInteger(err.statusCode) && err.statusCode>=400 && err.statusCode<600 ? err.statusCode : 500;
+      console.error('[CandidatePortalController Error]',status>=500?'SERVER_ERROR':err.code||'BAD_REQUEST');
+      return this.send(res, status, {
         success: false,
-        code: err.code || 'SERVER_ERROR',
-        message: err.message || 'Đã có lỗi xảy ra.'
+        code: status>=500?'SERVER_ERROR':err.code||'BAD_REQUEST',
+        message: status>=500?'Đã có lỗi xảy ra. Vui lòng thử lại sau.':err instanceof URIError?'Mã tài nguyên không hợp lệ.':err.message||'Dữ liệu yêu cầu không hợp lệ.'
       });
     }
   }

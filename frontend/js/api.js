@@ -192,9 +192,9 @@ async function getPermissionsApi(token) {
   }
 }
 
-async function getRbacMatrixApi() {
+async function getRbacMatrixApi(token) {
   try {
-    const response = await fetch(`${API_BASE}/rbac/matrix`, { method: 'GET' });
+    const response = await fetch(`${API_BASE}/rbac/matrix`, { method: 'GET', headers: { Authorization: token ? `Bearer ${token}` : '' } });
     const data = await response.json();
     return { status: response.status, ok: response.ok, data };
   } catch (error) {
