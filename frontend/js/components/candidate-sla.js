@@ -9,7 +9,8 @@
  * TIÊU CHÍ KỸ THUẬT:
  *   • Hoạt động độc lập bằng MutationObserver và Self-Mounting
  *   • TUYỆT ĐỐI KHÔNG SỬA BẤT KỲ FILE HTML / JS CŨ NÀO CỦA HỆ THỐNG
- *   • Hiển thị cờ cảnh báo quá hạn SLA trên danh sách ứng viên và chi tiết ứng viên
+ *   • Hiển thị cờ cảnh báo quá hạn SLA (Badge / Flag đỏ hoặc cam rõ ràng)
+ *     trên danh sách ứng viên (/candidates) và popup Chi tiết hồ sơ
  *   • Chuông thông báo nhắc việc (SLA Reminders Popover) tại thanh Topbar
  *   • Modal cấu hình ngưỡng SLA cho từng giai đoạn (AC-01)
  * ==============================================================================
@@ -32,7 +33,7 @@
 
   // Lấy token xác thực
   function getAuthToken() {
-    return localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+    return localStorage.getItem('token') || sessionStorage.getItem('token') || sessionStorage.getItem('ats_token') || '';
   }
 
   function getHeaders() {
@@ -64,13 +65,18 @@
 
   async function fetchOverdueCandidates() {
     try {
-      const res = await fetch('/api/v1/sla/overdue-candidates', { headers: getHeaders() });
+      const res = await fetch('/api/v1/sla/overdue-candidates?includeAll=true', { headers: getHeaders() });
       if (!res.ok) return [];
       const data = await res.json();
       if (data && data.success && data.data && Array.isArray(data.data.candidates)) {
         overdueCandidatesCache.clear();
         for (const c of data.data.candidates) {
-          overdueCandidatesCache.set(c.id, c.sla);
+          overdueCandidatesCache.set(c.id, {
+            ...c.sla,
+            fullName: c.fullName,
+            stage: c.stage,
+            isOverdue: Boolean(c.sla && c.sla.isOverdue)
+          });
         }
         return data.data.candidates;
       }
@@ -136,6 +142,7 @@
         await fetchOverdueCandidates();
         await fetchRecruiterReminders();
         renderTableBadges();
+        handleCandidateDetailModal();
       } else {
         showToast(data.message || 'Lỗi khi quét SLA.', 'error');
       }
@@ -158,6 +165,7 @@
         await fetchSlaConfigs();
         await fetchOverdueCandidates();
         renderTableBadges();
+        handleCandidateDetailModal();
         closeSlaConfigModal();
       } else {
         showToast(data.message || 'Lỗi khi lưu cấu hình SLA.', 'error');
@@ -188,14 +196,14 @@
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
           <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
         </svg>
-        <span id="sla-bell-badge" style="display: none; position: absolute; top: -4px; right: -4px; background: #ef4444; color: #fff; font-size: 0.675rem; font-weight: 700; min-width: 18px; height: 18px; border-radius: 9px; line-height: 18px; text-align: center; padding: 0 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.2);">0</span>
+        <span id="sla-bell-badge" style="display: none; position: absolute; top: -4px; right: -4px; background: #dc2626; color: #fff; font-size: 0.675rem; font-weight: 700; min-width: 18px; height: 18px; border-radius: 9px; line-height: 18px; text-align: center; padding: 0 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.2);">0</span>
       </button>
 
       <!-- Dropdown Popover Nhắc việc -->
-      <div id="sla-reminders-popover" class="sla-reminders-popover" style="display: none; position: absolute; right: 0; top: 46px; width: 360px; max-width: calc(100vw - 32px); background: #ffffff; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1); border: 1px solid #e2e8f0; z-index: 1050; overflow: hidden; font-family: inherit;">
+      <div id="sla-reminders-popover" class="sla-reminders-popover" style="display: none; position: absolute; right: 0; top: 46px; width: 370px; max-width: calc(100vw - 32px); background: #ffffff; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1); border: 1px solid #e2e8f0; z-index: 1050; overflow: hidden; font-family: inherit;">
         <div style="padding: 12px 16px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between; background: #fafafa;">
           <div style="display: flex; align-items: center; gap: 8px;">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2.2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
             <span style="font-weight: 700; font-size: 0.9rem; color: #0f172a;">Nhắc việc quá hạn SLA</span>
           </div>
           <div style="display: flex; gap: 4px;">
@@ -297,7 +305,7 @@
         <div class="sla-reminder-item" data-id="${r.id}" data-candidate-id="${r.candidateId}" style="padding: 10px 16px; border-bottom: 1px solid #f1f5f9; display: flex; flex-direction: column; gap: 4px; background: ${isUnread ? '#fff7ed' : '#ffffff'}; transition: background 0.15s ease; cursor: pointer;">
           <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;">
             <div style="font-weight: 600; font-size: 0.825rem; color: ${isUnread ? '#c2410c' : '#334155'};">
-              ⚠️ ${escapeHtml(r.candidateName || 'Ứng viên')}
+              🚩 ${escapeHtml(r.candidateName || 'Ứng viên')}
             </div>
             <span style="font-size: 0.7rem; color: #94a3b8; white-space: nowrap;">${formatDateSimple(r.createdAt)}</span>
           </div>
@@ -338,56 +346,104 @@
   }
 
   // ============================================================================
-  // UI: GẮN CỜ QUÁ HẠN SLA TRÊN DANH SÁCH ỨNG VIÊN (CANDIDATES TABLE)
+  // UI: GẮN BADGE / CỜ CẢNH BÁO QUÁ HẠN SLA TRÊN DANH SÁCH ỨNG VIÊN (/candidates)
   // ============================================================================
 
   function renderTableBadges() {
-    // Tìm các dòng trong bảng ứng viên
-    const table = document.querySelector('#candidates-table') || document.querySelector('table[data-table="candidates"]') || document.querySelector('#view-candidates table');
-    if (!table) return;
+    const tableBody = document.getElementById('candidates-table-body') || document.querySelector('tbody#candidates-table-body');
+    if (!tableBody) return;
 
-    const rows = table.querySelectorAll('tbody tr');
+    const rows = tableBody.querySelectorAll('tr');
     rows.forEach(row => {
-      const candId = row.getAttribute('data-id') || row.getAttribute('data-candidate-id') || getCandidateIdFromRow(row);
+      const candId = getCandidateIdFromRow(row);
       if (!candId) return;
 
-      const sla = overdueCandidatesCache.get(candId);
-      if (sla && sla.isOverdue) {
-        // Gắn cờ vi phạm SLA nếu chưa có
-        let badge = row.querySelector('.sla-overdue-flag');
-        if (!badge) {
-          badge = document.createElement('span');
-          badge.className = 'sla-overdue-flag';
-          badge.style.cssText = 'background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; padding: 2px 6px; border-radius: 9999px; font-size: 0.7rem; font-weight: 600; display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; vertical-align: middle; cursor: help;';
-          badge.title = sla.label || `Quá hạn SLA ${sla.daysInStage}/${sla.thresholdDays} ngày`;
-          badge.innerHTML = `
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            Quá hạn SLA ${sla.overdueDays > 0 ? `+${sla.overdueDays}d` : ''}
-          `;
+      // 1. Kiểm tra trạng thái quá hạn từ cache hoặc từ currentCandidatesList
+      let sla = overdueCandidatesCache.get(candId);
+      let isOverdue = Boolean(sla && sla.isOverdue);
 
-          // Gắn vào cột tên hoặc cột giai đoạn
-          const nameCell = row.cells[0] || row.querySelector('.candidate-name') || row.querySelector('td');
-          if (nameCell) {
-            nameCell.appendChild(badge);
+      if (!isOverdue && window.currentCandidatesList && Array.isArray(window.currentCandidatesList)) {
+        const item = window.currentCandidatesList.find(c => c && (c.id === candId));
+        if (item) {
+          isOverdue = Boolean(item.is_sla_violated || item.isOverdue || (item.sla && item.sla.isOverdue));
+          if (isOverdue && !sla) {
+            sla = item.sla || {
+              stage: item.stage || 'NEW',
+              daysInStage: item.sla?.daysInStage || 4,
+              thresholdDays: item.sla?.thresholdDays || 3,
+              isOverdue: true
+            };
           }
+        }
+      }
+
+      // Xóa badge cũ nếu ứng viên không còn quá hạn
+      const existingBadge = row.querySelector('.sla-overdue-badge');
+      if (!isOverdue) {
+        if (existingBadge) existingBadge.remove();
+        return;
+      }
+
+      // Gắn Badge / Cờ cảnh báo màu đỏ hoặc cam rõ ràng
+      if (!existingBadge) {
+        const badge = document.createElement('span');
+        badge.className = 'badge badge-danger sla-overdue-badge';
+        badge.style.cssText = `
+          background: #dc2626; color: #ffffff; border: 1px solid #b91c1c;
+          padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 700;
+          display: inline-flex; align-items: center; gap: 4px; margin-top: 4px;
+          box-shadow: 0 1px 2px rgba(220, 38, 38, 0.25); cursor: help;
+        `;
+        const days = sla ? sla.daysInStage : 4;
+        const limit = sla ? sla.thresholdDays : 3;
+        badge.title = `Hồ sơ quá hạn SLA (${days}/${limit} ngày chưa xử lý). Vui lòng kiểm tra ngay!`;
+        badge.innerHTML = `
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+          <span>Quá hạn SLA</span>
+        `;
+
+        // Ưu tiên gắn vào cột Vòng tuyển dụng (cells[4])
+        const stageCell = row.cells[4];
+        if (stageCell) {
+          // Tạo wrapper hoặc gắn bên dưới badge vòng tuyển dụng
+          let container = stageCell.querySelector('.sla-badge-container');
+          if (!container) {
+            container = document.createElement('div');
+            container.className = 'sla-badge-container';
+            container.style.marginTop = '4px';
+            stageCell.appendChild(container);
+          }
+          container.appendChild(badge);
+        } else {
+          // Fallback gắn vào cột Tên (cells[1])
+          const nameCell = row.cells[1] || row.querySelector('td');
+          if (nameCell) nameCell.appendChild(badge);
         }
       }
     });
   }
 
   function getCandidateIdFromRow(row) {
+    if (!row) return null;
+    const directId = row.getAttribute('data-id') || row.getAttribute('data-candidate-id');
+    if (directId) return directId;
+
+    // Trích xuất từ nút "Chi tiết" onclick="window.ATS_APP_HELPERS.viewCandidateDetails('xxx')"
+    const html = row.innerHTML || '';
+    const match = html.match(/viewCandidateDetails\(['"]([^'"]+)['"]\)/);
+    if (match && match[1]) return match[1];
+
     const link = row.querySelector('a[href*="candidate"]');
     if (link) {
       const m = link.href.match(/candidates\/([^/?#]+)/);
       if (m) return m[1];
     }
-    const btn = row.querySelector('button[data-id]');
-    if (btn) return btn.getAttribute('data-id');
+
     return null;
   }
 
   // ============================================================================
-  // UI: CẢNH BÁO SLA TRONG MODAL CHI TIẾT ỨNG VIÊN (CANDIDATE DETAIL MODAL)
+  // UI: CẢNH BÁO SLA TRONG POPUP CHI TIẾT HỒ SƠ (CANDIDATE DETAIL MODAL)
   // ============================================================================
 
   function handleCandidateDetailModal() {
@@ -395,20 +451,71 @@
     if (!modal || modal.classList.contains('hidden') || modal.style.display === 'none') return;
 
     // Lấy ID ứng viên hiện tại trong modal
-    const candId = modal.getAttribute('data-candidate-id') ||
-                  modal.querySelector('[data-candidate-id]')?.getAttribute('data-candidate-id') ||
+    const idInput = modal.querySelector('#cand-detail-id');
+    const candId = (idInput && idInput.value) ||
+                  modal.getAttribute('data-candidate-id') ||
                   window.__CURRENT_ACTIVE_CANDIDATE_ID__;
 
     if (!candId) return;
 
-    const sla = overdueCandidatesCache.get(candId);
-    let banner = modal.querySelector('#sla-candidate-modal-banner');
+    let sla = overdueCandidatesCache.get(candId);
+    let isOverdue = Boolean(sla && sla.isOverdue);
 
-    if (sla && sla.isOverdue) {
+    if (!isOverdue && window.currentCandidatesList && Array.isArray(window.currentCandidatesList)) {
+      const item = window.currentCandidatesList.find(c => c && c.id === candId);
+      if (item && (item.is_sla_violated || item.isOverdue || (item.sla && item.sla.isOverdue))) {
+        isOverdue = true;
+        sla = item.sla || {
+          stage: item.stage || 'NEW',
+          daysInStage: item.sla?.daysInStage || 4,
+          thresholdDays: item.sla?.thresholdDays || 3,
+          isOverdue: true
+        };
+      }
+    }
+
+    // 1. Badge cờ cảnh báo SLA cạnh Stage Badge ở Header (#cand-detail-stage-badge)
+    const stageBadge = modal.querySelector('#cand-detail-stage-badge');
+    let headerSlaBadge = modal.querySelector('#cand-detail-sla-badge');
+
+    if (isOverdue) {
+      if (!headerSlaBadge && stageBadge) {
+        headerSlaBadge = document.createElement('span');
+        headerSlaBadge = document.createElement('span');
+        headerSlaBadge.id = 'cand-detail-sla-badge';
+        headerSlaBadge.className = 'badge badge-danger';
+        headerSlaBadge.style.cssText = `
+          background: #dc2626; color: #ffffff; border: 1px solid #b91c1c;
+          padding: 4px 10px; border-radius: 9999px; font-weight: 700; font-size: 0.775rem;
+          display: inline-flex; align-items: center; gap: 5px; margin-left: 8px;
+          box-shadow: 0 1px 3px rgba(220, 38, 38, 0.3);
+        `;
+        stageBadge.parentNode.insertBefore(headerSlaBadge, stageBadge.nextSibling);
+      }
+      if (headerSlaBadge) {
+        const days = sla ? sla.daysInStage : 4;
+        const limit = sla ? sla.thresholdDays : 3;
+        headerSlaBadge.innerHTML = `
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+          <span>Quá hạn SLA (${days}/${limit} ngày)</span>
+        `;
+        headerSlaBadge.style.display = 'inline-flex';
+      }
+    } else if (headerSlaBadge) {
+      headerSlaBadge.style.display = 'none';
+    }
+
+    // 2. Banner cảnh báo quá hạn SLA chi tiết tại Modal Body
+    let banner = modal.querySelector('#sla-candidate-modal-banner');
+    if (isOverdue) {
       if (!banner) {
         banner = document.createElement('div');
         banner.id = 'sla-candidate-modal-banner';
-        banner.style.cssText = 'background: #fff7ed; border-left: 4px solid #ea580c; padding: 10px 14px; border-radius: 6px; margin: 12px 16px; display: flex; align-items: flex-start; gap: 10px; font-size: 0.825rem; color: #9a3412;';
+        banner.style.cssText = `
+          background: #fff7ed; border-left: 5px solid #ea580c; border: 1px solid #fed7aa;
+          padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; display: flex;
+          align-items: flex-start; gap: 12px; color: #9a3412; font-family: inherit;
+        `;
         
         const modalBody = modal.querySelector('.modal-body') || modal.querySelector('.dialog-body') || modal;
         if (modalBody) {
@@ -416,15 +523,27 @@
         }
       }
 
+      const days = sla ? sla.daysInStage : 4;
+      const limit = sla ? sla.thresholdDays : 3;
+      const stageName = (sla && sla.stage) || 'vòng hiện tại';
+
       banner.innerHTML = `
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ea580c" stroke-width="2" style="flex-shrink: 0; margin-top: 1px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-        <div>
-          <div style="font-weight: 700; margin-bottom: 2px;">CẢNH BÁO QUÁ HẠN SLA (${sla.daysInStage}/${sla.thresholdDays} ngày)</div>
-          <div>Hồ sơ này đã ở giai đoạn <strong>${escapeHtml(sla.stage)}</strong> trong <strong>${sla.daysInStage} ngày</strong>, vượt quá ngưỡng SLA quy định (<strong>${sla.thresholdDays} ngày</strong>). Recruiter phụ trách vui lòng sàng lọc hoặc cập nhật trạng thái ngay để tránh để hồ sơ nằm im.</div>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ea580c" stroke-width="2.2" style="flex-shrink: 0; margin-top: 2px;">
+          <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>
+          <line x1="4" y1="22" x2="4" y2="15"></line>
+        </svg>
+        <div style="flex: 1;">
+          <div style="font-weight: 700; font-size: 0.9rem; margin-bottom: 3px; color: #c2410c;">
+            🚩 CẢNH BÁO QUÁ HẠN SLA (${days}/${limit} ngày)
+          </div>
+          <div style="font-size: 0.825rem; line-height: 1.45; color: #431407;">
+            Hồ sơ này đã ở giai đoạn <strong>${escapeHtml(stageName)}</strong> trong <strong>${days} ngày</strong>, vượt quá ngưỡng SLA quy định (<strong>${limit} ngày</strong> chưa mở xem hoặc xử lý). Recruiter phụ trách vui lòng sàng lọc hoặc cập nhật trạng thái ngay để tránh để hồ sơ nằm im.
+          </div>
         </div>
       `;
+      banner.style.display = 'flex';
     } else if (banner) {
-      banner.remove();
+      banner.style.display = 'none';
     }
   }
 
@@ -461,7 +580,7 @@
               <div>
                 <span style="display: inline-block; padding: 2px 8px; border-radius: 4px; background: #e0f2fe; color: #0369a1; font-weight: 700; font-size: 0.775rem;">Mới (NEW)</span>
               </div>
-              <div style="font-size: 0.775rem; color: #475569;">Thời gian tối đa để đọc và sàng lọc CV mới</div>
+              <div style="font-size: 0.775rem; color: #475569;">Thời hạn tối đa để đọc và sàng lọc CV mới</div>
               <div style="display: flex; align-items: center; gap: 4px;">
                 <input type="number" id="sla-input-NEW" min="1" max="60" value="3" required style="width: 60px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; text-align: center; font-weight: 600;" />
                 <span style="font-size: 0.75rem; color: #64748b;">ngày</span>
@@ -565,13 +684,14 @@
   function openCandidateModalById(candId) {
     if (!candId) return;
     window.__CURRENT_ACTIVE_CANDIDATE_ID__ = candId;
-    if (typeof window.openCandidateDetailModal === 'function') {
+    if (window.ATS_APP_HELPERS && typeof window.ATS_APP_HELPERS.viewCandidateDetails === 'function') {
+      window.ATS_APP_HELPERS.viewCandidateDetails(candId);
+    } else if (typeof window.openCandidateDetailModal === 'function') {
       window.openCandidateDetailModal(candId);
     } else {
-      // Tìm dòng trong bảng ứng viên và kích hoạt click
       const row = document.querySelector(`tr[data-id="${candId}"]`) || document.querySelector(`tr[data-candidate-id="${candId}"]`);
       if (row) {
-        const btn = row.querySelector('.btn-view, .action-view, a');
+        const btn = row.querySelector('.btn-view, .action-view, a, button');
         if (btn) btn.click();
       }
     }
@@ -603,7 +723,7 @@
 
   function showToast(message, type = 'info') {
     if (typeof window.showToast === 'function') {
-      window.showToast(message, type);
+      window.showToast(type, 'SLA', message);
       return;
     }
     const toast = document.createElement('div');
@@ -638,7 +758,7 @@
     await fetchRecruiterReminders();
     runLifecycle();
 
-    // Lắng nghe thay đổi DOM
+    // Lắng nghe thay đổi DOM tự động
     const observer = new MutationObserver(() => {
       runLifecycle();
     });
@@ -668,7 +788,7 @@
     fetchOverdueCandidates,
     fetchRecruiterReminders,
     openSlaConfigModal,
-    triggerSlaCheckNow
+    triggerSlaCheckNow,
+    runLifecycle
   };
 })();
-

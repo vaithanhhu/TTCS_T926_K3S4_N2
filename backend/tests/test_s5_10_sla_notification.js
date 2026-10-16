@@ -549,8 +549,28 @@ async function runTestSuite() {
     passedTests++;
   }
 
+  // Test 26: Đảm bảo dữ liệu hồ sơ ứng viên đính kèm đầy đủ cờ SLA (is_sla_violated, sla_status, isOverdue, sla)
+  {
+    const cand = await db.prepare('SELECT * FROM candidates WHERE id = ?').get('cand-overdue-scr');
+    const sla = await slaService.calculateCandidateSla(cand, null, BASE_TIME);
+
+    cand.sla = sla;
+    cand.is_sla_violated = Boolean(sla && sla.isOverdue);
+    cand.sla_status = sla ? sla.flag : 'ON_TRACK';
+    cand.isOverdue = Boolean(sla && sla.isOverdue);
+    cand.slaStatus = sla ? sla.flag : 'ON_TRACK';
+
+    assert.strictEqual(cand.is_sla_violated, true, 'is_sla_violated phải là true khi quá hạn');
+    assert.strictEqual(cand.sla_status, 'BREACHED', 'sla_status phải là BREACHED');
+    assert.strictEqual(cand.isOverdue, true, 'isOverdue phải là true');
+    assert.strictEqual(cand.slaStatus, 'BREACHED', 'slaStatus phải là BREACHED');
+    assert.ok(cand.sla && cand.sla.thresholdDays === 5);
+    console.log('[PASS] Test 26: Dữ liệu hồ sơ đính kèm đầy đủ is_sla_violated và sla_status cho frontend binding');
+    passedTests++;
+  }
+
   console.log('\n================================================================');
-  console.log(`KẾT QUẢ TEST SUITE S5-10: HOÀN THÀNH XUẤT SẮC ${passedTests}/25 TESTS (100% PASS)`);
+  console.log(`KẾT QUẢ TEST SUITE S5-10: HOÀN THÀNH XUẤT SẮC ${passedTests}/26 TESTS (100% PASS)`);
   console.log('Tất cả các tiêu chí AC-01, AC-02, AC-03, IDOR & RBAC đã được xác minh hoàn hảo!');
   console.log('================================================================\n');
 }

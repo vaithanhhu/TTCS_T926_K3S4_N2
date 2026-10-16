@@ -1894,7 +1894,32 @@ async function handleRequest(req, res) {
     return;
   }
 
-  if(req.method==='GET'&&/^\/(?:api\/v1\/)?candidates\/[^/]+$/.test(pathname)){const user=await rbacMiddleware.authorize(req,res,authController.authService,'candidate.read');if(!user)return;let candidateId;try{candidateId=decodeURIComponent(pathname.split('/').at(-1));}catch{res.writeHead(400,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:'BAD_REQUEST',message:'Mã hồ sơ không hợp lệ.'}));return;}const result=await requisitionService.getCandidateById(candidateId,user);res.writeHead(result.statusCode||200,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(result));return;}
+  if(req.method==='GET'&&/^\/(?:api\/v1\/)?candidates\/[^/]+$/.test(pathname)){
+    const user=await rbacMiddleware.authorize(req,res,authController.authService,'candidate.read');
+    if(!user)return;
+    let candidateId;
+    try{candidateId=decodeURIComponent(pathname.split('/').at(-1));}catch{
+      res.writeHead(400,{'Content-Type':'application/json; charset=utf-8'});
+      res.end(JSON.stringify({success:false,code:'BAD_REQUEST',message:'Mã hồ sơ không hợp lệ.'}));
+      return;
+    }
+    const result=await requisitionService.getCandidateById(candidateId,user);
+    if (result && result.success && result.candidate) {
+      try {
+        const SlaNotificationService = require('./services/slaNotificationService');
+        const slaService = new SlaNotificationService(db);
+        const sla = await slaService.calculateCandidateSla(result.candidate);
+        result.candidate.sla = sla;
+        result.candidate.is_sla_violated = Boolean(sla && sla.isOverdue);
+        result.candidate.sla_status = sla ? sla.flag : 'ON_TRACK';
+        result.candidate.isOverdue = Boolean(sla && sla.isOverdue);
+        result.candidate.slaStatus = sla ? sla.flag : 'ON_TRACK';
+      } catch (slaErr) {}
+    }
+    res.writeHead(result.statusCode||200,{'Content-Type':'application/json; charset=utf-8'});
+    res.end(JSON.stringify(result));
+    return;
+  }
 
   // 13.7 API: Candidates List (Real SQLite Data)
   if (req.method === 'GET' && (pathname === '/api/v1/candidates' || pathname === '/candidates')) {
@@ -1951,7 +1976,12 @@ async function handleRequest(req, res) {
         const cfgMap = {};
         for (const sc of slaConfigs) cfgMap[sc.stage] = sc;
         for (const c of result.candidates) {
-          c.sla = await slaService.calculateCandidateSla(c, cfgMap);
+          const sla = await slaService.calculateCandidateSla(c, cfgMap);
+          c.sla = sla;
+          c.is_sla_violated = Boolean(sla && sla.isOverdue);
+          c.sla_status = sla ? sla.flag : 'ON_TRACK';
+          c.isOverdue = Boolean(sla && sla.isOverdue);
+          c.slaStatus = sla ? sla.flag : 'ON_TRACK';
         }
       } catch (slaErr) {
         // Bỏ qua lỗi tính SLA nếu chưa migrate
