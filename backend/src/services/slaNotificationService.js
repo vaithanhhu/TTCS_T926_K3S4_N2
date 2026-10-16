@@ -726,6 +726,23 @@ class SlaNotificationService {
                 sla.thresholdDays, sla.daysInStage, todayStr, reminderTitle, reminderMessage
               );
               remindersCreated++;
+
+              // Gửi email thông báo nhắc việc (notification / email) tới Recruiter
+              try {
+                const recruiterUser = await this.db.prepare('SELECT email, full_name FROM users WHERE id = ?').get(recruiterId);
+                if (recruiterUser && recruiterUser.email) {
+                  const EmailService = require('./emailService');
+                  const emailService = new EmailService(this.db);
+                  emailService.sendMail({
+                    to: recruiterUser.email,
+                    subject: reminderTitle,
+                    text: reminderMessage,
+                    templateName: 'SLA_REMINDER'
+                  }).catch(() => {});
+                }
+              } catch {
+                // Không làm gián đoạn tác vụ nếu cấu hình SMTP ngoại tuyến
+              }
             } catch (rErr) {
               // Bỏ qua lỗi duplicate nếu đồng thời chèn
               console.warn('[runDailySlaCheck] Duplicate reminder avoided:', rErr.message);
@@ -921,3 +938,4 @@ class SlaNotificationService {
 }
 
 module.exports = SlaNotificationService;
+
