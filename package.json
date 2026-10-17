@@ -115,7 +115,9 @@
     "migrate:s6-02": "node backend/src/db/migrate-interview-scheduling.js",
     "test:s6-02": "node backend/tests/test_s6_02_interview_scheduling.js",
     "migrate:s6-03": "node backend/src/db/migrate-bulk-interviews.js",
-    "test:s6-03": "node backend/tests/test_s6_03_bulk_interviews.js"
+    "test:s6-03": "node backend/tests/test_s6_03_bulk_interviews.js",
+    "migrate:s6-04": "node backend/src/db/migrate-interview-conflict-override.js",
+    "test:s6-04": "node backend/tests/test_s6_04_interview_conflicts.js"
   },
   "keywords": [
     "ats",

@@ -1675,64 +1675,37 @@ class RequisitionService {
     return Number.isFinite(result) ? result : null;
   }
 
-  async checkInterviewConflict(candidateId, interviewerIds, startMs, durationMinutes) {
-    const endMs = startMs + durationMinutes * 60 * 1000;
-    const hasColumns = await this.hasInterviewSchedulingColumns();
-    const candInterviews = await this.db.prepare(hasColumns
-      ? "SELECT id, scheduled_time, duration_minutes FROM interviews WHERE candidate_id = ? AND status = 'SCHEDULED'"
-      : "SELECT id, scheduled_time FROM interviews WHERE candidate_id = ? AND status = 'SCHEDULED'"
-    ).all(candidateId);
-    for (const iv of candInterviews) {
-      const s = this.parseInterviewTimestamp(iv.scheduled_time);
-      if (s !== null) {
-        const dur = (hasColumns && Number(iv.duration_minutes)) || 60;
-        const e = s + dur * 60 * 1000;
-        if (Math.max(startMs, s) < Math.min(endMs, e)) {
-          return { success: false, statusCode: 409, code: 'INTERVIEW_CANDIDATE_CONFLICT', message: 'Ứng viên đã có lịch phỏng vấn khác trong khoảng thời gian này.' };
-        }
-      }
-    }
-    if (interviewerIds.length > 0) {
-      const placeholders = interviewerIds.map(() => '?').join(',');
-      const intInterviews = await this.db.prepare(hasColumns ? `
-        SELECT DISTINCT i.id, i.scheduled_time, i.duration_minutes, u.id AS user_id, u.full_name
-        FROM interviews i
-        LEFT JOIN interview_interviewers ii ON ii.interview_id = i.id
-        JOIN users u ON u.id = COALESCE(ii.user_id, i.interviewer_id)
-        WHERE i.status = 'SCHEDULED' AND u.id IN (${placeholders})
-      ` : `
-        SELECT DISTINCT i.id, i.scheduled_time, u.id AS user_id, u.full_name
-        FROM interviews i
-        JOIN users u ON u.id = i.interviewer_id
-        WHERE i.status = 'SCHEDULED' AND u.id IN (${placeholders})
-      `).all(...interviewerIds);
-      for (const iv of intInterviews) {
-        const s = this.parseInterviewTimestamp(iv.scheduled_time);
-        if (s !== null) {
-          const dur = (hasColumns && Number(iv.duration_minutes)) || 60;
-          const e = s + dur * 60 * 1000;
-          if (Math.max(startMs, s) < Math.min(endMs, e)) {
-            return { success: false, statusCode: 409, code: 'INTERVIEW_INTERVIEWER_CONFLICT', message: 'Người phỏng vấn ' + (iv.full_name || '') + ' đã có lịch phỏng vấn khác trong khoảng thời gian này.' };
-          }
-        }
-      }
-    }
-    return null;
+  async checkInterviewConflict(candidateId, interviewerIds, startMs, durationMinutes, meetingRoom = null, excludeInterviewId = null) {
+    const endMs=startMs+durationMinutes*60000;
+    if(!await this.hasInterviewSchedulingColumns())return null;
+    const exclusion=excludeInterviewId?' AND i.id<>?':'';
+    const rows=await this.db.prepare(`SELECT i.id,i.candidate_id,i.scheduled_time,i.duration_minutes,i.meeting_room,c.full_name AS candidate_name,c.email AS candidate_email,u.id AS interviewer_id,u.full_name AS interviewer_name FROM interviews i LEFT JOIN candidates c ON c.id=i.candidate_id LEFT JOIN interview_interviewers ii ON ii.interview_id=i.id LEFT JOIN users u ON u.id=COALESCE(ii.user_id,i.interviewer_id) WHERE i.status='SCHEDULED'${exclusion}`).all(...(excludeInterviewId?[excludeInterviewId]:[]));
+    const own=new Set(interviewerIds), roomKey=String(meetingRoom||'').trim().toLocaleLowerCase(), grouped=new Map();
+    for(const row of rows){const start=this.parseInterviewTimestamp(row.scheduled_time);if(start===null)continue;const finish=start+(Number(row.duration_minutes)||60)*60000;if(!(startMs<finish&&start<endMs))continue;let item=grouped.get(row.id);if(!item){item={id:row.id,candidateId:row.candidate_id,candidateName:row.candidate_name,candidateEmail:row.candidate_email,scheduledTime:new Date(start).toISOString(),endTime:new Date(finish).toISOString(),meetingRoom:row.meeting_room||null,interviewers:[],resourceConflicts:[]};grouped.set(row.id,item);}if(row.interviewer_id&&!item.interviewers.some(person=>person.id===row.interviewer_id))item.interviewers.push({id:row.interviewer_id,fullName:row.interviewer_name});}
+    for(const item of grouped.values()){const shared=item.interviewers.filter(person=>own.has(person.id));if(shared.length)item.resourceConflicts.push({type:'INTERVIEWER',interviewers:shared});if(roomKey&&item.meetingRoom&&item.meetingRoom.trim().toLocaleLowerCase()===roomKey)item.resourceConflicts.push({type:'ROOM',meetingRoom:item.meetingRoom});if(item.candidateId===candidateId)item.resourceConflicts.push({type:'CANDIDATE'});}
+    const conflicts=[...grouped.values()].filter(item=>item.resourceConflicts.length);
+    return conflicts.length?{success:false,statusCode:409,code:'INTERVIEW_RESOURCE_CONFLICT',message:'Interview schedule conflicts with an interviewer or room booking.',conflicts,proposed:{candidateId,startTime:new Date(startMs).toISOString(),endTime:new Date(endMs).toISOString(),interviewerIds,meetingRoom:meetingRoom||null}}:null;
   }
 
   async createInterview(data = {}, actor = null) {
-    return this.#scheduleInterview(data, actor, false);
+    return this.#scheduleInterview(data, actor, false, null);
   }
+
+  async updateInterviewSchedule(id, data = {}, actor = null) { return this.#scheduleInterview(data, actor, false, id); }
 
   async previewInterview(data = {}, actor = null) {
     return this.#scheduleInterview(data, actor, true);
   }
 
-  async #scheduleInterview(data, actor, preview) {
+  async #scheduleInterview(data, actor, preview, updateId = null) {
     if (!actor?.id) return {success:false,statusCode:403,code:'INTERVIEW_ACTOR_REQUIRED'};
     const action = async()=>{
       const rbac=new (require('../middlewares/rbacMiddleware'))(this.db);
-      if(!await rbac.getAuthorizedActor(actor.id,'interview.create'))return{success:false,statusCode:403,code:'FORBIDDEN_PERMISSION_DENIED',message:'Bạn không có quyền tạo lịch phỏng vấn.'};
+      const permission=updateId?'interview.update':'interview.create';
+      const existing=updateId?await this.db.prepare('SELECT id,candidate_id,requisition_id FROM interviews WHERE id=?'+(this.db.provider==='postgres'?' FOR UPDATE':'')).get(updateId):null;
+      if(updateId&&!existing)return{success:false,statusCode:404,code:'INTERVIEW_NOT_FOUND'};
+      if(updateId)data={...data,candidateId:existing.candidate_id};
+      if(!await rbac.getAuthorizedActor(actor.id,permission))return{success:false,statusCode:403,code:'FORBIDDEN_PERMISSION_DENIED',message:'Bạn không có quyền điều phối lịch phỏng vấn.'};
       const candidate=await this.db.prepare('SELECT id,requisition_id FROM candidates WHERE id=?'+(this.db.provider==='postgres' && !preview?' FOR UPDATE':'')).get(data.candidateId);
       if(!candidate)return{success:false,statusCode:404,code:'CANDIDATE_NOT_FOUND',message:'Không tìm thấy ứng viên.'};
       if(candidate.requisition_id&&data.requisitionId&&candidate.requisition_id!==data.requisitionId)return{success:false,statusCode:400,code:'INTERVIEW_REQUISITION_MISMATCH',message:'Vị trí phỏng vấn không khớp hồ sơ ứng tuyển.'};
@@ -1748,10 +1721,12 @@ class RequisitionService {
         interviewerIds = [data.interviewerId];
       }
       if (interviewerIds.some(id => typeof id !== 'string' || !id.trim())) return {success:false,statusCode:400,code:'INTERVIEW_ASSIGNEE_INVALID'};
+      const roomKey=typeof data.meetingRoom==='string'?data.meetingRoom.trim().toLocaleLowerCase():'';
       if (this.db.provider === 'postgres' && !preview) {
-        for (const userId of [...interviewerIds].sort()) await this.db.prepare('SELECT pg_advisory_xact_lock(hashtextextended(?,0))').get('interview-scheduling:user:'+userId);
+        const lockKeys=[...interviewerIds.map(id=>'interview-scheduling:user:'+id),...(roomKey?['interview-scheduling:room:'+roomKey]:[])].sort();
+        for (const key of lockKeys) await this.db.prepare('SELECT pg_advisory_xact_lock(hashtextextended(?,0))').get(key);
       }
-      const fresh=await rbac.getAuthorizedActor(actor.id,'interview.create');
+      const fresh=await rbac.getAuthorizedActor(actor.id,permission);
       if(!fresh)return{success:false,statusCode:403,code:'FORBIDDEN_PERMISSION_DENIED'};
       if(!fresh.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))){const access=await this.candidateAccess(data.candidateId,fresh);if(!access.success)return access;}
       for (const uid of interviewerIds) {
@@ -1759,7 +1734,7 @@ class RequisitionService {
           return { success: false, statusCode: 400, code: 'INTERVIEW_ASSIGNEE_INVALID', message: 'Người phỏng vấn phải đang hoạt động và có quyền đánh giá.' };
         }
       }
-      return this.#createInterviewCore({...data, interviewerId: interviewerIds[0] || data.interviewerId || null, requisitionId: data.requisitionId || candidate.requisition_id}, preview);
+      return this.#createInterviewCore({...data, _actorId:actor.id, _updateId:updateId, excludeInterviewId:updateId||null, interviewerId: interviewerIds[0] || data.interviewerId || null, requisitionId: data.requisitionId || candidate.requisition_id}, preview);
     };
     return preview ? action() : this.db.transaction(action);
   }
@@ -1846,12 +1821,28 @@ class RequisitionService {
       try { await require('../db/migrate-interview-scheduling').verify(this.db); }
       catch { return {success:false,statusCode:503,code:'INTERVIEW_SCHEDULING_MIGRATION_REQUIRED'}; }
     }
-    const conflict = await this.checkInterviewConflict(candidateId, interviewerIds, startMs, durationMinutes);
-    if (conflict) return conflict;
+    const conflict = await this.checkInterviewConflict(candidateId, interviewerIds, startMs, durationMinutes, interviewFormat==='IN_PERSON'?meetingRoom:null, data.excludeInterviewId||null);
+    const overrideReason=typeof data.conflictOverrideReason==='string'?data.conflictOverrideReason.trim():'';
+    if(conflict){
+      if(conflict.conflicts.some(item=>item.resourceConflicts.some(reason=>reason.type==='CANDIDATE')))return{...conflict,code:'INTERVIEW_CANDIDATE_CONFLICT',message:'This candidate already has an interview scheduled during the requested time.'};
+      if(!data.conflictOverrideConfirmed)return conflict;
+      if(overrideReason.length<3)return{success:false,statusCode:400,code:'INTERVIEW_OVERRIDE_REASON_REQUIRED',message:'Vui lòng nhập lý do ghi đè (ít nhất 3 ký tự).',conflicts:conflict.conflicts};
+      const fresh=await new (require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(data._actorId,'interview.conflict.override');
+      if(!fresh||!fresh.roles.includes('RECRUITER'))return{success:false,statusCode:403,code:'INTERVIEW_OVERRIDE_FORBIDDEN',message:'Chỉ recruiter có quyền phù hợp mới được ghi đè xung đột lịch.',conflicts:conflict.conflicts};
+      data._override={actorId:fresh.id,reason:overrideReason,conflicts:conflict.conflicts};
+    }else if(data.conflictOverrideConfirmed)return{success:false,statusCode:409,code:'INTERVIEW_CONFLICT_CHANGED',message:'Xung đột đã thay đổi. Vui lòng kiểm tra lại lịch.'};
 
     if (preview) return {success:true,statusCode:200};
 
     return this.db.transaction(async () => {
+      if(data._updateId){
+        const id=data._updateId,primaryInterviewerId=interviewerIds[0]||null,locationOrLink=data.locationOrLink||(interviewFormat==='IN_PERSON'?meetingRoom:meetingLink)||'Google Meet Online';
+        await this.db.prepare('UPDATE interviews SET requisition_id=?,interviewer_id=?,round_name=?,scheduled_time=?,location_or_link=?,duration_minutes=?,interview_format=?,meeting_room=?,meeting_link=? WHERE id=?').run(data.requisitionId||candidate.requisition_id||null,primaryInterviewerId,data.roundName||'Interview',scheduledTime,locationOrLink,durationMinutes,interviewFormat,meetingRoom,meetingLink,id);
+        await this.db.prepare('DELETE FROM interview_interviewers WHERE interview_id=?').run(id);
+        for(const uid of interviewerIds)await this.db.prepare('INSERT INTO interview_interviewers(interview_id,user_id,role) VALUES(?,?,?)').run(id,uid,uid===primaryInterviewerId?'PRIMARY':'INTERVIEWER');
+        if(data._override)await this.db.prepare('INSERT INTO interview_conflict_override_audit(id,actor_id,interview_id,reason,conflicts_json,created_at) VALUES(?,?,?,?,?,CURRENT_TIMESTAMP)').run('iov-'+crypto.randomUUID(),data._override.actorId,id,data._override.reason,JSON.stringify(data._override.conflicts));
+        return{success:true,statusCode:200,message:'Interview schedule updated.',id,candidateId,requisitionId:data.requisitionId||candidate.requisition_id,interviewerIds,scheduledTime,durationMinutes,interviewFormat,meetingRoom,meetingLink};
+      }
       const id = 'int-' + crypto.randomUUID();
       const primaryInterviewerId = interviewerIds[0] || data.interviewerId || null;
       const locationOrLink = data.locationOrLink || (interviewFormat === 'IN_PERSON' ? meetingRoom : meetingLink) || 'Google Meet Online';
@@ -1896,6 +1887,7 @@ class RequisitionService {
       }
 
       await this.db.prepare("UPDATE candidates SET stage = 'INTERVIEW' WHERE id = ?").run(candidateId);
+      if(data._override) await this.db.prepare('INSERT INTO interview_conflict_override_audit(id,actor_id,interview_id,reason,conflicts_json,created_at) VALUES(?,?,?,?,?,CURRENT_TIMESTAMP)').run('iov-'+crypto.randomUUID(),data._override.actorId,id,data._override.reason,JSON.stringify(data._override.conflicts));
 
       return {
         success: true,

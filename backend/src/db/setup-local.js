@@ -2,7 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const local = require('../config/local-demo');
 const profile = local.configureLocalDemo();
-const migrations = ['migrate-approval-configurations', 'migrate-requisition-approvals', 'migrate-headcount-budgets', 'migrate-requisition-operations', 'migrate-requisition-lifecycle', 'migrate-requisition-tracking-job-drafts', 'migrate-job-publication', 'migrate-candidate-portal', 'migrate-requisition-open-policy', 'migrate-candidate-stage-transitions'];
+const migrations = ['migrate-approval-configurations', 'migrate-requisition-approvals', 'migrate-headcount-budgets', 'migrate-requisition-operations', 'migrate-requisition-lifecycle', 'migrate-requisition-tracking-job-drafts', 'migrate-job-publication', 'migrate-candidate-portal', 'migrate-requisition-open-policy', 'migrate-candidate-stage-transitions', 'migrate-interview-conflict-override'];
 
 async function setupLocal() {
   local.checkLocalPath();

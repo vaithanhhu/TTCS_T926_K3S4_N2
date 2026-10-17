@@ -15,6 +15,15 @@
             <p id="schedule-interview-alert-msg" style="margin: 0;"></p>
           </div>
         </div>
+        <div id="schedule-interview-conflicts" class="alert-box hidden" role="alert" style="display:block;max-height:240px;overflow:auto">
+          <strong>Các lịch bị xung đột</strong>
+          <div id="schedule-interview-conflict-list"></div>
+          <div id="schedule-interview-override-controls" class="hidden" style="margin-top:12px">
+            <label for="schedule-interview-override-reason" class="form-label">Lý do ghi đè bắt buộc</label>
+            <textarea id="schedule-interview-override-reason" class="form-input" rows="2" maxlength="1000"></textarea>
+            <button type="button" id="schedule-interview-override-btn" class="btn btn-danger btn-sm" style="margin-top:8px">Xác nhận lưu lịch bị trùng</button>
+          </div>
+        </div>
 
         <form id="schedule-interview-form">
           <div class="form-group">

@@ -6,6 +6,29 @@
   const scheduleInterviewForm = document.getElementById('schedule-interview-form');
   const scheduleInterviewAlert = document.getElementById('schedule-interview-alert');
   const scheduleInterviewAlertMsg = document.getElementById('schedule-interview-alert-msg');
+  const conflictPanel=document.getElementById('schedule-interview-conflicts');
+  const conflictList=document.getElementById('schedule-interview-conflict-list');
+  const overrideControls=document.getElementById('schedule-interview-override-controls');
+  let pendingConflictPayload=null;
+  const displayConflicts=rows=>{
+    if(!conflictPanel||!conflictList)return;
+    const proposed=pendingConflictPayload;
+    const own=proposed?`<article style="padding:8px 0"><strong>Lịch đang tạo</strong> · ${escapeHtml(new Date(proposed.scheduledTime).toLocaleString())} – ${escapeHtml(new Date(new Date(proposed.scheduledTime).getTime()+(Number(proposed.durationMinutes)||60)*60000).toLocaleString())}<div>Người phỏng vấn: ${escapeHtml((proposed.interviewerIds||[]).join(', '))}</div><div>Phòng: ${escapeHtml(proposed.meetingRoom||'—')}</div></article>`:'';
+    conflictList.innerHTML=own+(rows||[]).map(row=>`<article style="border-top:1px solid var(--color-border);padding:8px 0"><strong>${escapeHtml(row.candidateName||row.candidateEmail||row.candidateId||'Ứng viên')}</strong> · ${escapeHtml(new Date(row.scheduledTime).toLocaleString())} – ${escapeHtml(new Date(row.endTime).toLocaleString())}<div>Người phỏng vấn: ${escapeHtml((row.interviewers||[]).map(person=>person.fullName||person.id).join(', ')||'—')}</div><div>Phòng: ${escapeHtml(row.meetingRoom||'—')}</div><div>Lý do: ${escapeHtml((row.resourceConflicts||[]).map(item=>item.type==='ROOM'?'Trùng phòng '+item.meetingRoom:item.type==='CANDIDATE'?'Trùng ứng viên': 'Trùng người '+(item.interviewers||[]).map(person=>person.fullName||person.id).join(', ')).join('; '))}</div></article>`).join('');
+    conflictPanel.classList.remove('hidden');
+    const authenticatedUser=typeof currentAuthenticatedUser==='undefined'?null:currentAuthenticatedUser;
+    if(overrideControls)overrideControls.classList.toggle('hidden',!(authenticatedUser?.permissions||[]).includes('interview.conflict.override'));
+  };
+  document.getElementById('schedule-interview-override-btn')?.addEventListener('click',async()=>{
+    if(!pendingConflictPayload)return;
+    const reason=document.getElementById('schedule-interview-override-reason')?.value.trim()||'';
+    if(reason.length<3){if(scheduleInterviewAlertMsg)scheduleInterviewAlertMsg.textContent='Vui lòng nhập lý do ghi đè (ít nhất 3 ký tự).';scheduleInterviewAlert?.classList.remove('hidden');return;}
+    pendingConflictPayload.conflictOverrideConfirmed=true;pendingConflictPayload.conflictOverrideReason=reason;
+    const res=await window.ATS_API.createInterviewApi(sessionStorage.getItem('ats_token'),pendingConflictPayload);
+    if(res.ok&&res.data?.success){closeScheduleInterview();showToast('success','Đã ghi đè xung đột','Lịch đã lưu và thao tác được ghi nhận.');loadInterviews();loadCandidates();loadDashboardData();}
+    else if(res.data?.conflicts){displayConflicts(res.data.conflicts);showToast('warning','Xung đột lịch đã thay đổi','Hãy rà soát lại danh sách trước khi xác nhận.');}
+    else{if(scheduleInterviewAlertMsg)scheduleInterviewAlertMsg.textContent=res.data?.message||res.data?.code||'Không thể ghi đè lịch.';scheduleInterviewAlert?.classList.remove('hidden');}
+  });
 
   const formatSelectEl = document.getElementById('schedule-format-select');
   if (formatSelectEl) {
@@ -40,6 +63,7 @@
     if (scheduleInterviewModal) scheduleInterviewModal.classList.remove('hidden');
     if (scheduleInterviewForm) scheduleInterviewForm.reset();
     if (scheduleInterviewAlert) scheduleInterviewAlert.classList.add('hidden');
+    conflictPanel?.classList.add('hidden');pendingConflictPayload=null;
 
     const formatSelect = document.getElementById('schedule-format-select');
     const onlineGroup = document.getElementById('schedule-online-group');
@@ -158,7 +182,7 @@
       const interviewerIds = Array.from(new Set([interviewerId, ...checkedCoInterviewers].filter(Boolean)));
 
       try {
-        const res = await window.ATS_API.createInterviewApi(token, {
+        const payload = {
           candidateId,
           requisitionId,
           interviewerId,
@@ -170,7 +194,8 @@
           meetingRoom: interviewFormat === 'IN_PERSON' ? meetingRoom : null,
           meetingLink: interviewFormat === 'ONLINE' ? meetingLink : null,
           locationOrLink
-        });
+        };
+        const res = await window.ATS_API.createInterviewApi(token, payload);
 
         if (res.ok && res.data && res.data.success) {
           closeScheduleInterview();
@@ -179,6 +204,7 @@
           loadCandidates();
           loadDashboardData();
         } else {
+          if(res.data?.conflicts){pendingConflictPayload=payload;displayConflicts(res.data.conflicts);}
           if (scheduleInterviewAlert && scheduleInterviewAlertMsg) {
             scheduleInterviewAlertMsg.textContent = res.data.message || 'Không thể tạo lịch phỏng vấn.';
             scheduleInterviewAlert.classList.remove('hidden');
