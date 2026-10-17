@@ -378,9 +378,18 @@ class CandidateTimelineService {
     // NHÓM 4: LỊCH PHỎNG VẤN (INTERVIEWS)
     // ==========================================================================
     try {
+      const hasResponseCol = this.db.provider === 'postgres'
+        ? (await this.db.prepare("SELECT column_name FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='interviews' AND column_name='candidate_response_status'").get())
+        : (await this.db.prepare("PRAGMA table_info(interviews)").all()).some(c => c.name === 'candidate_response_status');
+      const hasCancelReschedCol = this.db.provider === 'postgres'
+        ? (await this.db.prepare("SELECT column_name FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='interviews' AND column_name='cancellation_reason'").get())
+        : (await this.db.prepare("PRAGMA table_info(interviews)").all()).some(c => c.name === 'cancellation_reason');
+
       const interviewRows = await this.db.prepare(
         `SELECT i.id, i.candidate_id, i.round_name, i.scheduled_time, i.location_or_link,
                 i.status, i.feedback, i.score, i.created_at,
+                ${hasResponseCol ? 'i.candidate_response_status, i.candidate_response_note, i.candidate_responded_at,' : ''}
+                ${hasCancelReschedCol ? 'i.cancellation_reason, i.cancelled_at, i.rescheduled_at, i.reschedule_reason,' : ''}
                 u.full_name AS interviewer_name, u.email AS interviewer_email,
                 r.title AS requisition_title
          FROM interviews i
@@ -390,7 +399,6 @@ class CandidateTimelineService {
       ).all(...relatedCandidateIds);
 
       for (const inv of (interviewRows || [])) {
-        // Sự kiện Đặt lịch phỏng vấn
         events.push({
           id: `interview-sched-${inv.id}`,
           eventType: 'INTERVIEW_SCHEDULED',
@@ -410,6 +418,65 @@ class CandidateTimelineService {
             requisitionTitle: inv.requisition_title || null
           }
         });
+
+        if (inv.status === 'CANCELLED') {
+          events.push({
+            id: `interview-cancel-${inv.id}`,
+            eventType: 'INTERVIEW_CANCELLED',
+            timestamp: inv.cancelled_at || inv.created_at,
+            actorName: inv.interviewer_name || 'Hội đồng tuyển dụng',
+            title: `Hủy buổi phỏng vấn: ${inv.round_name || 'Phỏng vấn chuyên môn'}`,
+            summary: `Buổi phỏng vấn đã bị hủy.${inv.cancellation_reason ? ` Lý do: ${inv.cancellation_reason}` : ''}`,
+            details: {
+              interviewId: inv.id,
+              candidateId: inv.candidate_id,
+              roundName: inv.round_name,
+              status: 'CANCELLED',
+              cancellationReason: inv.cancellation_reason || null,
+              cancelledAt: inv.cancelled_at || null
+            }
+          });
+        }
+
+        if (inv.rescheduled_at) {
+          events.push({
+            id: `interview-resched-${inv.id}`,
+            eventType: 'INTERVIEW_RESCHEDULED',
+            timestamp: inv.rescheduled_at,
+            actorName: inv.interviewer_name || 'Hội đồng tuyển dụng',
+            title: `Dời lịch phỏng vấn: ${inv.round_name || 'Phỏng vấn chuyên môn'}`,
+            summary: `Lịch phỏng vấn được dời sang ${inv.scheduled_time}.${inv.reschedule_reason ? ` Lý do: ${inv.reschedule_reason}` : ''}`,
+            details: {
+              interviewId: inv.id,
+              candidateId: inv.candidate_id,
+              roundName: inv.round_name,
+              scheduledTime: inv.scheduled_time,
+              rescheduledAt: inv.rescheduled_at,
+              rescheduleReason: inv.reschedule_reason || null
+            }
+          });
+        }
+
+        if (inv.candidate_response_status && inv.candidate_response_status !== 'PENDING') {
+          const isConfirmed = inv.candidate_response_status === 'CONFIRMED';
+          events.push({
+            id: `interview-resp-${inv.id}`,
+            eventType: isConfirmed ? 'INTERVIEW_CONFIRMED' : 'INTERVIEW_RESCHEDULE_REQUESTED',
+            timestamp: inv.candidate_responded_at || inv.created_at,
+            actorName: candidate.full_name || 'Ứng viên',
+            title: isConfirmed ? 'Ứng viên xác nhận tham dự phỏng vấn' : 'Ứng viên đề nghị đổi lịch phỏng vấn',
+            summary: isConfirmed
+              ? 'Ứng viên đã xác nhận tham dự buổi phỏng vấn theo đúng lịch hẹn.'
+              : `Ứng viên đề nghị dời lịch phỏng vấn.${inv.candidate_response_note ? ` Lý do/đề xuất: ${inv.candidate_response_note}` : ''}`,
+            details: {
+              interviewId: inv.id,
+              candidateId: inv.candidate_id,
+              responseStatus: inv.candidate_response_status,
+              responseNote: inv.candidate_response_note || null,
+              respondedAt: inv.candidate_responded_at || null
+            }
+          });
+        }
 
         // ======================================================================
         // NHÓM 5a: ĐÁNH GIÁ PHỎNG VẤN (INTERVIEW EVALUATION)
