@@ -265,6 +265,16 @@ class InterviewEvaluationService {
       targetInterviewerId = actor.id;
     }
 
+    const interview = await this.getInterviewInfo(interviewId);
+    if (interview && interview.status === 'CANCELLED') {
+      return {
+        success: false,
+        statusCode: 400,
+        code: 'INTERVIEW_CANCELLED',
+        message: 'Không thể đánh giá buổi phỏng vấn đã bị hủy.'
+      };
+    }
+
     const formResult = await this.getOrCreateEvaluationForm(interviewId, targetInterviewerId, actor);
     if (!formResult.success) return formResult;
 
@@ -366,40 +376,59 @@ class InterviewEvaluationService {
       ? (typeof data.generalNotes === 'string' ? data.generalNotes.trim() : '')
       : evaluation.generalNotes;
 
-    await this.db.transaction(async () => {
-      for (const crit of evaluatedCriteria) {
-        await this.db.prepare(`
-          UPDATE interview_evaluation_items
-          SET score = ?, comment = ?
-          WHERE id = ?
-        `).run(crit.score, crit.comment || null, crit.itemId);
-      }
-
-      const nextStatus = isSubmitting ? 'SUBMITTED' : (evaluation.status === 'REOPENED' ? 'REOPENED' : 'DRAFT');
-      const submittedAtClause = isSubmitting ? ", submitted_at = datetime('now')" : '';
-
-      await this.db.prepare(`
-        UPDATE interview_evaluations
-        SET status = ?,
-            recommendation = ?,
-            general_notes = ?,
-            total_score = ?,
-            updated_at = datetime('now')
-            ${submittedAtClause}
-        WHERE id = ?
-      `).run(nextStatus, recommendation || null, generalNotes || null, calculatedTotalScore, evaluation.id);
-
-      if (isSubmitting) {
-        const interview = await this.db.prepare('SELECT interviewer_id FROM interviews WHERE id = ?').get(interviewId);
-        if (interview && interview.interviewer_id === evaluation.interviewerId) {
-          await this.db.prepare(`
-            UPDATE interviews
-            SET score = ?, feedback = ?, status = 'COMPLETED'
-            WHERE id = ?
-          `).run(Math.round(calculatedTotalScore), generalNotes || recommendation, interviewId);
+    try {
+      await this.db.transaction(async () => {
+        const locked = await this.db.prepare(
+          'SELECT id, status FROM interview_evaluations WHERE id = ?' + (this.db.provider === 'postgres' ? ' FOR UPDATE' : '')
+        ).get(evaluation.id);
+        if (locked && locked.status === 'SUBMITTED' && isSubmitting) {
+          throw new Error('EVALUATION_ALREADY_SUBMITTED');
         }
+
+        for (const crit of evaluatedCriteria) {
+          await this.db.prepare(`
+            UPDATE interview_evaluation_items
+            SET score = ?, comment = ?
+            WHERE id = ?
+          `).run(crit.score, crit.comment || null, crit.itemId);
+        }
+
+        const nextStatus = isSubmitting ? 'SUBMITTED' : (evaluation.status === 'REOPENED' ? 'REOPENED' : 'DRAFT');
+        const submittedAtClause = isSubmitting ? ", submitted_at = datetime('now')" : '';
+
+        await this.db.prepare(`
+          UPDATE interview_evaluations
+          SET status = ?,
+              recommendation = ?,
+              general_notes = ?,
+              total_score = ?,
+              updated_at = datetime('now')
+              ${submittedAtClause}
+          WHERE id = ?
+        `).run(nextStatus, recommendation || null, generalNotes || null, calculatedTotalScore, evaluation.id);
+
+        if (isSubmitting) {
+          const interview = await this.db.prepare('SELECT interviewer_id FROM interviews WHERE id = ?').get(interviewId);
+          if (interview && interview.interviewer_id === evaluation.interviewerId) {
+            await this.db.prepare(`
+              UPDATE interviews
+              SET score = ?, feedback = ?, status = 'COMPLETED'
+              WHERE id = ?
+            `).run(Math.round(calculatedTotalScore), generalNotes || recommendation, interviewId);
+          }
+        }
+      });
+    } catch (err) {
+      if (err.message === 'EVALUATION_ALREADY_SUBMITTED') {
+        return {
+          success: false,
+          statusCode: 400,
+          code: 'EVALUATION_ALREADY_SUBMITTED',
+          message: 'Phiếu đánh giá đã nộp không thể chỉnh sửa trừ khi được mở lại.'
+        };
       }
-    });
+      throw err;
+    }
 
     return this.getOrCreateEvaluationForm(interviewId, evaluation.interviewerId, actor);
   }
@@ -515,6 +544,10 @@ class InterviewEvaluationService {
     `).all(interviewId);
 
     if (isInterviewer && !isPrivileged) {
+      const assigned = await this.isInterviewerAssigned(interviewId, actor.id);
+      if (!assigned) {
+        return { success: false, statusCode: 403, code: 'INTERVIEW_ACCESS_DENIED', message: 'Bạn không được phân công phỏng vấn buổi này.' };
+      }
       const myEval = evals.find(e => e.interviewer_id === actor.id);
       if (!myEval || myEval.status !== 'SUBMITTED') {
         const ownOnly = evals.filter(e => e.interviewer_id === actor.id);
