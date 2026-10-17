@@ -52,6 +52,8 @@ async function initializeApplication() {
   if(config.JOB_POSTING_PUBLICATION_ENABLED)await require('./db/migrate-job-publication').verify(db);
   if(config.CANDIDATE_PORTAL_ENABLED)await require('./db/migrate-candidate-portal').verify(db);
   await require('./db/migrate-candidate-merges').migrate(db);
+  if(db.provider==='sqlite')await require('./db/migrate-interview-conflict-override').migrate(db);
+  else await require('./db/migrate-interview-conflict-override').verify(db);
   if (!isTestEnv) {
     try {
       const SlaNotificationService = require('./services/slaNotificationService');
@@ -2224,6 +2226,13 @@ async function handleRequest(req, res) {
   }
 
   // 13.8.2 API: Update Interview Status / Feedback / Score
+  if (req.method === 'PUT' && /^\/api\/v1\/interviews\/[^/]+\/schedule$/.test(pathname)) {
+    const user=await rbacMiddleware.authorize(req,res,authController.authService,'interview.update');if(!user)return;
+    try{const id=pathname.split('/').at(-2),result=await requisitionService.updateInterviewSchedule(id,await parseBody(req),user);res.writeHead(result.statusCode||200,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(result));}
+    catch{res.writeHead(503,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:'INTERVIEW_UPDATE_UNAVAILABLE',message:'Unable to update interview schedule.'}));}
+    return;
+  }
+
   if (req.method === 'PUT' && ((pathname.startsWith('/api/v1/interviews/') && pathname.endsWith('/status')) || (pathname.startsWith('/interviews/') && pathname.endsWith('/status')))) {
     const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'interview.read'));
     if (!user) return;
