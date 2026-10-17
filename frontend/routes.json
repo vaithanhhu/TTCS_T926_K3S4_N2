@@ -181,6 +181,11 @@
       "path": "/careers/jobs",
       "view": "public-jobs",
       "auth": false
+    },
+    {
+      "path": "/interviews/invitation",
+      "view": "candidate-interview-response",
+      "auth": false
     }
   ],
   "scripts": [
@@ -238,6 +243,7 @@
     "/js/components/candidate-screening.js",
     "/js/components/talent-pool.js",
     "/js/components/candidate-sla.js",
+    "/js/pages/candidate-interview-response.js",
     "/js/shared/page-lifecycle.js",
     "/js/shared/route-lifecycle.js"
   ],
@@ -290,6 +296,7 @@
     "/components/edit-profile-modal.html",
     "/components/audit-detail-modal.html",
     "/components/referral-modal.html",
-    "/pages/public-jobs.html"
+    "/pages/public-jobs.html",
+    "/pages/candidate-interview-response.html"
   ]
 }

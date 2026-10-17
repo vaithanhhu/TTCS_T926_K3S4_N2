@@ -1,0 +1,81 @@
+<main id="candidate-interview-response-view" style="max-width: 640px; margin: 40px auto; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <div class="panel-card" style="background: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; overflow: hidden;">
+    <div style="background: #2563eb; color: #ffffff; padding: 24px; text-align: center;">
+      <h1 style="margin: 0 0 8px 0; font-size: 1.5rem; font-weight: 700;">Thư mời Phỏng vấn</h1>
+      <p id="invitation-subtitle" style="margin: 0; opacity: 0.9; font-size: 0.95rem;">Hệ thống Quản lý Tuyển dụng Nội bộ (ATS)</p>
+    </div>
+
+    <div style="padding: 24px;">
+      <div id="invitation-loading" style="text-align: center; padding: 32px 0; color: #64748b;">
+        <div style="font-size: 1.1rem; font-weight: 500;">Đang tải thông tin buổi phỏng vấn...</div>
+      </div>
+
+      <div id="invitation-error" class="hidden" style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px; color: #991b1b; text-align: center; margin-bottom: 16px;">
+        <div id="invitation-error-msg" style="font-weight: 600;">Liên kết không hợp lệ hoặc đã hết hạn.</div>
+      </div>
+
+      <div id="invitation-success" class="hidden" style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 20px; color: #166534; text-align: center; margin-bottom: 16px;">
+        <div style="font-size: 1.25rem; font-weight: 700; margin-bottom: 8px;">✓ Phản hồi thành công</div>
+        <div id="invitation-success-msg" style="font-size: 0.95rem;">Cảm ơn bạn đã phản hồi. Bộ phận Tuyển dụng đã ghi nhận thông tin.</div>
+      </div>
+
+      <div id="invitation-content" class="hidden">
+        <div style="margin-bottom: 20px;">
+          <h2 id="cand-greeting" style="font-size: 1.15rem; font-weight: 600; margin: 0 0 6px 0; color: #1e293b;">Xin chào Ứng viên,</h2>
+          <p style="margin: 0; color: #475569; font-size: 0.95rem;">Vui lòng kiểm tra kỹ chi tiết buổi phỏng vấn dưới đây và phản hồi trước thời gian diễn ra.</p>
+        </div>
+
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+          <div style="display: grid; grid-template-columns: 140px 1fr; gap: 8px; font-size: 0.9rem; line-height: 1.5;">
+            <div style="color: #64748b; font-weight: 600;">Vị trí ứng tuyển:</div>
+            <div id="inv-position" style="font-weight: 600; color: #0f172a;">--</div>
+
+            <div style="color: #64748b; font-weight: 600;">Vòng phỏng vấn:</div>
+            <div id="inv-round" style="color: #0f172a;">--</div>
+
+            <div style="color: #64748b; font-weight: 600;">Thời gian:</div>
+            <div id="inv-time" style="font-weight: 600; color: #2563eb;">--</div>
+
+            <div style="color: #64748b; font-weight: 600;">Thời lượng:</div>
+            <div id="inv-duration" style="color: #0f172a;">--</div>
+
+            <div style="color: #64748b; font-weight: 600;">Hình thức:</div>
+            <div id="inv-format" style="color: #0f172a;">--</div>
+
+            <div style="color: #64748b; font-weight: 600;">Địa điểm / Link:</div>
+            <div id="inv-location" style="color: #0f172a; word-break: break-all;">--</div>
+          </div>
+        </div>
+
+        <div style="background: #fffbeb; border: 1px solid #fef3c7; border-radius: 8px; padding: 14px; margin-bottom: 24px;">
+          <div style="font-weight: 600; color: #92400e; margin-bottom: 4px; font-size: 0.9rem;">📌 Hướng dẫn chuẩn bị:</div>
+          <div id="inv-instructions" style="color: #78350f; font-size: 0.875rem; line-height: 1.5;">--</div>
+        </div>
+
+        <div id="invitation-status-display" class="hidden" style="text-align: center; padding: 16px; border-radius: 8px; margin-bottom: 20px; font-weight: 600;"></div>
+
+        <div id="invitation-actions">
+          <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+            <button id="btn-confirm-interview" type="button" class="btn btn-primary" style="flex: 1; padding: 12px; font-weight: 600; font-size: 1rem; border-radius: 6px; cursor: pointer;">
+              ✓ Xác nhận Tham dự
+            </button>
+            <button id="btn-toggle-reschedule" type="button" class="btn btn-outline" style="flex: 1; padding: 12px; font-weight: 600; font-size: 1rem; border-radius: 6px; cursor: pointer; border: 1px solid #cbd5e1; background: #ffffff;">
+              Đề nghị Đổi lịch
+            </button>
+          </div>
+
+          <div id="reschedule-form-container" class="hidden" style="background: #f1f5f9; padding: 16px; border-radius: 8px; border: 1px solid #cbd5e1;">
+            <label for="reschedule-note" style="display: block; font-weight: 600; font-size: 0.875rem; margin-bottom: 6px; color: #334155;">
+              Lý do hoặc Khung giờ đề xuất thay thế:
+            </label>
+            <textarea id="reschedule-note" rows="3" class="form-control" placeholder="Ví dụ: Tôi có lịch đột xuất vào khung giờ trên, đề xuất dời sang chiều thứ 4 (14:00)..." style="width: 100%; box-sizing: border-box; padding: 8px; border-radius: 6px; border: 1px solid #94a3b8; margin-bottom: 12px; font-family: inherit; font-size: 0.9rem;"></textarea>
+            <div style="display: flex; justify-content: flex-end; gap: 8px;">
+              <button id="btn-cancel-reschedule" type="button" class="btn btn-outline" style="padding: 8px 16px; border-radius: 6px; cursor: pointer;">Huỷ</button>
+              <button id="btn-submit-reschedule" type="button" class="btn btn-warning" style="padding: 8px 16px; background: #f59e0b; color: #ffffff; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">Gửi yêu cầu đổi lịch</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
