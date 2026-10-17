@@ -123,7 +123,8 @@
     "migrate:s6-06": "node backend/src/db/migrate-interview-reschedule-cancel.js",
     "test:s6-06": "node backend/tests/test_s6_06_interview_rescheduling.js",
     "migrate:s6-07": "node backend/src/db/migrate-interview-evaluations.js",
-    "test:s6-07": "node backend/tests/test_s6_07_competency_evaluations.js"
+    "test:s6-07": "node backend/tests/test_s6_07_competency_evaluations.js",
+    "test:s6-08": "node backend/tests/test_s6_08_interview_evaluation_submission.js"
   },
   "keywords": [
     "ats",
