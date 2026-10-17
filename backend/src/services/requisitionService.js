@@ -1252,6 +1252,15 @@ class RequisitionService {
     return tables.length === 1;
   }
 
+  async hasInvitationTokensTable() {
+    if (this.db.provider === 'postgres') {
+      const row = await this.db.prepare("SELECT table_name FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='interview_invitation_tokens'").get();
+      return Boolean(row);
+    }
+    const row = await this.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='interview_invitation_tokens'").get();
+    return Boolean(row);
+  }
+
   async getInterviews(options = {}) {
     if(options.viewer){const fresh=await new(require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(options.viewer.id,options.evaluationsOnly?'interview.evaluation.read':'interview.read');if(!fresh)return{success:false,statusCode:403,code:'INTERVIEW_FORBIDDEN',message:'Bạn không có quyền xem lịch phỏng vấn.',interviews:[]};options={...options,viewer:fresh};}
     const conditions=[],params=[];
@@ -1901,8 +1910,10 @@ class RequisitionService {
 
       let invitation = null;
       try {
-        const InvitationService = require('./interviewInvitationService');
-        invitation = await new InvitationService(this.db).createInvitation(id);
+        if (await this.hasInvitationTokensTable()) {
+          const InvitationService = require('./interviewInvitationService');
+          invitation = await new InvitationService(this.db).createInvitation(id);
+        }
       } catch {}
 
       return {
