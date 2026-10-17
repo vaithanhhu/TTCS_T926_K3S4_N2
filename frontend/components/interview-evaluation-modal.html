@@ -1,0 +1,67 @@
+<div id="interview-evaluation-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="eval-modal-title">
+  <div class="modal-card" style="max-width: 720px; max-height: 90vh; overflow-y: auto;">
+    <div class="modal-header">
+      <div>
+        <h3 id="eval-modal-title" class="modal-title">Phiếu Đánh Giá Năng Lực Ứng Viên</h3>
+        <p id="eval-modal-subtitle" class="modal-desc" style="margin-top: 4px;">Khung năng lực chức danh</p>
+      </div>
+      <button type="button" id="close-interview-evaluation-modal" class="modal-close" aria-label="Đóng">&times;</button>
+    </div>
+
+    <div class="modal-body">
+      <input type="hidden" id="eval-interview-id" />
+      <input type="hidden" id="eval-form-id" />
+      <input type="hidden" id="eval-interviewer-id" />
+
+      <div style="background: var(--color-bg-page); border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 16px; font-size: 0.875rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="font-weight: 600;" id="eval-candidate-info">Ứng viên: -</div>
+          <span id="eval-status-badge" class="badge badge-secondary">BẢN NHÁP</span>
+        </div>
+        <div style="color: var(--color-text-secondary); margin-top: 4px;">
+          Vị trí: <span id="eval-job-title" style="font-weight: 500;">-</span> | Khung: <span id="eval-template-name">-</span>
+        </div>
+        <div id="eval-reopen-notice" class="alert alert-info hidden" style="margin-top: 8px; font-size: 0.8rem; padding: 6px 10px;"></div>
+      </div>
+
+      <div id="eval-criteria-container" style="display: flex; flex-direction: column; gap: 14px;"></div>
+
+      <div style="background: var(--color-bg-page); border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 14px; margin-top: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <span style="font-weight: 600; font-size: 1rem;">Điểm tổng trọng số:</span>
+          <span id="eval-total-score-display" style="font-size: 1.25rem; font-weight: 700; color: var(--color-primary);">-- / 5.00</span>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label for="eval-recommendation-select" class="form-label">Kết luận phỏng vấn <span style="color: var(--color-danger)">*</span></label>
+          <select id="eval-recommendation-select" class="form-input">
+            <option value="">-- Chọn kết luận --</option>
+            <option value="RECOMMENDED">Nên tuyển (RECOMMENDED)</option>
+            <option value="CONSIDER">Cân nhắc (CONSIDER)</option>
+            <option value="NOT_RECOMMENDED">Không nên tuyển (NOT_RECOMMENDED)</option>
+          </select>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 0;">
+          <label for="eval-general-notes" class="form-label">Nhận xét tổng quát</label>
+          <textarea id="eval-general-notes" class="form-input" rows="3" placeholder="Nhận xét tổng thể về ứng viên sau buổi phỏng vấn..."></textarea>
+        </div>
+      </div>
+
+      <div id="eval-reopen-section" class="hidden" style="margin-top: 16px; border: 1px dashed var(--color-warning); border-radius: var(--radius-sm); padding: 12px;">
+        <label for="eval-reopen-reason-input" class="form-label" style="font-weight: 600; color: var(--color-warning-dark, #b45309);">Mở lại phiếu đánh giá (trong vòng 24h)</label>
+        <div style="display: flex; gap: 8px; margin-top: 6px;">
+          <input type="text" id="eval-reopen-reason-input" class="form-input" placeholder="Nhập lý do mở lại phiếu..." />
+          <button type="button" id="eval-reopen-submit-btn" class="btn btn-warning btn-sm" style="white-space: nowrap;">Xác nhận mở lại</button>
+        </div>
+      </div>
+
+      <div style="margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px;">
+        <button type="button" id="close-eval-modal-btn" class="btn btn-outline btn-sm">Đóng</button>
+        <button type="button" id="eval-reopen-toggle-btn" class="btn btn-warning btn-sm hidden">Mở lại phiếu</button>
+        <button type="button" id="eval-save-draft-btn" class="btn btn-outline btn-sm">Lưu nháp</button>
+        <button type="button" id="eval-submit-btn" class="btn btn-primary btn-sm">Nộp phiếu đánh giá</button>
+      </div>
+    </div>
+  </div>
+</div>

@@ -2288,6 +2288,80 @@ async function handleRequest(req, res) {
     return;
   }
 
+  if (req.method === 'GET' && /^\/(?:api\/v1\/)?interviews\/[^/]+\/evaluation-form$/.test(pathname)) {
+    const user = await rbacMiddleware.authorize(req, res, authController.authService, 'interview.read');
+    if (!user) return;
+    const intId = pathname.replace(/^\/(?:api\/v1\/)?interviews\//, '').replace(/\/evaluation-form$/, '');
+    const evaluationService = new (require('./services/interviewEvaluationService'))(db);
+    const targetInterviewerId = parsedUrl.query?.interviewerId || null;
+    const result = await evaluationService.getOrCreateEvaluationForm(intId, targetInterviewerId, user);
+    res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(result));
+    return;
+  }
+
+  if ((req.method === 'POST' || req.method === 'PUT') && /^\/(?:api\/v1\/)?interviews\/[^/]+\/evaluation-form$/.test(pathname)) {
+    const user = await rbacMiddleware.authorize(req, res, authController.authService, 'interview.evaluate');
+    if (!user) return;
+    try {
+      const intId = pathname.replace(/^\/(?:api\/v1\/)?interviews\//, '').replace(/\/evaluation-form$/, '');
+      const body = await parseBody(req);
+      const evaluationService = new (require('./services/interviewEvaluationService'))(db);
+      const result = await evaluationService.saveEvaluation(intId, body, user);
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 400, code: 'BAD_REQUEST', message: 'Dữ liệu không hợp lệ.' }));
+    }
+    return;
+  }
+
+  if (req.method === 'POST' && /^\/(?:api\/v1\/)?interviews\/[^/]+\/evaluation-form\/calculate$/.test(pathname)) {
+    const user = await rbacMiddleware.authorize(req, res, authController.authService, 'interview.read');
+    if (!user) return;
+    try {
+      const body = await parseBody(req);
+      const evaluationService = new (require('./services/interviewEvaluationService'))(db);
+      const result = evaluationService.calculateWeightedScore(body.criteria);
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 400, code: 'BAD_REQUEST', message: 'Dữ liệu không hợp lệ.' }));
+    }
+    return;
+  }
+
+  if (req.method === 'POST' && /^\/(?:api\/v1\/)?interviews\/[^/]+\/evaluation-form\/reopen$/.test(pathname)) {
+    const user = await rbacMiddleware.authorize(req, res, authController.authService, 'interview.update');
+    if (!user) return;
+    try {
+      const intId = pathname.replace(/^\/(?:api\/v1\/)?interviews\//, '').replace(/\/evaluation-form\/reopen$/, '');
+      const body = await parseBody(req);
+      const evaluationService = new (require('./services/interviewEvaluationService'))(db);
+      const targetInterviewerId = body.interviewerId || user.id;
+      const result = await evaluationService.reopenEvaluation(intId, targetInterviewerId, user, body);
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 400, code: 'BAD_REQUEST', message: 'Dữ liệu không hợp lệ.' }));
+    }
+    return;
+  }
+
+  if (req.method === 'GET' && /^\/(?:api\/v1\/)?interviews\/[^/]+\/evaluations$/.test(pathname)) {
+    const user = await rbacMiddleware.authorize(req, res, authController.authService, 'interview.evaluation.read');
+    if (!user) return;
+    const intId = pathname.replace(/^\/(?:api\/v1\/)?interviews\//, '').replace(/\/evaluations$/, '');
+    const evaluationService = new (require('./services/interviewEvaluationService'))(db);
+    const result = await evaluationService.getEvaluationsForInterview(intId, user);
+    res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(result));
+    return;
+  }
+
   if (req.method === 'PUT' && ((pathname.startsWith('/api/v1/interviews/') && pathname.endsWith('/status')) || (pathname.startsWith('/interviews/') && pathname.endsWith('/status')))) {
     const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'interview.read'));
     if (!user) return;
