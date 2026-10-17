@@ -657,9 +657,18 @@ async function getCandidatesApi(token, params = {}) {
   }
 }
 
-async function getInterviewsApi(token) {
+async function getInterviewsApi(token, params = {}) {
   try {
-    const response = await fetch(`${API_BASE}/interviews`, {
+    const query = new URLSearchParams();
+    if (params && typeof params === 'object') {
+      for (const [k, v] of Object.entries(params)) {
+        if (v !== undefined && v !== null && v !== '' && v !== 'ALL') {
+          query.set(k, v);
+        }
+      }
+    }
+    const qStr = query.toString();
+    const response = await fetch(`${API_BASE}/interviews${qStr ? '?' + qStr : ''}`, {
       method: 'GET',
       headers: { 'Authorization': token ? `Bearer ${token}` : '' }
     });
@@ -667,6 +676,28 @@ async function getInterviewsApi(token) {
     return { status: response.status, ok: response.ok, data };
   } catch (error) {
     return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi lấy lịch phỏng vấn.' } };
+  }
+}
+
+async function getMyInterviewScheduleApi(token, params = {}) {
+  try {
+    const query = new URLSearchParams();
+    if (params && typeof params === 'object') {
+      for (const [k, v] of Object.entries(params)) {
+        if (v !== undefined && v !== null && v !== '' && v !== 'ALL') {
+          query.set(k, v);
+        }
+      }
+    }
+    const qStr = query.toString();
+    const response = await fetch(`${API_BASE}/interviews/my-schedule${qStr ? '?' + qStr : ''}`, {
+      method: 'GET',
+      headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi lấy lịch phỏng vấn cá nhân.' } };
   }
 }
 
@@ -1767,6 +1798,7 @@ window.ATS_API = {
   getCandidateStageExceptionsApi,
   decideInterviewSkipExceptionApi,
   getInterviewsApi,
+  getMyInterviewScheduleApi,
   createInterviewApi,
   updateInterviewStatusApi,
   cancelInterviewApi,

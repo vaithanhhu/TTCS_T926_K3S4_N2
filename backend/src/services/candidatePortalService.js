@@ -1038,9 +1038,31 @@ class CandidatePortalService {
       const actor = await this.rbac.getAuthorizedActor(actorId, 'candidate.read');
       if (!actor) return { failure: denied(403) };
       const scope = this.requisitions.candidateVisibility(actor);
-      const document = await this.db.prepare(`SELECT d.*, c.requisition_id FROM candidate_documents d
+      let document = await this.db.prepare(`SELECT d.*, c.requisition_id FROM candidate_documents d
         JOIN candidates c ON c.id=d.candidate_id LEFT JOIN requisitions r ON r.id=c.requisition_id
         WHERE d.id=? AND d.document_type='CV'${scope ? ' AND ' + scope.condition : ''}`).get(documentId, ...(scope?.params || []));
+      if (!document && actor.roles?.includes('INTERVIEWER')) {
+        let hasII = false;
+        try {
+          if (this.db.provider === 'postgres') {
+            const row = await this.db.prepare("SELECT table_name FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='interview_interviewers'").get();
+            hasII = Boolean(row);
+          } else {
+            const row = await this.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='interview_interviewers'").get();
+            hasII = Boolean(row);
+          }
+        } catch { hasII = false; }
+        if (hasII) {
+          document = await this.db.prepare(`SELECT d.*, c.requisition_id FROM candidate_documents d
+            JOIN candidates c ON c.id=d.candidate_id
+            WHERE d.id=? AND d.document_type='CV'
+              AND EXISTS (
+                SELECT 1 FROM interviews i
+                JOIN interview_interviewers ii ON ii.interview_id = i.id
+                WHERE i.candidate_id = c.id AND ii.user_id = ?
+              )`).get(documentId, actor.id);
+        }
+      }
       return document ? { document } : { failure: denied() };
     });
     const initial = await lookup();

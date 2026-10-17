@@ -1100,6 +1100,35 @@ class RequisitionService {
     return { condition: conditions.length ? '(' + conditions.join(' OR ') + ')' : '1=0', params };
   }
 
+  async canAccessCandidateCv(candidateId, actor) {
+    if (!actor) return false;
+    if (actor.roles?.some(r => ['ADMIN', 'HR_MANAGER', 'RECRUITER'].includes(r))) return true;
+    if (actor.roles?.includes('INTERVIEWER')) {
+      let hasII = false;
+      try {
+        if (this.db.provider === 'postgres') {
+          const row = await this.db.prepare("SELECT table_name FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='interview_interviewers'").get();
+          hasII = Boolean(row);
+        } else {
+          const row = await this.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='interview_interviewers'").get();
+          hasII = Boolean(row);
+        }
+      } catch { hasII = false; }
+      if (hasII) {
+        const isAssigned = await this.db.prepare(`
+          SELECT 1 FROM interviews i
+          LEFT JOIN interview_interviewers ii ON ii.interview_id = i.id
+          WHERE i.candidate_id = ? AND (i.interviewer_id = ? OR ii.user_id = ?)
+        `).get(candidateId, actor.id, actor.id);
+        return Boolean(isAssigned);
+      } else {
+        const isAssigned = await this.db.prepare('SELECT 1 FROM interviews WHERE candidate_id = ? AND interviewer_id = ?').get(candidateId, actor.id);
+        return Boolean(isAssigned);
+      }
+    }
+    return false;
+  }
+
   async getCandidates(options = {}) {
     const actor = await new (require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(options.viewer?.id, 'candidate.read');
     if (!actor) return {success:false,statusCode:403,code:'CANDIDATE_FORBIDDEN',message:'Bạn không có quyền xem hồ sơ ứng viên.',candidates:[]};
@@ -1339,7 +1368,15 @@ class RequisitionService {
     const viewer=options.viewer;
     const hasColumns = await this.hasInterviewSchedulingColumns();
     const hasCancelResched = hasColumns && await this.hasCancelReschedCols();
-    if (viewer && !viewer.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role)) && !(options.evaluationsOnly && viewer.roles.includes('APPROVER'))) {
+    if (options.mySchedule && viewer) {
+      if (hasColumns) {
+        conditions.push('(i.interviewer_id=? OR EXISTS (SELECT 1 FROM interview_interviewers ii WHERE ii.interview_id=i.id AND ii.user_id=?))');
+        params.push(viewer.id, viewer.id);
+      } else {
+        conditions.push('i.interviewer_id=?');
+        params.push(viewer.id);
+      }
+    } else if (viewer && !viewer.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role)) && !(options.evaluationsOnly && viewer.roles.includes('APPROVER'))) {
       const scopes=[];
       if (viewer.roles.includes('HIRING_MGR')) {scopes.push(this.hiringRequisitionScope());params.push(viewer.id,viewer.id,viewer.id);}
       if(viewer.roles.includes('RECRUITER')){const scope=this.recruiterScope('r',viewer.id),candidateScope=this.recruiterScope('candidate_position',viewer.id);scopes.push('('+scope.condition+' AND EXISTS(SELECT 1 FROM requisitions candidate_position WHERE candidate_position.id=c.requisition_id AND '+candidateScope.condition+'))');params.push(...scope.params,...candidateScope.params);}
@@ -1355,9 +1392,29 @@ class RequisitionService {
       if (viewer.roles.includes('CANDIDATE')) {scopes.push('LOWER(c.email)=LOWER(?)');params.push(viewer.email);}
       conditions.push(scopes.length?'('+scopes.join(' OR ')+')':'1=0');
     }
+    if (options.status && options.status !== 'ALL') {
+      conditions.push('i.status = ?');
+      params.push(options.status);
+    }
+    if (options.search && typeof options.search === 'string' && options.search.trim()) {
+      const term = `%${options.search.trim()}%`;
+      conditions.push('(c.full_name LIKE ? OR r.title LIKE ? OR i.round_name LIKE ?)');
+      params.push(term, term, term);
+    }
+    if (options.timeframe === 'UPCOMING') {
+      const now = new Date().toISOString();
+      conditions.push("i.status != 'CANCELLED' AND i.scheduled_time >= ?");
+      params.push(now);
+    } else if (options.timeframe === 'PAST') {
+      const now = new Date().toISOString();
+      conditions.push("i.scheduled_time < ?");
+      params.push(now);
+    }
     const hasResponseCols = hasColumns && (this.db.provider === 'postgres'
       ? Boolean(await this.db.prepare("SELECT column_name FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='interviews' AND column_name='candidate_response_status'").get())
       : (await this.db.prepare("PRAGMA table_info(interviews)").all()).some(c => c.name === 'candidate_response_status'));
+
+    const sortOrder = (options.sortOrder === 'ASC' || (options.mySchedule && options.sortOrder !== 'DESC')) ? 'ASC' : 'DESC';
 
     const stmt = this.db.prepare(hasColumns ? `
       SELECT
@@ -1391,7 +1448,7 @@ class RequisitionService {
       LEFT JOIN requisitions r ON COALESCE(i.requisition_id,c.requisition_id) = r.id
       LEFT JOIN users u ON i.interviewer_id = u.id
       ${conditions.length?'WHERE '+conditions.join(' AND '):''}
-      ORDER BY i.scheduled_time DESC
+      ORDER BY i.scheduled_time ${sortOrder}
     ` : `
       SELECT
         i.id,
@@ -1420,7 +1477,7 @@ class RequisitionService {
       LEFT JOIN requisitions r ON COALESCE(i.requisition_id,c.requisition_id) = r.id
       LEFT JOIN users u ON i.interviewer_id = u.id
       ${conditions.length?'WHERE '+conditions.join(' AND '):''}
-      ORDER BY i.scheduled_time DESC
+      ORDER BY i.scheduled_time ${sortOrder}
     `);
     const rows = (await stmt.all(...params));
 
@@ -1448,6 +1505,73 @@ class RequisitionService {
       }
     }
 
+    const candidateIds = [...new Set(rows.map(r => r.candidate_id).filter(Boolean))];
+    let candidateCvMap = new Map();
+    if (candidateIds.length > 0) {
+      let hasDocsTable = false;
+      try {
+        if (this.db.provider === 'postgres') {
+          hasDocsTable = true;
+        } else {
+          hasDocsTable = Boolean(this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='candidate_documents'").get());
+        }
+      } catch {
+        hasDocsTable = false;
+      }
+      if (hasDocsTable) {
+        try {
+          const placeholders = candidateIds.map(() => '?').join(',');
+          const docs = await this.db.prepare(`
+            SELECT id, candidate_id, file_name, created_at
+            FROM candidate_documents
+            WHERE candidate_id IN (${placeholders}) AND document_type = 'CV'
+            ORDER BY created_at DESC
+          `).all(...candidateIds);
+          for (const d of docs) {
+            if (!candidateCvMap.has(d.candidate_id)) {
+              candidateCvMap.set(d.candidate_id, {
+                documentId: d.id,
+                fileName: d.file_name,
+                downloadUrl: `/api/v1/candidates/documents/${d.id}/download`
+              });
+            }
+          }
+        } catch {
+          candidateCvMap = new Map();
+        }
+      }
+    }
+
+    let evaluationsMap = new Map();
+    if (interviewIds.length > 0) {
+      let hasEvalsTable = false;
+      try {
+        if (this.db.provider === 'postgres') {
+          hasEvalsTable = true;
+        } else {
+          hasEvalsTable = Boolean(this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='interview_evaluations'").get());
+        }
+      } catch {
+        hasEvalsTable = false;
+      }
+      if (hasEvalsTable) {
+        try {
+          const placeholders = interviewIds.map(() => '?').join(',');
+          const evals = await this.db.prepare(`
+            SELECT id, interview_id, interviewer_id, status, total_score, submitted_at
+            FROM interview_evaluations
+            WHERE interview_id IN (${placeholders})
+          `).all(...interviewIds);
+          for (const ev of evals) {
+            if (!evaluationsMap.has(ev.interview_id)) evaluationsMap.set(ev.interview_id, []);
+            evaluationsMap.get(ev.interview_id).push(ev);
+          }
+        } catch {
+          evaluationsMap = new Map();
+        }
+      }
+    }
+
     const calendarOnly = new Set();
     if (viewer?.roles.includes('INTERVIEWER') && !viewer.roles.some(role => ['ADMIN','HR_MANAGER'].includes(role)) && !(options.evaluationsOnly && viewer.roles.includes('APPROVER'))) {
       for (const row of rows) {
@@ -1462,61 +1586,123 @@ class RequisitionService {
       }
     }
 
-    return {
-      success: true,
-      total: rows.length,
-      interviews: rows.map(r => {
-        const interviewers = interviewerMap.get(r.id) || (r.interviewer_id ? [{
+    let mappedInterviews = rows.map(r => {
+      const interviewers = interviewerMap.get(r.id) || (r.interviewer_id ? [{
+        id: r.interviewer_id,
+        fullName: r.interviewer_name,
+        email: r.interviewer_email,
+        role: 'PRIMARY'
+      }] : []);
+      const hideEvaluation = calendarOnly.has(r.id) || viewer?.roles.every(role => role === 'CANDIDATE');
+      const ownApplication = viewer?.roles.includes('CANDIDATE') && typeof viewer.email === 'string' && typeof r.candidate_email === 'string' && viewer.email.toLowerCase() === r.candidate_email.toLowerCase();
+
+      const cvDoc = candidateCvMap.get(r.candidate_id);
+      const evals = evaluationsMap.get(r.id) || [];
+      const viewerEval = viewer?.id ? evals.find(e => e.interviewer_id === viewer.id) : null;
+      let evaluationStatus = 'NOT_SUBMITTED';
+      let hasSubmittedEvaluation = false;
+      let evaluationId = null;
+      let submittedAt = null;
+
+      const isAssignedToInterview = viewer?.id ? (r.interviewer_id === viewer.id || (interviewerMap.get(r.id)?.some(m => m.id === viewer.id) || false)) : false;
+
+      if (isAssignedToInterview || options.mySchedule) {
+        if (viewerEval) {
+          evaluationStatus = viewerEval.status;
+          hasSubmittedEvaluation = viewerEval.status === 'SUBMITTED';
+          evaluationId = viewerEval.id;
+          submittedAt = viewerEval.submitted_at || null;
+        } else {
+          evaluationStatus = 'NOT_SUBMITTED';
+          hasSubmittedEvaluation = false;
+          evaluationId = null;
+          submittedAt = null;
+        }
+      } else if (evals.length > 0) {
+        const allSubmitted = evals.every(e => e.status === 'SUBMITTED');
+        const anySubmitted = evals.some(e => e.status === 'SUBMITTED');
+        hasSubmittedEvaluation = anySubmitted;
+        evaluationStatus = allSubmitted ? 'SUBMITTED' : (anySubmitted ? 'PARTIALLY_SUBMITTED' : (evals[0].status || 'NOT_SUBMITTED'));
+        evaluationId = evals[0].id;
+        submittedAt = evals.find(e => e.submitted_at)?.submitted_at || null;
+      }
+
+      const scheduledMs = this.parseInterviewTimestamp(r.scheduled_time);
+      const isUpcoming = r.status !== 'CANCELLED' && scheduledMs !== null && scheduledMs >= Date.now();
+
+      return {
+        id: r.id,
+        roundName: r.round_name,
+        scheduledTime: scheduledMs === null ? r.scheduled_time : new Date(scheduledMs).toISOString(),
+        durationMinutes: r.duration_minutes || 60,
+        interviewFormat: r.interview_format || ((typeof r.location_or_link === 'string' && r.location_or_link.trim() && !/^https?:\/\//i.test(r.location_or_link.trim())) ? 'IN_PERSON' : 'ONLINE'),
+        meetingRoom: r.meeting_room || null,
+        meetingLink: r.meeting_link || null,
+        locationOrLink: r.location_or_link || r.meeting_room || r.meeting_link || 'Google Meet Online',
+        status: r.status,
+        candidateResponseStatus: r.candidate_response_status || 'PENDING',
+        candidateResponseNote: r.candidate_response_note || null,
+        candidateRespondedAt: r.candidate_responded_at || null,
+        cancellationReason: r.cancellation_reason || null,
+        cancelledAt: r.cancelled_at || null,
+        rescheduledAt: r.rescheduled_at || null,
+        rescheduleReason: r.reschedule_reason || null,
+        isRescheduled: Boolean(r.rescheduled_at),
+        isCancelled: r.status === 'CANCELLED',
+        isUpcoming,
+        cvDocumentId: cvDoc?.documentId || null,
+        cvFileName: cvDoc?.fileName || null,
+        cvUrl: cvDoc?.downloadUrl || null,
+        evaluationStatus,
+        hasSubmittedEvaluation,
+        evaluationId,
+        evaluationSubmittedAt: submittedAt,
+        feedback: hideEvaluation?null:r.feedback,
+        score: hideEvaluation?null:r.score,
+        createdAt: r.created_at,
+        candidate: calendarOnly.has(r.id) && !ownApplication ? {
+          id: r.candidate_id,
+          fullName: r.candidate_name,
+          cvDocumentId: cvDoc?.documentId || null,
+          cvFileName: cvDoc?.fileName || null,
+          cvUrl: cvDoc?.downloadUrl || null
+        } : {
+          id: r.candidate_id,
+          fullName: r.candidate_name,
+          email: r.candidate_email,
+          phone: r.candidate_phone,
+          cvDocumentId: cvDoc?.documentId || null,
+          cvFileName: cvDoc?.fileName || null,
+          cvUrl: cvDoc?.downloadUrl || null
+        },
+        requisition: {
+          id: r.requisition_id,
+          title: r.requisition_title,
+          departmentName: r.department_name
+        },
+        interviewer: r.interviewer_id ? {
           id: r.interviewer_id,
           fullName: r.interviewer_name,
-          email: r.interviewer_email,
-          role: 'PRIMARY'
-        }] : []);
-        const hideEvaluation = calendarOnly.has(r.id) || viewer?.roles.every(role => role === 'CANDIDATE');
-        const ownApplication = viewer?.roles.includes('CANDIDATE') && typeof viewer.email === 'string' && typeof r.candidate_email === 'string' && viewer.email.toLowerCase() === r.candidate_email.toLowerCase();
-        return {
-          id: r.id,
-          roundName: r.round_name,
-          scheduledTime: this.parseInterviewTimestamp(r.scheduled_time) === null ? r.scheduled_time : new Date(this.parseInterviewTimestamp(r.scheduled_time)).toISOString(),
-          durationMinutes: r.duration_minutes || 60,
-          interviewFormat: r.interview_format || ((typeof r.location_or_link === 'string' && r.location_or_link.trim() && !/^https?:\/\//i.test(r.location_or_link.trim())) ? 'IN_PERSON' : 'ONLINE'),
-          meetingRoom: r.meeting_room || null,
-          meetingLink: r.meeting_link || null,
-          locationOrLink: r.location_or_link || r.meeting_room || r.meeting_link || 'Google Meet Online',
-          status: r.status,
-          candidateResponseStatus: r.candidate_response_status || 'PENDING',
-          candidateResponseNote: r.candidate_response_note || null,
-          candidateRespondedAt: r.candidate_responded_at || null,
-          cancellationReason: r.cancellation_reason || null,
-          cancelledAt: r.cancelled_at || null,
-          rescheduledAt: r.rescheduled_at || null,
-          rescheduleReason: r.reschedule_reason || null,
-          feedback: hideEvaluation?null:r.feedback,
-          score: hideEvaluation?null:r.score,
-          createdAt: r.created_at,
-          candidate: calendarOnly.has(r.id) && !ownApplication ? {id:r.candidate_id,fullName:r.candidate_name} : {
-            id: r.candidate_id,
-            fullName: r.candidate_name,
-            email: r.candidate_email,
-            phone: r.candidate_phone
-          },
-          requisition: {
-            id: r.requisition_id,
-            title: r.requisition_title,
-            departmentName: r.department_name
-          },
-          interviewer: r.interviewer_id ? {
-            id: r.interviewer_id,
-            fullName: r.interviewer_name,
-            email: r.interviewer_email
-          } : (interviewers[0] ? {
-            id: interviewers[0].id,
-            fullName: interviewers[0].fullName,
-            email: interviewers[0].email
-          } : null),
-          interviewers: calendarOnly.has(r.id) ? interviewers.map(({email,...member}) => member) : interviewers
-        };
-      })
+          email: r.interviewer_email
+        } : (interviewers[0] ? {
+          id: interviewers[0].id,
+          fullName: interviewers[0].fullName,
+          email: interviewers[0].email
+        } : null),
+        interviewers: calendarOnly.has(r.id) ? interviewers.map(({email,...member}) => member) : interviewers
+      };
+    });
+
+    if (options.evaluationStatus === 'SUBMITTED') {
+      mappedInterviews = mappedInterviews.filter(iv => iv.hasSubmittedEvaluation);
+    } else if (options.evaluationStatus === 'NOT_SUBMITTED') {
+      mappedInterviews = mappedInterviews.filter(iv => !iv.hasSubmittedEvaluation);
+    }
+
+    return {
+      success: true,
+      total: mappedInterviews.length,
+      interviews: mappedInterviews
     };
   }
 
