@@ -181,6 +181,11 @@
       "path": "/careers/jobs",
       "view": "public-jobs",
       "auth": false
+    },
+    {
+      "path": "/interviews/invitation",
+      "view": "candidate-interview-response",
+      "auth": false
     }
   ],
   "scripts": [
@@ -229,6 +234,7 @@
     "/js/pages/error.js",
     "/js/components/candidate-dialogs.js",
     "/js/components/interview-dialogs.js",
+    "/js/components/interview-evaluation-dialog.js",
     "/js/components/bulk-interview-dialog.js",
     "/js/components/offer-dialogs.js",
     "/js/pages/approvals.js",
@@ -238,6 +244,7 @@
     "/js/components/candidate-screening.js",
     "/js/components/talent-pool.js",
     "/js/components/candidate-sla.js",
+    "/js/pages/candidate-interview-response.js",
     "/js/shared/page-lifecycle.js",
     "/js/shared/route-lifecycle.js"
   ],
@@ -283,6 +290,7 @@
     "/components/bulk-interview-modal.html",
     "/components/question-bank-modal.html",
     "/components/interview-detail-modal.html",
+    "/components/interview-evaluation-modal.html",
     "/components/create-offer-modal.html",
     "/components/offer-detail-modal.html",
     "/components/requisition-detail-modal.html",
@@ -290,6 +298,7 @@
     "/components/edit-profile-modal.html",
     "/components/audit-detail-modal.html",
     "/components/referral-modal.html",
-    "/pages/public-jobs.html"
+    "/pages/public-jobs.html",
+    "/pages/candidate-interview-response.html"
   ]
 }

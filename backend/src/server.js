@@ -2208,6 +2208,46 @@ async function handleRequest(req, res) {
     res.end(JSON.stringify(result));return;
   }
 
+  if (req.method === 'GET' && (pathname === '/api/v1/interviews/public/invitation' || pathname === '/api/v1/interviews/invitation')) {
+    const token = parsedUrl.query?.token;
+    const invitationService = new (require('./services/interviewInvitationService'))(db);
+    const result = await invitationService.getInvitationByToken(token);
+    res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(result));
+    return;
+  }
+
+  if (req.method === 'POST' && (pathname === '/api/v1/interviews/public/invitation/respond' || pathname === '/api/v1/interviews/invitation/respond')) {
+    try {
+      const body = await parseBody(req);
+      const token = body.token || parsedUrl.query?.token;
+      const invitationService = new (require('./services/interviewInvitationService'))(db);
+      const result = await invitationService.respondToInvitation(token, body);
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 400, code: 'BAD_REQUEST', message: 'Dữ liệu không hợp lệ.' }));
+    }
+    return;
+  }
+
+  if (req.method === 'POST' && /^\/api\/v1\/interviews\/[^/]+\/invitation$/.test(pathname)) {
+    const user = await rbacMiddleware.authorize(req, res, authController.authService, 'interview.create');
+    if (!user) return;
+    try {
+      const intId = pathname.split('/').at(-2);
+      const invitationService = new (require('./services/interviewInvitationService'))(db);
+      const result = await invitationService.createInvitation(intId);
+      res.writeHead(result.statusCode || 201, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 500, code: 'INVITATION_CREATION_FAILED' }));
+    }
+    return;
+  }
+
   // 13.8.1 API: Create Interview
   if (req.method === 'POST' && (pathname === '/api/v1/interviews' || pathname === '/interviews')) {
     const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'interview.create'));
@@ -2230,6 +2270,95 @@ async function handleRequest(req, res) {
     const user=await rbacMiddleware.authorize(req,res,authController.authService,'interview.update');if(!user)return;
     try{const id=pathname.split('/').at(-2),result=await requisitionService.updateInterviewSchedule(id,await parseBody(req),user);res.writeHead(result.statusCode||200,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(result));}
     catch{res.writeHead(503,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:'INTERVIEW_UPDATE_UNAVAILABLE',message:'Unable to update interview schedule.'}));}
+    return;
+  }
+
+  if ((req.method === 'POST' || req.method === 'PUT') && /^\/api\/v1\/interviews\/[^/]+\/cancel$/.test(pathname)) {
+    const user = await rbacMiddleware.authorize(req, res, authController.authService, 'interview.update');
+    if (!user) return;
+    try {
+      const id = pathname.split('/').at(-2);
+      const result = await requisitionService.cancelInterview(id, await parseBody(req), user);
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, code: 'INTERVIEW_CANCEL_UNAVAILABLE', message: 'Unable to cancel interview.' }));
+    }
+    return;
+  }
+
+  if (req.method === 'GET' && /^\/(?:api\/v1\/)?interviews\/[^/]+\/evaluation-form$/.test(pathname)) {
+    const user = await rbacMiddleware.authorize(req, res, authController.authService, 'interview.read');
+    if (!user) return;
+    const intId = pathname.replace(/^\/(?:api\/v1\/)?interviews\//, '').replace(/\/evaluation-form$/, '');
+    const evaluationService = new (require('./services/interviewEvaluationService'))(db);
+    const targetInterviewerId = parsedUrl.query?.interviewerId || null;
+    const result = await evaluationService.getOrCreateEvaluationForm(intId, targetInterviewerId, user);
+    res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(result));
+    return;
+  }
+
+  if ((req.method === 'POST' || req.method === 'PUT') && /^\/(?:api\/v1\/)?interviews\/[^/]+\/evaluation-form$/.test(pathname)) {
+    const user = await rbacMiddleware.authorize(req, res, authController.authService, 'interview.evaluate');
+    if (!user) return;
+    try {
+      const intId = pathname.replace(/^\/(?:api\/v1\/)?interviews\//, '').replace(/\/evaluation-form$/, '');
+      const body = await parseBody(req);
+      const evaluationService = new (require('./services/interviewEvaluationService'))(db);
+      const result = await evaluationService.saveEvaluation(intId, body, user);
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 400, code: 'BAD_REQUEST', message: 'Dữ liệu không hợp lệ.' }));
+    }
+    return;
+  }
+
+  if (req.method === 'POST' && /^\/(?:api\/v1\/)?interviews\/[^/]+\/evaluation-form\/calculate$/.test(pathname)) {
+    const user = await rbacMiddleware.authorize(req, res, authController.authService, 'interview.read');
+    if (!user) return;
+    try {
+      const body = await parseBody(req);
+      const evaluationService = new (require('./services/interviewEvaluationService'))(db);
+      const result = evaluationService.calculateWeightedScore(body.criteria);
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 400, code: 'BAD_REQUEST', message: 'Dữ liệu không hợp lệ.' }));
+    }
+    return;
+  }
+
+  if (req.method === 'POST' && /^\/(?:api\/v1\/)?interviews\/[^/]+\/evaluation-form\/reopen$/.test(pathname)) {
+    const user = await rbacMiddleware.authorize(req, res, authController.authService, 'interview.update');
+    if (!user) return;
+    try {
+      const intId = pathname.replace(/^\/(?:api\/v1\/)?interviews\//, '').replace(/\/evaluation-form\/reopen$/, '');
+      const body = await parseBody(req);
+      const evaluationService = new (require('./services/interviewEvaluationService'))(db);
+      const targetInterviewerId = body.interviewerId || user.id;
+      const result = await evaluationService.reopenEvaluation(intId, targetInterviewerId, user, body);
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 400, code: 'BAD_REQUEST', message: 'Dữ liệu không hợp lệ.' }));
+    }
+    return;
+  }
+
+  if (req.method === 'GET' && /^\/(?:api\/v1\/)?interviews\/[^/]+\/evaluations$/.test(pathname)) {
+    const user = await rbacMiddleware.authorize(req, res, authController.authService, 'interview.evaluation.read');
+    if (!user) return;
+    const intId = pathname.replace(/^\/(?:api\/v1\/)?interviews\//, '').replace(/\/evaluations$/, '');
+    const evaluationService = new (require('./services/interviewEvaluationService'))(db);
+    const result = await evaluationService.getEvaluationsForInterview(intId, user);
+    res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(result));
     return;
   }
 
