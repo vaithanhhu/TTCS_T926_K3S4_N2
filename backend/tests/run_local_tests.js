@@ -56,6 +56,67 @@ async function execute(args, cwd, log, env = environment) {
   });
 }
 
+function safeSliceUtf8Tail(str, maxBytes) {
+  if (typeof Buffer !== 'undefined') {
+    const buf = Buffer.from(str, 'utf8');
+    if (buf.length <= maxBytes) return str;
+    let start = buf.length - maxBytes;
+    while (start < buf.length && (buf[start] & 0xC0) === 0x80) {
+      start++;
+    }
+    return buf.subarray(start).toString('utf8');
+  }
+  return str.slice(-maxBytes);
+}
+
+function sanitizeLog(text) {
+  if (typeof text !== 'string') return '';
+  return text
+    .replace(/-----BEGIN (?:[A-Z0-9_-]+ )?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z0-9_-]+ )?PRIVATE KEY-----/g, '[REDACTED_PRIVATE_KEY]')
+    .replace(/([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)([^:\s\/]+):([^@\s\/]+)@/g, '$1$2:[REDACTED]@')
+    .replace(/([?&](?:token|access_token|refresh_token|apiKey|api_key|client_secret|clientSecret|secret|password|passwd|pass|authToken|auth_token|sessionToken|session_token|signature|sig|private_key|privateKey|key)\s*=\s*)([^&\s#'"]+)/gi, '$1[REDACTED]')
+    .replace(/\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{30,})\b/g, '[REDACTED_TOKEN]')
+    .replace(/\bAKIA[0-9A-Z]{16}\b/g, '[REDACTED_AWS_KEY]')
+    .replace(/\b((?:Bearer|Basic|Token)\s+)[A-Za-z0-9._~+/=-]+/gi, '$1[REDACTED]')
+    .replace(/(\\?['"]?(?:password|passwd|secret|apiKey|api_key|clientSecret|client_secret|accessToken|access_token|refreshToken|refresh_token|privateKey|private_key|authToken|auth_token|sessionToken|session_token|signature)\\?['"]?\s*[:=]\s*)(?:(\\?['"])[^\r\n]*?\2|[^\s'",;\r\n}&]+)/gi, '$1[REDACTED]');
+}
+
+function extractFailureSnippet(rawText, maxLines = 100, maxBytes = 16384) {
+  if (!rawText || !rawText.trim()) return '(empty log)';
+  const sanitized = sanitizeLog(rawText.trim());
+  const marker = '[... log truncated; showing tail ...]\n';
+  const getByteLength = str => typeof Buffer !== 'undefined' ? Buffer.byteLength(str, 'utf8') : encodeURIComponent(str).replace(/%[A-F\d]{2}/gi, 'U').length;
+  const totalBytes = getByteLength(sanitized);
+
+  if (totalBytes <= maxBytes) {
+    const lines = sanitized.split(/\r?\n/);
+    if (lines.length <= maxLines) {
+      return sanitized;
+    }
+    const tailLines = lines.slice(-maxLines).join('\n');
+    const markerBytes = getByteLength(marker);
+    if (markerBytes + getByteLength(tailLines) <= maxBytes) {
+      return marker + tailLines;
+    }
+  }
+
+  const markerBytes = getByteLength(marker);
+  if (maxBytes <= markerBytes) {
+    return safeSliceUtf8Tail(marker.trim(), maxBytes);
+  }
+
+  const allowedTailBytes = maxBytes - markerBytes;
+  let tail = safeSliceUtf8Tail(sanitized, allowedTailBytes);
+  const firstNewline = tail.indexOf('\n');
+  if (firstNewline !== -1) {
+    const candidate = tail.slice(firstNewline + 1);
+    if (candidate.length > 0) {
+      tail = candidate;
+    }
+  }
+  return marker + tail;
+}
+
 async function main() {
   const requested = process.argv.slice(2);
   const available = Object.keys(manifest.scripts).filter(name => name.startsWith('test:') && !['test:local', 'test:azure', 'test:postgres:live', 'test:s3-10:pg-live', 'test:qa-s3-06:pg-live', 'test:qa-s3-batch:pg-live'].includes(name));
@@ -78,6 +139,9 @@ async function main() {
     const summaries = output.split(/\r?\n/).filter(line => /_RESULT |BROWSER_E2E_RESULT |passed|failed|KẾT QUẢ|Tổng.*[0-9]/i.test(line));
     results.push({ script, ...result, summaries });
     console.log('LOCAL_TEST_RESULT ' + JSON.stringify({ script, exitCode: result.exitCode, durationMs: result.durationMs, log: result.log }));
+    if (result.exitCode !== 0) {
+      console.error(`--- LOCAL_TEST_FAILURE: ${script} (exitCode: ${result.exitCode}) ---\n${extractFailureSnippet(output)}\n--- END LOCAL_TEST_FAILURE: ${script} ---`);
+    }
   }
   const report = { provider: 'isolated SQLite and embedded PostgreSQL only', email: 'simulated', directory, results, livePostgres: 'NOT RUN: use an explicitly isolated PostgreSQL environment', aggregateNote: 'test:sprint1 repeats individual S1 suites; execution counts are not unique test counts' };
   fs.writeFileSync(path.join(directory, 'results.json'), JSON.stringify(report, null, 2));

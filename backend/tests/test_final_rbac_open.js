@@ -14,6 +14,7 @@ async function test(name,action){try{await action();passed++;console.log('[PASS]
 async function storageCases(db,label){
   const mergeMigration=require('../src/db/migrate-candidate-merges');
   await mergeMigration.migrate(db);
+  await require('../src/db/migrate-interview-conflict-override').migrate(db);
   await test(label+' merge module migration preserves grants on retry',async()=>{
     const before=await db.prepare('SELECT * FROM role_permissions ORDER BY role_id,permission_id').all();
     await mergeMigration.migrate(db);
