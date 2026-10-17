@@ -307,7 +307,7 @@ async function runTests() {
     await workbook.xlsx.load(result.buffer);
     const sheet = workbook.getWorksheet('Danh Sách Ứng Viên');
     const headerRow = sheet.getRow(1);
-    
+
     const headers = [];
     headerRow.eachCell((cell) => {
       headers.push(String(cell.value || ''));
@@ -392,4 +392,3 @@ runTests().catch(err => {
   console.error('Test execution failed:', err);
   process.exit(1);
 });
-

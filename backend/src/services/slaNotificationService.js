@@ -5,10 +5,10 @@ const RequisitionService = require('./requisitionService');
  * ==============================================================================
  * USER STORY S5-10 (SCRUM-120) - CANDIDATE SLA NOTIFICATION & MONITORING SERVICE
  * ==============================================================================
- * 
+ *
  * Là Nhân viên tuyển dụng, tôi muốn được nhắc khi công việc quá hạn SLA,
  * để không để hồ sơ nằm im ba ngày mà chưa ai đọc.
- * 
+ *
  * Tiêu chí chấp nhận (Acceptance Criteria):
  *   • AC-01: Cấu hình ngưỡng SLA cho từng giai đoạn, ví dụ hồ sơ mới phải sàng lọc trong 3 ngày
  *   • AC-02: Quá hạn thì hồ sơ được gắn cờ và recruiter nhận nhắc việc
@@ -343,10 +343,10 @@ class SlaNotificationService {
 
       if (existing) {
         const updateSql = isPostgres
-          ? `UPDATE sla_configurations 
+          ? `UPDATE sla_configurations
              SET threshold_days = ?, warning_days = ?, description = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
              WHERE id = ?`
-          : `UPDATE sla_configurations 
+          : `UPDATE sla_configurations
              SET threshold_days = ?, warning_days = ?, description = ?, updated_by = ?, updated_at = datetime('now')
              WHERE id = ?`;
         await this.db.prepare(updateSql).run(thresholdDays, warningDays, description, currentUser.id, existing.id);
@@ -413,7 +413,7 @@ class SlaNotificationService {
       try {
         const reqId = candidate.requisition_id || candidate.requisitionId || (candidate.requisition && candidate.requisition.id) || null;
         const found = await this.db.prepare(
-          `SELECT threshold_days, warning_days FROM sla_configurations 
+          `SELECT threshold_days, warning_days FROM sla_configurations
            WHERE stage = ? AND (requisition_id = ? OR requisition_id IS NULL)
            ORDER BY requisition_id DESC LIMIT 1`
         ).get(stage, reqId);
@@ -431,7 +431,7 @@ class SlaNotificationService {
     let stageEntryTime = null;
     try {
       const historyEntry = await this.db.prepare(
-        `SELECT created_at FROM candidate_status_history 
+        `SELECT created_at FROM candidate_status_history
          WHERE candidate_id = ? AND after_stage = ?
          ORDER BY created_at DESC LIMIT 1`
       ).get(candidate.id, stage);
@@ -529,7 +529,7 @@ class SlaNotificationService {
     // Phân quyền phạm vi dữ liệu IDOR: Recruiter chỉ thấy hồ sơ thuộc vị trí mình phụ trách
     if (!isAdminOrHr && isRecruiter) {
       sql += ` AND (
-        r.recruiter_id = ? 
+        r.recruiter_id = ?
         OR EXISTS (SELECT 1 FROM requisition_recruiter_supports WHERE requisition_id = r.id AND user_id = ?)
       )`;
       params.push(currentUser.id, currentUser.id);
@@ -599,7 +599,7 @@ class SlaNotificationService {
    * Thực hiện tác vụ kiểm tra SLA định kỳ hàng ngày (AC-03)
    * Quét toàn bộ hồ sơ, gắn cờ quá hạn và gửi nhắc việc tới Recruiter
    * ĐẢM BẢO: Không nhắc trùng trong cùng ngày (Deduplication per calendar day)
-   * 
+   *
    * @param {string|null} targetDate Ngày chạy tác vụ định dạng YYYY-MM-DD (mặc định là hôm nay)
    * @param {object|null} currentUser Người chạy tác vụ thủ công (nếu có)
    */
@@ -646,7 +646,7 @@ class SlaNotificationService {
 
           if (existingBreach) {
             await this.db.prepare(
-              `UPDATE candidate_sla_breaches 
+              `UPDATE candidate_sla_breaches
                SET days_in_stage = ?, threshold_days = ?, is_overdue = 1, flagged_at = ${isPostgres ? 'CURRENT_TIMESTAMP' : "datetime('now')"}
                WHERE id = ?`
             ).run(sla.daysInStage, sla.thresholdDays, existingBreach.id);
@@ -713,7 +713,7 @@ class SlaNotificationService {
         for (const recruiterId of recruiterIds) {
           // KIỂM TRA CHỐNG NHẮC TRÙNG: Trong cùng 1 ngày (todayStr), nếu đã nhắc rồi thì BỎ QUA
           const existingReminder = await this.db.prepare(
-            `SELECT id FROM sla_reminders 
+            `SELECT id FROM sla_reminders
              WHERE candidate_id = ? AND stage = ? AND reminder_date = ? AND recruiter_id = ?`
           ).get(cand.id, sla.stage, todayStr, recruiterId);
 
@@ -762,7 +762,7 @@ class SlaNotificationService {
         // Nếu hồ sơ không còn quá hạn (đã chuyển stage hoặc bình thường), đánh dấu resolve cờ cũ
         try {
           await this.db.prepare(
-            `UPDATE candidate_sla_breaches 
+            `UPDATE candidate_sla_breaches
              SET status = 'RESOLVED', resolved_at = ${isPostgres ? 'CURRENT_TIMESTAMP' : "datetime('now')"}
              WHERE candidate_id = ? AND status = 'ACTIVE' AND stage <> ?`
           ).run(cand.id, cand.stage);

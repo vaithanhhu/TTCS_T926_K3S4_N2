@@ -2,10 +2,10 @@
  * ==============================================================================
  * USER STORY S5-10 (SCRUM-120) - CANDIDATE SLA NOTIFICATION & MONITORING UI
  * ==============================================================================
- * 
+ *
  * Là Nhân viên tuyển dụng, tôi muốn được nhắc khi công việc quá hạn SLA,
  * để không để hồ sơ nằm im ba ngày mà chưa ai đọc.
- * 
+ *
  * TIÊU CHÍ KỸ THUẬT:
  *   • Hoạt động độc lập bằng MutationObserver, Event Hooking và Self-Mounting
  *   • TUYỆT ĐỐI KHÔNG SỬA BẤT KỲ FILE HTML / JS CŨ NÀO CỦA HỆ THỐNG

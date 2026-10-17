@@ -39,8 +39,8 @@ async function seed() {
 
       // Verify candidates
       const rows = db.prepare(`
-        SELECT id, full_name, stage, created_at 
-        FROM candidates 
+        SELECT id, full_name, stage, created_at
+        FROM candidates
         WHERE id IN ('cand-sla-demo-1', 'cand-sla-demo-2')
       `).all();
       console.log('Current rows:', rows);
@@ -70,4 +70,3 @@ async function seed() {
 }
 
 seed();
-
