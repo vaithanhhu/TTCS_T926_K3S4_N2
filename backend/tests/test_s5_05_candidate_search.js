@@ -177,7 +177,7 @@ async function browserTests(){
       await page.locator('#candidate-filter-saved').selectOption(saved.id);await page.locator('#candidate-filter-apply').click();
       await page.waitForFunction(()=>document.getElementById('candidates-total-badge').textContent.startsWith('1'));assert.equal(await page.locator('#candidates-search-input').inputValue(),'Kubernetes');
       await page.reload();await page.addScriptTag({path:path.join(root,'frontend/js/api.js')});
-      await page.evaluate(()=>{window.currentCandidatesList=[];window.currentRequisitionsList=[];window.STAGE_BADGES={};window.STAGE_LABELS={};window.escapeHtml=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));});
+      await page.evaluate(()=>{window.currentAuthenticatedUser={id:'recruiter',roles:['RECRUITER']};window.currentCandidatesList=[];window.currentRequisitionsList=[];window.STAGE_BADGES={};window.STAGE_LABELS={};window.escapeHtml=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));});
       await page.addScriptTag({path:path.join(root,'frontend/js/pages/candidates.js')});await page.evaluate(()=>loadCandidates());await page.waitForFunction(()=>document.getElementById('candidate-filter-saved').options.length>1);
       await page.locator('#candidate-advanced-filters summary').click();await page.locator('#candidate-filter-saved').selectOption(saved.id);await page.locator('#candidate-filter-apply').click();await page.waitForFunction(()=>document.getElementById('candidates-total-badge').textContent.startsWith('1'));
     });

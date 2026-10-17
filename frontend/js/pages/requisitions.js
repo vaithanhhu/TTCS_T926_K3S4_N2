@@ -43,6 +43,7 @@
           return;
         }
 
+        const authUser = typeof currentAuthenticatedUser !== 'undefined' ? currentAuthenticatedUser : (typeof window !== 'undefined' ? window.currentAuthenticatedUser : null);
         requisitionsTableBody.innerHTML = list.map(req => {
           const statusBadge = req.status === 'OPEN' ? 'badge-primary' : (req.status === 'IN_PROGRESS' ? 'badge-warning' : 'badge-neutral');
           let statusText = req.status === 'PAUSED' ? 'Tạm dừng' : req.status === 'CANCELLED' ? 'Huỷ' : req.status === 'DRAFT' ? 'Nháp' : (req.status === 'OPEN' ? 'Đang mở' : (req.status === 'IN_PROGRESS' ? 'Đang tuyển' : 'Đã đóng'));
@@ -69,7 +70,7 @@
                   <button type="button" class="btn btn-outline btn-xs btn-detail-req" data-id="${escapeDepartmentHtml(req.id).replace(/"/g, '&quot;')}">
                     Chi tiết
                   </button>
-                  ${res.data.features?.requisitionOperations&&currentAuthenticatedUser?.roles?.some(role=>['ADMIN','HR_MANAGER','HIRING_MGR'].includes(role))?`<button type="button" class="btn btn-outline btn-xs btn-copy-req" data-id="${escapeDepartmentHtml(req.id).replace(/"/g, '&quot;')}">Sao chép</button>`:''}
+                  ${res.data.features?.requisitionOperations&&authUser?.roles?.some(role=>['ADMIN','HR_MANAGER','HIRING_MGR'].includes(role))?`<button type="button" class="btn btn-outline btn-xs btn-copy-req" data-id="${escapeDepartmentHtml(req.id).replace(/"/g, '&quot;')}">Sao chép</button>`:''}
                   <button type="button" class="btn btn-outline btn-xs btn-edit-req" data-id="${escapeDepartmentHtml(req.id).replace(/"/g, '&quot;')}">
                     Sửa
                   </button>
@@ -81,7 +82,7 @@
                   <button type="button" class="btn btn-outline btn-xs btn-view-candidates-req" data-id="${escapeDepartmentHtml(req.id).replace(/"/g, '&quot;')}" data-title="${escapeDepartmentHtml(req.title).replace(/"/g, '&quot;')}">
                     Ứng viên
                   </button>
-                  ${currentAuthenticatedUser?.roles?.some(role=>['ADMIN','HR_MANAGER','HIRING_MGR','RECRUITER'].includes(role))?`<button type="button" class="btn btn-outline btn-xs btn-compare-candidates-req" data-id="${escapeDepartmentHtml(req.id).replace(/"/g, '&quot;')}">So sánh</button>`:''}
+                  ${authUser?.roles?.some(role=>['ADMIN','HR_MANAGER','HIRING_MGR','RECRUITER'].includes(role))?`<button type="button" class="btn btn-outline btn-xs btn-compare-candidates-req" data-id="${escapeDepartmentHtml(req.id).replace(/"/g, '&quot;')}">So sánh</button>`:''}
                 </div>
               </td>
             </tr>
