@@ -1274,6 +1274,15 @@ class RequisitionService {
     }
   }
 
+  async hasEvaluationTable() {
+    if (this.db.provider === 'postgres') {
+      const row = await this.db.prepare("SELECT table_name FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='interview_evaluations'").get();
+      return Boolean(row);
+    }
+    const row = await this.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='interview_evaluations'").get();
+    return Boolean(row);
+  }
+
   async hasInvitationTokensTable() {
     if (this.db.provider === 'postgres') {
       const row = await this.db.prepare("SELECT table_name FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='interview_invitation_tokens'").get();
@@ -1780,6 +1789,10 @@ class RequisitionService {
       if(updateId&&!existing)return{success:false,statusCode:404,code:'INTERVIEW_NOT_FOUND'};
       if(updateId){
         if(existing.status==='COMPLETED'||existing.score!==null||existing.feedback!==null)return{success:false,statusCode:400,code:'INTERVIEW_ALREADY_EVALUATED',message:'Không thể dời lịch buổi phỏng vấn đã hoàn thành hoặc đã có đánh giá.'};
+        if (await this.hasEvaluationTable()) {
+          const hasEval = await this.db.prepare("SELECT id FROM interview_evaluations WHERE interview_id = ? AND status = 'SUBMITTED' LIMIT 1").get(updateId);
+          if (hasEval) return {success:false,statusCode:400,code:'INTERVIEW_ALREADY_EVALUATED',message:'Không thể dời lịch buổi phỏng vấn đã có đánh giá đã nộp.'};
+        }
         if(existing.status==='CANCELLED')return{success:false,statusCode:400,code:'INTERVIEW_ALREADY_CANCELLED',message:'Không thể dời lịch buổi phỏng vấn đã bị hủy.'};
         data={...data,candidateId:existing.candidate_id};
       }
@@ -2059,6 +2072,10 @@ class RequisitionService {
 
       if (existing.status === 'COMPLETED' || existing.score !== null || existing.feedback !== null) {
         return { success: false, statusCode: 400, code: 'INTERVIEW_ALREADY_EVALUATED', message: 'Không thể hủy buổi phỏng vấn đã hoàn thành hoặc đã có đánh giá.' };
+      }
+      if (await this.hasEvaluationTable()) {
+        const hasEval = await this.db.prepare("SELECT id FROM interview_evaluations WHERE interview_id = ? AND status = 'SUBMITTED' LIMIT 1").get(id);
+        if (hasEval) return { success: false, statusCode: 400, code: 'INTERVIEW_ALREADY_EVALUATED', message: 'Không thể hủy buổi phỏng vấn đã có đánh giá đã nộp.' };
       }
       if (existing.status === 'CANCELLED') {
         return { success: false, statusCode: 400, code: 'INTERVIEW_ALREADY_CANCELLED', message: 'Buổi phỏng vấn đã bị hủy trước đó.' };
