@@ -64,10 +64,16 @@ function makeGit(root) {
     return { status: result.status, stdout: result.stdout || (options.binary ? Buffer.alloc(0) : '') };
   };
 }
-function context(git, clean = false, allowDetached = false, allowProtected = false) {
+function context(git, clean = false, allowDetached = false, allowProtected = false, allowMerge = false) {
   for (const marker of ['MERGE_HEAD','REBASE_HEAD','CHERRY_PICK_HEAD','REVERT_HEAD','rebase-merge','rebase-apply','sequencer','index.lock']) {
     const location = git(['rev-parse','--git-path',marker]).stdout.trim();
-    if (fs.existsSync(path.resolve(git(['rev-parse','--show-toplevel']).stdout.trim(), location))) fail('GIT_OPERATION_IN_PROGRESS');
+    if (fs.existsSync(path.resolve(git(['rev-parse','--show-toplevel']).stdout.trim(), location))) {
+      if (allowMerge && marker === 'MERGE_HEAD') {
+        if (git(['ls-files','-u','-z']).stdout) fail('UNMERGED_INDEX');
+        continue;
+      }
+      fail('GIT_OPERATION_IN_PROGRESS');
+    }
   }
   if (git(['ls-files','-u','-z']).stdout) fail('UNMERGED_INDEX');
   const branch = git(['symbolic-ref','--quiet','--short','HEAD'], { allowFailure: true }).stdout.trim();
@@ -175,7 +181,7 @@ function execute(command, args, git, input = '', output = console.log) {
       if (command !== 'ci' || args.length !== 2 || args[0] !== '--remote-branch' || !branchAllowed(args[1]) && !['main','develop'].includes(args[1])) fail('UNEXPECTED_ARGUMENT');
       remoteBranch = args[1];
     }
-    context(git,false,command === 'ci');git(['diff','--cached','--check']);
+    context(git,false,command === 'ci',false,command === 'pre-commit');git(['diff','--cached','--check']);
     if (command === 'pre-commit') inspectStaged(git,output); else inspectIndex(git,output,remoteBranch);
     return;
   }

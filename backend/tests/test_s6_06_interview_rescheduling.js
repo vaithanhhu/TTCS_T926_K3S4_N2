@@ -222,6 +222,10 @@ async function bootstrapSqlite(db) {
   const schedSource = require('../src/db/migrate-interview-scheduling').source(db);
   db.exec('CREATE TABLE IF NOT EXISTS ats_interview_scheduling_migrations(version INTEGER PRIMARY KEY, checksum TEXT NOT NULL);');
   db.prepare('INSERT INTO ats_interview_scheduling_migrations(version, checksum) VALUES(1, ?)').run(schedSource.checksum);
+  const conflictOverrideSql = fs.readFileSync(path.join(__dirname, '../src/db/migrations/015_interview_conflict_override_sqlite.sql'), 'utf8');
+  const conflictOverrideChecksum = crypto.createHash('sha256').update(conflictOverrideSql.replace(/\r\n/g, '\n')).digest('hex');
+  db.exec('CREATE TABLE IF NOT EXISTS ats_interview_conflict_override_migrations(version INTEGER PRIMARY KEY, checksum TEXT NOT NULL);');
+  db.prepare('INSERT INTO ats_interview_conflict_override_migrations(version, checksum) VALUES(1, ?)').run(conflictOverrideChecksum);
   await require('../src/db/migrate-interview-invitations').migrate(db);
   await require('../src/db/migrate-interview-reschedule-cancel').migrate(db);
 }
@@ -359,6 +363,10 @@ async function bootstrapPglite(db) {
   `);
   const schedSource = require('../src/db/migrate-interview-scheduling').source(db);
   await db.prepare('INSERT INTO ats_interview_scheduling_migrations (version, checksum) VALUES (1, ?)').run(schedSource.checksum);
+  const conflictOverrideSql = fs.readFileSync(path.join(__dirname, '../src/db/migrations/015_interview_conflict_override_postgres.sql'), 'utf8');
+  const conflictOverrideChecksum = crypto.createHash('sha256').update(conflictOverrideSql.replace(/\r\n/g, '\n')).digest('hex');
+  await db.exec('CREATE TABLE IF NOT EXISTS ats_interview_conflict_override_migrations (version INTEGER PRIMARY KEY, checksum TEXT NOT NULL);');
+  await db.prepare('INSERT INTO ats_interview_conflict_override_migrations (version, checksum) VALUES (1, ?)').run(conflictOverrideChecksum);
   await require('../src/db/migrate-interview-invitations').migrate(db);
   await require('../src/db/migrate-interview-reschedule-cancel').migrate(db);
 }
@@ -734,6 +742,186 @@ async function runTests() {
     assert.ok(verifyRow.cancelled_at);
 
     await db.close();
+  });
+
+  test('TC14: Reschedule and cancel succeed without transaction abort when interview_invitation_tokens table is missing (SQLite and PGlite)', async () => {
+    {
+      const db = createSqliteDb();
+      await bootstrapSqlite(db);
+      await seedFixture(db);
+      db.exec('DROP TABLE IF EXISTS interview_invitation_tokens;');
+      const service = new RequisitionService(db);
+      const newTime = new Date(Date.now() + 86400000 * 3).toISOString();
+
+      const resResched = await service.updateInterviewSchedule('int-301', {
+        scheduledTime: newTime,
+        durationMinutes: 70,
+        interviewFormat: 'IN_PERSON',
+        meetingRoom: 'Phòng 101',
+        interviewerIds: ['u-int-1'],
+        rescheduleReason: 'Doi lich khong co bang token'
+      }, { id: 'u-rec-1' });
+      assert.equal(resResched.success, true);
+
+      const updated = await db.prepare('SELECT duration_minutes, reschedule_reason, status FROM interviews WHERE id=?').get('int-301');
+      assert.equal(updated.duration_minutes, 70);
+      assert.equal(updated.reschedule_reason, 'Doi lich khong co bang token');
+
+      const historyResched = await db.prepare("SELECT action FROM candidate_status_history WHERE candidate_id='cand-201' AND action='INTERVIEW_RESCHEDULED'").get();
+      assert.ok(historyResched);
+
+      const resCancel = await service.cancelInterview('int-301', {
+        cancellationReason: 'Huy lich khong co bang token'
+      }, { id: 'u-rec-1' });
+      assert.equal(resCancel.success, true);
+      assert.equal(resCancel.status, 'CANCELLED');
+
+      const cancelled = await db.prepare('SELECT status, cancellation_reason FROM interviews WHERE id=?').get('int-301');
+      assert.equal(cancelled.status, 'CANCELLED');
+      assert.equal(cancelled.cancellation_reason, 'Huy lich khong co bang token');
+
+      const historyCancel = await db.prepare("SELECT action FROM candidate_status_history WHERE candidate_id='cand-201' AND action='INTERVIEW_CANCELLED'").get();
+      assert.ok(historyCancel);
+    }
+
+    {
+      const db = await createPgliteDb();
+      await bootstrapPglite(db);
+      await seedFixture(db);
+      await db.exec('DROP TABLE IF EXISTS interview_invitation_tokens CASCADE;');
+      const service = new RequisitionService(db);
+      const newTime = new Date(Date.now() + 86400000 * 3).toISOString();
+
+      const resResched = await service.updateInterviewSchedule('int-301', {
+        scheduledTime: newTime,
+        durationMinutes: 70,
+        interviewFormat: 'IN_PERSON',
+        meetingRoom: 'Phòng PGlite',
+        interviewerIds: ['u-int-1'],
+        rescheduleReason: 'Doi lich tren PGlite khong co bang token'
+      }, { id: 'u-rec-1' });
+      assert.equal(resResched.success, true);
+
+      const updated = await db.prepare('SELECT duration_minutes, reschedule_reason, status FROM interviews WHERE id=?').get('int-301');
+      assert.equal(updated.duration_minutes, 70);
+      assert.equal(updated.reschedule_reason, 'Doi lich tren PGlite khong co bang token');
+
+      const historyResched = await db.prepare("SELECT action FROM candidate_status_history WHERE candidate_id='cand-201' AND action='INTERVIEW_RESCHEDULED'").get();
+      assert.ok(historyResched);
+
+      const resCancel = await service.cancelInterview('int-301', {
+        cancellationReason: 'Huy lich tren PGlite khong co bang token'
+      }, { id: 'u-rec-1' });
+      assert.equal(resCancel.success, true);
+      assert.equal(resCancel.status, 'CANCELLED');
+
+      const cancelled = await db.prepare('SELECT status, cancellation_reason FROM interviews WHERE id=?').get('int-301');
+      assert.equal(cancelled.status, 'CANCELLED');
+      assert.equal(cancelled.cancellation_reason, 'Huy lich tren PGlite khong co bang token');
+
+      const historyCancel = await db.prepare("SELECT action FROM candidate_status_history WHERE candidate_id='cand-201' AND action='INTERVIEW_CANCELLED'").get();
+      assert.ok(historyCancel);
+
+      await db.close();
+    }
+  });
+
+  test('TC15: Reschedule and cancel revoke tokens correctly on PGlite when table exists', async () => {
+    const db = await createPgliteDb();
+    await bootstrapPglite(db);
+    await seedFixture(db);
+    const service = new RequisitionService(db);
+    const invService = new InterviewInvitationService(db);
+
+    const oldInv = await invService.createInvitation('int-301');
+    assert.equal(oldInv.success, true);
+
+    const newTime = new Date(Date.now() + 86400000 * 4).toISOString();
+    const resResched = await service.updateInterviewSchedule('int-301', {
+      scheduledTime: newTime,
+      durationMinutes: 60,
+      interviewFormat: 'ONLINE',
+      meetingLink: 'https://meet.google.com/pglite-token-test',
+      interviewerIds: ['u-int-1'],
+      rescheduleReason: 'Doi lich sang online tren PGlite'
+    }, { id: 'u-rec-1' });
+    assert.equal(resResched.success, true);
+
+    const oldTokenRow = await db.prepare('SELECT status FROM interview_invitation_tokens WHERE token_hash=?').get(oldInv.tokenHash);
+    assert.equal(oldTokenRow.status, 'REVOKED');
+
+    const activeTokens = await db.prepare("SELECT token_hash FROM interview_invitation_tokens WHERE interview_id='int-301' AND status='ACTIVE'").all();
+    assert.equal(activeTokens.length, 1);
+
+    const resCancel = await service.cancelInterview('int-301', {
+      cancellationReason: 'Huy lich sau khi co token tren PGlite'
+    }, { id: 'u-rec-1' });
+    assert.equal(resCancel.success, true);
+    assert.equal(resCancel.status, 'CANCELLED');
+
+    const tokensAfterCancel = await db.prepare("SELECT status FROM interview_invitation_tokens WHERE interview_id='int-301'").all();
+    assert.ok(tokensAfterCancel.length >= 2);
+    assert.ok(tokensAfterCancel.every(t => t.status === 'REVOKED'));
+
+    await db.close();
+  });
+
+  test('TC16: Transaction rollback on cancel failure leaves interview and tokens unchanged (SQLite and PGlite)', async () => {
+    {
+      const db = createSqliteDb();
+      await bootstrapSqlite(db);
+      await seedFixture(db);
+      const service = new RequisitionService(db);
+      const invService = new InterviewInvitationService(db);
+      const inv = await invService.createInvitation('int-301');
+
+      db.exec("CREATE TRIGGER test_cancel_rollback BEFORE UPDATE ON interviews BEGIN SELECT RAISE(ABORT, 'SIMULATED_CANCEL_ERROR'); END;");
+
+      await assert.rejects(async () => {
+        await service.cancelInterview('int-301', {
+          cancellationReason: 'Lý do kiểm thử rollback SQLite'
+        }, { id: 'u-rec-1' });
+      }, /SIMULATED_CANCEL_ERROR/);
+
+      const intRow = await db.prepare('SELECT status, cancellation_reason FROM interviews WHERE id=?').get('int-301');
+      assert.equal(intRow.status, 'SCHEDULED');
+      assert.equal(intRow.cancellation_reason, null);
+
+      const tokenRow = await db.prepare('SELECT status FROM interview_invitation_tokens WHERE token_hash=?').get(inv.tokenHash);
+      assert.equal(tokenRow.status, 'ACTIVE');
+
+      const outbox = await db.prepare("SELECT id FROM email_outbox WHERE template_name='S606_INTERVIEW_CANCELLATION'").all();
+      assert.equal(outbox.length, 0);
+    }
+
+    {
+      const db = await createPgliteDb();
+      await bootstrapPglite(db);
+      await seedFixture(db);
+      const service = new RequisitionService(db);
+      const invService = new InterviewInvitationService(db);
+      const inv = await invService.createInvitation('int-301');
+
+      await db.exec("ALTER TABLE interviews ADD CONSTRAINT test_cancel_rollback CHECK (status != 'CANCELLED');");
+
+      await assert.rejects(async () => {
+        await service.cancelInterview('int-301', {
+          cancellationReason: 'Lý do kiểm thử rollback PGlite'
+        }, { id: 'u-rec-1' });
+      }, /test_cancel_rollback/);
+
+      const intRow = await db.prepare('SELECT status, cancellation_reason FROM interviews WHERE id=?').get('int-301');
+      assert.equal(intRow.status, 'SCHEDULED');
+      assert.equal(intRow.cancellation_reason, null);
+
+      const tokenRow = await db.prepare('SELECT status FROM interview_invitation_tokens WHERE token_hash=?').get(inv.tokenHash);
+      assert.equal(tokenRow.status, 'ACTIVE');
+
+      const outbox = await db.prepare("SELECT id FROM email_outbox WHERE template_name='S606_INTERVIEW_CANCELLATION'").all();
+      assert.equal(outbox.length, 0);
+
+      await db.close();
+    }
   });
 
   let passed = 0;
