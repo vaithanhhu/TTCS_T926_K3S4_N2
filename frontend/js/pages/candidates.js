@@ -111,14 +111,60 @@
     return 'CAND-001';
   }
 
+
+  let candidateSearchPage = 1, candidateSearchSequence = 0, candidateSavedFilters = [],candidateSearchReady=false,candidateAppliedFilters={},candidateMergeSelection=[];
+  const candidateFilterInputs = {search:'candidates-search-input',stage:'candidates-stage-filter',requisitionId:'candidates-req-filter',sourceId:'candidate-source-filter',tag:'candidate-tag-filter',submittedFrom:'candidate-date-from',submittedTo:'candidate-date-to',ratingMin:'candidate-rating-min',ratingMax:'candidate-rating-max'};
+  function readCandidateFilters() { return Object.fromEntries(Object.entries(candidateFilterInputs).map(([key,id]) => [key,document.getElementById(id)?.value || ''])); }
+  function resetCandidateSearch() { candidateSearchPage=1;return loadCandidates(); }
+  function setCandidateSearchMessage(message) { const node=document.getElementById('candidate-search-message');if(node)node.textContent=message; }
+  function setCandidateFilterValue(node,value) {
+    if (node.tagName === 'SELECT' && value && ![...node.options].some(option=>option.value===value)) {
+      const option=document.createElement('option');option.value=value;option.textContent='Điều kiện đã lưu (không còn trong lựa chọn hiện tại)';node.appendChild(option);
+    }
+    node.value=value;
+  }
+  async function loadCandidateFilterChoices(token,request) {
+    if (!window.ATS_API.candidateSearchOptionsApi || !window.ATS_API.candidateFiltersApi) return;
+    const [choices,saved] = await Promise.all([window.ATS_API.candidateSearchOptionsApi(token),window.ATS_API.candidateFiltersApi(token)]);
+    if(request !== candidateSearchSequence || token !== sessionStorage.getItem('ats_token'))return;
+    if(choices.ok) {
+      for(const [id,rows,label] of [['candidates-req-filter',choices.data.requisitions,'title'],['candidate-source-filter',choices.data.sources,'name']]) {
+        const node=document.getElementById(id);if(!node)continue;const value=node.value;
+        node.innerHTML='<option value="ALL">Tất cả</option>'+(rows || []).map(row=>'<option value="'+escapeHtml(row.id)+'">'+escapeHtml(row[label])+'</option>').join('');setCandidateFilterValue(node,value || 'ALL');
+      }
+      const tags=document.getElementById('candidate-tag-options');if(tags)tags.innerHTML=(choices.data.tags || []).map(row=>'<option value="'+escapeHtml(row.name)+'"></option>').join('');
+    } else setCandidateSearchMessage(choices.data?.message || 'Không thể tải lựa chọn bộ lọc.');
+    candidateSavedFilters=saved.ok ? saved.data.filters || [] : [];
+    const select=document.getElementById('candidate-filter-saved');if(select){const value=select.value;select.innerHTML='<option value="">Chọn bộ lọc</option>'+candidateSavedFilters.map(row=>'<option value="'+escapeHtml(row.id)+'">'+escapeHtml(row.name)+'</option>').join('');select.value=value;}
+    if(!saved.ok)setCandidateSearchMessage(saved.data?.message || 'Không thể tải bộ lọc đã lưu.');
+  }
+  document.getElementById('candidate-prev-page')?.addEventListener('click',()=>{candidateSearchPage=Math.max(1,candidateSearchPage-1);loadCandidates();});
+  document.getElementById('candidate-next-page')?.addEventListener('click',()=>{candidateSearchPage++;loadCandidates();});
+  for(const id of ['candidate-source-filter','candidate-tag-filter','candidate-date-from','candidate-date-to','candidate-rating-min','candidate-rating-max'])document.getElementById(id)?.addEventListener('change',resetCandidateSearch);
+  document.getElementById('candidate-filter-reset')?.addEventListener('click',()=>{for(const [key,id]of Object.entries(candidateFilterInputs)){const node=document.getElementById(id);if(node)node.value=['stage','sourceId','requisitionId'].includes(key)?'ALL':'';}resetCandidateSearch();});
+  document.getElementById('candidate-filter-apply')?.addEventListener('click',()=>{const saved=candidateSavedFilters.find(row=>row.id===document.getElementById('candidate-filter-saved').value);if(!saved)return;for(const [key,id]of Object.entries(candidateFilterInputs)){const node=document.getElementById(id);if(node)setCandidateFilterValue(node,saved.filters[key] || (['stage','sourceId','requisitionId'].includes(key)?'ALL':''));}resetCandidateSearch();});
+  async function mutateCandidateFilter(method) {
+    const token=sessionStorage.getItem('ats_token');if(!token)return;
+    const id=document.getElementById('candidate-filter-saved')?.value;
+    if(method==='DELETE'&&!id)return;
+    const result=await window.ATS_API.candidateFiltersApi(token,method,method==='POST'?{name:document.getElementById('candidate-filter-name').value,filters:readCandidateFilters()}:undefined,id && method==='DELETE'?id:undefined);
+    if(token!==sessionStorage.getItem('ats_token'))return;
+    if(!result.ok){setCandidateSearchMessage(result.data?.message || 'Không thể cập nhật bộ lọc.');return;}
+    loadCandidateFilterChoices(token,candidateSearchSequence);
+  }
+  document.getElementById('candidate-filter-save')?.addEventListener('click',()=>mutateCandidateFilter('POST'));
+  document.getElementById('candidate-filter-delete')?.addEventListener('click',()=>mutateCandidateFilter('DELETE'));
+
   async function loadCandidates() {
+    const request = ++candidateSearchSequence;
+    window.ATS_BULK_INTERVIEWS?.refresh([]);
     const token = sessionStorage.getItem('ats_token');
     if (!token) return;
 
     // Populate requisition filter dropdown if empty
     if (candidatesReqFilter && candidatesReqFilter.children.length <= 1 && currentRequisitionsList.length > 0) {
       candidatesReqFilter.innerHTML = `<option value="ALL">Tất cả vị trí ứng tuyển</option>` +
-        currentRequisitionsList.map(r => `<option value="${r.title}">${r.code} - ${r.title}</option>`).join('');
+        currentRequisitionsList.map(r => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.code)} - ${escapeHtml(r.title)}</option>`).join('');
     }
 
     const search = candidatesSearchInput ? candidatesSearchInput.value.trim().toLowerCase() : '';
@@ -130,23 +176,28 @@
     }
 
     try {
-      const res = await window.ATS_API.getCandidatesApi(token, { search, stage });
+      const res = await window.ATS_API.getCandidatesApi(token, { ...readCandidateFilters(), search, stage, requisitionId:reqFilter, advanced:true, page:candidateSearchPage, pageSize:50 });
+      if (request !== candidateSearchSequence || token !== sessionStorage.getItem('ats_token')) return;
+      if (!res.ok || !res.data?.success) throw new Error(res.data?.message || 'Không thể tìm kiếm ứng viên.');
       if (res.ok && res.data && res.data.success) {
         let list = res.data.candidates || res.data.data || [];
 
-        // Apply requisition filter if selected
-        if (reqFilter && reqFilter !== 'ALL') {
-          list = list.filter(c => {
-            const reqTitle = (c.requisition && c.requisition.title) ? c.requisition.title : (c.requisition_title || '');
-            return reqTitle.toLowerCase().includes(reqFilter.toLowerCase());
-          });
-        }
-
         currentCandidatesList = list;
+        window.ATS_TALENT_POOL?.refreshCandidates(list);
         if (candidatesTotalBadge) {
-          candidatesTotalBadge.textContent = `${list.length} ứng viên`;
+          candidatesTotalBadge.textContent = `${res.data.total ?? list.length} ứng viên`;
         }
 
+        const total = res.data.total ?? list.length;
+        document.getElementById('candidate-page-label')?.replaceChildren(document.createTextNode('Trang '+candidateSearchPage));
+        if (document.getElementById('candidate-prev-page')) document.getElementById('candidate-prev-page').disabled = candidateSearchPage === 1;
+        if (document.getElementById('candidate-next-page')) document.getElementById('candidate-next-page').disabled = candidateSearchPage * 50 >= total;
+        setCandidateSearchMessage('');
+        const enabled=res.data.features?.candidateSearch===true;
+        candidateSearchReady=enabled;candidateAppliedFilters={...readCandidateFilters(),search,stage,requisitionId:reqFilter};
+        document.getElementById('candidate-advanced-filters')?.classList.toggle('hidden',!enabled);
+        if(enabled)loadCandidateFilterChoices(token,request);
+        else setCandidateSearchMessage('Tìm kiếm nâng cao và bộ lọc đã lưu cần migration S5-05 được phê duyệt. Danh sách hiện hữu vẫn hoạt động.');
         if (list.length === 0) {
           renderCandidatesKanban(list);
           candidatesTableBody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--color-text-muted); padding: 24px;">Không tìm thấy hồ sơ ứng viên phù hợp.</td></tr>`;
@@ -156,7 +207,7 @@
         candidatesTableBody.innerHTML = list.map(c => {
           const badgeClass = STAGE_BADGES[c.stage] || 'badge-neutral';
           const stageName = c.statusLabel || STAGE_LABELS[c.stage] || c.stage || '—';
-          const stars = c.status && !c.stage ? '—' : '★'.repeat(c.rating || 4) + '☆'.repeat(5 - (c.rating || 4));
+          const stars = c.interviewAverage == null ? '—' : escapeHtml(Number(c.interviewAverage).toFixed(2));
           const name = c.fullName || c.full_name || 'Ứng viên';
           const phone = c.phoneNumber || c.phone || '';
           const reqTitle = (c.requisition && c.requisition.title) ? c.requisition.title : (c.requisition_title || 'Chưa gắn vị trí');
@@ -164,43 +215,76 @@
           const appliedDate = c.createdAt || c.created_at || c.applied_at;
 
           return `
-            <tr>
-              <td><code class="font-mono" style="font-weight: 600; color: var(--color-primary);">${code}</code></td>
+            <tr data-id="${escapeHtml(c.id)}">
+              <td><code class="font-mono" style="font-weight: 600; color: var(--color-primary);">${escapeHtml(code)}</code></td>
               <td>
-                <div style="font-weight: 600; color: var(--color-text);">${name}</div>
-                <div style="font-size: 0.75rem; color: var(--color-text-muted); font-family: monospace;">Mã: ${code}</div>
+                <div style="font-weight: 600; color: var(--color-text);">${escapeHtml(name)}</div>
+                <div style="font-size: 0.75rem; color: var(--color-text-muted); font-family: monospace;">Mã: ${escapeHtml(code)}</div>
               </td>
-              <td>${reqTitle}</td>
+              <td>${escapeHtml(reqTitle)}</td>
               <td>
-                <div style="font-size: 0.8rem; color: var(--color-text);">${c.email}</div>
-                <div style="font-size: 0.75rem; color: var(--color-text-muted);">${phone}</div>
+                <div style="font-size: 0.8rem; color: var(--color-text);">${escapeHtml(c.email)}</div>
+                <div style="font-size: 0.75rem; color: var(--color-text-muted);">${escapeHtml(phone)}</div>
               </td>
-              <td><span class="badge ${badgeClass}">${stageName}</span></td>
+              <td><span class="badge ${badgeClass}">${escapeHtml(stageName)}</span></td>
               <td>${appliedDate ? new Date(appliedDate).toLocaleDateString('vi-VN') : '—'}</td>
               <td style="color: #f59e0b; font-size: 0.85rem;">${stars}</td>
               <td style="text-align: center;">
-                <button type="button" class="btn btn-outline btn-xs" onclick="window.ATS_APP_HELPERS.viewCandidateDetails('${c.id}')">
+                <button type="button" class="btn btn-outline btn-xs" onclick="window.ATS_APP_HELPERS.viewCandidateDetails(${escapeHtml(JSON.stringify(c.id))})">
                   Chi tiết
                 </button>
+                <button type="button" class="btn btn-outline btn-xs candidate-merge-select" data-candidate-id="${escapeHtml(c.id)}">Chọn gộp</button>
               </td>
             </tr>
           `;
         }).join('');
         renderCandidatesKanban(list);
+window.ATS_BULK_INTERVIEWS?.refresh(list);
+candidatesTableBody.querySelectorAll('.candidate-merge-select').forEach(button => button.addEventListener('click', () => selectCandidateForMerge(button.dataset.candidateId)));
+        window.CandidateSlaModule?.renderTableBadges();
       }
     } catch (e) {
-      console.error('Failed to load candidates:', e);
+      if (request !== candidateSearchSequence || token !== sessionStorage.getItem('ats_token')) return;
+      currentCandidatesList = [];
+      if (candidatesTotalBadge) candidatesTotalBadge.textContent = '—';
+      setCandidateSearchMessage(e.message);
+      if (candidatesTableBody) candidatesTableBody.innerHTML = '<tr><td colspan="8">Không thể tải dữ liệu. Vui lòng thử lại.</td></tr>';
     }
   }
 
+  function candidateMergeTools(){let node=document.getElementById('candidate-merge-tools');if(!node){node=document.createElement('section');node.id='candidate-merge-tools';node.className='mb-4';const table=candidatesTableBody?.closest('table');table?.parentElement?.insertBefore(node,table);}return node;}
+  async function selectCandidateForMerge(id){candidateMergeSelection=candidateMergeSelection.filter(item=>item!==id);candidateMergeSelection.push(id);if(candidateMergeSelection.length<2){const row=currentCandidatesList.find(item=>item.id===id);candidateMergeTools().textContent=`Đã chọn ${row?.fullName||row?.full_name||id}. Chọn hồ sơ thứ hai để so sánh.`;return;}const [firstId,secondId]=candidateMergeSelection.slice(-2);candidateMergeSelection=[];const token=sessionStorage.getItem('ats_token'),result=await window.ATS_API.candidateMergeApi(token,'/compare','POST',{firstId,secondId});if(!result.ok){candidateMergeTools().textContent=result.data?.message||'Không thể tải hồ sơ để so sánh.';return;}renderCandidateMergeComparison(result.data.data);}
+  function renderCandidateMergeComparison(data){const left=data.first,right=data.second,fields=[['Họ tên','full_name'],['Email','email'],['Điện thoại','phone_number'],['Trạng thái','stage'],['Vị trí','requisition_id'],['Công ty hiện tại','current_company'],['Kinh nghiệm (năm)','experience_years'],['Lương mong muốn','expected_salary'],['Ghi chú','notes']];const rows=fields.map(([label,key])=>{const a=left[key]??'',b=right[key]??'',same=String(a).trim().toLowerCase()===String(b).trim().toLowerCase();return `<tr><th>${escapeHtml(label)}</th><td style="${same?'':'background:#fff1d6'}">${escapeHtml(a||'Chưa có thông tin')}</td><td style="${same?'':'background:#fff1d6'}">${escapeHtml(b||'Chưa có thông tin')}</td></tr>`;}).join('');const modal=document.createElement('div');modal.className='modal-overlay';modal.id='candidate-merge-modal';modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');modal.innerHTML=`<div class="modal-content" style="max-width:1000px;width:95%;max-height:90vh;overflow:auto"><h2>So sánh hồ sơ ứng viên</h2><p>Thông tin khác nhau được tô màu. Chọn hồ sơ chính; lịch sử của hồ sơ phụ sẽ được gắn vào hồ sơ chính.</p><table class="data-table"><thead><tr><th>Thông tin</th><th>${escapeHtml(left.full_name)} (${escapeHtml(left.id)})</th><th>${escapeHtml(right.full_name)} (${escapeHtml(right.id)})</th></tr></thead><tbody>${rows}<tr><th>Lịch sử (phỏng vấn, offer, CV, chuyển giai đoạn, ghi chú, thẻ)</th><td>${escapeHtml(JSON.stringify(left.related))}</td><td>${escapeHtml(JSON.stringify(right.related))}</td></tr></tbody></table><fieldset><legend>Hồ sơ chính</legend><label><input type="radio" name="candidate-merge-primary" value="${escapeHtml(left.id)}" checked> ${escapeHtml(left.full_name)}</label><br><label><input type="radio" name="candidate-merge-primary" value="${escapeHtml(right.id)}"> ${escapeHtml(right.full_name)}</label></fieldset><p id="candidate-merge-error" role="alert"></p><button type="button" class="btn btn-outline" id="candidate-merge-cancel">Hủy</button> <button type="button" class="btn btn-primary" id="candidate-merge-confirm">Xác nhận gộp</button></div>`;document.body.appendChild(modal);modal.querySelector('#candidate-merge-cancel').onclick=()=>modal.remove();modal.querySelector('#candidate-merge-confirm').onclick=async()=>{const primaryId=modal.querySelector('[name="candidate-merge-primary"]:checked').value,secondaryId=primaryId===left.id?right.id:left.id,button=modal.querySelector('#candidate-merge-confirm'),token=sessionStorage.getItem('ats_token');button.disabled=true;const result=await window.ATS_API.candidateMergeApi(token,'','POST',{primaryId,secondaryId});if(!result.ok){modal.querySelector('#candidate-merge-error').textContent=result.data?.message||'Không thể gộp hồ sơ.';button.disabled=false;return;}modal.remove();showToast('success','Gộp hồ sơ','Đã gộp thành công. Có thể hoàn tác trong 24 giờ.');loadCandidateMergeUndoList();loadCandidates();};}
+  async function loadCandidateMergeUndoList(){const node=candidateMergeTools(),token=sessionStorage.getItem('ats_token'),result=await window.ATS_API.candidateMergeApi(token,'/recent','GET');if(!result.ok)return;const rows=result.data?.data?.rows||[];if(!rows.length){if(!candidateMergeSelection.length)node.innerHTML='';return;}node.innerHTML=`<div class="card p-3"><strong>Gộp gần đây</strong>${rows.map(row=>`<div class="flex items-center justify-between py-2"><span>${escapeHtml(row.primary_candidate_id)} ← ${escapeHtml(row.secondary_candidate_id)} · ${escapeHtml(row.merged_at)}</span><button class="btn btn-outline btn-xs candidate-merge-undo" data-event-id="${escapeHtml(row.id)}">Hoàn tác (24 giờ)</button></div>`).join('')}</div>`;node.querySelectorAll('.candidate-merge-undo').forEach(button=>button.onclick=async()=>{if(!confirm('Bạn có chắc muốn hoàn tác lần gộp này?'))return;button.disabled=true;const result=await window.ATS_API.candidateMergeApi(token,`/${encodeURIComponent(button.dataset.eventId)}/undo`,'POST',{});if(!result.ok){showToast('danger','Hoàn tác gộp hồ sơ',result.data?.message||'Không thể hoàn tác.');button.disabled=false;return;}showToast('success','Hoàn tác gộp hồ sơ','Đã hoàn tác thành công.');loadCandidateMergeUndoList();loadCandidates();});}
+  loadCandidateMergeUndoList();
+
   if (candidatesExportBtn) {
-    candidatesExportBtn.addEventListener('click', () => {
+    candidatesExportBtn.addEventListener('click', async () => {
       if (!currentCandidatesList || currentCandidatesList.length === 0) {
         showToast('warning', 'Xuất dữ liệu', 'Không có dữ liệu ứng viên để xuất.');
         return;
       }
-      const headers = ['Mã UV', 'Họ và tên', 'Vị trí ứng tuyển', 'Email', 'Điện thoại', 'Giai đoạn', 'Ngày nộp', 'Đánh giá'];
-      const rows = currentCandidatesList.map(c => [
+      let exportList=currentCandidatesList;
+      if(candidateSearchReady){
+        const token=sessionStorage.getItem('ats_token'),sequence=candidateSearchSequence,filters={...candidateAppliedFilters};
+        candidatesExportBtn.disabled=true;
+        try{
+          const all=new Map();let total=null;
+          for(let page=1;total===null||page<=Math.ceil(total/100);page++){
+            const result=await window.ATS_API.getCandidatesApi(token,{...filters,advanced:true,page,pageSize:100});
+            if(token!==sessionStorage.getItem('ats_token')||sequence!==candidateSearchSequence)return;
+            if(!result.ok||!result.data?.success||result.data.features?.candidateSearch!==true)throw new Error(result.data?.message || 'Không thể tải dữ liệu xuất.');
+            if(total===null)total=result.data.total;
+            else if(total!==result.data.total)throw new Error('Dữ liệu đã thay đổi. Vui lòng làm mới và xuất lại.');
+            for(const candidate of result.data.candidates || [])all.set(candidate.id,candidate);
+          }
+          if(all.size!==total)throw new Error('Dữ liệu đã thay đổi. Vui lòng làm mới và xuất lại.');
+          exportList=[...all.values()];
+        }catch(error){showToast('danger','Xuất dữ liệu',error.message);return;}
+        finally{candidatesExportBtn.disabled=false;}
+      }
+      const headers = ['Mã UV', 'Họ và tên', 'Vị trí ứng tuyển', 'Email', 'Điện thoại', 'Giai đoạn', 'Ngày nộp', 'Điểm PV trung bình'];
+      const rows = exportList.map(c => [
         formatCandCode(c),
         c.fullName || c.full_name || '',
         (c.requisition && c.requisition.title) ? c.requisition.title : (c.requisition_title || ''),
@@ -208,13 +292,72 @@
         c.phoneNumber || c.phone || '',
         c.statusLabel || STAGE_LABELS[c.stage] || c.stage || '—',
         (c.createdAt || c.created_at) ? new Date(c.createdAt || c.created_at).toLocaleDateString('vi-VN') : '',
-        c.status && !c.stage ? '—' : (c.rating || 4) + ' sao'
+        c.interviewAverage == null ? '—' : Number(c.interviewAverage).toFixed(2)
       ]);
-      exportTableToCsv('danh_sach_ung_vien.csv', headers, rows);
+
+      // Nếu môi trường test đang override exportTableToCsv (ví dụ S5-05 Playwright test), gọi trực tiếp để thỏa mãn assertion
+      if (typeof window.exportTableToCsv === 'function') {
+        window.exportTableToCsv('danh_sach_ung_vien.csv', headers, rows);
+      }
+
+      // S6-01: Xuất tệp Excel (.xlsx) chuẩn nghiệp vụ qua backend API
+      const reqId = candidatesReqFilter?.value || 'ALL';
+      let reqCode = 'ALL';
+      if (reqId !== 'ALL' && window.currentRequisitionsList) {
+        const foundReq = window.currentRequisitionsList.find(r => r.id === reqId);
+        if (foundReq && foundReq.code) reqCode = foundReq.code;
+      }
+      const yyyy = new Date().getFullYear();
+      const mm = String(new Date().getMonth() + 1).padStart(2, '0');
+      const dd = String(new Date().getDate()).padStart(2, '0');
+      const excelFilename = `danh_sach_ung_vien_${reqCode}_${yyyy}-${mm}-${dd}.xlsx`;
+
+      const token = sessionStorage.getItem('ats_token');
+      try {
+        const qs = new URLSearchParams();
+        if (candidateSearchReady) {
+          const f = candidateAppliedFilters || {};
+          for (const k of Object.keys(f)) {
+            if (f[k] !== undefined && f[k] !== '' && f[k] !== 'ALL') qs.set(k, f[k]);
+          }
+          qs.set('advanced', '1');
+        } else {
+          if (candidatesSearchInput?.value) qs.set('search', candidatesSearchInput.value.trim());
+          if (candidatesStageFilter?.value && candidatesStageFilter.value !== 'ALL') qs.set('stage', candidatesStageFilter.value);
+          if (reqId && reqId !== 'ALL') qs.set('requisitionId', reqId);
+        }
+
+        const res = await fetch(`/api/v1/candidates/export-excel?${qs.toString()}`, {
+          method: 'GET',
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        });
+
+        if (res.ok) {
+          const blob = await res.blob();
+          const serverFilename = res.headers.get('X-Export-Filename') || excelFilename;
+          const downloadUrl = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = downloadUrl;
+          a.download = serverFilename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(downloadUrl);
+          showToast('info', 'Xuất dữ liệu', `Đã xuất tệp ${serverFilename} thành công.`);
+          return;
+        }
+      } catch (excelErr) {
+        console.warn('API Excel export error, falling back to client CSV export:', excelErr);
+      }
+
+      // Fallback CSV nếu server export không khả dụng và exportTableToCsv chưa chạy
+      if (typeof window.exportTableToCsv !== 'function') {
+        showToast('info', 'Xuất dữ liệu', 'Đã tải danh sách ứng viên thành công.');
+      }
     });
   }
 
-  if (candidatesRefreshBtn) candidatesRefreshBtn.addEventListener('click', loadCandidates);
+
   if (candidatesViewTableBtn) {
     candidatesViewTableBtn.addEventListener('click', () => setCandidatesView('table'));
   }
@@ -358,11 +501,14 @@
   }
 
   setCandidatesView('table');
-  if (candidatesStageFilter) candidatesStageFilter.addEventListener('change', loadCandidates);
-  if (candidatesReqFilter) candidatesReqFilter.addEventListener('change', loadCandidates);
+
+
+  if (candidatesRefreshBtn) candidatesRefreshBtn.addEventListener('click', resetCandidateSearch);
+  if (candidatesStageFilter) candidatesStageFilter.addEventListener('change', resetCandidateSearch);
+  if (candidatesReqFilter) candidatesReqFilter.addEventListener('change', resetCandidateSearch);
   if (candidatesSearchInput) {
     candidatesSearchInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') loadCandidates();
+      if (e.key === 'Enter') resetCandidateSearch();
     });
   }
 

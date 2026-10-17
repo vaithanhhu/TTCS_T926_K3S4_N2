@@ -8,15 +8,25 @@ const Requisitions=require('../src/services/requisitionService');
 const Rbac=require('../src/middlewares/rbacMiddleware');
 const {ROLE_PERMISSIONS,synchronizePermissions}=require('../src/db/sync-permissions');
 const roles={ADMIN:'usr-admin',HR_MANAGER:'usr-hr-mgr',HIRING_MGR:'usr-hiring-mgr',RECRUITER:'usr-recruiter',INTERVIEWER:'usr-interviewer',APPROVER:'usr-approver',CANDIDATE:'usr-candidate'};
+const mergePermissions=['candidate.merge','candidate.merge.undo'],mergeRoles=['ADMIN','HR_MANAGER','RECRUITER'];
 let passed=0,failed=0;
 async function test(name,action){try{await action();passed++;console.log('[PASS] '+name);}catch(error){failed++;console.error('[FAIL] '+name+'\n'+error.stack);}}
 async function storageCases(db,label){
+  const mergeMigration=require('../src/db/migrate-candidate-merges');
+  await mergeMigration.migrate(db);
+  await require('../src/db/migrate-interview-conflict-override').migrate(db);
+  await test(label+' merge module migration preserves grants on retry',async()=>{
+    const before=await db.prepare('SELECT * FROM role_permissions ORDER BY role_id,permission_id').all();
+    await mergeMigration.migrate(db);
+    assert.deepEqual(await db.prepare('SELECT * FROM role_permissions ORDER BY role_id,permission_id').all(),before);
+  });
   const rbac=new Rbac(db),service=new Requisitions(db);
   const actor=role=>({id:roles[role],roles:[role],email:role==='CANDIDATE'?'candidate@example.com':role.toLowerCase()+'@example.test'});
   for(const [role,id]of Object.entries(roles))await test(label+' canonical grants '+role,async()=>{
     const actual=await rbac.getUserPermissions(id);
     if(role==='ADMIN')assert.deepEqual(actual,(await db.prepare('SELECT code FROM permissions ORDER BY code').all()).map(row=>row.code));
-    else assert.deepEqual(actual,[...ROLE_PERMISSIONS[role]].sort());
+    else assert.deepEqual(actual,[...ROLE_PERMISSIONS[role],...(mergeRoles.includes(role)?mergePermissions:[])].sort());
+    for(const permission of mergePermissions)assert.equal(await rbac.hasPermission(id,permission),mergeRoles.includes(role));
   });
   await test(label+' seed and sync preserve legitimate module grants and revoke forbidden legacy grants',async()=>{
     await db.prepare("INSERT INTO permissions(id,code,name,module) VALUES('test-preserved','test.module.read','Preserved','TEST')").run();

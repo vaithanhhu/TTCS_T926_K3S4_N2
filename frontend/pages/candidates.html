@@ -22,11 +22,12 @@
           <div class="filter-toolbar">
             <div class="toolbar-filters">
               <div style="min-width: 260px; flex: 1;">
-                <input type="text" id="candidates-search-input" class="form-input" placeholder="Tìm theo tên ứng viên, email, số điện thoại..." />
+                <input type="text" id="candidates-search-input" class="form-input" placeholder="Tên, email, điện thoại, từ khóa thư giới thiệu..." aria-label="Tìm kiếm ứng viên" />
               </div>
               <div style="width: 180px;">
                 <select id="candidates-stage-filter" class="form-input">
                   <option value="ALL">Tất cả giai đoạn</option>
+                  <option value="NEW">Hồ sơ mới</option>
                   <option value="APPLIED">Ứng tuyển</option>
                   <option value="SCREENING">Sơ loại hồ sơ</option>
                   <option value="INTERVIEW">Phỏng vấn</option>
@@ -65,6 +66,39 @@
       <!-- Table -->
 
 <!-- Table -->
+
+          <div id="bulk-interview-toolbar" hidden style="margin:12px 0">
+            <label><input id="bulk-select-page" type="checkbox"> Chọn các hồ sơ hợp lệ trên trang này</label>
+            <button id="bulk-open-button" type="button" class="btn btn-outline">Đặt lịch hàng loạt</button>
+            <span id="bulk-selected-count" aria-live="polite"></span>
+          </div>
+          <details id="candidate-advanced-filters" style="margin-bottom:16px">
+            <summary>Bộ lọc nâng cao và bộ lọc đã lưu</summary>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px;margin-top:12px">
+              <label>Nguồn ứng viên<select id="candidate-source-filter" class="form-input"><option value="ALL">Tất cả nguồn</option></select></label>
+              <label>Nhãn<input id="candidate-tag-filter" class="form-input" list="candidate-tag-options" maxlength="200"><datalist id="candidate-tag-options"></datalist></label>
+              <label>Nộp từ ngày<input id="candidate-date-from" type="date" class="form-input"></label>
+              <label>Nộp đến hết ngày<input id="candidate-date-to" type="date" class="form-input"></label>
+              <label>Điểm phỏng vấn TB từ<input id="candidate-rating-min" type="number" step="any" class="form-input"></label>
+              <label>Điểm phỏng vấn TB đến<input id="candidate-rating-max" type="number" step="any" class="form-input"></label>
+            </div>
+            <p class="text-muted">Điểm trung bình các phỏng vấn hoàn tất có điểm; hồ sơ chưa có điểm không khớp điều kiện điểm.</p>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:end">
+              <label>Tên bộ lọc<input id="candidate-filter-name" class="form-input" maxlength="100"></label>
+              <button type="button" id="candidate-filter-save" class="btn btn-outline btn-sm">Lưu bộ lọc</button>
+              <label>Bộ lọc của tôi<select id="candidate-filter-saved" class="form-input"><option value="">Chọn bộ lọc</option></select></label>
+              <button type="button" id="candidate-filter-apply" class="btn btn-outline btn-sm">Áp dụng</button>
+              <button type="button" id="candidate-filter-delete" class="btn btn-outline btn-sm">Xóa bộ lọc</button>
+              <button type="button" id="candidate-filter-reset" class="btn btn-outline btn-sm">Xóa điều kiện</button>
+            </div>
+          </details>
+          <p id="candidate-search-message" role="status" aria-live="polite"></p>
+          <div style="display:flex;justify-content:flex-end;gap:8px;margin:8px 0">
+            <button type="button" id="candidate-prev-page" class="btn btn-outline btn-sm" disabled>Trang trước</button>
+            <span id="candidate-page-label" aria-live="polite">Trang 1</span>
+            <button type="button" id="candidate-next-page" class="btn btn-outline btn-sm" disabled>Trang sau</button>
+          </div>
+          <!-- Table -->
           <div class="table-wrapper">
             <table class="data-table">
               <thead>
@@ -75,7 +109,7 @@
                   <th>Liên hệ</th>
                   <th>Vòng tuyển dụng</th>
                   <th>Ngày nộp</th>
-                  <th>Đánh giá</th>
+                  <th>Điểm PV trung bình</th>
                   <th style="text-align: center;">Thao tác</th>
                 </tr>
               </thead>

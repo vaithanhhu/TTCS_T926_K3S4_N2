@@ -184,7 +184,7 @@ async function main() {
     const foreign = await require('./helpers/approvalPolicyFixture').createApproved(service.db,{ title: 'PG scope foreign', departmentId: 'dept-2', hiringManagerId: 'usr-hr-mgr', headcount: 1 },{id:'usr-admin',roles:['ADMIN']});
     const a = await service.createCandidate({ fullName: 'PG scope own', email: 'pg-own@example.test', requisitionId: own.data.id });
     const b = await service.createCandidate({ fullName: 'PG scope foreign', email: 'pg-foreign@example.test', requisitionId: foreign.data.id });
-    await service.createInterview({ candidateId: b.data.id, interviewerId: 'usr-interviewer', scheduledTime: '2027-01-01T12:00:00Z' });
+    await service.createInterview({ candidateId: b.data.id, interviewerId: 'usr-interviewer', scheduledTime: '2027-01-01T12:00:00Z' }, {id:'usr-admin'});
     await test('PostgreSQL Hiring Manager scope includes only owned requisition candidates', async () => {
       const response = await service.getCandidates({ search: 'PG scope', viewer: { id: 'usr-hiring-mgr', roles: ['HIRING_MGR'] } });
       assert.deepEqual(response.candidates.map(row => row.id), [a.data.id]);
@@ -204,8 +204,8 @@ async function main() {
       assert.deepEqual(response.candidates.map(row => row.id), [a.data.id]);
     });
     await test('PostgreSQL visibility preserves role union and rejects unknown role scope', async () => {
-      await service.createInterview({ candidateId: b.data.id, interviewerId: 'usr-hiring-mgr', scheduledTime: '2027-01-01T12:00:00Z' });
       await pg.prepare("INSERT INTO user_roles(user_id,role_id) SELECT ?,id FROM roles WHERE code='INTERVIEWER' ON CONFLICT DO NOTHING").run('usr-hiring-mgr');
+      await service.createInterview({ candidateId: b.data.id, interviewerId: 'usr-hiring-mgr', scheduledTime: '2027-01-01T14:00:00Z' }, {id:'usr-admin'});
       const response = await service.getCandidates({ search: 'PG scope', viewer: { id: 'usr-hiring-mgr', roles: ['HIRING_MGR', 'INTERVIEWER'] } });
       assert.deepEqual(response.candidates.map(row => row.id).sort(), [a.data.id, b.data.id].sort());
       assert.deepEqual((await service.getCandidates({ viewer: { id: 'unknown-user', roles: ['UNRELATED_ROLE'] } })).candidates, []);

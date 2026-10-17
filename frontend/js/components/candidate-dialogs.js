@@ -108,6 +108,20 @@
   const candDetailSource = document.getElementById('cand-detail-source');
   const candDetailRejectionReasonGroup = document.getElementById('cand-detail-rejection-reason-group');
   const candDetailRejectionReasonSelect = document.getElementById('cand-detail-rejection-reason-select');
+  const candDetailRejectionNotesGroup = document.getElementById('cand-detail-rejection-notes-group');
+  const candDetailRejectionNotesInput = document.getElementById('cand-detail-rejection-notes-input');
+  const candDetailExceptionBanner = document.getElementById('cand-detail-exception-banner');
+  const candDetailExceptionRecruiterBox = document.getElementById('cand-detail-exception-recruiter-box');
+  const candDetailExceptionReasonInput = document.getElementById('cand-detail-exception-reason-input');
+  const candDetailSendExceptionBtn = document.getElementById('cand-detail-send-exception-btn');
+  const candDetailExceptionPendingBox = document.getElementById('cand-detail-exception-pending-box');
+  const candDetailExceptionManagerBox = document.getElementById('cand-detail-exception-manager-box');
+  const candDetailExceptionManagerInfo = document.getElementById('cand-detail-exception-manager-info');
+  const candDetailExceptionCommentInput = document.getElementById('cand-detail-exception-comment-input');
+  const candDetailApproveExceptionBtn = document.getElementById('cand-detail-approve-exception-btn');
+  const candDetailRejectExceptionBtn = document.getElementById('cand-detail-reject-exception-btn');
+  const candDetailHistoryList = document.getElementById('cand-detail-history-list');
+  const candDetailHistoryCount = document.getElementById('cand-detail-history-count');
   let canEditCandidateRejectionReason = false;
   let candidateDetailsGeneration=0;
   window.ATS_CANDIDATE_DETAILS={leave(){candidateDetailsGeneration++;}};
@@ -154,23 +168,25 @@
     canEditCandidateRejectionReason = false;
     if (candDetailRejectionReasonSelect) candDetailRejectionReasonSelect.disabled = true;
     if (candDetailRejectionReasonGroup) {
-      candDetailRejectionReasonGroup.classList.toggle(
-        'hidden',
-        true
-      );
+      candDetailRejectionReasonGroup.classList.toggle('hidden', true);
     }
+    if (candDetailRejectionNotesGroup) candDetailRejectionNotesGroup.classList.add('hidden');
+    if (candDetailRejectionNotesInput) candDetailRejectionNotesInput.value = '';
+    if (candDetailExceptionBanner) candDetailExceptionBanner.classList.add('hidden');
+    if (candDetailExceptionReasonInput) candDetailExceptionReasonInput.value = '';
+    if (candDetailExceptionCommentInput) candDetailExceptionCommentInput.value = '';
 
     if (candDetailRejectionReasonSelect && !publicProfile) {
       const token = sessionStorage.getItem('ats_token');
 
       candDetailRejectionReasonSelect.innerHTML =
-        '<option value="">-- Chưa xác định --</option>';
+        '<option value="">-- Chọn lý do loại --</option>';
 
       if (token) {
         try {
           const [permissionsRes, reasonRes] = await Promise.all([
             window.ATS_API.getPermissionsApi(token),
-            window.ATS_API.getRecruitmentCatalogsApi(token, { type: 'REJECTION_REASON' })
+            window.ATS_API.getRejectionReasonsApi ? window.ATS_API.getRejectionReasonsApi(token) : window.ATS_API.getRecruitmentCatalogsApi(token, { type: 'REJECTION_REASON' })
           ]);
           canEditCandidateRejectionReason = permissionsRes.ok && Array.isArray(permissionsRes.data?.permissions) && permissionsRes.data.permissions.includes('candidate.update');
           candDetailRejectionReasonSelect.disabled = !canEditCandidateRejectionReason;
@@ -180,11 +196,11 @@
             reasonRes.ok &&
             reasonRes.data &&
             reasonRes.data.success
-              ? reasonRes.data.items || []
+              ? (reasonRes.data.items || [])
               : [];
 
           candDetailRejectionReasonSelect.innerHTML =
-            '<option value="">-- Chưa xác định --</option>' +
+            '<option value="">-- Chọn lý do loại --</option>' +
             reasons.map(item => {
               const selected =
                 item.id === c.rejectionReasonId
@@ -202,14 +218,33 @@
                   ? ''
                   : ' (Ngừng áp dụng)';
 
-              return `<option value="${item.id}" ${selected} ${disabled}>${escapeRecruitmentCatalogHtml(item.name)}${suffix}</option>`;
+              return `<option value="${item.id}" data-code="${escapeHtml(item.code || '')}" ${selected} ${disabled}>${escapeRecruitmentCatalogHtml(item.name)}${suffix}</option>`;
             }).join('');
+
+          // Show rejection note if current reason is Khác
+          if (c.stage === 'REJECTED') {
+            const selOpt = candDetailRejectionReasonSelect.options[candDetailRejectionReasonSelect.selectedIndex];
+            const isOther = selOpt && (selOpt.text.toLowerCase().includes('khác') || selOpt.dataset.code === 'REJ-OTHER' || selOpt.value === 'cat-rej-other');
+            if (candDetailRejectionNotesGroup) {
+              candDetailRejectionNotesGroup.classList.toggle('hidden', !isOther);
+              if (candDetailRejectionNotesInput && c.notes) {
+                candDetailRejectionNotesInput.value = c.notes;
+              }
+            }
+          }
         } catch {
           candDetailRejectionReasonSelect.innerHTML =
             '<option value="">-- Không tải được lý do loại --</option>';
         }
       }
     }
+
+    // S5-03: Load stage transition history & exceptions
+    if (!publicProfile && token) {
+      loadCandidateStageHistory(id, token);
+      loadCandidateExceptions(id, token, c.stage);
+    }
+
     // S4-09: Load Unified Profile & Multi-Application History
     if (publicProfile) {
       for (const id of ['cand-detail-documents-list','cand-detail-unified-apps','cand-detail-tags-list','cand-detail-notes-list']) {
@@ -451,6 +486,96 @@
     });
   }
 
+  // S5-03: Stage Transition History Loader
+  async function loadCandidateStageHistory(id, token) {
+    if (!candDetailHistoryList || !token || !id) return;
+    try {
+      const res = await window.ATS_API.getCandidateStageHistoryApi(token, id);
+      if (res.ok && res.data?.history) {
+        const history = res.data.history;
+        if (candDetailHistoryCount) candDetailHistoryCount.textContent = `${history.length} lần chuyển`;
+        if (!history.length) {
+          candDetailHistoryList.innerHTML = '<span style="font-size:0.8rem;color:var(--color-text-muted);">Chưa có nhật ký chuyển giai đoạn.</span>';
+          return;
+        }
+
+        candDetailHistoryList.innerHTML = history.map(h => {
+          const timeStr = h.createdAt ? new Date(h.createdAt).toLocaleString('vi-VN') : '—';
+          const beforeBadge = `<span class="badge ${STAGE_BADGES[h.beforeStage] || 'badge-neutral'}" style="font-size:0.75rem;">${STAGE_LABELS[h.beforeStage] || h.beforeStage}</span>`;
+          const afterBadge = `<span class="badge ${STAGE_BADGES[h.afterStage] || 'badge-neutral'}" style="font-size:0.75rem;">${STAGE_LABELS[h.afterStage] || h.afterStage}</span>`;
+
+          let detailsHtml = '';
+          if (h.rejectionReasonName) {
+            detailsHtml += `<div style="color:#b91c1c;margin-top:2px;font-size:0.8rem;">❌ <strong>Lý do loại:</strong> ${escapeHtml(h.rejectionReasonName)}</div>`;
+          }
+          if (h.notes) {
+            detailsHtml += `<div style="color:var(--color-text-secondary);margin-top:2px;font-size:0.8rem;">📝 <strong>Ghi chú:</strong> ${escapeHtml(h.notes)}</div>`;
+          }
+          if (h.skippedInterviewApprovedBy) {
+            const approvedTime = h.skippedInterviewApprovedAt ? new Date(h.skippedInterviewApprovedAt).toLocaleString('vi-VN') : '';
+            detailsHtml += `<div style="color:#047857;margin-top:2px;font-size:0.8rem;">🛡️ <strong>Xác nhận ngoại lệ bỏ qua phỏng vấn:</strong> ${escapeHtml(h.skippedInterviewApprovedName || h.skippedInterviewApprovedBy)} ${approvedTime ? `(${approvedTime})` : ''}</div>`;
+          }
+
+          return `
+            <div style="padding:8px 10px;background:var(--color-bg-page);border:1px solid var(--color-border);border-left:3px solid var(--color-primary);border-radius:4px;font-size:0.825rem;">
+              <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:4px;">
+                <div style="display:flex;align-items:center;gap:6px;">
+                  ${beforeBadge} <span>➔</span> ${afterBadge}
+                </div>
+                <div style="font-size:0.75rem;color:var(--color-text-muted);">
+                  ${timeStr}
+                </div>
+              </div>
+              <div style="font-size:0.8rem;color:var(--color-text-muted);">
+                Người thực hiện: <strong style="color:var(--color-text);">${escapeHtml(h.actorName || h.actorId || 'Hệ thống')}</strong>
+              </div>
+              ${detailsHtml}
+            </div>
+          `;
+        }).join('');
+      } else {
+        candDetailHistoryList.innerHTML = '<span style="font-size:0.8rem;color:var(--color-text-muted);">Không thể tải lịch sử chuyển giai đoạn.</span>';
+      }
+    } catch {
+      candDetailHistoryList.innerHTML = '<span style="font-size:0.8rem;color:var(--color-text-muted);">Lỗi kết nối khi tải lịch sử.</span>';
+    }
+  }
+
+  // S5-03: Stage Exceptions Loader
+  async function loadCandidateExceptions(id, token, currentCandidateStage) {
+    if (!candDetailExceptionBanner || !token || !id) return;
+
+    candDetailExceptionBanner.classList.add('hidden');
+    candDetailExceptionRecruiterBox?.classList.add('hidden');
+    candDetailExceptionPendingBox?.classList.add('hidden');
+    candDetailExceptionManagerBox?.classList.add('hidden');
+
+    try {
+      const res = await window.ATS_API.getCandidateStageExceptionsApi(token, id);
+      if (res.ok && Array.isArray(res.data?.items)) {
+        const pending = res.data.items.find(e => e.status === 'PENDING' && e.from_stage === currentCandidateStage);
+        if (pending) {
+          candDetailExceptionBanner.classList.remove('hidden');
+          const isManager = currentAuthenticatedUser?.roles?.some(r => ['HR_MANAGER', 'ADMIN'].includes(r));
+          if (isManager) {
+            candDetailExceptionManagerBox?.classList.remove('hidden');
+            if (candDetailExceptionManagerInfo) {
+              candDetailExceptionManagerInfo.textContent = `Yêu cầu từ: ${escapeHtml(pending.requester_name)} - Lý do: "${escapeHtml(pending.reason)}" (${new Date(pending.created_at).toLocaleString('vi-VN')})`;
+            }
+            if (candDetailExceptionManagerBox) {
+              candDetailExceptionManagerBox.dataset.exceptionId = pending.id;
+            }
+          } else {
+            candDetailExceptionPendingBox?.classList.remove('hidden');
+            candDetailExceptionPendingBox.textContent = `⏳ Đã gửi yêu cầu bỏ qua phỏng vấn ngày ${new Date(pending.created_at).toLocaleString('vi-VN')} (Lý do: "${escapeHtml(pending.reason)}"). Đang chờ Trưởng phòng Nhân sự phê duyệt.`;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[Exceptions Load Error]', err);
+    }
+  }
+
   const candDetailStageSelect =
     document.getElementById('cand-detail-change-stage-select');
 
@@ -463,14 +588,27 @@
         );
       }
 
-      if (
-        candDetailStageSelect.value !== 'REJECTED' &&
-        candDetailRejectionReasonSelect
-      ) {
-        candDetailRejectionReasonSelect.value = '';
+      if (candDetailStageSelect.value !== 'REJECTED') {
+        if (candDetailRejectionReasonSelect) candDetailRejectionReasonSelect.value = '';
+        if (candDetailRejectionNotesGroup) candDetailRejectionNotesGroup.classList.add('hidden');
+        if (candDetailRejectionNotesInput) candDetailRejectionNotesInput.value = '';
       }
     });
   }
+
+  if (candDetailRejectionReasonSelect) {
+    candDetailRejectionReasonSelect.addEventListener('change', () => {
+      const selectedOpt = candDetailRejectionReasonSelect.options[candDetailRejectionReasonSelect.selectedIndex];
+      const isOther = selectedOpt && (selectedOpt.text.toLowerCase().includes('khác') || selectedOpt.dataset.code === 'REJ-OTHER' || selectedOpt.value === 'cat-rej-other');
+      if (candDetailRejectionNotesGroup) {
+        candDetailRejectionNotesGroup.classList.toggle('hidden', !isOther);
+        if (isOther && candDetailRejectionNotesInput) {
+          candDetailRejectionNotesInput.focus();
+        }
+      }
+    });
+  }
+
   if (closeCandidateDetailModal) {
     closeCandidateDetailModal.addEventListener('click', () => {
       if (candidateDetailModal) candidateDetailModal.classList.add('hidden');
@@ -482,10 +620,28 @@
       const token = sessionStorage.getItem('ats_token');
       const id = document.getElementById('cand-detail-id').value;
       const stage = document.getElementById('cand-detail-change-stage-select').value;
-      const rejectionReasonId =
-        canEditCandidateRejectionReason && stage === 'REJECTED' && candDetailRejectionReasonSelect
-          ? candDetailRejectionReasonSelect.value || null
-          : null;
+      let rejectionReasonId = null;
+      let notes = '';
+
+      if (stage === 'REJECTED') {
+        rejectionReasonId = candDetailRejectionReasonSelect ? candDetailRejectionReasonSelect.value : null;
+        if (!rejectionReasonId) {
+          showToast('danger', 'Chưa chọn lý do loại', 'Chuyển sang "Loại" bắt buộc chọn lý do từ danh mục.');
+          candDetailRejectionReasonSelect?.focus();
+          return;
+        }
+
+        const selectedOpt = candDetailRejectionReasonSelect.options[candDetailRejectionReasonSelect.selectedIndex];
+        const isOther = selectedOpt && (selectedOpt.text.toLowerCase().includes('khác') || selectedOpt.dataset.code === 'REJ-OTHER' || selectedOpt.value === 'cat-rej-other');
+        notes = candDetailRejectionNotesInput?.value?.trim() || '';
+
+        if (isOther && !notes) {
+          showToast('danger', 'Thiếu giải thích lý do', 'Vui lòng nhập nội dung giải thích chi tiết khi chọn lý do loại là "Khác".');
+          candDetailRejectionNotesInput?.focus();
+          return;
+        }
+      }
+
       if (!token || !id) return;
 
       try {
@@ -493,16 +649,137 @@
           token,
           id,
           stage,
-          undefined,
+          notes || undefined,
           rejectionReasonId || undefined
         );
+
         if (res.ok && res.data && res.data.success) {
           showToast('success', 'Chuyển vòng thành công', `Đã cập nhật trạng thái ứng viên sang "${STAGE_LABELS[stage] || stage}".`);
-          if (candidateDetailModal) candidateDetailModal.classList.add('hidden');
+          if (candDetailExceptionBanner) candDetailExceptionBanner.classList.add('hidden');
+          const stageBadge = document.getElementById('cand-detail-stage-badge');
+          if (stageBadge) {
+            stageBadge.className = `badge ${STAGE_BADGES[stage] || 'badge-neutral'}`;
+            stageBadge.textContent = STAGE_LABELS[stage] || stage;
+          }
+          loadCandidateStageHistory(id, token);
           loadCandidates();
           loadDashboardData();
         } else {
-          showToast('danger', 'Lỗi cập nhật', res.data.message || 'Không thể chuyển vòng.');
+          if (res.data?.code === 'INTERVIEW_STAGE_REQUIRED') {
+            if (candDetailExceptionBanner) candDetailExceptionBanner.classList.remove('hidden');
+            const isManager = currentAuthenticatedUser?.roles?.some(r => ['HR_MANAGER', 'ADMIN'].includes(r));
+            if (isManager) {
+              candDetailExceptionManagerBox?.classList.remove('hidden');
+              candDetailExceptionRecruiterBox?.classList.add('hidden');
+              candDetailExceptionPendingBox?.classList.add('hidden');
+              if (candDetailExceptionManagerInfo) {
+                candDetailExceptionManagerInfo.textContent = 'Hồ sơ chưa qua phỏng vấn. Bạn có vai trò Trưởng phòng Nhân sự và có thể xác nhận ngoại lệ để chuyển tiếp.';
+              }
+            } else {
+              candDetailExceptionRecruiterBox?.classList.remove('hidden');
+              candDetailExceptionPendingBox?.classList.add('hidden');
+              candDetailExceptionManagerBox?.classList.add('hidden');
+            }
+            showToast('warning', 'Yêu cầu xác nhận ngoại lệ', res.data?.message || 'Cần Trưởng phòng Nhân sự xác nhận ngoại lệ.');
+          } else {
+            showToast('danger', 'Lỗi cập nhật', res.data?.message || 'Không thể chuyển vòng.');
+          }
+        }
+      } catch (err) {
+        showToast('danger', 'Lỗi kết nối', err.message);
+      }
+    });
+  }
+
+  // S5-03: Recruiter sends exception request
+  if (candDetailSendExceptionBtn) {
+    candDetailSendExceptionBtn.addEventListener('click', async () => {
+      const token = sessionStorage.getItem('ats_token');
+      const id = document.getElementById('cand-detail-id').value;
+      const reason = candDetailExceptionReasonInput?.value?.trim();
+      if (!token || !id) return;
+      if (!reason) {
+        showToast('danger', 'Thiếu lý do', 'Vui lòng nhập lý do đề xuất bỏ qua vòng phỏng vấn.');
+        candDetailExceptionReasonInput?.focus();
+        return;
+      }
+
+      try {
+        const res = await window.ATS_API.requestInterviewSkipExceptionApi(token, id, reason);
+        if (res.ok && res.data?.success) {
+          showToast('success', 'Đã gửi yêu cầu', 'Yêu cầu ngoại lệ đã được gửi tới Trưởng phòng Nhân sự.');
+          candDetailExceptionRecruiterBox?.classList.add('hidden');
+          candDetailExceptionPendingBox?.classList.remove('hidden');
+          candDetailExceptionPendingBox.textContent = '⏳ Yêu cầu bỏ qua phỏng vấn đang chờ Trưởng phòng Nhân sự xem xét.';
+          loadCandidateStageHistory(id, token);
+        } else {
+          showToast('danger', 'Lỗi gửi yêu cầu', res.data?.message || 'Không thể gửi yêu cầu.');
+        }
+      } catch (err) {
+        showToast('danger', 'Lỗi kết nối', err.message);
+      }
+    });
+  }
+
+  // S5-03: HR Manager approves exception
+  if (candDetailApproveExceptionBtn) {
+    candDetailApproveExceptionBtn.addEventListener('click', async () => {
+      const token = sessionStorage.getItem('ats_token');
+      const id = document.getElementById('cand-detail-id').value;
+      const exceptionId = candDetailExceptionManagerBox?.dataset?.exceptionId;
+      const comment = candDetailExceptionCommentInput?.value?.trim() || '';
+      if (!token || !id) return;
+
+      try {
+        if (exceptionId) {
+          const decideRes = await window.ATS_API.decideInterviewSkipExceptionApi(token, exceptionId, 'APPROVE', comment);
+          if (!decideRes.ok || !decideRes.data?.success) {
+            showToast('danger', 'Lỗi phê duyệt', decideRes.data?.message || 'Không thể phê duyệt yêu cầu.');
+            return;
+          }
+        }
+
+        // Advance to OFFER
+        const updateRes = await window.ATS_API.updateCandidateStageApi(token, id, 'OFFER', comment || undefined);
+        if (updateRes.ok && updateRes.data?.success) {
+          showToast('success', 'Xác nhận ngoại lệ thành công', 'Đã phê duyệt ngoại lệ và chuyển ứng viên sang Đề xuất offer.');
+          if (candDetailExceptionBanner) candDetailExceptionBanner.classList.add('hidden');
+          const stageBadge = document.getElementById('cand-detail-stage-badge');
+          if (stageBadge) {
+            stageBadge.className = `badge ${STAGE_BADGES['OFFER'] || 'badge-neutral'}`;
+            stageBadge.textContent = STAGE_LABELS['OFFER'] || 'OFFER';
+          }
+          const stageSelect = document.getElementById('cand-detail-change-stage-select');
+          if (stageSelect) stageSelect.value = 'OFFER';
+          loadCandidateStageHistory(id, token);
+          loadCandidates();
+          loadDashboardData();
+        } else {
+          showToast('danger', 'Lỗi chuyển giai đoạn', updateRes.data?.message || 'Không thể chuyển sang OFFER.');
+        }
+      } catch (err) {
+        showToast('danger', 'Lỗi kết nối', err.message);
+      }
+    });
+  }
+
+  // S5-03: HR Manager rejects exception
+  if (candDetailRejectExceptionBtn) {
+    candDetailRejectExceptionBtn.addEventListener('click', async () => {
+      const token = sessionStorage.getItem('ats_token');
+      const id = document.getElementById('cand-detail-id').value;
+      const exceptionId = candDetailExceptionManagerBox?.dataset?.exceptionId;
+      const comment = candDetailExceptionCommentInput?.value?.trim() || '';
+      if (!token || !id || !exceptionId) return;
+
+      try {
+        const decideRes = await window.ATS_API.decideInterviewSkipExceptionApi(token, exceptionId, 'REJECT', comment);
+        if (decideRes.ok && decideRes.data?.success) {
+          showToast('info', 'Đã từ chối', 'Đã từ chối yêu cầu bỏ qua phỏng vấn.');
+          if (candDetailExceptionBanner) candDetailExceptionBanner.classList.add('hidden');
+          loadCandidateStageHistory(id, token);
+        } else {
+          showToast('danger', 'Lỗi từ chối', decideRes.data?.message || 'Không thể từ chối yêu cầu.');
         }
       } catch (err) {
         showToast('danger', 'Lỗi kết nối', err.message);

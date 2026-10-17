@@ -198,16 +198,11 @@
 
       const footer = node('div', null, '');
       footer.style.display = 'flex';
-      footer.style.justifyContent = 'space-between';
+      footer.style.justifyContent = 'flex-end';
       footer.style.alignItems = 'center';
       footer.style.flexWrap = 'wrap';
       footer.style.gap = '12px';
       footer.style.marginTop = '8px';
-
-      const deadline = node('span', job.applicationDeadline ? `Hạn nộp: ${job.applicationDeadline.split('-').reverse().join('/')}` : '');
-      deadline.style.fontSize = '0.85rem';
-      deadline.style.color = '#b45309';
-      footer.appendChild(deadline);
 
       const btnGroup = node('div', null, '');
       btnGroup.style.display = 'flex';

@@ -192,9 +192,9 @@ async function getPermissionsApi(token) {
   }
 }
 
-async function getRbacMatrixApi() {
+async function getRbacMatrixApi(token) {
   try {
-    const response = await fetch(`${API_BASE}/rbac/matrix`, { method: 'GET' });
+    const response = await fetch(`${API_BASE}/rbac/matrix`, { method: 'GET', headers: { Authorization: token ? `Bearer ${token}` : '' } });
     const data = await response.json();
     return { status: response.status, ok: response.ok, data };
   } catch (error) {
@@ -640,6 +640,10 @@ async function getCandidatesApi(token, params = {}) {
     if (params.search) qs.append('search', params.search);
     if (params.stage && params.stage !== 'ALL') qs.append('stage', params.stage);
     if (params.requisitionId && params.requisitionId !== 'ALL') qs.append('requisitionId', params.requisitionId);
+    if (params.advanced) qs.set('advanced','1');
+    if (params.advanced) for (const key of ['sourceId','tag','submittedFrom','submittedTo','ratingMin','ratingMax','page','pageSize']) {
+      if (params[key] !== undefined && params[key] !== '' && params[key] !== 'ALL') qs.set(key,params[key]);
+    }
     const queryString = qs.toString() ? `?${qs.toString()}` : '';
 
     const response = await fetch(`${API_BASE}/candidates${queryString}`, {
@@ -850,6 +854,79 @@ async function updateCandidateStageApi(token, id, stage, notes, rejectionReasonI
     return { status: response.status, ok: response.ok, data };
   } catch (error) {
     return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi cập nhật vòng tuyển dụng.' } };
+  }
+}
+
+async function getRejectionReasonsApi(token) {
+  try {
+    const response = await fetch(`${API_BASE}/recruitment-catalogs/rejection-reasons`, {
+      method: 'GET',
+      headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi lấy danh mục lý do loại.' } };
+  }
+}
+
+async function getCandidateStageHistoryApi(token, candidateId) {
+  try {
+    const response = await fetch(`${API_BASE}/candidates/${encodeURIComponent(candidateId)}/history`, {
+      method: 'GET',
+      headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi lấy lịch sử chuyển giai đoạn.' } };
+  }
+}
+
+async function requestInterviewSkipExceptionApi(token, candidateId, reason) {
+  try {
+    const response = await fetch(`${API_BASE}/candidates/${encodeURIComponent(candidateId)}/stage-exception-request`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify({ reason })
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi gửi yêu cầu ngoại lệ.' } };
+  }
+}
+
+async function getCandidateStageExceptionsApi(token, candidateId) {
+  try {
+    const response = await fetch(`${API_BASE}/candidates/${encodeURIComponent(candidateId)}/stage-exceptions`, {
+      method: 'GET',
+      headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi lấy danh sách ngoại lệ.' } };
+  }
+}
+
+async function decideInterviewSkipExceptionApi(token, exceptionId, action, comment) {
+  try {
+    const response = await fetch(`${API_BASE}/stage-exceptions/${encodeURIComponent(exceptionId)}/decide`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify({ action, comment })
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi xử lý yêu cầu ngoại lệ.' } };
   }
 }
 
@@ -1667,6 +1744,11 @@ window.ATS_API = {
   getCandidatesApi,
   createCandidateApi,
   updateCandidateStageApi,
+  getRejectionReasonsApi,
+  getCandidateStageHistoryApi,
+  requestInterviewSkipExceptionApi,
+  getCandidateStageExceptionsApi,
+  decideInterviewSkipExceptionApi,
   getInterviewsApi,
   createInterviewApi,
   updateInterviewStatusApi,
@@ -1695,3 +1777,24 @@ for (const [name, request] of Object.entries(window.ATS_API)) {
 }
 
 
+
+window.ATS_API.candidateSearchOptionsApi = async function(token) {
+  try { const response = await fetch(API_BASE+'/candidate-search-options',{cache:'no-store',headers:{Authorization:'Bearer '+token}});return {ok:response.ok,data:await response.json()}; } catch { return {ok:false,data:{message:'Không thể tải lựa chọn bộ lọc.'}}; }
+};
+window.ATS_API.candidateFiltersApi = async function(token,method='GET',body,id) {
+  try { const response = await fetch(API_BASE+'/candidate-filters'+(id ? '/'+encodeURIComponent(id) : ''),{method,cache:'no-store',headers:{Authorization:'Bearer '+token,...(body ? {'Content-Type':'application/json'} : {})},...(body ? {body:JSON.stringify(body)} : {})});return {ok:response.ok,data:await response.json()}; } catch { return {ok:false,data:{message:'Không thể lưu hoặc tải bộ lọc.'}}; }
+};
+window.ATS_API.talentPoolApi = async function(token,path='',method='GET',body) {
+  try { const response = await fetch(API_BASE+'/talent-pool'+path,{method,cache:'no-store',headers:{Authorization:'Bearer '+token,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});return {ok:response.ok,data:await response.json()}; } catch { return {ok:false,data:{message:'Không thể kết nối kho ứng viên.'}}; }
+};
+window.ATS_API.bulkInterviewsApi = async function(token,action,body) {
+  try {
+    const response=await fetch(API_BASE+'/interviews/'+action,{method:body?'POST':'GET',cache:'no-store',headers:{Authorization:'Bearer '+token,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});
+    return {ok:response.ok,status:response.status,data:await response.json()};
+  }catch{return {ok:false,status:0,data:{message:'Mất kết nối. Dùng lại yêu cầu hiện tại để kiểm tra kết quả, không tạo đợt mới.'}};}
+};
+
+window.ATS_API.candidateMergeApi = async function(token,path,method='POST',body) {
+  try { const response=await fetch(API_BASE+'/candidates/merge'+path,{method,cache:'no-store',headers:{Authorization:'Bearer '+token,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});return {ok:response.ok,status:response.status,data:await response.json()}; }
+  catch { return {ok:false,status:0,data:{success:false,message:'Không thể kết nối tới chức năng gộp hồ sơ.'}}; }
+};

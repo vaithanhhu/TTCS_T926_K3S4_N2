@@ -14,6 +14,55 @@ function verifier(text){
  vm.runInNewContext(source,context);return module.exports;
 }
 function reader(row,error){return {prepare(sql){assert.equal(sql,'SELECT checksum FROM ats_schema_migrations WHERE version=?');return {async get(version){assert.equal(version,1);if(error)throw error;return row;}};}};}
+async function startupCases(){
+ const config=require('../src/config/config');config.DB_PROVIDER='postgres';config.EMAIL_MODE='simulated';
+ const {PGlite}=require('@electric-sql/pglite'),{PostgresDatabase,postgresSQL}=require('../src/db/postgres'),database=require('../src/db/database');
+ const engine=new PGlite(),original=database.getDatabase,queries=[];
+ let recording=false,server;
+ const query=async(sql,params)=>{if(recording)queries.push(sql);const result=params===undefined?(await engine.exec(sql)).at(-1):await engine.query(sql,params);return {rows:result?.rows||[],rowCount:result?.affectedRows||0};};
+ const db=new PostgresDatabase({},{on(){},query,async connect(){return {query,release(){}};},async end(){await engine.close();}});
+ const mergeMigration=require('../src/db/migrate-candidate-merges');
+ const grants=async()=>await db.prepare('SELECT r.code AS role,p.code AS permission FROM role_permissions rp JOIN roles r ON r.id=rp.role_id JOIN permissions p ON p.id=rp.permission_id ORDER BY r.code,p.code').all();
+ try{
+  await require('../src/db/migrate-postgres').migrate(db);
+  await db.transaction(()=>require('../src/db/seed').seedDatabase(db));
+  await require('../src/db/migrate-requisition-open-policy').migrate(db);
+  const beforeUsers=await db.prepare('SELECT id,password_hash FROM users ORDER BY id').all(),beforeCandidates=await db.prepare('SELECT id,stage FROM candidates ORDER BY id').all(),beforeGrants=await grants();
+  const beforePermissions=(await db.prepare('SELECT code FROM permissions ORDER BY code').all()).map(row=>row.code);
+  const mergeSQL=fs.readFileSync(path.join(root,'backend/src/db/migrations/015_candidate_merges_postgres.sql'),'utf8');
+  database.getDatabase=()=>db;
+  const app=require('../src/server');server=app.server;
+  await test('Actual PostgreSQL startup applies only the merge migration in one transaction and reaches HTTP readiness',async()=>{
+   recording=true;
+   try{await app.startServer(0);}finally{recording=false;}
+   const response=await fetch('http://127.0.0.1:'+server.address().port+'/api/v1/health');assert.equal(response.status,200);assert.equal((await response.json()).status,'ok');
+   assert.equal(queries.filter(sql=>sql==='BEGIN').length,1);assert.equal(queries.filter(sql=>sql==='COMMIT').length,1);assert.equal(queries.includes('ROLLBACK'),false);
+   const begin=queries.indexOf('BEGIN'),commit=queries.indexOf('COMMIT'),writes=queries.filter(sql=>/^\s*(CREATE|ALTER|DROP|INSERT|UPDATE|DELETE|TRUNCATE)\b/i.test(sql));
+   assert.equal(writes.length,8);assert.ok(writes.includes(postgresSQL(mergeSQL)));
+   for(const sql of writes){assert.ok(queries.indexOf(sql)>begin&&queries.indexOf(sql)<commit);assert.ok(sql===postgresSQL(mergeSQL)||/^CREATE TABLE IF NOT EXISTS ats_candidate_merge_migrations\(/.test(sql)||/^INSERT INTO (ats_candidate_merge_migrations|permissions|role_permissions)\(/.test(sql));}
+   await mergeMigration.verify(db);
+   assert.equal((await db.prepare('SELECT checksum FROM ats_candidate_merge_migrations WHERE version=1').get()).checksum,digest(mergeSQL.replace(/\r\n/g,'\n')));
+   assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='candidates' AND column_name='merged_into_id'").get()).n,1);
+   assert.deepEqual(await db.prepare('SELECT id,password_hash FROM users ORDER BY id').all(),beforeUsers);assert.deepEqual(await db.prepare('SELECT id,stage FROM candidates ORDER BY id').all(),beforeCandidates);
+   assert.deepEqual((await db.prepare('SELECT code FROM permissions ORDER BY code').all()).map(row=>row.code),[...beforePermissions,'candidate.merge','candidate.merge.undo'].sort());
+   const expected=beforeGrants.concat(['ADMIN','HR_MANAGER','RECRUITER'].flatMap(role=>['candidate.merge','candidate.merge.undo'].map(permission=>({role,permission}))));
+   const keys=rows=>rows.map(row=>row.role+':'+row.permission).sort();assert.deepEqual(keys(await grants()),keys(expected));
+  });
+  await test('PostgreSQL merge migration retry preserves ledger data and grants',async()=>{
+   const before=await grants(),ledger=await db.prepare('SELECT * FROM ats_candidate_merge_migrations ORDER BY version').all();
+   await mergeMigration.migrate(db);
+   assert.deepEqual(await grants(),before);assert.deepEqual(await db.prepare('SELECT * FROM ats_candidate_merge_migrations ORDER BY version').all(),ledger);
+   assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM candidate_merge_events').get()).n,0);
+  });
+  await test('PostgreSQL split-phase RBAC pending still rejects startup module reconciliation without changing grants',async()=>{
+   await db.exec('CREATE TABLE ats_schema_execution(version INTEGER PRIMARY KEY)');
+   const before=await grants(),offset=queries.length;
+   recording=true;
+   try{await assert.rejects(()=>mergeMigration.migrate(db),/RBAC_RECONCILIATION_PENDING_USE_SCHEMA_EXECUTOR/);}finally{recording=false;}
+   assert.deepEqual(await grants(),before);assert.equal(queries.at(-1),'ROLLBACK');assert.equal(queries.slice(offset).some(sql=>/^\s*(CREATE|ALTER|INSERT|UPDATE|DELETE|TRUNCATE)\b/i.test(sql)),false);
+  });
+ }finally{database.getDatabase=original;if(server?.listening){server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}await db.close();}
+}
 async function main(){
  const expected=digest(migration);
  await test('LF checksum matches existing LF ledger',()=>verifier(migration).verifyMigration(reader({checksum:expected})));
@@ -40,16 +89,7 @@ async function main(){
   let writes=0;const db={async transaction(action){return action();},async exec(sql){assert.ok(!sql.includes('CREATE TABLE candidates'));},prepare(){return {async get(){return {checksum:'different'};},async run(){writes++;}};}};
   await assert.rejects(verifier(migration).migrate(db),/MIGRATION_CHECKSUM_MISMATCH/);assert.equal(writes,0);
  });
- await test('Actual PostgreSQL startup reaches HTTP readiness using only SELECT statements',async()=>{
-  const config=require('../src/config/config');config.DB_PROVIDER='postgres';config.EMAIL_MODE='simulated';
-  const {PostgresDatabase}=require('../src/db/postgres');const database=require('../src/db/database');
-  const original=database.getDatabase,queries=[];
-  const pool={on(){},async query(sql){queries.push(sql);if(sql.includes('ats_schema_migrations'))return {rows:[{checksum:expected}]};if(sql.includes('ats_requisition_open_policy_migrations'))return {rows:[{checksum:digest(fs.readFileSync(path.join(root,'backend/src/db/migrations/010_requisition_open_policy_postgres.sql'),'utf8').replace(/\r\n/g,'\n'))}]};if(sql.includes('COUNT(*) AS c FROM users'))return {rows:[{c:59}]};throw new Error('Unexpected startup SQL');},async end(){}};
-  const db=new PostgresDatabase({},pool);database.getDatabase=()=>db;
-  const {startServer,server}=require('../src/server');
-  try{await startServer(0);const response=await fetch('http://127.0.0.1:'+server.address().port+'/api/v1/health');assert.equal(response.status,200);assert.equal((await response.json()).status,'ok');assert.equal(queries.length,3);assert.ok(queries.every(query=>/^SELECT\b/.test(query)));}
-  finally{database.getDatabase=original;server.closeAllConnections();await new Promise(resolve=>server.close(resolve));await db.close();}
- });
+ await startupCases();
  console.log('POSTGRES_STARTUP_RESULT '+JSON.stringify({passed,failed,total:passed+failed}));process.exitCode=failed?1:0;
 }
 main().catch(error=>{console.error(error.stack);process.exitCode=1;});

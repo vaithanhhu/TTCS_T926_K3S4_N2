@@ -36,7 +36,7 @@
 
             return `
               <tr>
-                <td><strong>${dName}</strong></td>
+                <td><strong>${escapeHtml(dName)}</strong></td>
                 <td style="text-align: center;">${totalPos}</td>
                 <td style="text-align: center; font-weight: 600;">${totalHc}</td>
                 <td style="text-align: center;">${totalCands}</td>

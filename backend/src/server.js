@@ -51,6 +51,17 @@ async function initializeApplication() {
   if (config.REQUISITION_TRACKING_ENABLED || config.JOB_POSTING_DRAFTS_ENABLED) await require('./db/migrate-requisition-tracking-job-drafts').verify(db);
   if(config.JOB_POSTING_PUBLICATION_ENABLED)await require('./db/migrate-job-publication').verify(db);
   if(config.CANDIDATE_PORTAL_ENABLED)await require('./db/migrate-candidate-portal').verify(db);
+  await require('./db/migrate-candidate-merges').migrate(db);
+  if(db.provider==='sqlite')await require('./db/migrate-interview-conflict-override').migrate(db);
+  if (!isTestEnv) {
+    try {
+      const SlaNotificationService = require('./services/slaNotificationService');
+      const slaService = new SlaNotificationService(db);
+      slaService.runDailySlaCheck().catch(e => console.warn('[SLA Daily Job] Note:', e.message));
+    } catch (slaErr) {
+      // Bỏ qua lỗi khởi tạo SLA
+    }
+  }
 }
 
 const avatarService = new AvatarService();
@@ -551,6 +562,8 @@ async function handleRequest(req, res) {
   }
   // 10. API: S1-05 Get Full RBAC Matrix (AC-01)
   if (req.method === 'GET' && (pathname === '/api/v1/rbac/matrix' || pathname === '/rbac/matrix' || pathname === '/api/v1/admin/roles-matrix' || pathname === '/admin/roles-matrix')) {
+    const user = await rbacMiddleware.authorize(req, res, authController.authService, 'role.read');
+    if (!user) return;
     const rawMatrix = (await rbacMiddleware.getRbacMatrix());
     const roles = (await db.prepare('SELECT id, code AS name, name AS description FROM roles ORDER BY code ASC').all());
     const permissions = (await db.prepare('SELECT id, code AS name, name AS description, module FROM permissions ORDER BY module, code ASC').all());
@@ -1794,7 +1807,7 @@ async function handleRequest(req, res) {
     let roles = [];
     if (userInfo) {
       roles = (await db.prepare(`
-        SELECT r.code, r.name 
+        SELECT r.code, r.name
         FROM user_roles ur
         JOIN roles r ON ur.role_id = r.id
         WHERE ur.user_id = ?
@@ -1867,8 +1880,88 @@ async function handleRequest(req, res) {
     /^\/api\/v1\/candidates\/[^/]+\/(?:parse-cv|notes|tags(?:\/[^/]+)?)$/.test(pathname)
   )){await new(require('./controllers/candidatePortalController'))(new(require('./services/candidatePortalService'))(db),rbacMiddleware,authController.authService).handle(req,res,parsedUrl,parseBody);return;}
   if(pathname.startsWith('/api/v1/requisition-operations/')){if(!config.REQUISITION_OPERATIONS_ENABLED){res.writeHead(404,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:'S305_S306_DISABLED',message:'Chức năng sao chép/phân công chưa được bật.'}));return;}const {RequisitionOperationsService}=require('./services/requisitionOperationsService');await new(require('./controllers/requisitionOperationsController'))(new RequisitionOperationsService(db),rbacMiddleware,authController.authService).handle(req,res,parsedUrl,parseBody);return;}
+  // S5-09 (SCRUM-119): Candidate Mandatory Screening & Scoring API
+  if (
+    /^\/(?:api\/v1\/)?requisitions\/[^/]+\/(?:screening-criteria|screen-all|screening-candidates)$/.test(pathname) ||
+    /^\/(?:api\/v1\/)?candidates\/[^/]+\/screen$/.test(pathname)
+  ) {
+    const CandidateScreeningService = require('./services/candidateScreeningService');
+    const CandidateScreeningController = require('./controllers/candidateScreeningController');
+    await new CandidateScreeningController(new CandidateScreeningService(db), rbacMiddleware, authController.authService).handle(req, res, parsedUrl, parseBody);
+    return;
+  }
 
-  if(req.method==='GET'&&/^\/(?:api\/v1\/)?candidates\/[^/]+$/.test(pathname)){const user=await rbacMiddleware.authorize(req,res,authController.authService,'candidate.read');if(!user)return;let candidateId;try{candidateId=decodeURIComponent(pathname.split('/').at(-1));}catch{res.writeHead(400,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:'BAD_REQUEST',message:'Mã hồ sơ không hợp lệ.'}));return;}const result=await requisitionService.getCandidateById(candidateId,user);res.writeHead(result.statusCode||200,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(result));return;}
+  if (/^\/(?:api\/v1\/)?talent-pool(?:\/(?:suggestions|availability))?$/.test(pathname)) {
+    await new (require('./controllers/talentPoolController'))(new (require('./services/talentPoolService'))(db),rbacMiddleware,authController.authService).handle(req,res,parsedUrl,parseBody);
+    return;
+  }
+  if (/^\/(?:api\/v1\/)?(?:candidate-search(?:-options|-availability)?|candidate-filters(?:\/[^/]+)?)$/.test(pathname)) {
+    await new (require('./controllers/candidateSearchController'))(new (require('./services/candidateSearchService'))(db),rbacMiddleware,authController.authService).handle(req,res,parsedUrl,parseBody);
+    return;
+  }
+  // S5-10 (SCRUM-120): Candidate SLA Notification & Monitoring API
+  if (pathname.startsWith('/api/v1/sla/') || pathname === '/api/v1/sla') {
+    const SlaNotificationService = require('./services/slaNotificationService');
+    const SlaNotificationController = require('./controllers/slaNotificationController');
+    await new SlaNotificationController(new SlaNotificationService(db), rbacMiddleware, authController.authService).handle(req, res, parsedUrl, parseBody);
+    return;
+  }
+
+  if(req.method==='GET'&&/^\/(?:api\/v1\/)?candidates\/[^/]+$/.test(pathname)){
+    const user=await rbacMiddleware.authorize(req,res,authController.authService,'candidate.read');
+    if(!user)return;
+    let candidateId;
+    try{candidateId=decodeURIComponent(pathname.split('/').at(-1));}catch{
+      res.writeHead(400,{'Content-Type':'application/json; charset=utf-8'});
+      res.end(JSON.stringify({success:false,code:'BAD_REQUEST',message:'Mã hồ sơ không hợp lệ.'}));
+      return;
+    }
+    const result=await requisitionService.getCandidateById(candidateId,user);
+    const candObj = result && result.success ? (result.data || result.candidate) : null;
+    if (candObj && Object.hasOwn(candObj, 'stage')) {
+      try {
+        const SlaNotificationService = require('./services/slaNotificationService');
+        const slaService = new SlaNotificationService(db);
+        const sla = await slaService.calculateCandidateSla(candObj);
+        candObj.sla = sla;
+        candObj.is_sla_violated = Boolean(sla && sla.isOverdue);
+        candObj.sla_status = sla ? sla.flag : 'ON_TRACK';
+        candObj.isOverdue = Boolean(sla && sla.isOverdue);
+        candObj.slaStatus = sla ? sla.flag : 'ON_TRACK';
+      } catch (slaErr) {}
+    }
+    res.writeHead(result.statusCode||200,{'Content-Type':'application/json; charset=utf-8'});
+    res.end(JSON.stringify(result));
+    return;
+  }
+
+  // S6-01 (SCRUM-84): Export Candidate List to Excel (.xlsx)
+  if (req.method === 'GET' && (pathname === '/api/v1/candidates/export-excel' || pathname === '/candidates/export-excel')) {
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.read'));
+    if (!user) return;
+    try {
+      const CandidateExportService = require('./services/candidateExportService');
+      const CandidateSearchService = require('./services/candidateSearchService');
+      const exportService = new CandidateExportService(db, requisitionService, new CandidateSearchService(db));
+      const filters = Object.fromEntries(parsedUrl.searchParams);
+      const { filename, buffer, count } = await exportService.exportCandidatesToExcel(filters, user);
+
+      res.writeHead(200, {
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': `attachment; filename="${encodeURIComponent(filename)}"`,
+        'Content-Length': buffer.length,
+        'X-Total-Count': String(count),
+        'X-Export-Filename': filename
+      });
+      res.end(buffer);
+      return;
+    } catch (exportErr) {
+      console.error('[Export Candidate Excel Error]:', exportErr);
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, code: 'CANDIDATE_EXPORT_FAILED', message: 'Không thể xuất danh sách ứng viên ra tệp Excel.' }));
+      return;
+    }
+  }
 
   // 13.7 API: Candidates List (Real SQLite Data)
   if (req.method === 'GET' && (pathname === '/api/v1/candidates' || pathname === '/candidates')) {
@@ -1881,9 +1974,100 @@ async function handleRequest(req, res) {
       viewer: user
     };
     if (isCandidateOnly(user)) options.candidateEmail = user.email;
-    const result = (await requisitionService.getCandidates(options));
+    let result;
+    if(parsedUrl.searchParams.get('advanced')==='1'){
+      const searchService=new(require('./services/candidateSearchService'))(db);
+      try{
+        const enabled=(await searchService.availability(user)).enabled;
+        const filters=Object.fromEntries(parsedUrl.searchParams);
+        if(!enabled&&['sourceId','tag','submittedFrom','submittedTo','ratingMin','ratingMax'].some(key=>filters[key]!==undefined&&filters[key]!==''&&filters[key]!=='ALL')){
+          result={success:false,statusCode:503,code:'S505_MIGRATION_REQUIRED',message:'Cần áp dụng migration S5-05 được phê duyệt trước khi sử dụng bộ lọc nâng cao.'};
+        }else{
+          result=enabled?await searchService.search(filters,user):await requisitionService.getCandidates(options);
+          result.features={...result.features,candidateSearch:enabled};
+        }
+      }catch(error){result=error.statusCode?error:{success:false,statusCode:503,code:'CANDIDATE_SEARCH_UNAVAILABLE',message:'Chưa thể tìm kiếm ứng viên. Vui lòng thử lại.'};}
+    }else result=await requisitionService.getCandidates(options);
+
+    // S5-09: Gắn kết quả điểm sàng lọc tiêu chí bắt buộc vào danh sách ứng viên
+    if (result && result.success && Array.isArray(result.candidates) && result.candidates.length > 0) {
+      try {
+        const candIds = result.candidates.map(c => c.id).filter(Boolean);
+        if (candIds.length > 0) {
+          const placeholders = candIds.map(() => '?').join(',');
+          const srRows = await db.prepare(
+            `SELECT candidate_id, fit_score, mandatory_pass, experience_passed, education_passed, skills_passed, evaluation_details, evaluated_at
+             FROM candidate_screening_results WHERE candidate_id IN (${placeholders})`
+          ).all(...candIds);
+          const srMap = new Map();
+          for (const sr of srRows) {
+            let breakdown = null;
+            if (sr.evaluation_details) {
+              try { breakdown = JSON.parse(sr.evaluation_details); } catch {}
+            }
+            srMap.set(sr.candidate_id, {
+              fitScore: sr.fit_score,
+              mandatoryPass: Boolean(sr.mandatory_pass),
+              experiencePassed: Boolean(sr.experience_passed),
+              educationPassed: Boolean(sr.education_passed),
+              skillsPassed: Boolean(sr.skills_passed),
+              evaluatedAt: sr.evaluated_at,
+              breakdown
+            });
+          }
+          for (const c of result.candidates) {
+            if(parsedUrl.searchParams.get('advanced')==='1'&&!Object.hasOwn(c,'stage'))continue;
+            c.screening = srMap.get(c.id) || null;
+          }
+        }
+      } catch (err) {
+        // Bảng screening results chưa tồn tại
+      }
+    }
+
+    // S5-10: Gắn SLA status và thông tin vi phạm SLA vào danh sách ứng viên
+    if (result && result.success && Array.isArray(result.candidates) && result.candidates.length > 0) {
+      try {
+        const SlaNotificationService = require('./services/slaNotificationService');
+        const slaService = new SlaNotificationService(db);
+        const slaConfigs = await slaService.getSlaConfigs();
+        const cfgMap = {};
+        for (const sc of slaConfigs) cfgMap[sc.stage] = sc;
+        for (const c of result.candidates) {
+          if (!Object.hasOwn(c, 'stage')) continue;
+          const sla = await slaService.calculateCandidateSla(c, cfgMap);
+          c.sla = sla;
+          c.is_sla_violated = Boolean(sla && sla.isOverdue);
+          c.sla_status = sla ? sla.flag : 'ON_TRACK';
+          c.isOverdue = Boolean(sla && sla.isOverdue);
+          c.slaStatus = sla ? sla.flag : 'ON_TRACK';
+        }
+      } catch (slaErr) {
+        // Bỏ qua lỗi tính SLA nếu chưa migrate
+      }
+    }
+
     res.writeHead(result.statusCode||200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(result));
+    return;
+  }
+
+  // S5-08 (SCRUM-118): Candidate Manual Entry & Duplicate Detection API
+  if (pathname.startsWith('/api/v1/candidates/merge') || pathname.startsWith('/candidates/merge')) {
+    const CandidateMergeController = require('./controllers/candidateMergeController');
+    await new CandidateMergeController(db, rbacMiddleware, authController.authService).handle(req, res, parsedUrl, parseBody);
+    return;
+  }
+
+  if (
+    pathname === '/api/v1/candidates/manual' ||
+    pathname === '/candidates/manual' ||
+    pathname === '/api/v1/candidates/check-duplicate' ||
+    pathname === '/candidates/check-duplicate'
+  ) {
+    const CandidateManualEntryService = require('./services/candidateManualEntryService');
+    const CandidateManualEntryController = require('./controllers/candidateManualEntryController');
+    await new CandidateManualEntryController(new CandidateManualEntryService(db), rbacMiddleware, authController.authService).handle(req, res, parsedUrl, parseBody);
     return;
   }
 
@@ -1894,7 +2078,35 @@ async function handleRequest(req, res) {
     try {
       const body = await parseBody(req);
       if (isCandidateOnly(user)) Object.assign(body, { email: user.email, fullName: user.fullName, stage: 'NEW', notes: null, rejectionReasonId: null });
-      const result = (await requisitionService.createCandidate(body,user));
+
+      // S5-08 (SCRUM-118): Kiểm tra chống trùng lặp ứng viên trên cùng vị trí (AC-02)
+      const CandidateManualEntryService = require('./services/candidateManualEntryService');
+      const manualEntryService = new CandidateManualEntryService(db);
+      const result = await db.transaction(async () => {
+        await manualEntryService.lockDuplicateIdentities(body.email, body.phoneNumber || body.phone);
+        const dupCheck = await manualEntryService.checkDuplicateCandidate({ email: body.email, phoneNumber: body.phoneNumber || body.phone, requisitionId: body.requisitionId });
+        if (dupCheck.hasSamePositionDuplicate) {
+          const match = dupCheck.samePositionMatches[0];
+          const matchFieldText = match.matchField === 'BOTH' ? 'email và số điện thoại' : match.matchField === 'EMAIL' ? 'email' : 'số điện thoại';
+          return { success: false, statusCode: 409, code: 'DUPLICATE_CANDIDATE_IN_POSITION', message: `Ứng viên với ${matchFieldText} này đã có hồ sơ đang xử lý tại vị trí "${match.requisitionTitle || 'này'}".`, data: { duplicateType: 'SAME_POSITION', matchField: match.matchField, existingCandidate: match } };
+        }
+        return requisitionService.createCandidate(body,user);
+      });
+      if (!result.success && result.code === 'DUPLICATE_CANDIDATE_IN_POSITION') {
+        res.writeHead(409, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(result)); return;
+      }
+
+      // S5-09: Tự động chấm điểm hồ sơ mới theo tiêu chí sàng lọc bắt buộc của vị trí (AC-02)
+      const createdId = result.data?.id || result.candidate?.id || result.id;
+      if (result.success && createdId) {
+        try {
+          const CandidateScreeningService = require('./services/candidateScreeningService');
+          await new CandidateScreeningService(db).screenCandidate(createdId, user);
+        } catch (screenErr) {
+          // Bỏ qua nếu vị trí chưa có tiêu chí
+        }
+      }
+
       res.writeHead(result.statusCode || 201, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
@@ -1902,6 +2114,18 @@ async function handleRequest(req, res) {
       res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
     }
+    return;
+  }
+
+  // S5-03: Candidate Stage Transitions, History & Exceptions
+  if (
+    pathname === '/api/v1/recruitment-catalogs/rejection-reasons' ||
+    pathname === '/recruitment-catalogs/rejection-reasons' ||
+    /^\/(?:api\/v1\/)?candidates\/[^/]+\/(?:history|stage-history|stage-exception-request|stage-exceptions)$/.test(pathname) ||
+    /^\/(?:api\/v1\/)?stage-exceptions\/[^/]+\/decide$/.test(pathname)
+  ) {
+    const CandidateStageController = require('./controllers/candidateStageController');
+    await new CandidateStageController(db, rbacMiddleware, authController.authService).handle(req, res, parsedUrl, parseBody);
     return;
   }
 
@@ -1914,7 +2138,9 @@ async function handleRequest(req, res) {
       const body = await parseBody(req);
       const isCatalogUpdate = Object.hasOwn(body, 'rejectionReasonId');
       if (isCatalogUpdate && !(await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.update'))) return;
-      const result = (await requisitionService.updateCandidateStage(candId, body.stage, isCatalogUpdate ? body.notes : undefined, isCatalogUpdate ? body.rejectionReasonId : undefined,user));
+      const notesToPass = body.notes !== undefined ? body.notes : (isCatalogUpdate ? body.notes : undefined);
+      const reasonToPass = body.rejectionReasonId !== undefined ? body.rejectionReasonId : undefined;
+      const result = (await requisitionService.updateCandidateStage(candId, body.stage, notesToPass, reasonToPass, user));
       res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch (err) {
@@ -1934,6 +2160,11 @@ async function handleRequest(req, res) {
       if (interview.interviewer) {
         Object.assign(interview.interviewer, avatarService.getAvatarUrls(interview.interviewer.id));
       }
+      if (Array.isArray(interview.interviewers)) {
+        for (const iv of interview.interviewers) {
+          Object.assign(iv, avatarService.getAvatarUrls(iv.id));
+        }
+      }
     }
     res.writeHead(result.statusCode||200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(result));
@@ -1950,6 +2181,30 @@ async function handleRequest(req, res) {
     const user=await rbacMiddleware.authorize(req,res,authController.authService,'interview.evaluation.read');if(!user)return;
     const result=await requisitionService.getInterviews({viewer:user,evaluationsOnly:true});
     res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:true,evaluations:result.interviews.map(row=>({id:row.id,candidate:row.candidate,requisition:row.requisition,interviewer:row.interviewer,feedback:row.feedback,score:row.score}))}));return;
+  }
+
+  if (/^\/(?:api\/v1\/)?interviews\/(?:bulk-preview|bulk-create|batches\/[^/]+(?:\/retry)?)$/.test(pathname)) {
+    const user=await rbacMiddleware.authorize(req,res,authController.authService,'interview.create');
+    if(!user)return;
+    const service=new(require('./services/bulkInterviewService'))(db);
+    let result;
+    try{
+      if(req.method==='POST' && pathname.endsWith('/bulk-preview'))result=await service.preview(await parseBody(req),user);
+      else if(req.method==='POST' && pathname.endsWith('/bulk-create'))result=await service.create(await parseBody(req),user);
+      else if(req.method==='GET' && !pathname.endsWith('/retry'))result=await service.status(pathname.split('/').at(-1),user);
+      else if(req.method==='POST' && pathname.endsWith('/retry'))result=await service.retry(pathname.split('/').at(-2),user);
+      else result={success:false,statusCode:405,code:'METHOD_NOT_ALLOWED'};
+      if(result.success && req.method==='POST' && result.batchId){
+        try{const delivered=await new(require('./services/interviewInvitationWorker'))(db).deliver(result.batchId,user);if(delivered.success)result={...result,deliveries:delivered.deliveries};}
+        catch{result.deliveryPending=true;}
+      }
+    }catch(error){
+      const known=error instanceof require('./services/approvalConfigurationService').ApprovalConfigurationError;
+      const invalid=error.message==='Invalid JSON';
+      result={success:false,statusCode:known?error.statusCode:invalid?400:503,code:known?error.code:invalid?'BAD_REQUEST':'BULK_INTERVIEW_UNAVAILABLE',message:known?error.message:invalid?'Dữ liệu không hợp lệ.':'Không thể xử lý lịch hàng loạt. Vui lòng thử lại.'};
+    }
+    res.writeHead(result.statusCode || 200,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});
+    res.end(JSON.stringify(result));return;
   }
 
   // 13.8.1 API: Create Interview
@@ -1970,6 +2225,13 @@ async function handleRequest(req, res) {
   }
 
   // 13.8.2 API: Update Interview Status / Feedback / Score
+  if (req.method === 'PUT' && /^\/api\/v1\/interviews\/[^/]+\/schedule$/.test(pathname)) {
+    const user=await rbacMiddleware.authorize(req,res,authController.authService,'interview.update');if(!user)return;
+    try{const id=pathname.split('/').at(-2),result=await requisitionService.updateInterviewSchedule(id,await parseBody(req),user);res.writeHead(result.statusCode||200,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(result));}
+    catch{res.writeHead(503,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:'INTERVIEW_UPDATE_UNAVAILABLE',message:'Unable to update interview schedule.'}));}
+    return;
+  }
+
   if (req.method === 'PUT' && ((pathname.startsWith('/api/v1/interviews/') && pathname.endsWith('/status')) || (pathname.startsWith('/interviews/') && pathname.endsWith('/status')))) {
     const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'interview.read'));
     if (!user) return;
@@ -1979,8 +2241,9 @@ async function handleRequest(req, res) {
       const evaluating=Object.hasOwn(body,'feedback')||Object.hasOwn(body,'score')||(!user.permissions.includes('interview.update')&&user.roles.includes('INTERVIEWER'));
       if(!await rbacMiddleware.authorize(req,res,authController.authService,evaluating?'interview.evaluate':'interview.update'))return;
       if(evaluating&&!user.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))){
-        const assigned=await db.prepare('SELECT id FROM interviews WHERE id=? AND interviewer_id=?').get(intId,user.id);
-        if(!user.roles.includes('INTERVIEWER')||!assigned){res.writeHead(403,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:'INTERVIEW_ASSIGNEE_REQUIRED',message:'Bạn chỉ được đánh giá vòng phỏng vấn được phân công.'}));return;}
+        const assigned=await db.prepare('SELECT id,interviewer_id FROM interviews WHERE id=?').get(intId);
+        if(!assigned){res.writeHead(404,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:'INTERVIEW_NOT_FOUND'}));return;}
+        if(!user.roles.includes('INTERVIEWER')||assigned.interviewer_id!==user.id){res.writeHead(403,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:'INTERVIEW_ASSIGNEE_REQUIRED',message:'Bạn chỉ được đánh giá vòng phỏng vấn được phân công.'}));return;}
       }
       const result = (await requisitionService.updateInterviewStatus(intId, body.status, body.feedback, body.score,user,evaluating?'interview.evaluate':'interview.update'));
       res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });

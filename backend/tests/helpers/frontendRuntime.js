@@ -10,16 +10,35 @@ async function createFrontendRuntime(base, initialPath = '/login', initialStorag
   for (const [key, value] of initialStorage) storage.set(key, value);
   let ready, context, timerId = 0;
   const read = source => fs.readFileSync(path.join(root, 'frontend', source.replace(/^\//,'')), 'utf8');
+  const observers = new Set();
+  class MutationObserver {
+    constructor(callback){this.callback=callback;this.targets=new Map();this.records=[];this.queued=false;}
+    observe(target,options){if(!options.attributes||options.childList||options.characterData)throw new Error('Only attribute observation is supported by this runtime');this.targets.set(target,options);observers.add(this);}
+    disconnect(){this.targets.clear();this.records=[];observers.delete(this);}
+    takeRecords(){return this.records.splice(0);}
+  }
+  function attributeChanged(target,attributeName,oldValue){
+    for(const observer of observers){
+      const options=observer.targets.get(target)||[...observer.targets].find(([ancestor,settings])=>settings.subtree&&ancestor.contains(target))?.[1];
+      if(!options||options.attributeFilter&&!options.attributeFilter.includes(attributeName))continue;
+      observer.records.push({type:'attributes',target,attributeName,oldValue:options.attributeOldValue?oldValue:null});
+      if(!observer.queued){observer.queued=true;queueMicrotask(()=>{observer.queued=false;const records=observer.takeRecords();if(records.length)try{observer.callback(records,observer);}catch(error){errors.push(error);}});}
+    }
+  }
   function node() {
     const listeners = new Map(), attributes = new Map(), classes = new Set();
-    return {listeners,attributes,classes,value:'',innerHTML:'',style:{},dataset:{},children:[],files:[],disabled:false,
+    const updateClass=()=>{const oldValue=attributes.get('class')??null;attributes.set('class',[...classes].join(' '));attributeChanged(item,'class',oldValue);};
+    const item={listeners,attributes,classes,value:'',innerHTML:'',style:{},dataset:{},children:[],files:[],disabled:false,
       get textContent(){return this._textContent??'';},set textContent(value){this._textContent=value;this.children=[];},
-      classList:{add:(...values)=>values.forEach(v=>classes.add(v)),remove:(...values)=>values.forEach(v=>classes.delete(v)),contains:v=>classes.has(v),toggle(v,force){const enabled=force===undefined?!classes.has(v):force;enabled?classes.add(v):classes.delete(v);return enabled;}},
+      classList:{add(...values){values.forEach(v=>classes.add(v));updateClass();},remove(...values){values.forEach(v=>classes.delete(v));updateClass();},contains:v=>classes.has(v),toggle(v,force){const enabled=force===undefined?!classes.has(v):force;enabled?classes.add(v):classes.delete(v);updateClass();return enabled;}},
       addEventListener(type,handler){if(!listeners.has(type))listeners.set(type,[]);listeners.get(type).push(handler);},
       removeEventListener(type,handler){listeners.set(type,(listeners.get(type)||[]).filter(item=>item!==handler));},
-      setAttribute(key,value){attributes.set(key,value);if(key==='class'){classes.clear();value.split(/\s+/).forEach(v=>classes.add(v));}},getAttribute:key=>attributes.get(key)||'',
-      removeAttribute(key){attributes.delete(key);if(key==='src')delete this.src;},
+      setAttribute(key,value){const oldValue=attributes.get(key)??null;attributes.set(key,value);if(key==='class'){classes.clear();value.split(/\s+/).forEach(v=>classes.add(v));}attributeChanged(this,key,oldValue);},getAttribute:key=>attributes.get(key)||'',
+      removeAttribute(key){const oldValue=attributes.get(key)??null;attributes.delete(key);if(key==='src')delete this.src;if(key==='class')classes.clear();if(oldValue!==null)attributeChanged(this,key,oldValue);},
       appendChild(child){child.parentNode=this;this.children.push(child);return child;},
+      get firstChild(){return this.children[0]||null;},
+      insertBefore(child,reference){if(reference!=null&&!this.children.includes(reference))throw new Error('Reference node is not a child');if(child===reference)return child;if(child.parentNode){const siblings=child.parentNode.children,index=siblings.indexOf(child);if(index>=0)siblings.splice(index,1);}child.parentNode=this;this.children.splice(reference==null?this.children.length:this.children.indexOf(reference),0,child);return child;},
+      prepend(child){this.insertBefore(child,this.firstChild);},
       querySelectorAll(selector){return this.children.flatMap(child=>[...(child.matches(selector)?[child]:[]),...child.querySelectorAll(selector)]);},
       querySelector(selector){return this.querySelectorAll(selector)[0]||null;},
       reset(){},focus(){document.activeElement=this;},remove(){},
@@ -35,6 +54,7 @@ async function createFrontendRuntime(base, initialPath = '/login', initialStorag
         : {top:100,left:1100,right:1136,bottom:136,width:36,height:36};},
       click(){},
       async dispatch(type,event={}){for(const handler of listeners.get(type)||[])await handler({preventDefault(){},stopPropagation(){},...event});}};
+    return item;
   }
   function parse(source) {
     for(const match of source.matchAll(/<[^>]+\bid="([^"]+)"[^>]*>/g)) {
@@ -76,7 +96,7 @@ async function createFrontendRuntime(base, initialPath = '/login', initialStorag
   }
   function assertLocal(url){if(url.origin!==base)throw new Error('Non-isolated request rejected: '+url.origin);}
   context=vm.createContext({window,document,sessionStorage:fakeStorage,localStorage:{getItem:()=>null,setItem(){},removeItem(){}},
-    fetch:transport,URL,URLSearchParams,Blob,FormData,Intl,console:{log(){},warn(){},error(...args){errors.push(args.map(String).join(' '));}},
+    fetch:transport,URL,URLSearchParams,Blob,FormData,Intl,MutationObserver,console:{log(){},warn(){},error(...args){errors.push(args.map(String).join(' '));}},
     setInterval(fn){intervals.set(++timerId,fn);return timerId;},clearInterval:id=>intervals.delete(id),
     setTimeout(fn){timeouts.set(++timerId,fn);return timerId;},clearTimeout:id=>timeouts.delete(id),
     navigator:{clipboard:{writeText:async()=>{}}},confirm:()=>true,prompt:()=>''});
