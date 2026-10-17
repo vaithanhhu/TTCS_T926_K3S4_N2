@@ -1,4 +1,3 @@
-(() => {
   const interviewsSearchInput = document.getElementById('interviews-search-input');
   const interviewsStatusFilter = document.getElementById('interviews-status-filter');
   const interviewsTimeframeFilter = document.getElementById('interviews-timeframe-filter');
@@ -8,16 +7,7 @@
   const interviewsTotalBadge = document.getElementById('interviews-total-badge');
   const tabScopeMine = document.getElementById('tab-scope-mine');
   const tabScopeAll = document.getElementById('tab-scope-all');
-  const createInterviewBtn = document.getElementById('open-create-interview-modal-btn');
-
   let currentScope = 'mine';
-
-  function updateCreateButtonVisibility() {
-    if (!createInterviewBtn) return;
-    const user = window.ATS_STATE?.currentUser;
-    const canCreate = user?.roles?.some(r => ['ADMIN', 'HR_MANAGER', 'RECRUITER'].includes(r)) || user?.permissions?.includes('interview.create');
-    createInterviewBtn.style.display = canCreate ? '' : 'none';
-  }
 
   function setScope(scope) {
     currentScope = scope;
@@ -71,8 +61,6 @@
   async function loadInterviews() {
     const token = sessionStorage.getItem('ats_token');
     if (!token) return;
-
-    updateCreateButtonVisibility();
 
     const search = interviewsSearchInput ? interviewsSearchInput.value.trim() : '';
     const status = interviewsStatusFilter ? interviewsStatusFilter.value : 'ALL';
@@ -266,4 +254,3 @@
   }
 
   window.loadInterviews = loadInterviews;
-})();
