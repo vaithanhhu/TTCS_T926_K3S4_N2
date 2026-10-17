@@ -1,19 +1,19 @@
-﻿<div id="candidates-view" class="hidden">
+<div id="candidates-view" class="hidden">
           <div class="view-header">
             <div class="view-title-group">
               <div style="display: flex; align-items: center; gap: 8px;">
-                <h2>Há»“ sÆ¡ á»¨ng viĂªn</h2>
-                <span id="candidates-total-badge" class="badge badge-primary font-mono">0 á»©ng viĂªn</span>
+                <h2>Hồ sơ Ứng viên</h2>
+                <span id="candidates-total-badge" class="badge badge-primary font-mono">0 ứng viên</span>
               </div>
-              <p>Quáº£n lĂ½ nguá»“n nhĂ¢n tĂ i, Ä‘Ă¡nh giĂ¡ há»“ sÆ¡ vĂ  chuyá»ƒn Ä‘á»•i giai Ä‘oáº¡n tuyá»ƒn dá»¥ng</p>
+              <p>Quản lý nguồn nhân tài, đánh giá hồ sơ và chuyển đổi giai đoạn tuyển dụng</p>
             </div>
             <div style="display: flex; gap: 8px;">
               <button type="button" id="open-referral-modal-btn" class="btn btn-outline btn-sm">
-                <span>đŸ¤ Giá»›i thiá»‡u á»¨ng viĂªn</span>
+                <span>🤝 Giới thiệu Ứng viên</span>
               </button>
               <button type="button" id="open-create-candidate-modal-btn" class="btn btn-primary btn-sm">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                <span> ThĂªm á»¨ng viĂªn má»›i</span>
+                <span> Thêm Ứng viên mới</span>
               </button>
             </div>
           </div>
@@ -22,38 +22,36 @@
           <div class="filter-toolbar">
             <div class="toolbar-filters">
               <div style="min-width: 260px; flex: 1;">
-                <input type="text" id="candidates-search-input" class="form-input" placeholder="TĂ¬m theo tĂªn á»©ng viĂªn, email, sá»‘ Ä‘iá»‡n thoáº¡i..." />
+                <input type="text" id="candidates-search-input" class="form-input" placeholder="Tìm theo tên ứng viên, email, số điện thoại..." />
               </div>
               <div style="width: 180px;">
                 <select id="candidates-stage-filter" class="form-input">
-                  <option value="ALL">Táº¥t cáº£ giai Ä‘oáº¡n</option>
-                  <option value="APPLIED">á»¨ng tuyá»ƒn</option>
-                  <option value="SCREENING">SÆ¡ loáº¡i há»“ sÆ¡</option>
-                  <option value="INTERVIEW">Phá»ng váº¥n</option>
-                  <option value="OFFER">Äá» nghá»‹ (Offer)</option>
-                  <option value="HIRED">ÄĂ£ tuyá»ƒn dá»¥ng</option>
-                  <option value="REJECTED">Tá»« chá»‘i</option>
+                  <option value="ALL">Tất cả giai đoạn</option>
+                  <option value="APPLIED">Ứng tuyển</option>
+                  <option value="SCREENING">Sơ loại hồ sơ</option>
+                  <option value="INTERVIEW">Phỏng vấn</option>
+                  <option value="OFFER">Đề nghị (Offer)</option>
+                  <option value="HIRED">Đã tuyển dụng</option>
+                  <option value="REJECTED">Từ chối</option>
                 </select>
               </div>
               <div style="width: 200px;">
                 <select id="candidates-req-filter" class="form-input">
-                  <option value="ALL">Táº¥t cáº£ vá»‹ trĂ­ á»©ng tuyá»ƒn</option>
+                  <option value="ALL">Tất cả vị trí ứng tuyển</option>
                 </select>
               </div>
             </div>
             <div style="display: flex; gap: 8px;">
               <button type="button" id="candidates-export-btn" class="btn btn-outline btn-sm">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                <span>Xuáº¥t Excel</span>
+                <span>Xuất Excel</span>
               </button>
               <button type="button" id="candidates-refresh-btn" class="btn btn-outline btn-sm">
-                Lá»c / LĂ m má»›i
+                Lọc / Làm mới
               </button>
             </div>
           </div>
-
-          
-          <!-- Candidate view switch -->
+<!-- Candidate view switch -->
 <div class="candidate-view-switch" style="display: flex; gap: 8px; margin: 16px 0;">
   <button type="button" id="candidates-view-table-btn" class="btn btn-outline btn-sm">Danh sách</button>
   <button type="button" id="candidates-view-kanban-btn" class="btn btn-primary btn-sm">Pipeline Kanban</button>
@@ -63,19 +61,22 @@
 <div id="candidates-kanban" class="candidate-kanban hidden" aria-label="Bảng điều phối ứng viên theo giai đoạn">
 </div>
 
+
+      <!-- Table -->
+
 <!-- Table -->
-<div class="table-wrapper">
-<table class="data-table">
+          <div class="table-wrapper">
+            <table class="data-table">
               <thead>
                 <tr>
-                  <th>MĂ£ UV</th>
-                  <th>Há» vĂ  tĂªn</th>
-                  <th>Vá»‹ trĂ­ á»©ng tuyá»ƒn</th>
-                  <th>LiĂªn há»‡</th>
-                  <th>VĂ²ng tuyá»ƒn dá»¥ng</th>
-                  <th>NgĂ y ná»™p</th>
-                  <th>ÄĂ¡nh giĂ¡</th>
-                  <th style="text-align: center;">Thao tĂ¡c</th>
+                  <th>Mã UV</th>
+                  <th>Họ và tên</th>
+                  <th>Vị trí ứng tuyển</th>
+                  <th>Liên hệ</th>
+                  <th>Vòng tuyển dụng</th>
+                  <th>Ngày nộp</th>
+                  <th>Đánh giá</th>
+                  <th style="text-align: center;">Thao tác</th>
                 </tr>
               </thead>
               <tbody id="candidates-table-body">
@@ -84,4 +85,3 @@
             </table>
           </div>
         </div>
-
