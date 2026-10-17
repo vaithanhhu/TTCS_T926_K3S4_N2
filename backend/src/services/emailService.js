@@ -179,7 +179,7 @@ class EmailService {
   async sendPasswordResetEmail(recipientEmail, resetToken, expiresAt) {
     const resetUrl = `${config.APP_URL}/?reset_token=${resetToken}`;
     const subject = '🔐 [ATS] Hướng dẫn đặt lại mật khẩu tài khoản tuyển dụng';
-    
+
     const html = `
       <!DOCTYPE html>
       <html>
@@ -326,7 +326,7 @@ class EmailService {
           </div>
           <p class="body-text">${greeting}</p>
           <p class="body-text">Hệ thống nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn. Dưới đây là <strong>mã xác thực OTP gồm 6 chữ số</strong> của bạn:</p>
-          
+
           <div class="otp-container">
             <div class="otp-code">${otpCode}</div>
             <div class="otp-hint">Hiệu lực trong vòng <strong>${config.PASSWORD_RESET_OTP_TTL_MINUTES} phút</strong> · Chỉ sử dụng 1 lần</div>

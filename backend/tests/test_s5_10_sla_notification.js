@@ -7,10 +7,10 @@ const SlaNotificationController = require('../src/controllers/slaNotificationCon
  * ==============================================================================
  * TEST SUITE: USER STORY S5-10 / SCRUM-120
  * ==============================================================================
- * 
+ *
  * Là Nhân viên tuyển dụng, tôi muốn được nhắc khi công việc quá hạn SLA,
  * để không để hồ sơ nằm im ba ngày mà chưa ai đọc.
- * 
+ *
  * Tiêu chí chấp nhận (Acceptance Criteria):
  *   • AC-01: Cấu hình ngưỡng SLA cho từng giai đoạn, ví dụ hồ sơ mới phải sàng lọc trong 3 ngày
  *   • AC-02: Quá hạn thì hồ sơ được gắn cờ và recruiter nhận nhắc việc

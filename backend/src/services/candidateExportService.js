@@ -164,4 +164,3 @@ class CandidateExportService {
 }
 
 module.exports = CandidateExportService;
-

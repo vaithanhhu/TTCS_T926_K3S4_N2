@@ -149,7 +149,7 @@ async function runS503Tests() {
   console.log('TC-4: Chọn lý do hợp lệ: loại thành công & bắt buộc giải thích cho "Khác"...');
   {
     const cand4 = await createTestCandidate('Ứng viên TC4', 'SCREENING');
-    
+
     // Thử chọn "Khác" nhưng không nhập giải thích -> Phải bị chặn
     const rejectOtherEmptyNotes = await stageService.updateStage(cand4, 'REJECTED', {
       rejectionReasonId: 'cat-rej-other',

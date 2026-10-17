@@ -10,6 +10,95 @@
   const candidatesTableBody = document.getElementById('candidates-table-body');
   const candidatesTotalBadge = document.getElementById('candidates-total-badge');
 
+  const candidatesKanban = document.getElementById('candidates-kanban');
+  const candidatesViewTableBtn = document.getElementById('candidates-view-table-btn');
+  const candidatesViewKanbanBtn = document.getElementById('candidates-view-kanban-btn');
+
+  const CANDIDATE_KANBAN_STAGES = [
+    { key: 'NEW', label: 'Mới tiếp nhận' },
+    { key: 'APPLIED', label: 'Ứng tuyển' },
+    { key: 'SCREENING', label: 'Sơ loại' },
+    { key: 'INTERVIEW', label: 'Phỏng vấn' },
+    { key: 'OFFER', label: 'Đề nghị (Offer)' },
+    { key: 'HIRED', label: 'Đã nhận việc' },
+    { key: 'REJECTED', label: 'Từ chối' }
+  ];
+
+  function escapeKanbanHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;',
+      '"': '&quot;', "'": '&#39;'
+    })[ch]);
+  }
+
+  function setCandidatesView(view) {
+    const tableWrapper = document.querySelector('.table-wrapper');
+    const showKanban = view === 'kanban';
+
+    if (tableWrapper) tableWrapper.classList.toggle('hidden', showKanban);
+    if (candidatesKanban) candidatesKanban.classList.toggle('hidden', !showKanban);
+
+    if (candidatesViewTableBtn) {
+      candidatesViewTableBtn.classList.toggle('btn-primary', !showKanban);
+      candidatesViewTableBtn.classList.toggle('btn-outline', showKanban);
+    }
+    if (candidatesViewKanbanBtn) {
+      candidatesViewKanbanBtn.classList.toggle('btn-primary', showKanban);
+      candidatesViewKanbanBtn.classList.toggle('btn-outline', !showKanban);
+    }
+  }
+
+  function renderCandidatesKanban(list) {
+    if (!candidatesKanban) return;
+
+    const grouped = {};
+    CANDIDATE_KANBAN_STAGES.forEach(stage => grouped[stage.key] = []);
+
+    (list || []).forEach(candidate => {
+      const stage = String(candidate.stage || 'APPLIED').toUpperCase();
+      if (grouped[stage]) grouped[stage].push(candidate);
+    });
+
+    candidatesKanban.style.cssText =
+      'display:flex;gap:12px;overflow-x:auto;align-items:flex-start;padding:8px 2px 16px;';
+
+    candidatesKanban.innerHTML = CANDIDATE_KANBAN_STAGES.map(stage => {
+      const cards = grouped[stage.key].map(candidate => {
+        const id = escapeKanbanHtml(candidate.id || '');
+        const name = escapeKanbanHtml(candidate.fullName || candidate.full_name || 'Ứng viên');
+        const email = escapeKanbanHtml(candidate.email || '');
+        const phone = escapeKanbanHtml(candidate.phoneNumber || candidate.phone || '');
+        const reqTitle = escapeKanbanHtml(
+          candidate.requisition?.title || candidate.requisition_title || 'Chưa gắn vị trí'
+        );
+        const code = escapeKanbanHtml(formatCandCode(candidate));
+
+        return `
+          <article class="candidate-kanban-card"
+            draggable="${id ? 'true' : 'false'}"
+            data-candidate-id="${id}"
+            style="background:var(--color-surface, #fff);border:1px solid var(--color-border, #ddd);border-radius:8px;padding:12px;margin-bottom:10px;cursor:${id ? 'grab' : 'default'};box-shadow:0 1px 3px #0000000d;">
+            <div style="font-weight:600;margin-bottom:6px;">${name}</div>
+            <div style="font-size:12px;color:var(--color-text-muted);margin-bottom:6px;">${code}</div>
+            <div style="font-size:13px;overflow-wrap:anywhere;">${email}</div>
+            <div style="font-size:12px;margin-top:4px;">${phone}</div>
+            <div style="font-size:12px;margin-top:8px;color:var(--color-text-muted);">${reqTitle}</div>
+          </article>`;
+      }).join('');
+
+      return `
+        <section class="candidate-kanban-column"
+          data-kanban-stage="${stage.key}"
+          style="flex:0 0 220px;min-width:220px;background:var(--color-bg-secondary, #f5f6f8);border:1px solid var(--color-border, #ddd);border-radius:10px;padding:10px;min-height:180px;">
+          <div style="font-weight:700;margin-bottom:12px;">
+            ${stage.label}
+            <span style="font-weight:400;color:var(--color-text-muted);">(${grouped[stage.key].length})</span>
+          </div>
+          <div>${cards || '<div style="font-size:12px;color:var(--color-text-muted);padding:12px 4px;">Chưa có ứng viên</div>'}</div>
+        </section>`;
+    }).join('');
+  }
+
   function formatCandCode(c) {
     if (c?.status && !c.stage) return '—';
     if (!c) return 'CAND-001';
@@ -110,6 +199,7 @@
         if(enabled)loadCandidateFilterChoices(token,request);
         else setCandidateSearchMessage('Tìm kiếm nâng cao và bộ lọc đã lưu cần migration S5-05 được phê duyệt. Danh sách hiện hữu vẫn hoạt động.');
         if (list.length === 0) {
+          renderCandidatesKanban(list);
           candidatesTableBody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--color-text-muted); padding: 24px;">Không tìm thấy hồ sơ ứng viên phù hợp.</td></tr>`;
           return;
         }
@@ -148,6 +238,7 @@
             </tr>
           `;
         }).join('');
+        renderCandidatesKanban(list);
 window.ATS_BULK_INTERVIEWS?.refresh(list);
 candidatesTableBody.querySelectorAll('.candidate-merge-select').forEach(button => button.addEventListener('click', () => selectCandidateForMerge(button.dataset.candidateId)));
         window.CandidateSlaModule?.renderTableBadges();
@@ -265,6 +356,152 @@ candidatesTableBody.querySelectorAll('.candidate-merge-select').forEach(button =
       }
     });
   }
+
+
+  if (candidatesViewTableBtn) {
+    candidatesViewTableBtn.addEventListener('click', () => setCandidatesView('table'));
+  }
+  if (candidatesViewKanbanBtn) {
+    candidatesViewKanbanBtn.addEventListener('click', () => setCandidatesView('kanban'));
+  }
+
+  if (candidatesKanban) {
+    candidatesKanban.addEventListener('dragstart', event => {
+      const card = event.target.closest('[data-candidate-id]');
+      if (!card || !card.dataset.candidateId) {
+        event.preventDefault();
+        return;
+      }
+      event.dataTransfer.setData('text/plain', card.dataset.candidateId);
+      event.dataTransfer.effectAllowed = 'move';
+      card.style.opacity = '0.5';
+    });
+
+    candidatesKanban.addEventListener('dragend', event => {
+      const card = event.target.closest('[data-candidate-id]');
+      if (card) card.style.opacity = '1';
+    });
+
+    candidatesKanban.addEventListener('dragover', event => {
+      const column = event.target.closest('[data-kanban-stage]');
+      if (column) {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+      }
+    });
+
+    candidatesKanban.addEventListener('drop', async event => {
+      const column = event.target.closest('[data-kanban-stage]');
+      if (!column) return;
+
+      event.preventDefault();
+      const candidateId = event.dataTransfer.getData('text/plain');
+      const newStage = column.dataset.kanbanStage;
+      const candidate = currentCandidatesList.find(c => String(c.id) === candidateId);
+
+      if (!candidate || !candidateId ||
+          String(candidate.stage || 'APPLIED').toUpperCase() === newStage) return;
+
+      const token = sessionStorage.getItem('ats_token');
+      if (!token) return;
+
+      let rejectionReasonId;
+
+      if (newStage === 'REJECTED') {
+        try {
+          const [permissionsRes, reasonRes] = await Promise.all([
+            window.ATS_API.getPermissionsApi(token),
+            window.ATS_API.getRecruitmentCatalogsApi(token, { type: 'REJECTION_REASON' })
+          ]);
+
+          const canUpdate =
+            permissionsRes.ok &&
+            Array.isArray(permissionsRes.data?.permissions) &&
+            permissionsRes.data.permissions.includes('candidate.update');
+
+          if (!canUpdate) {
+            showToast('error', 'Không có quyền', 'Bạn không có quyền cập nhật hồ sơ ứng viên.');
+            await loadCandidates();
+            return;
+          }
+
+          const reasons =
+            reasonRes.ok && reasonRes.data?.success
+              ? (reasonRes.data.items || []).filter(item => item.status === 'ACTIVE')
+              : [];
+
+          if (!reasons.length) {
+            showToast('error', 'Không có lý do', 'Không tìm thấy lý do từ chối đang hoạt động.');
+            await loadCandidates();
+            return;
+          }
+
+          const options = reasons
+            .map((item, index) => `${index + 1}. ${item.name}`)
+            .join('\n');
+
+          const choice = window.prompt(
+            'Chọn lý do từ chối ứng viên bằng cách nhập số tương ứng:\n\n' +
+            options +
+            '\n\nNhấn Cancel để hủy thao tác.'
+          );
+
+          if (choice === null) {
+            await loadCandidates();
+            return;
+          }
+
+          const selectedIndex = Number(choice.trim()) - 1;
+          if (
+            !choice.trim() ||
+            !Number.isInteger(selectedIndex) ||
+            selectedIndex < 0 ||
+            selectedIndex >= reasons.length
+          ) {
+            showToast('error', 'Lựa chọn không hợp lệ', 'Vui lòng chọn số trong danh sách lý do.');
+            await loadCandidates();
+            return;
+          }
+
+          rejectionReasonId = reasons[selectedIndex].id;
+          if (rejectionReasonId === undefined || rejectionReasonId === null || rejectionReasonId === '') {
+            showToast('error', 'Thiếu lý do', 'Không thể xác định mã lý do từ chối.');
+            await loadCandidates();
+            return;
+          }
+        } catch (error) {
+          console.error('Failed to load rejection reasons:', error);
+          showToast('error', 'Lỗi tải lý do', 'Không thể tải danh sách lý do từ chối.');
+          await loadCandidates();
+          return;
+        }
+      }
+
+      try {
+        const result = await window.ATS_API.updateCandidateStageApi(
+          token, candidateId, newStage, undefined, rejectionReasonId
+        );
+
+        if (result.ok && result.data && result.data.success) {
+          showToast('success', 'Cập nhật thành công', 'Đã chuyển giai đoạn ứng viên.');
+        } else {
+          showToast(
+            'error',
+            'Không thể chuyển giai đoạn',
+            (result.data && result.data.message) || 'Vui lòng kiểm tra quyền hoặc dữ liệu bắt buộc.'
+          );
+        }
+        await loadCandidates();
+      } catch (error) {
+        console.error('Failed to update candidate stage:', error);
+        showToast('error', 'Lỗi cập nhật', 'Không thể cập nhật giai đoạn ứng viên.');
+        await loadCandidates();
+      }
+    });
+  }
+
+  setCandidatesView('table');
+
 
   if (candidatesRefreshBtn) candidatesRefreshBtn.addEventListener('click', resetCandidateSearch);
   if (candidatesStageFilter) candidatesStageFilter.addEventListener('change', resetCandidateSearch);

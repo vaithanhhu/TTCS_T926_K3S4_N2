@@ -52,7 +52,20 @@
               </button>
             </div>
           </div>
+<!-- Candidate view switch -->
+<div class="candidate-view-switch" style="display: flex; gap: 8px; margin: 16px 0;">
+  <button type="button" id="candidates-view-table-btn" class="btn btn-outline btn-sm">Danh sách</button>
+  <button type="button" id="candidates-view-kanban-btn" class="btn btn-primary btn-sm">Pipeline Kanban</button>
+</div>
 
+<!-- Candidate Kanban board -->
+<div id="candidates-kanban" class="candidate-kanban hidden" aria-label="Bảng điều phối ứng viên theo giai đoạn">
+</div>
+
+
+      <!-- Table -->
+
+<!-- Table -->
 
           <div id="bulk-interview-toolbar" hidden style="margin:12px 0">
             <label><input id="bulk-select-page" type="checkbox"> Chọn các hồ sơ hợp lệ trên trang này</label>

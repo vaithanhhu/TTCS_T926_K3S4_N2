@@ -2,7 +2,7 @@
  * ==============================================================================
  * USER STORY S5-10 (SCRUM-120) - CANDIDATE SLA NOTIFICATION CONTROLLER
  * ==============================================================================
- * 
+ *
  * Endpoints:
  *   • GET  /api/v1/sla/configs             : Xem danh sách cấu hình ngưỡng SLA
  *   • PUT  /api/v1/sla/configs             : Cập nhật cấu hình ngưỡng SLA theo stage

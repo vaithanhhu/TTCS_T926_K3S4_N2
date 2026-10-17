@@ -503,7 +503,7 @@
           const timeStr = h.createdAt ? new Date(h.createdAt).toLocaleString('vi-VN') : '—';
           const beforeBadge = `<span class="badge ${STAGE_BADGES[h.beforeStage] || 'badge-neutral'}" style="font-size:0.75rem;">${STAGE_LABELS[h.beforeStage] || h.beforeStage}</span>`;
           const afterBadge = `<span class="badge ${STAGE_BADGES[h.afterStage] || 'badge-neutral'}" style="font-size:0.75rem;">${STAGE_LABELS[h.afterStage] || h.afterStage}</span>`;
-          
+
           let detailsHtml = '';
           if (h.rejectionReasonName) {
             detailsHtml += `<div style="color:#b91c1c;margin-top:2px;font-size:0.8rem;">❌ <strong>Lý do loại:</strong> ${escapeHtml(h.rejectionReasonName)}</div>`;
