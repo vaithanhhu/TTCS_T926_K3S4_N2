@@ -1275,15 +1275,47 @@ class RequisitionService {
   }
 
   async hasEvaluationTable() {
-    try {
-      if (this.db.provider === 'postgres') {
-        const row = await this.db.prepare("SELECT table_name FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='interview_evaluations'").get();
-        return Boolean(row);
-      }
-      const row = await this.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='interview_evaluations'").get();
+    if (this.db.provider === 'postgres') {
+      const row = await this.db.prepare("SELECT table_name FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='interview_evaluations'").get();
       return Boolean(row);
-    } catch {
-      return false;
+    }
+    const row = await this.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='interview_evaluations'").get();
+    return Boolean(row);
+  }
+
+  async hasInvitationTokensTable() {
+    if (this.db.provider === 'postgres') {
+      const row = await this.db.prepare("SELECT table_name FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='interview_invitation_tokens'").get();
+      return Boolean(row);
+    }
+    const row = await this.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='interview_invitation_tokens'").get();
+    return Boolean(row);
+  }
+
+  async hasEmailOutboxTable() {
+    if (this.db.provider === 'postgres') {
+      const row = await this.db.prepare("SELECT table_name FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='email_outbox'").get();
+      return Boolean(row);
+    }
+    const row = await this.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='email_outbox'").get();
+    return Boolean(row);
+  }
+
+  async recordCandidateStatusHistory(data) {
+    const cols = this.db.provider === 'postgres'
+      ? (await this.db.prepare("SELECT column_name AS name FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='candidate_status_history'").all()).map(c => c.name)
+      : (await this.db.prepare("PRAGMA table_info(candidate_status_history)").all()).map(c => c.name);
+    if (!cols || cols.length === 0) return;
+    if (cols.includes('actor_id')) {
+      await this.db.prepare(`
+        INSERT INTO candidate_status_history (id, candidate_id, before_stage, after_stage, actor_id, actor_name, action, notes, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(data.id, data.candidateId, data.beforeStage, data.afterStage, data.actorId, data.actorName, data.action, data.notes, data.createdAt);
+    } else if (cols.includes('actor_name')) {
+      await this.db.prepare(`
+        INSERT INTO candidate_status_history (id, candidate_id, before_stage, after_stage, actor_name, action, notes, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(data.id, data.candidateId, data.beforeStage, data.afterStage, data.actorName, data.action, data.notes, data.createdAt);
     }
   }
 
@@ -1885,6 +1917,8 @@ class RequisitionService {
     if(conflict){
       if(conflict.conflicts.some(item=>item.resourceConflicts.some(reason=>reason.type==='CANDIDATE')))return{...conflict,code:'INTERVIEW_CANDIDATE_CONFLICT',message:'This candidate already has an interview scheduled during the requested time.'};
       if(!data.conflictOverrideConfirmed)return conflict;
+      try { await require('../db/migrate-interview-conflict-override').verify(this.db); }
+      catch { return {success:false,statusCode:503,code:'INTERVIEW_CONFLICT_OVERRIDE_MIGRATION_REQUIRED',message:'Interview conflict override migration required.'}; }
       if(overrideReason.length<3)return{success:false,statusCode:400,code:'INTERVIEW_OVERRIDE_REASON_REQUIRED',message:'Vui lòng nhập lý do ghi đè (ít nhất 3 ký tự).',conflicts:conflict.conflicts};
       const fresh=await new (require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(data._actorId,'interview.conflict.override');
       if(!fresh||!fresh.roles.includes('RECRUITER'))return{success:false,statusCode:403,code:'INTERVIEW_OVERRIDE_FORBIDDEN',message:'Chỉ recruiter có quyền phù hợp mới được ghi đè xung đột lịch.',conflicts:conflict.conflicts};
@@ -1910,19 +1944,23 @@ class RequisitionService {
         for(const uid of interviewerIds)await this.db.prepare('INSERT INTO interview_interviewers(interview_id,user_id,role) VALUES(?,?,?)').run(id,uid,uid===primaryInterviewerId?'PRIMARY':'INTERVIEWER');
         if(data._override)await this.db.prepare('INSERT INTO interview_conflict_override_audit(id,actor_id,interview_id,reason,conflicts_json,created_at) VALUES(?,?,?,?,?,CURRENT_TIMESTAMP)').run('iov-'+crypto.randomUUID(),data._override.actorId,id,data._override.reason,JSON.stringify(data._override.conflicts));
 
-        try {
+        if (await this.hasInvitationTokensTable()) {
           await this.db.prepare("UPDATE interview_invitation_tokens SET status='REVOKED' WHERE interview_id=? AND status='ACTIVE'").run(id);
           const InvitationService = require('./interviewInvitationService');
           await new InvitationService(this.db).createInvitation(id);
-        } catch {}
+        }
 
-        try {
-          const nowVal = new Date().toISOString();
-          await this.db.prepare(`
-            INSERT INTO candidate_status_history (id, candidate_id, before_stage, after_stage, actor_id, actor_name, action, notes, created_at)
-            VALUES (?, ?, 'INTERVIEW', 'INTERVIEW', ?, ?, 'INTERVIEW_RESCHEDULED', ?, ?)
-          `).run('csh-' + crypto.randomUUID(), candidateId, data._actorId || null, data._actorName || 'Nhân viên tuyển dụng', rescheduleReason || 'Dời lịch phỏng vấn', nowVal);
-        } catch {}
+        await this.recordCandidateStatusHistory({
+          id: 'csh-' + crypto.randomUUID(),
+          candidateId,
+          beforeStage: 'INTERVIEW',
+          afterStage: 'INTERVIEW',
+          actorId: data._actorId || null,
+          actorName: data._actorName || 'Nhân viên tuyển dụng',
+          action: 'INTERVIEW_RESCHEDULED',
+          notes: rescheduleReason || 'Dời lịch phỏng vấn',
+          createdAt: new Date().toISOString()
+        });
 
         return{success:true,statusCode:200,message:'Interview schedule updated.',id,candidateId,requisitionId:data.requisitionId||candidate.requisition_id,interviewerIds,scheduledTime,durationMinutes,interviewFormat,meetingRoom,meetingLink,rescheduledAt:new Date().toISOString(),rescheduleReason};
       }
@@ -1974,8 +2012,10 @@ class RequisitionService {
 
       let invitation = null;
       try {
-        const InvitationService = require('./interviewInvitationService');
-        invitation = await new InvitationService(this.db).createInvitation(id);
+        if (await this.hasInvitationTokensTable()) {
+          const InvitationService = require('./interviewInvitationService');
+          invitation = await new InvitationService(this.db).createInvitation(id);
+        }
       } catch {}
 
       return {
@@ -2069,35 +2109,37 @@ class RequisitionService {
         await this.db.prepare("UPDATE interviews SET status = 'CANCELLED' WHERE id = ?").run(id);
       }
 
-      try {
+      if (await this.hasInvitationTokensTable()) {
         await this.db.prepare("UPDATE interview_invitation_tokens SET status='REVOKED' WHERE interview_id=? AND status='ACTIVE'").run(id);
-      } catch {}
+      }
 
       const candidate = await this.db.prepare('SELECT id, full_name, email FROM candidates WHERE id = ?').get(existing.candidate_id);
       const reqRow = existing.requisition_id ? await this.db.prepare('SELECT title FROM requisitions WHERE id = ?').get(existing.requisition_id) : null;
       const requisitionTitle = reqRow?.title || 'Vị trí tuyển dụng';
 
-      if (candidate?.email) {
-        try {
-          const outboxId = 'out-' + crypto.randomUUID();
-          const subject = `[Thông báo hủy] Lịch phỏng vấn vị trí ${requisitionTitle}`;
-          const bodyText = `Kính gửi ${candidate.full_name},\n\nBuổi phỏng vấn vị trí ${requisitionTitle} (${existing.round_name}) dự kiến diễn ra lúc ${existing.scheduled_time} đã bị hủy.\nLý do: ${cancellationReason}\n\nBộ phận tuyển dụng xin lỗi vì sự bất tiện này.`;
-          const bodyHtml = `<p>Kính gửi <strong>${candidate.full_name}</strong>,</p><p>Chúng tôi rất tiếc phải thông báo buổi phỏng vấn vị trí <strong>${requisitionTitle}</strong> (${existing.round_name}) dự kiến lúc ${existing.scheduled_time} đã bị hủy.</p><p><strong>Lý do:</strong> ${cancellationReason}</p><p>Bộ phận tuyển dụng xin lỗi vì sự bất tiện này.</p>`;
+      if (candidate?.email && await this.hasEmailOutboxTable()) {
+        const outboxId = 'out-' + crypto.randomUUID();
+        const subject = `[Thông báo hủy] Lịch phỏng vấn vị trí ${requisitionTitle}`;
+        const bodyText = `Kính gửi ${candidate.full_name},\n\nBuổi phỏng vấn vị trí ${requisitionTitle} (${existing.round_name}) dự kiến diễn ra lúc ${existing.scheduled_time} đã bị hủy.\nLý do: ${cancellationReason}\n\nBộ phận tuyển dụng xin lỗi vì sự bất tiện này.`;
+        const bodyHtml = `<p>Kính gửi <strong>${candidate.full_name}</strong>,</p><p>Chúng tôi rất tiếc phải thông báo buổi phỏng vấn vị trí <strong>${requisitionTitle}</strong> (${existing.round_name}) dự kiến lúc ${existing.scheduled_time} đã bị hủy.</p><p><strong>Lý do:</strong> ${cancellationReason}</p><p>Bộ phận tuyển dụng xin lỗi vì sự bất tiện này.</p>`;
 
-          await this.db.prepare(`
-            INSERT INTO email_outbox (id, recipient, subject, body_html, body_text, template_name, status)
-            VALUES (?, ?, ?, ?, ?, 'S606_INTERVIEW_CANCELLATION', 'PENDING')
-          `).run(outboxId, candidate.email, subject, bodyHtml, bodyText);
-        } catch {}
+        await this.db.prepare(`
+          INSERT INTO email_outbox (id, recipient, subject, body_html, body_text, template_name, status)
+          VALUES (?, ?, ?, ?, ?, 'S606_INTERVIEW_CANCELLATION', 'PENDING')
+        `).run(outboxId, candidate.email, subject, bodyHtml, bodyText);
       }
 
-      try {
-        const nowVal = new Date().toISOString();
-        await this.db.prepare(`
-          INSERT INTO candidate_status_history (id, candidate_id, before_stage, after_stage, actor_id, actor_name, action, notes, created_at)
-          VALUES (?, ?, 'INTERVIEW', 'INTERVIEW', ?, ?, 'INTERVIEW_CANCELLED', ?, ?)
-        `).run('csh-' + crypto.randomUUID(), existing.candidate_id, fresh.id, fresh.fullName || 'Nhân viên tuyển dụng', cancellationReason, nowVal);
-      } catch {}
+      await this.recordCandidateStatusHistory({
+        id: 'csh-' + crypto.randomUUID(),
+        candidateId: existing.candidate_id,
+        beforeStage: 'INTERVIEW',
+        afterStage: 'INTERVIEW',
+        actorId: fresh.id,
+        actorName: fresh.fullName || 'Nhân viên tuyển dụng',
+        action: 'INTERVIEW_CANCELLED',
+        notes: cancellationReason,
+        createdAt: new Date().toISOString()
+      });
 
       return {
         success: true,
@@ -2113,9 +2155,6 @@ class RequisitionService {
 
   async updateInterviewStatus(id, status, feedback, score, actor = null, permission = 'interview.evaluate') {
     if (!actor?.id) return {success:false,statusCode:403,code:'INTERVIEW_ACTOR_REQUIRED'};
-    if (status === 'CANCELLED') {
-      return this.cancelInterview(id, { cancellationReason: feedback || '' }, actor);
-    }
     return this.db.transaction(async()=>{
       const fresh=await new (require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(actor.id,permission);
       if(!fresh)return{success:false,statusCode:403,code:'FORBIDDEN_PERMISSION_DENIED',message:'Bạn không có quyền cập nhật lịch hoặc đánh giá.'};
@@ -2141,6 +2180,9 @@ class RequisitionService {
     `);
     const res = (await stmt.run(status, feedback || null, hasScore ? Number(score) : null, id));
     if (res.changes === 0) return { success: false, statusCode: 404, message: 'Không tìm thấy lịch phỏng vấn.' };
+    if (status === 'CANCELLED' && await this.hasInvitationTokensTable()) {
+      await this.db.prepare("UPDATE interview_invitation_tokens SET status='REVOKED' WHERE interview_id=? AND status='ACTIVE'").run(id);
+    }
     return { success: true, statusCode: 200, message: 'Cập nhật lịch phỏng vấn thành công.' };
   }
 
