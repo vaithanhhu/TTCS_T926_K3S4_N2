@@ -220,6 +220,80 @@ function runMigrations(customPath) {
   if (!db.prepare('PRAGMA table_info(users)').all().some(column => column.name === 'must_change_password')) {
     db.exec('ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0 CHECK (must_change_password IN (0, 1))');
   }
+
+  const interviewCols = db.prepare('PRAGMA table_info(interviews)').all().map(column => column.name);
+  if (!interviewCols.includes('candidate_response_status')) {
+    db.exec("ALTER TABLE interviews ADD COLUMN candidate_response_status TEXT DEFAULT 'PENDING'");
+  }
+  if (!interviewCols.includes('candidate_response_note')) {
+    db.exec("ALTER TABLE interviews ADD COLUMN candidate_response_note TEXT");
+  }
+  if (!interviewCols.includes('candidate_responded_at')) {
+    db.exec("ALTER TABLE interviews ADD COLUMN candidate_responded_at TEXT");
+  }
+  if (!interviewCols.includes('cancellation_reason')) {
+    db.exec("ALTER TABLE interviews ADD COLUMN cancellation_reason TEXT");
+  }
+  if (!interviewCols.includes('cancelled_at')) {
+    db.exec("ALTER TABLE interviews ADD COLUMN cancelled_at TEXT");
+  }
+  if (!interviewCols.includes('rescheduled_at')) {
+    db.exec("ALTER TABLE interviews ADD COLUMN rescheduled_at TEXT");
+  }
+  if (!interviewCols.includes('reschedule_reason')) {
+    db.exec("ALTER TABLE interviews ADD COLUMN reschedule_reason TEXT");
+  }
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS interview_invitation_tokens (
+      id TEXT PRIMARY KEY,
+      interview_id TEXT NOT NULL REFERENCES interviews(id) ON DELETE CASCADE,
+      token_hash TEXT NOT NULL UNIQUE,
+      status TEXT NOT NULL DEFAULT 'ACTIVE',
+      expires_at TEXT NOT NULL,
+      used_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_invitation_tokens_hash ON interview_invitation_tokens(token_hash);
+    CREATE INDEX IF NOT EXISTS idx_invitation_tokens_interview ON interview_invitation_tokens(interview_id);
+
+    CREATE TABLE IF NOT EXISTS interview_evaluations (
+      id TEXT PRIMARY KEY,
+      interview_id TEXT NOT NULL REFERENCES interviews(id) ON DELETE CASCADE,
+      interviewer_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      job_title_id TEXT REFERENCES job_titles(id) ON DELETE SET NULL,
+      framework_id TEXT REFERENCES competency_frameworks(id) ON DELETE SET NULL,
+      template_name TEXT NOT NULL,
+      snapshot_criteria TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'SUBMITTED', 'REOPENED')),
+      recommendation TEXT CHECK (recommendation IS NULL OR recommendation IN ('RECOMMENDED', 'CONSIDER', 'NOT_RECOMMENDED')),
+      general_notes TEXT,
+      total_score REAL,
+      submitted_at TEXT,
+      reopened_at TEXT,
+      reopened_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+      reopen_reason TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(interview_id, interviewer_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_interview_evaluations_interview ON interview_evaluations(interview_id);
+    CREATE INDEX IF NOT EXISTS idx_interview_evaluations_interviewer ON interview_evaluations(interviewer_id);
+    CREATE INDEX IF NOT EXISTS idx_interview_evaluations_status ON interview_evaluations(status);
+
+    CREATE TABLE IF NOT EXISTS interview_evaluation_items (
+      id TEXT PRIMARY KEY,
+      evaluation_id TEXT NOT NULL REFERENCES interview_evaluations(id) ON DELETE CASCADE,
+      criterion_id TEXT NOT NULL,
+      criterion_name TEXT NOT NULL,
+      weight INTEGER NOT NULL,
+      score INTEGER CHECK (score IS NULL OR (score >= 1 AND score <= 5)),
+      comment TEXT,
+      display_order INTEGER NOT NULL DEFAULT 0,
+      UNIQUE(evaluation_id, criterion_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_evaluation_items_eval ON interview_evaluation_items(evaluation_id);
+  `);
   console.log('[Migration] All tables and indexes migrated successfully.');
   return db;
 }

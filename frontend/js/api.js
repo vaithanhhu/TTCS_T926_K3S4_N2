@@ -947,7 +947,7 @@ async function createInterviewApi(token, interviewData) {
   }
 }
 
-async function updateInterviewStatusApi(token, id, status, feedback, score) {
+async function updateInterviewStatusApi(token, id, status, feedback, score, extra = {}) {
   try {
     const response = await fetch(`${API_BASE}/interviews/${id}/status`, {
       method: 'PUT',
@@ -955,12 +955,29 @@ async function updateInterviewStatusApi(token, id, status, feedback, score) {
         'Content-Type': 'application/json',
         'Authorization': token ? `Bearer ${token}` : ''
       },
-      body: JSON.stringify({ status, feedback, score })
+      body: JSON.stringify({ status, feedback, score, ...extra })
     });
     const data = await response.json();
     return { status: response.status, ok: response.ok, data };
   } catch (error) {
     return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi cập nhật buổi phỏng vấn.' } };
+  }
+}
+
+async function cancelInterviewApi(token, id, cancellationReason) {
+  try {
+    const response = await fetch(`${API_BASE}/interviews/${id}/cancel`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify({ cancellationReason })
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi hủy buổi phỏng vấn.' } };
   }
 }
 
@@ -1752,6 +1769,7 @@ window.ATS_API = {
   getInterviewsApi,
   createInterviewApi,
   updateInterviewStatusApi,
+  cancelInterviewApi,
   getOffersApi,
   createOfferApi,
   updateOfferStatusApi,
@@ -1797,4 +1815,95 @@ window.ATS_API.bulkInterviewsApi = async function(token,action,body) {
 window.ATS_API.candidateMergeApi = async function(token,path,method='POST',body) {
   try { const response=await fetch(API_BASE+'/candidates/merge'+path,{method,cache:'no-store',headers:{Authorization:'Bearer '+token,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});return {ok:response.ok,status:response.status,data:await response.json()}; }
   catch { return {ok:false,status:0,data:{success:false,message:'Không thể kết nối tới chức năng gộp hồ sơ.'}}; }
+};
+
+window.ATS_API.getInterviewEvaluationFormApi = async function(token, interviewId, interviewerId = null) {
+  try {
+    const qs = interviewerId ? `?interviewerId=${encodeURIComponent(interviewerId)}` : '';
+    const response = await fetch(`${API_BASE}/interviews/${encodeURIComponent(interviewId)}/evaluation-form${qs}`, {
+      method: 'GET',
+      headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+    });
+    return { ok: response.ok, status: response.status, data: await response.json() };
+  } catch {
+    return { ok: false, status: 0, data: { success: false, message: 'Lỗi kết nối khi lấy phiếu đánh giá.' } };
+  }
+};
+
+window.ATS_API.saveInterviewEvaluationApi = async function(token, interviewId, body) {
+  try {
+    const response = await fetch(`${API_BASE}/interviews/${encodeURIComponent(interviewId)}/evaluation-form`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify(body)
+    });
+    return { ok: response.ok, status: response.status, data: await response.json() };
+  } catch {
+    return { ok: false, status: 0, data: { success: false, message: 'Lỗi kết nối khi lưu phiếu đánh giá.' } };
+  }
+};
+
+window.ATS_API.calculateEvaluationScoreApi = async function(token, interviewId, criteria) {
+  try {
+    const response = await fetch(`${API_BASE}/interviews/${encodeURIComponent(interviewId)}/evaluation-form/calculate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify({ criteria })
+    });
+    return { ok: response.ok, status: response.status, data: await response.json() };
+  } catch {
+    return { ok: false, status: 0, data: { success: false, message: 'Lỗi kết nối khi tính điểm đánh giá.' } };
+  }
+};
+
+window.ATS_API.reopenInterviewEvaluationApi = async function(token, interviewId, body) {
+  try {
+    const response = await fetch(`${API_BASE}/interviews/${encodeURIComponent(interviewId)}/evaluation-form/reopen`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify(body)
+    });
+    return { ok: response.ok, status: response.status, data: await response.json() };
+  } catch {
+    return { ok: false, status: 0, data: { success: false, message: 'Lỗi kết nối khi mở lại phiếu đánh giá.' } };
+  }
+};
+
+window.ATS_API.getInterviewEvaluationsApi = async function(token, interviewId) {
+  try {
+    const response = await fetch(`${API_BASE}/interviews/${encodeURIComponent(interviewId)}/evaluations`, {
+      method: 'GET',
+      headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+    });
+    return { ok: response.ok, status: response.status, data: await response.json() };
+  } catch {
+    return { ok: false, status: 0, data: { success: false, message: 'Lỗi kết nối khi lấy kết quả đánh giá.' } };
+  }
+};
+
+window.ATS_API.getCandidateEvaluationsComparisonApi = async function(token, requisitionId, params = {}) {
+  try {
+    const query = new URLSearchParams();
+    if (params.roundName) query.set('roundName', params.roundName);
+    if (params.sortBy) query.set('sortBy', params.sortBy);
+    if (params.order) query.set('order', params.order);
+    if (params.finalRoundOnly !== undefined) query.set('finalRoundOnly', String(params.finalRoundOnly));
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    const response = await fetch(`${API_BASE}/requisitions/${encodeURIComponent(requisitionId)}/candidate-evaluations-comparison${qs}`, {
+      method: 'GET',
+      headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+    });
+    return { ok: response.ok, status: response.status, data: await response.json() };
+  } catch {
+    return { ok: false, status: 0, data: { success: false, message: 'Lỗi kết nối khi lấy bảng so sánh ứng viên.' } };
+  }
 };

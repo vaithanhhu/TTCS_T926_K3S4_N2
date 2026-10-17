@@ -76,7 +76,15 @@
                 <div>${formatBadge}${durationBadge}</div>
                 <div style="font-size: 0.8rem; margin-top: 2px;">${escapeHtml(location)}</div>
               </td>
-              <td><span class="badge ${statusBadge}">${statusText}</span></td>
+              <td>
+                <span class="badge ${statusBadge}">${statusText}</span>
+                ${(() => {
+                  const resp = iv.candidateResponseStatus || iv.candidate_response_status;
+                  if (resp === 'CONFIRMED') return '<div style="margin-top: 4px;"><span class="badge" style="background: #dcfce7; color: #15803d; font-size: 0.7rem;">✓ Đã xác nhận</span></div>';
+                  if (resp === 'RESCHEDULE_REQUESTED') return '<div style="margin-top: 4px;"><span class="badge" style="background: #fef3c7; color: #b45309; font-size: 0.7rem;">⏳ Đề nghị đổi lịch</span></div>';
+                  return '';
+                })()}
+              </td>
               <td style="text-align: center;">
                 <button type="button" class="btn btn-outline btn-xs" onclick="window.ATS_APP_HELPERS.viewInterviewDetails(${escapeHtml(JSON.stringify(iv.id))})">
                   Chi tiết

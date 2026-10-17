@@ -1,0 +1,48 @@
+<div id="candidate-comparison-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="comparison-modal-title">
+  <div class="modal-content" style="max-width: 1100px; width: 95%; max-height: 90vh; display: flex; flex-direction: column;">
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--color-border); padding-bottom: 12px; margin-bottom: 16px;">
+      <div>
+        <h3 id="comparison-modal-title" style="margin: 0; font-size: 1.25rem;">So sánh ứng viên theo điểm đánh giá</h3>
+        <p id="comparison-modal-subtitle" style="margin: 4px 0 0; color: var(--color-text-secondary); font-size: 0.875rem;">Vòng phỏng vấn cuối</p>
+      </div>
+      <button type="button" id="close-comparison-modal" class="btn btn-outline btn-sm" aria-label="Đóng">&times;</button>
+    </div>
+
+    <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap;">
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <label for="comparison-round-filter" style="font-size: 0.85rem; font-weight: 500;">Vòng:</label>
+        <input type="text" id="comparison-round-filter" class="form-input" style="padding: 4px 8px; width: 180px; font-size: 0.85rem;" placeholder="Mặc định: Vòng cuối" />
+      </div>
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <label for="comparison-sort-order" style="font-size: 0.85rem; font-weight: 500;">Sắp xếp:</label>
+        <select id="comparison-sort-order" class="form-input" style="padding: 4px 8px; font-size: 0.85rem;">
+          <option value="DESC">Điểm tổng: Cao đến thấp</option>
+          <option value="ASC">Điểm tổng: Thấp đến cao</option>
+        </select>
+      </div>
+      <button type="button" id="comparison-apply-filter-btn" class="btn btn-primary btn-sm">Áp dụng</button>
+      <span id="comparison-total-badge" class="badge badge-info" style="margin-left: auto;">0 ứng viên</span>
+    </div>
+
+    <div style="flex: 1; overflow: auto; border: 1px solid var(--color-border); border-radius: var(--radius-sm);">
+      <table class="data-table" style="width: 100%; border-collapse: collapse; font-size: 0.875rem;">
+        <thead id="comparison-table-head" style="position: sticky; top: 0; background: var(--color-bg-secondary, #f8f9fa); z-index: 1;">
+          <tr>
+            <th style="width: 50px; text-align: center;">Hạng</th>
+            <th>Ứng viên</th>
+            <th style="width: 100px; text-align: center;">Điểm tổng</th>
+            <th style="width: 120px; text-align: center;">Kết luận</th>
+            <th style="width: 90px; text-align: center;">Số phiếu</th>
+          </tr>
+        </thead>
+        <tbody id="comparison-table-body">
+          <tr><td colspan="5" style="text-align: center; padding: 24px; color: var(--color-text-secondary);">Đang tải dữ liệu so sánh...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div style="display: flex; justify-content: flex-end; margin-top: 16px; border-top: 1px solid var(--color-border); padding-top: 12px;">
+      <button type="button" id="comparison-modal-close-btn" class="btn btn-outline">Đóng</button>
+    </div>
+  </div>
+</div>
