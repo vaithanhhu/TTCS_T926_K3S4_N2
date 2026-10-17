@@ -1826,6 +1826,8 @@ class RequisitionService {
     if(conflict){
       if(conflict.conflicts.some(item=>item.resourceConflicts.some(reason=>reason.type==='CANDIDATE')))return{...conflict,code:'INTERVIEW_CANDIDATE_CONFLICT',message:'This candidate already has an interview scheduled during the requested time.'};
       if(!data.conflictOverrideConfirmed)return conflict;
+      try { await require('../db/migrate-interview-conflict-override').verify(this.db); }
+      catch { return {success:false,statusCode:503,code:'INTERVIEW_CONFLICT_OVERRIDE_MIGRATION_REQUIRED',message:'Interview conflict override migration required.'}; }
       if(overrideReason.length<3)return{success:false,statusCode:400,code:'INTERVIEW_OVERRIDE_REASON_REQUIRED',message:'Vui lòng nhập lý do ghi đè (ít nhất 3 ký tự).',conflicts:conflict.conflicts};
       const fresh=await new (require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(data._actorId,'interview.conflict.override');
       if(!fresh||!fresh.roles.includes('RECRUITER'))return{success:false,statusCode:403,code:'INTERVIEW_OVERRIDE_FORBIDDEN',message:'Chỉ recruiter có quyền phù hợp mới được ghi đè xung đột lịch.',conflicts:conflict.conflicts};

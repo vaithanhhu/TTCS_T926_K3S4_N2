@@ -102,7 +102,7 @@ async function migrate(db) {
     await db.exec(migration.sql);
     await db.exec("INSERT INTO interview_interviewers (interview_id, user_id, role) SELECT id, interviewer_id, 'PRIMARY' FROM interviews WHERE interviewer_id IS NOT NULL ON CONFLICT (interview_id, user_id) DO NOTHING;");
     await verifySchema(db);
-    await db.prepare('INSERT INTO ats_interview_scheduling_migrations (version, checksum) VALUES (1, ?)').run(migration.checksum);
+    await db.prepare('INSERT INTO ats_interview_scheduling_migrations (version, checksum) VALUES (1, ?) ON CONFLICT (version) DO NOTHING').run(migration.checksum);
     return { success: true, checksum: migration.checksum };
   });
 }
