@@ -2152,10 +2152,21 @@ async function handleRequest(req, res) {
   }
 
   // 13.8 API: Interviews List (Real SQLite Data)
-  if (req.method === 'GET' && (pathname === '/api/v1/interviews' || pathname === '/interviews')) {
+  if (req.method === 'GET' && (pathname === '/api/v1/interviews' || pathname === '/interviews' || pathname === '/api/v1/interviews/my-schedule' || pathname === '/interviews/my-schedule')) {
     const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'interview.read'));
     if (!user) return;
-    const result = (await requisitionService.getInterviews({viewer:user,...(isCandidateOnly(user) ? { candidateEmail: user.email } : {})}));
+    const query = parsedUrl.query || {};
+    const isMySchedule = pathname.endsWith('/my-schedule') || query.mySchedule === 'true' || query.mySchedule === '1' || query.scope === 'mine' || query.mine === '1' || query.mine === 'true';
+    const result = (await requisitionService.getInterviews({
+      viewer: user,
+      mySchedule: isMySchedule,
+      status: query.status,
+      search: query.search,
+      timeframe: query.timeframe || (pathname.endsWith('/my-schedule') ? (query.timeframe !== undefined ? query.timeframe : 'UPCOMING') : undefined),
+      sortOrder: query.sortOrder,
+      evaluationStatus: query.evaluationStatus,
+      ...(isCandidateOnly(user) ? { candidateEmail: user.email } : {})
+    }));
     for (const interview of result.interviews) {
       if (interview.interviewer) {
         Object.assign(interview.interviewer, avatarService.getAvatarUrls(interview.interviewer.id));
