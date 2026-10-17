@@ -1,13 +1,14 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),cp=require('node:child_process');
 const safety=require('../../scripts/git-safety'),{install}=require('../../scripts/install-git-hooks');
 const root=fs.mkdtempSync(path.join(os.tmpdir(),'ats-git-guard-')),sha='a'.repeat(40),old='b'.repeat(40),zero='0'.repeat(40),url='https://github.com/vaithanhhu/TTCS_T926_K3S4_N2.git',results=[];
+fs.writeFileSync(path.join(root,'MERGE_HEAD'),sha);
 function test(name,fn){try{fn();results.push({name,status:'PASS'});}catch(error){results.push({name,status:'FAIL',message:error.message});}}
 function fixture(options={}) {
  let remoteQueries=0;
  const calls=[],blobs=new Map(),entries=(options.files||[]).map(([name,content],i)=>{const id=(i+1).toString(16).padStart(40,'0');blobs.set(id,Buffer.from(content));return{mode:'100644',sha:id,name};});
  const git=(args,opts={})=>{calls.push(args);const key=args.join(' ');let status=0,stdout='';
   if(key==='rev-parse --show-toplevel')stdout=root;
-  else if(args[0]==='rev-parse'&&args[1]==='--git-path')stdout=path.join(root,'absent',args[2]);
+  else if(args[0]==='rev-parse'&&args[1]==='--git-path')stdout=options.mergeHead&&args[2]==='MERGE_HEAD'?path.join(root,'MERGE_HEAD'):path.join(root,'absent',args[2]);
   else if(args[0]==='symbolic-ref'){status=options.detached?1:0;stdout=options.detached?'':options.branch||'feature/candidates-fixture';}
   else if(key==='ls-files -u -z')stdout=options.conflict?'100644 '+sha+' 1\tconflict.js\0':'';
   else if(args[0]==='status')stdout=options.dirty?' M working.js\0':'';
@@ -104,5 +105,11 @@ test('unknown command process exits nonzero',()=>{const r=cp.spawnSync(process.e
 test('installer preserves existing custom hook',()=>{const dir=path.join(root,'install-preserve');fs.mkdirSync(path.join(dir,'.git/hooks'),{recursive:true});fs.mkdirSync(path.join(dir,'.githooks'));fs.mkdirSync(path.join(dir,'scripts'));fs.writeFileSync(path.join(dir,'scripts/git-safety.js'),'fixture');for(const name of ['pre-commit','pre-push'])fs.writeFileSync(path.join(dir,'.githooks',name),'#!/bin/sh\nexit 0\n');const existing=path.join(dir,'.git/hooks/pre-commit');fs.writeFileSync(existing,'custom hook');const invoke=(_,args)=>args[0]==='config'?{status:1,stdout:''}:{status:0,stdout:'.git/hooks'};assert.throws(()=>install(dir,invoke),/EXISTING_HOOK_REQUIRES_REVIEW/);assert.equal(fs.readFileSync(existing,'utf8'),'custom hook');assert.equal(fs.existsSync(path.join(dir,'.git/hooks/pre-push')),false);});
 test('installer refuses custom hooksPath',()=>assert.throws(()=>install(root,()=>({status:0,stdout:'custom'})),/EXISTING_HOOKS_CONFIGURATION_REQUIRES_REVIEW/));
 test('installer creates new hooks and standalone guard; rerun is idempotent',()=>{const dir=path.join(root,'install-new');fs.mkdirSync(path.join(dir,'.git/hooks'),{recursive:true});fs.mkdirSync(path.join(dir,'.githooks'));fs.mkdirSync(path.join(dir,'scripts'));const guard=fs.readFileSync(path.resolve(__dirname,'../../scripts/git-safety.js'));fs.writeFileSync(path.join(dir,'scripts/git-safety.js'),guard);const data='#!/bin/sh\nexit 0\n';for(const name of ['pre-commit','pre-push'])fs.writeFileSync(path.join(dir,'.githooks',name),data);const invoke=(_,args)=>args[0]==='config'?{status:1,stdout:''}:{status:0,stdout:'.git/hooks'};install(dir,invoke);install(dir,invoke);for(const name of ['pre-commit','pre-push'])assert.equal(fs.readFileSync(path.join(dir,'.git/hooks',name),'utf8'),data);assert.deepEqual(fs.readFileSync(path.join(dir,'.git/hooks/ats-git-safety.js')),guard);const result=cp.spawnSync(process.execPath,[path.join(dir,'.git/hooks/ats-git-safety.js'),'invalid'],{cwd:root,encoding:'utf8',windowsHide:true});assert.equal(result.status,1);assert.ok(result.stderr.includes('UNKNOWN_COMMAND'));});
+test('pre-commit allows valid merge commit when MERGE_HEAD exists and index is clean',()=>run('pre-commit',[],{mergeHead:true,files:[['feature.js','const ready=true;']]}));
+test('pre-commit rejects merge commit when MERGE_HEAD exists and conflicts remain',()=>denied('pre-commit',[],{mergeHead:true,conflict:true,files:[['conflict.js','const conflict=true;']]}));
+test('pre-commit rejection on unresolved conflict reports UNMERGED_INDEX',()=>{assert.throws(()=>safety.execute('pre-commit',[],fixture({mergeHead:true,conflict:true,files:[['conflict.js','const conflict=true;']]}).git,'',()=>{}),/UNMERGED_INDEX/);});
+test('check rejects merge in progress',()=>denied('check',[],{mergeHead:true}));
+test('push rejects merge in progress',()=>denied('push',[],{mergeHead:true}));
+test('pre-push rejects merge in progress',()=>denied('pre-push',['origin',url],{mergeHead:true},tuple()));
 const report={passed:results.filter(r=>r.status==='PASS').length,failed:results.filter(r=>r.status==='FAIL').length,total:results.length,gitOperations:'MOCKED; no add/commit/push/merge/reset on any repository',results};
 console.log('GIT_SAFETY_RESULT '+JSON.stringify(report));process.exitCode=report.failed?1:0;
