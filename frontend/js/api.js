@@ -1889,3 +1889,21 @@ window.ATS_API.getInterviewEvaluationsApi = async function(token, interviewId) {
     return { ok: false, status: 0, data: { success: false, message: 'Lỗi kết nối khi lấy kết quả đánh giá.' } };
   }
 };
+
+window.ATS_API.getCandidateEvaluationsComparisonApi = async function(token, requisitionId, params = {}) {
+  try {
+    const query = new URLSearchParams();
+    if (params.roundName) query.set('roundName', params.roundName);
+    if (params.sortBy) query.set('sortBy', params.sortBy);
+    if (params.order) query.set('order', params.order);
+    if (params.finalRoundOnly !== undefined) query.set('finalRoundOnly', String(params.finalRoundOnly));
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    const response = await fetch(`${API_BASE}/requisitions/${encodeURIComponent(requisitionId)}/candidate-evaluations-comparison${qs}`, {
+      method: 'GET',
+      headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+    });
+    return { ok: response.ok, status: response.status, data: await response.json() };
+  } catch {
+    return { ok: false, status: 0, data: { success: false, message: 'Lỗi kết nối khi lấy bảng so sánh ứng viên.' } };
+  }
+};

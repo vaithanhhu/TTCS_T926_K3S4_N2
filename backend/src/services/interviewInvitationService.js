@@ -19,7 +19,23 @@ class InterviewInvitationService {
     });
   }
 
+  async hasTokensTable() {
+    try {
+      if (this.db.provider === 'postgres') {
+        const row = await this.db.prepare("SELECT table_name FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='interview_invitation_tokens'").get();
+        return Boolean(row);
+      }
+      const row = await this.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='interview_invitation_tokens'").get();
+      return Boolean(row);
+    } catch {
+      return false;
+    }
+  }
+
   async createInvitation(interviewId, options = {}) {
+    if (!await this.hasTokensTable()) {
+      return { success: false, statusCode: 503, code: 'INVITATION_SERVICE_UNAVAILABLE', message: 'Bảng lời mời chưa sẵn sàng.' };
+    }
     if (!interviewId) return { success: false, statusCode: 400, code: 'INTERVIEW_ID_REQUIRED' };
 
     const interview = await this.db.prepare(`
