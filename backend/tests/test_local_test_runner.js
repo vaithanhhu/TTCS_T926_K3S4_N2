@@ -8,24 +8,25 @@ const source = fs.readFileSync(path.join(__dirname, 'run_local_tests.js'), 'utf8
 const manifest = require(path.join(root, 'package.json'));
 const results = [];
 
-function fixture(api, executable, cli, requested) {
+function fixture(api, executable, cli, requested, logs = {}) {
   const calls = [];
+  const fsMock = {
+    existsSync: candidate => candidate === cli,
+    mkdtempSync: () => '/isolated/tests', mkdirSync() {}, copyFileSync() {},
+    readFileSync: file => logs[file] !== undefined ? logs[file] : '', writeFileSync() {}
+  };
   const sandbox = {
-    require: name => name === 'node:fs' ? {
-      existsSync: candidate => candidate === cli,
-      mkdtempSync: () => '/isolated/tests', mkdirSync() {}, copyFileSync() {},
-      readFileSync: () => '', writeFileSync() {}
-    } : name === 'node:path' ? api : name === 'node:os' ? { tmpdir: () => '/tmp' }
+    require: name => name === 'node:fs' ? fsMock : name === 'node:path' ? api : name === 'node:os' ? { tmpdir: () => '/tmp' }
       : name === 'node:child_process' ? { spawn() { throw Error('Unexpected subprocess'); } } : manifest,
     __dirname: api.dirname(executable),
     process: { execPath: executable, argv: [executable, 'runner', ...requested], env: {}, platform: 'linux' },
-    console: { log() {}, error() {} }, setTimeout, clearTimeout,
+    console: { log() {}, error() {} }, Buffer, setTimeout, clearTimeout,
     capture: args => calls.push(Array.from(args))
   };
   vm.createContext(sandbox);
   vm.runInContext(source.replace(/main\(\)\.catch\([\s\S]*$/, '') + '\nglobalThis.run = main; globalThis.resolvedNpm = npm;', sandbox);
   vm.runInContext('copySource = () => {}; linkDependencies = () => {}; execute = async args => { capture(args); return {exitCode:0, durationMs:0, log:"fixture.log"}; };', sandbox);
-  return { sandbox, calls };
+  return { sandbox, calls, fsMock };
 }
 
 async function test(name, action) {
@@ -152,6 +153,154 @@ async function main() {
       for (const entry of routes[key]) {
         assert.equal(fs.existsSync(path.join(root, 'frontend', entry.replace(/^\//, ''))), true, entry);
       }
+    }
+  });
+  await test('runner reports sanitized and bounded failure snippet on test failure and sets exitCode 1', async () => {
+    const errorLogs = [];
+    const keyTag = ['PRIVATE', 'KEY'].join(' ');
+    const beginRsa = ['-----', 'BEGIN ', 'RSA ', keyTag, '-----'].join('');
+    const endRsa = ['-----', 'END ', 'RSA ', keyTag, '-----'].join('');
+    const dbPass = ['super', 'Secret', 'Pass123'].join('');
+    const dbUrl = ['postgres', 'ql://admin:', dbPass, '@postgres-server:5432/ats_db'].join('');
+    const ghTok = ['gh', 'p_', '1234567890'.repeat(3)].join('');
+    const queryTok = ['secret', 'QueryToken123'].join('');
+    const queryKey = ['secret', 'QueryApiKey456'].join('');
+    const basicToken = ['YWRtaW46', 'c2VjcmV0MTIz'].join('');
+    const confPass = ['Confidential', 'Pass'].join('');
+    const confApiKey = ['Confidential', 'ApiKey'].join('');
+    const escPass = ['escaped', 'SecretPass999'].join('');
+    const csVal = ['cs', 'Val789'].join('');
+    const sensitiveLog = [
+      'Starting test suite...',
+      ...Array.from({ length: 150 }, (_, i) => `log line ${i + 1}`),
+      'Connecting ' + dbUrl,
+      'API call: https://api.ats.local/interviews?token=' + queryTok + '&apiKey=' + queryKey,
+      'Headers: Authorization: Basic ' + basicToken,
+      'Auth: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.token',
+      'Config: ' + JSON.stringify({ [['pass', 'word'].join('')]: confPass, [['api', 'Key'].join('')]: confApiKey }),
+      'Payload: ' + JSON.stringify(JSON.stringify({ [['pass', 'word'].join('')]: escPass, [['client', 'Secret'].join('')]: csVal })),
+      'Token: ' + ghTok,
+      beginRsa,
+      'MIIEowIBAAKCAQEA0Y1...',
+      endRsa,
+      'AssertionError [ERR_ASSERTION]: Expected 200, got 500',
+      '    at test.js:42:1'
+    ].join('\n');
+    const f = fixture(path.posix, '/usr/bin/node', '/usr/lib/node_modules/npm/bin/npm-cli.js', ['test:sprint1'], {
+      'fixture.log': sensitiveLog
+    });
+    f.sandbox.console.error = msg => errorLogs.push(msg);
+    vm.runInContext(`
+      execute = async args => {
+        capture(args);
+        if (args[1] === 'run') return { exitCode: 1, durationMs: 40, log: 'fixture.log' };
+        return { exitCode: 0, durationMs: 20, log: 'install.log' };
+      };
+    `, f.sandbox);
+    await f.sandbox.run();
+    assert.equal(f.sandbox.process.exitCode, 1);
+    assert.equal(errorLogs.length >= 1, true);
+    const failureOutput = errorLogs.join('\n');
+    assert.ok(failureOutput.includes('LOCAL_TEST_FAILURE: test:sprint1 (exitCode: 1)'));
+    assert.ok(failureOutput.includes('[... log truncated; showing tail ...]'));
+    assert.ok(failureOutput.includes('AssertionError [ERR_ASSERTION]: Expected 200, got 500'));
+    assert.ok(!failureOutput.includes(dbPass));
+    assert.ok(failureOutput.includes(['postgres', 'ql://admin:[REDACTED]@postgres-server:5432/ats_db'].join('')));
+    assert.ok(!failureOutput.includes(queryTok));
+    assert.ok(!failureOutput.includes(queryKey));
+    assert.ok(failureOutput.includes('token=[REDACTED]'));
+    assert.ok(failureOutput.includes('apiKey=[REDACTED]'));
+    assert.ok(!failureOutput.includes(basicToken));
+    assert.ok(failureOutput.includes('Authorization: Basic [REDACTED]'));
+    assert.ok(!failureOutput.includes('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.token'));
+    assert.ok(failureOutput.includes('Bearer [REDACTED]'));
+    assert.ok(!failureOutput.includes(confPass));
+    assert.ok(failureOutput.includes(['pass', 'word'].join('') + '":[REDACTED]'));
+    assert.ok(!failureOutput.includes(escPass));
+    assert.ok(!failureOutput.includes(csVal));
+    assert.ok(!failureOutput.includes(ghTok));
+    assert.ok(failureOutput.includes('[REDACTED_TOKEN]'));
+    assert.ok(!failureOutput.includes('MIIEowIBAAKCAQEA0Y1'));
+    assert.ok(failureOutput.includes('[REDACTED_PRIVATE_KEY]'));
+    assert.ok(failureOutput.includes('--- END LOCAL_TEST_FAILURE: test:sprint1 ---'));
+  });
+  await test('runner preserves exitCode 0 and outputs no failure logs when all tests pass', async () => {
+    const errorLogs = [];
+    const f = fixture(path.posix, '/usr/bin/node', '/usr/lib/node_modules/npm/bin/npm-cli.js', ['test:sprint1']);
+    f.sandbox.console.error = msg => errorLogs.push(msg);
+    await f.sandbox.run();
+    assert.equal(f.sandbox.process.exitCode, 0);
+    assert.equal(errorLogs.length, 0);
+  });
+  await test('sanitizeLog masks query credentials, JSON secrets, and bounding preserves redactions', () => {
+    const f = fixture(path.posix, '/usr/bin/node', '/usr/lib/node_modules/npm/bin/npm-cli.js', ['test:sprint1']);
+    const sanitize = f.sandbox.sanitizeLog;
+    const extract = f.sandbox.extractFailureSnippet;
+    const keyTag = ['PRIVATE', 'KEY'].join(' ');
+    const beginKey = ['-----', 'BEGIN ', keyTag, '-----'].join('');
+    const endKey = ['-----', 'END ', keyTag, '-----'].join('');
+    const paramSecret = ['secret', 'ParamToken'].join('');
+    const sigVal = ['sig', 'HexVal'].join('');
+    const jsonSecretPass = ['unhashed', 'Password999'].join('');
+    const jsonSecretKey = ['secret', 'SecretKey'].join('');
+    const basicCredential = ['dXNlcjpw', 'YXNzd29yZA=='].join('');
+    const envPass = ['env', 'SecretValue888'].join('');
+    const raw = [
+      'GET https://ats.example.com/v1/jobs?token=' + paramSecret + '&signature=' + sigVal + '&visibleParam=keepMe',
+      'Config: ' + JSON.stringify({ user: 'recruiter', [['pass', 'word'].join('')]: jsonSecretPass, [['client', 'Secret'].join('')]: jsonSecretKey }),
+      'Headers: Authorization: Basic ' + basicCredential,
+      'DB_PASSWORD=' + envPass,
+      beginKey,
+      'MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC...',
+      endKey
+    ].join('\n');
+    const sanitized = sanitize(raw);
+    assert.ok(!sanitized.includes(paramSecret));
+    assert.ok(!sanitized.includes(sigVal));
+    assert.ok(sanitized.includes('visibleParam=keepMe'));
+    assert.ok(!sanitized.includes(jsonSecretPass));
+    assert.ok(!sanitized.includes(jsonSecretKey));
+    assert.ok(!sanitized.includes(basicCredential));
+    assert.ok(!sanitized.includes(envPass));
+    assert.ok(!sanitized.includes('MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC...'));
+    assert.ok(sanitized.includes('[REDACTED_PRIVATE_KEY]'));
+    for (const byteLimit of [50, 100, 200, 500]) {
+      const bounded = extract(raw, 50, byteLimit);
+      assert.ok(!bounded.includes(paramSecret));
+      assert.ok(!bounded.includes(sigVal));
+      assert.ok(!bounded.includes(jsonSecretPass));
+      assert.ok(!bounded.includes(jsonSecretKey));
+      assert.ok(!bounded.includes(basicCredential));
+      assert.ok(!bounded.includes(envPass));
+      assert.ok(!bounded.includes('MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC...'));
+    }
+  });
+  await test('extractFailureSnippet safely bounds multi-line, Unicode Vietnamese and extreme single-line logs', () => {
+    const f = fixture(path.posix, '/usr/bin/node', '/usr/lib/node_modules/npm/bin/npm-cli.js', ['test:sprint1']);
+    const extract = f.sandbox.extractFailureSnippet;
+    const vnMultiLine = [
+      'Bắt đầu kiểm thử...',
+      ...Array.from({ length: 80 }, (_, i) => `Dòng ${i + 1}: Kiểm tra tiến trình phỏng vấn ứng viên thành công.`),
+      'Lỗi nghiêm trọng: Không thể kết nối cơ sở dữ liệu PostgreSQL cục bộ!',
+      'AssertionError [ERR_ASSERTION]: Kỳ vọng mã trạng thái 200 nhưng nhận được 500',
+      '    at Object.testRun (backend/tests/test_s6_03.js:55:10)'
+    ].join('\n');
+    for (const limit of [100, 250, 600, 2048, 16384]) {
+      const snippet = extract(vnMultiLine, 40, limit);
+      const byteLen = Buffer.byteLength(snippet, 'utf8');
+      assert.ok(byteLen <= limit);
+      assert.ok(!snippet.includes('\uFFFD'));
+      if (limit >= 250) {
+        assert.ok(snippet.includes('AssertionError [ERR_ASSERTION]'));
+        assert.ok(snippet.includes('backend/tests/test_s6_03.js'));
+      }
+    }
+    const extremeSingleLine = 'Lỗi tiếng Việt không ngắt dòng: ' + 'dữ liệu cực dài kiểm tra UTF-8 an toàn '.repeat(500);
+    for (const limit of [50, 120, 400, 1500]) {
+      const snippet = extract(extremeSingleLine, 100, limit);
+      const byteLen = Buffer.byteLength(snippet, 'utf8');
+      assert.ok(byteLen <= limit);
+      assert.ok(!snippet.includes('\uFFFD'));
     }
   });
   console.log('LOCAL_RUNNER_RESULT ' + JSON.stringify({ passed: results.length, failed: 0, results }));

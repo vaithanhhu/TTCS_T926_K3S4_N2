@@ -391,6 +391,31 @@ function initSchema(db) {
     `);
   }
 
+  const interviewCols = db.prepare('PRAGMA table_info(interviews)').all().map(c => c.name);
+  if (!interviewCols.includes('candidate_response_status')) {
+    db.exec("ALTER TABLE interviews ADD COLUMN candidate_response_status TEXT DEFAULT 'PENDING'");
+  }
+  if (!interviewCols.includes('candidate_response_note')) {
+    db.exec("ALTER TABLE interviews ADD COLUMN candidate_response_note TEXT");
+  }
+  if (!interviewCols.includes('candidate_responded_at')) {
+    db.exec("ALTER TABLE interviews ADD COLUMN candidate_responded_at TEXT");
+  }
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS interview_invitation_tokens (
+      id TEXT PRIMARY KEY,
+      interview_id TEXT NOT NULL REFERENCES interviews(id) ON DELETE CASCADE,
+      token_hash TEXT NOT NULL UNIQUE,
+      status TEXT NOT NULL DEFAULT 'ACTIVE',
+      expires_at TEXT NOT NULL,
+      used_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_invitation_tokens_hash ON interview_invitation_tokens(token_hash);
+    CREATE INDEX IF NOT EXISTS idx_invitation_tokens_interview ON interview_invitation_tokens(interview_id);
+  `);
+
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_departments_parent ON departments(parent_id);
     CREATE INDEX IF NOT EXISTS idx_departments_manager ON departments(manager_id);

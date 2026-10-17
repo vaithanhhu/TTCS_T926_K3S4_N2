@@ -378,9 +378,14 @@ class CandidateTimelineService {
     // NHÓM 4: LỊCH PHỎNG VẤN (INTERVIEWS)
     // ==========================================================================
     try {
+      const hasResponseCol = this.db.provider === 'postgres'
+        ? (await this.db.prepare("SELECT column_name FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='interviews' AND column_name='candidate_response_status'").get())
+        : (await this.db.prepare("PRAGMA table_info(interviews)").all()).some(c => c.name === 'candidate_response_status');
+
       const interviewRows = await this.db.prepare(
         `SELECT i.id, i.candidate_id, i.round_name, i.scheduled_time, i.location_or_link,
                 i.status, i.feedback, i.score, i.created_at,
+                ${hasResponseCol ? 'i.candidate_response_status, i.candidate_response_note, i.candidate_responded_at,' : ''}
                 u.full_name AS interviewer_name, u.email AS interviewer_email,
                 r.title AS requisition_title
          FROM interviews i
@@ -410,6 +415,27 @@ class CandidateTimelineService {
             requisitionTitle: inv.requisition_title || null
           }
         });
+
+        if (inv.candidate_response_status && inv.candidate_response_status !== 'PENDING') {
+          const isConfirmed = inv.candidate_response_status === 'CONFIRMED';
+          events.push({
+            id: `interview-resp-${inv.id}`,
+            eventType: isConfirmed ? 'INTERVIEW_CONFIRMED' : 'INTERVIEW_RESCHEDULE_REQUESTED',
+            timestamp: inv.candidate_responded_at || inv.created_at,
+            actorName: candidate.full_name || 'Ứng viên',
+            title: isConfirmed ? 'Ứng viên xác nhận tham dự phỏng vấn' : 'Ứng viên đề nghị đổi lịch phỏng vấn',
+            summary: isConfirmed
+              ? 'Ứng viên đã xác nhận tham dự buổi phỏng vấn theo đúng lịch hẹn.'
+              : `Ứng viên đề nghị dời lịch phỏng vấn.${inv.candidate_response_note ? ` Lý do/đề xuất: ${inv.candidate_response_note}` : ''}`,
+            details: {
+              interviewId: inv.id,
+              candidateId: inv.candidate_id,
+              responseStatus: inv.candidate_response_status,
+              responseNote: inv.candidate_response_note || null,
+              respondedAt: inv.candidate_responded_at || null
+            }
+          });
+        }
 
         // ======================================================================
         // NHÓM 5a: ĐÁNH GIÁ PHỎNG VẤN (INTERVIEW EVALUATION)

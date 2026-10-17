@@ -220,6 +220,31 @@ function runMigrations(customPath) {
   if (!db.prepare('PRAGMA table_info(users)').all().some(column => column.name === 'must_change_password')) {
     db.exec('ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0 CHECK (must_change_password IN (0, 1))');
   }
+
+  const interviewCols = db.prepare('PRAGMA table_info(interviews)').all().map(column => column.name);
+  if (!interviewCols.includes('candidate_response_status')) {
+    db.exec("ALTER TABLE interviews ADD COLUMN candidate_response_status TEXT DEFAULT 'PENDING'");
+  }
+  if (!interviewCols.includes('candidate_response_note')) {
+    db.exec("ALTER TABLE interviews ADD COLUMN candidate_response_note TEXT");
+  }
+  if (!interviewCols.includes('candidate_responded_at')) {
+    db.exec("ALTER TABLE interviews ADD COLUMN candidate_responded_at TEXT");
+  }
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS interview_invitation_tokens (
+      id TEXT PRIMARY KEY,
+      interview_id TEXT NOT NULL REFERENCES interviews(id) ON DELETE CASCADE,
+      token_hash TEXT NOT NULL UNIQUE,
+      status TEXT NOT NULL DEFAULT 'ACTIVE',
+      expires_at TEXT NOT NULL,
+      used_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_invitation_tokens_hash ON interview_invitation_tokens(token_hash);
+    CREATE INDEX IF NOT EXISTS idx_invitation_tokens_interview ON interview_invitation_tokens(interview_id);
+  `);
   console.log('[Migration] All tables and indexes migrated successfully.');
   return db;
 }

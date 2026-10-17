@@ -264,6 +264,18 @@
     if (timeEl) timeEl.textContent = new Date(schedTime).toLocaleString('vi-VN', {timeZone:'Asia/Ho_Chi_Minh'});
     if (locationEl) locationEl.textContent = location;
     if (interviewerEl) interviewerEl.textContent = interviewer;
+    const respBadgeEl = document.getElementById('int-detail-response-status');
+    if (respBadgeEl) {
+      const respStatus = iv.candidateResponseStatus || iv.candidate_response_status || 'PENDING';
+      const respNote = iv.candidateResponseNote || iv.candidate_response_note;
+      if (respStatus === 'CONFIRMED') {
+        respBadgeEl.innerHTML = '<span class="badge" style="background:#dcfce7;color:#15803d;padding:2px 6px;border-radius:4px;">✓ Đã xác nhận tham dự</span>';
+      } else if (respStatus === 'RESCHEDULE_REQUESTED') {
+        respBadgeEl.innerHTML = `<span class="badge" style="background:#fef3c7;color:#b45309;padding:2px 6px;border-radius:4px;">⏳ Đề nghị đổi lịch${respNote ? ` (${escapeHtml(respNote)})` : ''}</span>`;
+      } else {
+        respBadgeEl.innerHTML = '<span class="badge" style="background:#f1f5f9;color:#64748b;padding:2px 6px;border-radius:4px;">Chờ phản hồi</span>';
+      }
+    }
     if (idInput) idInput.value = iv.id;
     if (statusSelect) statusSelect.value = iv.status || 'SCHEDULED';
     if (scoreSelect) {

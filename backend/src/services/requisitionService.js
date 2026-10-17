@@ -1252,6 +1252,15 @@ class RequisitionService {
     return tables.length === 1;
   }
 
+  async hasInvitationTokensTable() {
+    if (this.db.provider === 'postgres') {
+      const row = await this.db.prepare("SELECT table_name FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='interview_invitation_tokens'").get();
+      return Boolean(row);
+    }
+    const row = await this.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='interview_invitation_tokens'").get();
+    return Boolean(row);
+  }
+
   async getInterviews(options = {}) {
     if(options.viewer){const fresh=await new(require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(options.viewer.id,options.evaluationsOnly?'interview.evaluation.read':'interview.read');if(!fresh)return{success:false,statusCode:403,code:'INTERVIEW_FORBIDDEN',message:'Bạn không có quyền xem lịch phỏng vấn.',interviews:[]};options={...options,viewer:fresh};}
     const conditions=[],params=[];
@@ -1274,6 +1283,10 @@ class RequisitionService {
       if (viewer.roles.includes('CANDIDATE')) {scopes.push('LOWER(c.email)=LOWER(?)');params.push(viewer.email);}
       conditions.push(scopes.length?'('+scopes.join(' OR ')+')':'1=0');
     }
+    const hasResponseCols = hasColumns && (this.db.provider === 'postgres'
+      ? Boolean(await this.db.prepare("SELECT column_name FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='interviews' AND column_name='candidate_response_status'").get())
+      : (await this.db.prepare("PRAGMA table_info(interviews)").all()).some(c => c.name === 'candidate_response_status'));
+
     const stmt = this.db.prepare(hasColumns ? `
       SELECT
         i.id,
@@ -1287,6 +1300,7 @@ class RequisitionService {
         i.status,
         i.feedback,
         i.score,
+        ${hasResponseCols ? 'i.candidate_response_status, i.candidate_response_note, i.candidate_responded_at,' : 'NULL AS candidate_response_status, NULL AS candidate_response_note, NULL AS candidate_responded_at,'}
         i.created_at,
         c.id AS candidate_id,
         c.full_name AS candidate_name,
@@ -1395,6 +1409,9 @@ class RequisitionService {
           meetingLink: r.meeting_link || null,
           locationOrLink: r.location_or_link || r.meeting_room || r.meeting_link || 'Google Meet Online',
           status: r.status,
+          candidateResponseStatus: r.candidate_response_status || 'PENDING',
+          candidateResponseNote: r.candidate_response_note || null,
+          candidateRespondedAt: r.candidate_responded_at || null,
           feedback: hideEvaluation?null:r.feedback,
           score: hideEvaluation?null:r.score,
           createdAt: r.created_at,
@@ -1891,6 +1908,14 @@ class RequisitionService {
       await this.db.prepare("UPDATE candidates SET stage = 'INTERVIEW' WHERE id = ?").run(candidateId);
       if(data._override) await this.db.prepare('INSERT INTO interview_conflict_override_audit(id,actor_id,interview_id,reason,conflicts_json,created_at) VALUES(?,?,?,?,?,CURRENT_TIMESTAMP)').run('iov-'+crypto.randomUUID(),data._override.actorId,id,data._override.reason,JSON.stringify(data._override.conflicts));
 
+      let invitation = null;
+      try {
+        if (await this.hasInvitationTokensTable()) {
+          const InvitationService = require('./interviewInvitationService');
+          invitation = await new InvitationService(this.db).createInvitation(id);
+        }
+      } catch {}
+
       return {
         success: true,
         statusCode: 201,
@@ -1907,6 +1932,10 @@ class RequisitionService {
         meetingRoom,
         meetingLink,
         locationOrLink,
+        invitation: invitation?.success ? {
+          invitationUrl: invitation.invitationUrl,
+          expiresAt: invitation.expiresAt
+        } : null,
         data: {
           id,
           candidateId,
@@ -1919,7 +1948,11 @@ class RequisitionService {
           interviewFormat,
           meetingRoom,
           meetingLink,
-          locationOrLink
+          locationOrLink,
+          invitation: invitation?.success ? {
+            invitationUrl: invitation.invitationUrl,
+            expiresAt: invitation.expiresAt
+          } : null
         }
       };
     });
