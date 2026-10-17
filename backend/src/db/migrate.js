@@ -231,6 +231,18 @@ function runMigrations(customPath) {
   if (!interviewCols.includes('candidate_responded_at')) {
     db.exec("ALTER TABLE interviews ADD COLUMN candidate_responded_at TEXT");
   }
+  if (!interviewCols.includes('cancellation_reason')) {
+    db.exec("ALTER TABLE interviews ADD COLUMN cancellation_reason TEXT");
+  }
+  if (!interviewCols.includes('cancelled_at')) {
+    db.exec("ALTER TABLE interviews ADD COLUMN cancelled_at TEXT");
+  }
+  if (!interviewCols.includes('rescheduled_at')) {
+    db.exec("ALTER TABLE interviews ADD COLUMN rescheduled_at TEXT");
+  }
+  if (!interviewCols.includes('reschedule_reason')) {
+    db.exec("ALTER TABLE interviews ADD COLUMN reschedule_reason TEXT");
+  }
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS interview_invitation_tokens (

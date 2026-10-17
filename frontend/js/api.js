@@ -947,7 +947,7 @@ async function createInterviewApi(token, interviewData) {
   }
 }
 
-async function updateInterviewStatusApi(token, id, status, feedback, score) {
+async function updateInterviewStatusApi(token, id, status, feedback, score, extra = {}) {
   try {
     const response = await fetch(`${API_BASE}/interviews/${id}/status`, {
       method: 'PUT',
@@ -955,12 +955,29 @@ async function updateInterviewStatusApi(token, id, status, feedback, score) {
         'Content-Type': 'application/json',
         'Authorization': token ? `Bearer ${token}` : ''
       },
-      body: JSON.stringify({ status, feedback, score })
+      body: JSON.stringify({ status, feedback, score, ...extra })
     });
     const data = await response.json();
     return { status: response.status, ok: response.ok, data };
   } catch (error) {
     return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi cập nhật buổi phỏng vấn.' } };
+  }
+}
+
+async function cancelInterviewApi(token, id, cancellationReason) {
+  try {
+    const response = await fetch(`${API_BASE}/interviews/${id}/cancel`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify({ cancellationReason })
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi hủy buổi phỏng vấn.' } };
   }
 }
 
@@ -1752,6 +1769,7 @@ window.ATS_API = {
   getInterviewsApi,
   createInterviewApi,
   updateInterviewStatusApi,
+  cancelInterviewApi,
   getOffersApi,
   createOfferApi,
   updateOfferStatusApi,

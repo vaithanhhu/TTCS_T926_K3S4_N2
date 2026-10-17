@@ -1252,6 +1252,28 @@ class RequisitionService {
     return tables.length === 1;
   }
 
+  async hasCancelReschedCols() {
+    try {
+      const columns = this.db.provider === 'postgres'
+        ? await this.db.prepare("SELECT column_name AS name FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='interviews'").all()
+        : await this.db.prepare('PRAGMA table_info(interviews)').all();
+      return ['cancellation_reason', 'cancelled_at', 'rescheduled_at', 'reschedule_reason'].every(name => columns.some(c => (c.name || c.column_name) === name));
+    } catch {
+      return false;
+    }
+  }
+
+  async hasResponseCols() {
+    try {
+      const columns = this.db.provider === 'postgres'
+        ? await this.db.prepare("SELECT column_name AS name FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='interviews'").all()
+        : await this.db.prepare('PRAGMA table_info(interviews)').all();
+      return ['candidate_response_status', 'candidate_response_note', 'candidate_responded_at'].every(name => columns.some(c => (c.name || c.column_name) === name));
+    } catch {
+      return false;
+    }
+  }
+
   async hasInvitationTokensTable() {
     if (this.db.provider === 'postgres') {
       const row = await this.db.prepare("SELECT table_name FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='interview_invitation_tokens'").get();
@@ -1261,12 +1283,40 @@ class RequisitionService {
     return Boolean(row);
   }
 
+  async hasEmailOutboxTable() {
+    if (this.db.provider === 'postgres') {
+      const row = await this.db.prepare("SELECT table_name FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='email_outbox'").get();
+      return Boolean(row);
+    }
+    const row = await this.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='email_outbox'").get();
+    return Boolean(row);
+  }
+
+  async recordCandidateStatusHistory(data) {
+    const cols = this.db.provider === 'postgres'
+      ? (await this.db.prepare("SELECT column_name AS name FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='candidate_status_history'").all()).map(c => c.name)
+      : (await this.db.prepare("PRAGMA table_info(candidate_status_history)").all()).map(c => c.name);
+    if (!cols || cols.length === 0) return;
+    if (cols.includes('actor_id')) {
+      await this.db.prepare(`
+        INSERT INTO candidate_status_history (id, candidate_id, before_stage, after_stage, actor_id, actor_name, action, notes, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(data.id, data.candidateId, data.beforeStage, data.afterStage, data.actorId, data.actorName, data.action, data.notes, data.createdAt);
+    } else if (cols.includes('actor_name')) {
+      await this.db.prepare(`
+        INSERT INTO candidate_status_history (id, candidate_id, before_stage, after_stage, actor_name, action, notes, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(data.id, data.candidateId, data.beforeStage, data.afterStage, data.actorName, data.action, data.notes, data.createdAt);
+    }
+  }
+
   async getInterviews(options = {}) {
     if(options.viewer){const fresh=await new(require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(options.viewer.id,options.evaluationsOnly?'interview.evaluation.read':'interview.read');if(!fresh)return{success:false,statusCode:403,code:'INTERVIEW_FORBIDDEN',message:'Bạn không có quyền xem lịch phỏng vấn.',interviews:[]};options={...options,viewer:fresh};}
     const conditions=[],params=[];
     if (options.candidateEmail) { conditions.push('LOWER(c.email)=LOWER(?)');params.push(options.candidateEmail); }
     const viewer=options.viewer;
     const hasColumns = await this.hasInterviewSchedulingColumns();
+    const hasCancelResched = hasColumns && await this.hasCancelReschedCols();
     if (viewer && !viewer.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role)) && !(options.evaluationsOnly && viewer.roles.includes('APPROVER'))) {
       const scopes=[];
       if (viewer.roles.includes('HIRING_MGR')) {scopes.push(this.hiringRequisitionScope());params.push(viewer.id,viewer.id,viewer.id);}
@@ -1301,6 +1351,7 @@ class RequisitionService {
         i.feedback,
         i.score,
         ${hasResponseCols ? 'i.candidate_response_status, i.candidate_response_note, i.candidate_responded_at,' : 'NULL AS candidate_response_status, NULL AS candidate_response_note, NULL AS candidate_responded_at,'}
+        ${hasCancelResched ? 'i.cancellation_reason, i.cancelled_at, i.rescheduled_at, i.reschedule_reason,' : 'NULL AS cancellation_reason, NULL AS cancelled_at, NULL AS rescheduled_at, NULL AS reschedule_reason,'}
         i.created_at,
         c.id AS candidate_id,
         c.full_name AS candidate_name,
@@ -1328,6 +1379,8 @@ class RequisitionService {
         i.status,
         i.feedback,
         i.score,
+        NULL AS candidate_response_status, NULL AS candidate_response_note, NULL AS candidate_responded_at,
+        NULL AS cancellation_reason, NULL AS cancelled_at, NULL AS rescheduled_at, NULL AS reschedule_reason,
         i.created_at,
         c.id AS candidate_id,
         c.full_name AS candidate_name,
@@ -1412,6 +1465,10 @@ class RequisitionService {
           candidateResponseStatus: r.candidate_response_status || 'PENDING',
           candidateResponseNote: r.candidate_response_note || null,
           candidateRespondedAt: r.candidate_responded_at || null,
+          cancellationReason: r.cancellation_reason || null,
+          cancelledAt: r.cancelled_at || null,
+          rescheduledAt: r.rescheduled_at || null,
+          rescheduleReason: r.reschedule_reason || null,
           feedback: hideEvaluation?null:r.feedback,
           score: hideEvaluation?null:r.score,
           createdAt: r.created_at,
@@ -1719,9 +1776,13 @@ class RequisitionService {
     const action = async()=>{
       const rbac=new (require('../middlewares/rbacMiddleware'))(this.db);
       const permission=updateId?'interview.update':'interview.create';
-      const existing=updateId?await this.db.prepare('SELECT id,candidate_id,requisition_id FROM interviews WHERE id=?'+(this.db.provider==='postgres'?' FOR UPDATE':'')).get(updateId):null;
+      const existing=updateId?await this.db.prepare('SELECT id,candidate_id,requisition_id,status,feedback,score FROM interviews WHERE id=?'+(this.db.provider==='postgres'?' FOR UPDATE':'')).get(updateId):null;
       if(updateId&&!existing)return{success:false,statusCode:404,code:'INTERVIEW_NOT_FOUND'};
-      if(updateId)data={...data,candidateId:existing.candidate_id};
+      if(updateId){
+        if(existing.status==='COMPLETED'||existing.score!==null||existing.feedback!==null)return{success:false,statusCode:400,code:'INTERVIEW_ALREADY_EVALUATED',message:'Không thể dời lịch buổi phỏng vấn đã hoàn thành hoặc đã có đánh giá.'};
+        if(existing.status==='CANCELLED')return{success:false,statusCode:400,code:'INTERVIEW_ALREADY_CANCELLED',message:'Không thể dời lịch buổi phỏng vấn đã bị hủy.'};
+        data={...data,candidateId:existing.candidate_id};
+      }
       if(!await rbac.getAuthorizedActor(actor.id,permission))return{success:false,statusCode:403,code:'FORBIDDEN_PERMISSION_DENIED',message:'Bạn không có quyền điều phối lịch phỏng vấn.'};
       const candidate=await this.db.prepare('SELECT id,requisition_id FROM candidates WHERE id=?'+(this.db.provider==='postgres' && !preview?' FOR UPDATE':'')).get(data.candidateId);
       if(!candidate)return{success:false,statusCode:404,code:'CANDIDATE_NOT_FOUND',message:'Không tìm thấy ứng viên.'};
@@ -1751,7 +1812,7 @@ class RequisitionService {
           return { success: false, statusCode: 400, code: 'INTERVIEW_ASSIGNEE_INVALID', message: 'Người phỏng vấn phải đang hoạt động và có quyền đánh giá.' };
         }
       }
-      return this.#createInterviewCore({...data, _actorId:actor.id, _updateId:updateId, excludeInterviewId:updateId||null, interviewerId: interviewerIds[0] || data.interviewerId || null, requisitionId: data.requisitionId || candidate.requisition_id}, preview);
+      return this.#createInterviewCore({...data, _actorId:actor.id, _actorName:fresh.fullName, _updateId:updateId, excludeInterviewId:updateId||null, interviewerId: interviewerIds[0] || data.interviewerId || null, requisitionId: data.requisitionId || candidate.requisition_id}, preview);
     };
     return preview ? action() : this.db.transaction(action);
   }
@@ -1856,11 +1917,39 @@ class RequisitionService {
     return this.db.transaction(async () => {
       if(data._updateId){
         const id=data._updateId,primaryInterviewerId=interviewerIds[0]||null,locationOrLink=data.locationOrLink||(interviewFormat==='IN_PERSON'?meetingRoom:meetingLink)||'Google Meet Online';
-        await this.db.prepare('UPDATE interviews SET requisition_id=?,interviewer_id=?,round_name=?,scheduled_time=?,location_or_link=?,duration_minutes=?,interview_format=?,meeting_room=?,meeting_link=? WHERE id=?').run(data.requisitionId||candidate.requisition_id||null,primaryInterviewerId,data.roundName||'Interview',scheduledTime,locationOrLink,durationMinutes,interviewFormat,meetingRoom,meetingLink,id);
+        const hasReschedCols = await this.hasCancelReschedCols();
+        const rescheduleReason = typeof data.rescheduleReason === 'string' ? data.rescheduleReason.trim() : (typeof data.reason === 'string' ? data.reason.trim() : null);
+        const hasResponseCols = await this.hasResponseCols();
+        if (hasReschedCols) {
+          await this.db.prepare(`UPDATE interviews SET requisition_id=?,interviewer_id=?,round_name=?,scheduled_time=?,location_or_link=?,duration_minutes=?,interview_format=?,meeting_room=?,meeting_link=?,candidate_response_status='PENDING',candidate_response_note=NULL,candidate_responded_at=NULL,rescheduled_at=${this.db.provider==='postgres'?'CURRENT_TIMESTAMP':"datetime('now')"},reschedule_reason=? WHERE id=?`).run(data.requisitionId||candidate.requisition_id||null,primaryInterviewerId,data.roundName||'Interview',scheduledTime,locationOrLink,durationMinutes,interviewFormat,meetingRoom,meetingLink,rescheduleReason,id);
+        } else if (hasResponseCols) {
+          await this.db.prepare("UPDATE interviews SET requisition_id=?,interviewer_id=?,round_name=?,scheduled_time=?,location_or_link=?,duration_minutes=?,interview_format=?,meeting_room=?,meeting_link=?,candidate_response_status='PENDING',candidate_response_note=NULL,candidate_responded_at=NULL WHERE id=?").run(data.requisitionId||candidate.requisition_id||null,primaryInterviewerId,data.roundName||'Interview',scheduledTime,locationOrLink,durationMinutes,interviewFormat,meetingRoom,meetingLink,id);
+        } else {
+          await this.db.prepare("UPDATE interviews SET requisition_id=?,interviewer_id=?,round_name=?,scheduled_time=?,location_or_link=?,duration_minutes=?,interview_format=?,meeting_room=?,meeting_link=? WHERE id=?").run(data.requisitionId||candidate.requisition_id||null,primaryInterviewerId,data.roundName||'Interview',scheduledTime,locationOrLink,durationMinutes,interviewFormat,meetingRoom,meetingLink,id);
+        }
         await this.db.prepare('DELETE FROM interview_interviewers WHERE interview_id=?').run(id);
         for(const uid of interviewerIds)await this.db.prepare('INSERT INTO interview_interviewers(interview_id,user_id,role) VALUES(?,?,?)').run(id,uid,uid===primaryInterviewerId?'PRIMARY':'INTERVIEWER');
         if(data._override)await this.db.prepare('INSERT INTO interview_conflict_override_audit(id,actor_id,interview_id,reason,conflicts_json,created_at) VALUES(?,?,?,?,?,CURRENT_TIMESTAMP)').run('iov-'+crypto.randomUUID(),data._override.actorId,id,data._override.reason,JSON.stringify(data._override.conflicts));
-        return{success:true,statusCode:200,message:'Interview schedule updated.',id,candidateId,requisitionId:data.requisitionId||candidate.requisition_id,interviewerIds,scheduledTime,durationMinutes,interviewFormat,meetingRoom,meetingLink};
+
+        if (await this.hasInvitationTokensTable()) {
+          await this.db.prepare("UPDATE interview_invitation_tokens SET status='REVOKED' WHERE interview_id=? AND status='ACTIVE'").run(id);
+          const InvitationService = require('./interviewInvitationService');
+          await new InvitationService(this.db).createInvitation(id);
+        }
+
+        await this.recordCandidateStatusHistory({
+          id: 'csh-' + crypto.randomUUID(),
+          candidateId,
+          beforeStage: 'INTERVIEW',
+          afterStage: 'INTERVIEW',
+          actorId: data._actorId || null,
+          actorName: data._actorName || 'Nhân viên tuyển dụng',
+          action: 'INTERVIEW_RESCHEDULED',
+          notes: rescheduleReason || 'Dời lịch phỏng vấn',
+          createdAt: new Date().toISOString()
+        });
+
+        return{success:true,statusCode:200,message:'Interview schedule updated.',id,candidateId,requisitionId:data.requisitionId||candidate.requisition_id,interviewerIds,scheduledTime,durationMinutes,interviewFormat,meetingRoom,meetingLink,rescheduledAt:new Date().toISOString(),rescheduleReason};
       }
       const id = 'int-' + crypto.randomUUID();
       const primaryInterviewerId = interviewerIds[0] || data.interviewerId || null;
@@ -1958,6 +2047,95 @@ class RequisitionService {
     });
   }
 
+  async cancelInterview(id, data = {}, actor = null) {
+    if (!actor?.id) return { success: false, statusCode: 403, code: 'INTERVIEW_ACTOR_REQUIRED', message: 'Yêu cầu thông tin người thực hiện.' };
+    return this.db.transaction(async () => {
+      const rbac = new (require('../middlewares/rbacMiddleware'))(this.db);
+      const fresh = await rbac.getAuthorizedActor(actor.id, 'interview.update');
+      if (!fresh) return { success: false, statusCode: 403, code: 'FORBIDDEN_PERMISSION_DENIED', message: 'Bạn không có quyền hủy lịch phỏng vấn.' };
+
+      const existing = await this.db.prepare('SELECT id, candidate_id, requisition_id, round_name, scheduled_time, status, feedback, score FROM interviews WHERE id=?' + (this.db.provider === 'postgres' ? ' FOR UPDATE' : '')).get(id);
+      if (!existing) return { success: false, statusCode: 404, code: 'INTERVIEW_NOT_FOUND', message: 'Không tìm thấy buổi phỏng vấn.' };
+
+      if (existing.status === 'COMPLETED' || existing.score !== null || existing.feedback !== null) {
+        return { success: false, statusCode: 400, code: 'INTERVIEW_ALREADY_EVALUATED', message: 'Không thể hủy buổi phỏng vấn đã hoàn thành hoặc đã có đánh giá.' };
+      }
+      if (existing.status === 'CANCELLED') {
+        return { success: false, statusCode: 400, code: 'INTERVIEW_ALREADY_CANCELLED', message: 'Buổi phỏng vấn đã bị hủy trước đó.' };
+      }
+
+      if (!fresh.roles.some(role => ['ADMIN', 'HR_MANAGER'].includes(role))) {
+        const access = await this.candidateAccess(existing.candidate_id, fresh);
+        if (!access.success) return access;
+        const reqId = existing.requisition_id || access.row.requisition_id;
+        if (!await this.recruiterAssigned(reqId, fresh.id)) {
+          return { success: false, statusCode: 403, code: 'INTERVIEW_OUT_OF_SCOPE', message: 'Lịch phỏng vấn không thuộc vị trí được giao.' };
+        }
+      }
+
+      const rawReason = typeof data.cancellationReason === 'string' ? data.cancellationReason : (typeof data.reason === 'string' ? data.reason : (typeof data.notes === 'string' ? data.notes : (typeof data.feedback === 'string' ? data.feedback : '')));
+      const cancellationReason = rawReason.trim();
+      if (!cancellationReason || cancellationReason.length < 3) {
+        return { success: false, statusCode: 400, code: 'CANCELLATION_REASON_REQUIRED', message: 'Vui lòng nhập lý do hủy buổi phỏng vấn (tối thiểu 3 ký tự).' };
+      }
+
+      const hasReschedCols = await this.hasCancelReschedCols();
+      if (hasReschedCols) {
+        await this.db.prepare(`
+          UPDATE interviews
+          SET status = 'CANCELLED',
+              cancellation_reason = ?,
+              cancelled_at = ${this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')"}
+          WHERE id = ?
+        `).run(cancellationReason, id);
+      } else {
+        await this.db.prepare("UPDATE interviews SET status = 'CANCELLED' WHERE id = ?").run(id);
+      }
+
+      if (await this.hasInvitationTokensTable()) {
+        await this.db.prepare("UPDATE interview_invitation_tokens SET status='REVOKED' WHERE interview_id=? AND status='ACTIVE'").run(id);
+      }
+
+      const candidate = await this.db.prepare('SELECT id, full_name, email FROM candidates WHERE id = ?').get(existing.candidate_id);
+      const reqRow = existing.requisition_id ? await this.db.prepare('SELECT title FROM requisitions WHERE id = ?').get(existing.requisition_id) : null;
+      const requisitionTitle = reqRow?.title || 'Vị trí tuyển dụng';
+
+      if (candidate?.email && await this.hasEmailOutboxTable()) {
+        const outboxId = 'out-' + crypto.randomUUID();
+        const subject = `[Thông báo hủy] Lịch phỏng vấn vị trí ${requisitionTitle}`;
+        const bodyText = `Kính gửi ${candidate.full_name},\n\nBuổi phỏng vấn vị trí ${requisitionTitle} (${existing.round_name}) dự kiến diễn ra lúc ${existing.scheduled_time} đã bị hủy.\nLý do: ${cancellationReason}\n\nBộ phận tuyển dụng xin lỗi vì sự bất tiện này.`;
+        const bodyHtml = `<p>Kính gửi <strong>${candidate.full_name}</strong>,</p><p>Chúng tôi rất tiếc phải thông báo buổi phỏng vấn vị trí <strong>${requisitionTitle}</strong> (${existing.round_name}) dự kiến lúc ${existing.scheduled_time} đã bị hủy.</p><p><strong>Lý do:</strong> ${cancellationReason}</p><p>Bộ phận tuyển dụng xin lỗi vì sự bất tiện này.</p>`;
+
+        await this.db.prepare(`
+          INSERT INTO email_outbox (id, recipient, subject, body_html, body_text, template_name, status)
+          VALUES (?, ?, ?, ?, ?, 'S606_INTERVIEW_CANCELLATION', 'PENDING')
+        `).run(outboxId, candidate.email, subject, bodyHtml, bodyText);
+      }
+
+      await this.recordCandidateStatusHistory({
+        id: 'csh-' + crypto.randomUUID(),
+        candidateId: existing.candidate_id,
+        beforeStage: 'INTERVIEW',
+        afterStage: 'INTERVIEW',
+        actorId: fresh.id,
+        actorName: fresh.fullName || 'Nhân viên tuyển dụng',
+        action: 'INTERVIEW_CANCELLED',
+        notes: cancellationReason,
+        createdAt: new Date().toISOString()
+      });
+
+      return {
+        success: true,
+        statusCode: 200,
+        message: 'Đã hủy buổi phỏng vấn thành công.',
+        id,
+        status: 'CANCELLED',
+        cancellationReason,
+        cancelledAt: new Date().toISOString()
+      };
+    });
+  }
+
   async updateInterviewStatus(id, status, feedback, score, actor = null, permission = 'interview.evaluate') {
     if (!actor?.id) return {success:false,statusCode:403,code:'INTERVIEW_ACTOR_REQUIRED'};
     return this.db.transaction(async()=>{
@@ -1985,6 +2163,9 @@ class RequisitionService {
     `);
     const res = (await stmt.run(status, feedback || null, hasScore ? Number(score) : null, id));
     if (res.changes === 0) return { success: false, statusCode: 404, message: 'Không tìm thấy lịch phỏng vấn.' };
+    if (status === 'CANCELLED' && await this.hasInvitationTokensTable()) {
+      await this.db.prepare("UPDATE interview_invitation_tokens SET status='REVOKED' WHERE interview_id=? AND status='ACTIVE'").run(id);
+    }
     return { success: true, statusCode: 200, message: 'Cập nhật lịch phỏng vấn thành công.' };
   }
 

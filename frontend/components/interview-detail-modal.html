@@ -21,6 +21,8 @@
 
         <input type="hidden" id="int-detail-id" />
 
+        <div id="int-eval-guard-alert" class="alert alert-warning hidden" style="margin-bottom: 12px; font-size: 0.85rem;"></div>
+
         <form id="interview-eval-form">
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
             <div class="form-group">
@@ -43,13 +45,19 @@
             </div>
           </div>
 
-          <div class="form-group">
+          <div id="int-cancel-reason-group" class="form-group hidden">
+            <label for="int-cancel-reason" class="form-label">Lý do hủy phỏng vấn <span style="color:var(--color-danger)">*</span></label>
+            <input type="text" id="int-cancel-reason" class="form-input" placeholder="Nhập lý do hủy buổi phỏng vấn (tối thiểu 3 ký tự)..." />
+          </div>
+
+          <div class="form-group" id="int-eval-feedback-group">
             <label for="int-eval-feedback" class="form-label">Biên bản nhận xét & Đánh giá năng lực chuyên môn</label>
             <textarea id="int-eval-feedback" class="form-input" rows="3" placeholder="Nhập nhận xét về tư duy giải thuật, kỹ năng giao tiếp, sự phù hợp với văn hóa công ty..." style="height: auto;"></textarea>
           </div>
 
           <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 10px;">
             <button type="button" id="cancel-interview-eval-btn" class="btn btn-outline btn-sm">Đóng</button>
+            <button type="button" id="reschedule-interview-btn" class="btn btn-warning btn-sm hidden">Dời lịch</button>
             <button type="submit" id="submit-interview-eval-btn" class="btn btn-primary btn-sm">
               <span>Lưu biên bản đánh giá</span>
             </button>
