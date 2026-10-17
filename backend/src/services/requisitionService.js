@@ -1090,29 +1090,43 @@ class RequisitionService {
       params.push(viewer.id, viewer.id, viewer.id);
     }
     if (viewer.roles?.includes('INTERVIEWER')) {
-      let hasInterviewers = false;
-      try {
-        if (this.db.provider === 'postgres') {
-          hasInterviewers = this._hasInterviewInterviewers !== false;
-        } else {
-          hasInterviewers = Boolean(this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='interview_interviewers'").get());
-        }
-      } catch {
-        hasInterviewers = false;
-      }
-      if (hasInterviewers) {
-        conditions.push('(EXISTS (SELECT 1 FROM interviews scope_interview WHERE scope_interview.candidate_id=c.id AND (scope_interview.interviewer_id=? OR EXISTS (SELECT 1 FROM interview_interviewers ii WHERE ii.interview_id=scope_interview.id AND ii.user_id=?))))');
-        params.push(viewer.id, viewer.id);
-      } else {
-        conditions.push('EXISTS (SELECT 1 FROM interviews scope_interview WHERE scope_interview.candidate_id=c.id AND scope_interview.interviewer_id=?)');
-        params.push(viewer.id);
-      }
+      conditions.push('EXISTS (SELECT 1 FROM interviews scope_interview WHERE scope_interview.candidate_id=c.id AND scope_interview.interviewer_id=?)');
+      params.push(viewer.id);
     }
     if (viewer.roles?.includes('CANDIDATE')) {
       conditions.push('LOWER(c.email)=LOWER(?)');
       params.push(viewer.email);
     }
     return { condition: conditions.length ? '(' + conditions.join(' OR ') + ')' : '1=0', params };
+  }
+
+  async canAccessCandidateCv(candidateId, actor) {
+    if (!actor) return false;
+    if (actor.roles?.some(r => ['ADMIN', 'HR_MANAGER', 'RECRUITER'].includes(r))) return true;
+    if (actor.roles?.includes('INTERVIEWER')) {
+      let hasII = false;
+      try {
+        if (this.db.provider === 'postgres') {
+          const row = await this.db.prepare("SELECT table_name FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='interview_interviewers'").get();
+          hasII = Boolean(row);
+        } else {
+          const row = await this.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='interview_interviewers'").get();
+          hasII = Boolean(row);
+        }
+      } catch { hasII = false; }
+      if (hasII) {
+        const isAssigned = await this.db.prepare(`
+          SELECT 1 FROM interviews i
+          LEFT JOIN interview_interviewers ii ON ii.interview_id = i.id
+          WHERE i.candidate_id = ? AND (i.interviewer_id = ? OR ii.user_id = ?)
+        `).get(candidateId, actor.id, actor.id);
+        return Boolean(isAssigned);
+      } else {
+        const isAssigned = await this.db.prepare('SELECT 1 FROM interviews WHERE candidate_id = ? AND interviewer_id = ?').get(candidateId, actor.id);
+        return Boolean(isAssigned);
+      }
+    }
+    return false;
   }
 
   async getCandidates(options = {}) {

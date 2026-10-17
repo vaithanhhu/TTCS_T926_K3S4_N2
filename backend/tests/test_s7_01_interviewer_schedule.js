@@ -522,31 +522,12 @@ async function runTestSuite(db, label) {
   }
 
   {
-    const scope1 = service.candidateVisibility(actorInt1);
-    assert.ok(scope1 !== null);
-
-    const queryDoc = async (docId, candId, actor) => {
-      const scope = service.candidateVisibility(actor);
-      return db.prepare(`
-        SELECT d.id
-        FROM candidate_documents d
-        JOIN candidates c ON c.id = d.candidate_id
-        LEFT JOIN requisitions r ON r.id = c.requisition_id
-        WHERE d.id = ? AND d.candidate_id = ? AND d.document_type = 'CV' ${scope ? 'AND ' + scope.condition : ''}
-      `).get(docId, candId, ...(scope?.params || []));
-    };
-
-    const doc1Int1 = await queryDoc('doc-cv-1', 'cand-1', actorInt1);
-    assert.ok(doc1Int1, 'Primary interviewer should be authorized to read candidate CV');
-
-    const doc1Int2 = await queryDoc('doc-cv-1', 'cand-1', actorInt2);
-    assert.ok(doc1Int2, 'Panel interviewer should be authorized to read candidate CV');
-
-    const doc1Int3 = await queryDoc('doc-cv-1', 'cand-1', actorInt3);
-    assert.equal(doc1Int3, undefined, 'Uninvited interviewer should NOT be authorized to read candidate CV');
-
-    const doc3Int1 = await queryDoc('doc-cv-3', 'cand-3', actorInt1);
-    assert.equal(doc3Int1, undefined, 'Interviewer not assigned to candidate 3 should NOT read candidate 3 CV');
+    assert.equal(await service.canAccessCandidateCv('cand-1', actorInt1), true);
+    assert.equal(await service.canAccessCandidateCv('cand-1', actorInt2), true);
+    assert.equal(await service.canAccessCandidateCv('cand-1', actorInt3), false);
+    assert.equal(await service.canAccessCandidateCv('cand-3', actorInt1), false);
+    assert.equal(await service.canAccessCandidateCv('cand-3', actorInt2), true);
+    assert.equal(await service.canAccessCandidateCv('cand-1', actorAdmin), true);
   }
 
   {
