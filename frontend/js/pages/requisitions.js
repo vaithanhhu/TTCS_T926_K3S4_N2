@@ -81,6 +81,7 @@
                   <button type="button" class="btn btn-outline btn-xs btn-view-candidates-req" data-id="${escapeDepartmentHtml(req.id).replace(/"/g, '&quot;')}" data-title="${escapeDepartmentHtml(req.title).replace(/"/g, '&quot;')}">
                     Ứng viên
                   </button>
+                  ${currentAuthenticatedUser?.roles?.some(role=>['ADMIN','HR_MANAGER','HIRING_MGR','RECRUITER'].includes(role))?`<button type="button" class="btn btn-outline btn-xs btn-compare-candidates-req" data-id="${escapeDepartmentHtml(req.id).replace(/"/g, '&quot;')}">So sánh</button>`:''}
                 </div>
               </td>
             </tr>
@@ -120,6 +121,15 @@
             candidateSearchPage=1;
             switchView('candidates');
             showToast('info', 'Ứng viên theo vị trí', `Đang lọc danh sách ứng viên cho vị trí: "${reqTitle}"`);
+          });
+        });
+
+        document.querySelectorAll('.btn-compare-candidates-req').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const reqId = btn.getAttribute('data-id');
+            if (window.ATS_CANDIDATE_COMPARISON_UI) {
+              window.ATS_CANDIDATE_COMPARISON_UI.open(reqId);
+            }
           });
         });
       } else {

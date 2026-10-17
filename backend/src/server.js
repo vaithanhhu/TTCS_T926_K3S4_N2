@@ -2362,6 +2362,21 @@ async function handleRequest(req, res) {
     return;
   }
 
+  if (req.method === 'GET' && /^\/(?:api\/v1\/)?requisitions\/[^/]+\/candidate-evaluations-comparison$/.test(pathname)) {
+    const user = await rbacMiddleware.authorize(req, res, authController.authService, 'interview.evaluation.read');
+    if (!user) return;
+    const reqId = pathname.replace(/^\/(?:api\/v1\/)?requisitions\//, '').replace(/\/candidate-evaluations-comparison$/, '');
+    const evaluationService = new (require('./services/interviewEvaluationService'))(db);
+    const roundName = parsedUrl.query?.roundName || null;
+    const sortBy = parsedUrl.query?.sortBy || null;
+    const order = parsedUrl.query?.order || null;
+    const finalRoundOnly = parsedUrl.query?.finalRoundOnly !== 'false';
+    const result = await evaluationService.compareCandidateEvaluations(reqId, { roundName, sortBy, order, finalRoundOnly }, user);
+    res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(result));
+    return;
+  }
+
   if (req.method === 'PUT' && ((pathname.startsWith('/api/v1/interviews/') && pathname.endsWith('/status')) || (pathname.startsWith('/interviews/') && pathname.endsWith('/status')))) {
     const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'interview.read'));
     if (!user) return;

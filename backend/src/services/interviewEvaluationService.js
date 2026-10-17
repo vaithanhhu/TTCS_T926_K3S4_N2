@@ -605,6 +605,267 @@ class InterviewEvaluationService {
     const row = await this.db.prepare("SELECT id FROM interview_evaluations WHERE interview_id = ? AND status = 'SUBMITTED' LIMIT 1").get(interviewId);
     return Boolean(row);
   }
+
+  async compareCandidateEvaluations(requisitionId, options = {}, actor = null) {
+    if (!await this.hasEvaluationTables()) {
+      return { success: false, statusCode: 503, code: 'EVALUATION_SERVICE_UNAVAILABLE', message: 'Bảng đánh giá chưa sẵn sàng.' };
+    }
+
+    if (!requisitionId || typeof requisitionId !== 'string' || !requisitionId.trim()) {
+      return { success: false, statusCode: 400, code: 'BAD_REQUEST', message: 'Mã yêu cầu tuyển dụng không hợp lệ.' };
+    }
+    const reqId = requisitionId.trim();
+
+    const reqRow = await this.db.prepare(`
+      SELECT r.id, r.code, r.title, r.job_title_id, r.department_id, r.department_name, r.hiring_manager_id, r.recruiter_id,
+             jt.name AS job_title_name
+      FROM requisitions r
+      LEFT JOIN job_titles jt ON jt.id = r.job_title_id
+      WHERE r.id = ?
+    `).get(reqId);
+
+    if (!reqRow) {
+      return { success: false, statusCode: 404, code: 'REQUISITION_NOT_FOUND', message: 'Không tìm thấy yêu cầu tuyển dụng.' };
+    }
+
+    if (actor) {
+      const userRoles = actor.roles || [];
+      const isAdminOrHr = userRoles.some(r => ['ADMIN', 'HR_MANAGER'].includes(r));
+      let hasAccess = isAdminOrHr;
+
+      const reqService = new (require('./requisitionService'))(this.db);
+
+      if (!hasAccess && userRoles.includes('HIRING_MGR')) {
+        try {
+          hasAccess = await reqService.canReadHiringRequisition(reqId, actor.id);
+        } catch {
+          hasAccess = false;
+        }
+      }
+
+      if (!hasAccess && userRoles.includes('RECRUITER')) {
+        try {
+          hasAccess = await reqService.recruiterAssigned(reqId, actor.id);
+        } catch {
+          hasAccess = false;
+        }
+      }
+
+      if (!hasAccess) {
+        return { success: false, statusCode: 403, code: 'FORBIDDEN', message: 'Bạn không có quyền xem so sánh ứng viên cho yêu cầu này.' };
+      }
+    }
+
+    const interviewRows = await this.db.prepare(`
+      SELECT i.id AS interview_id, i.candidate_id, i.round_name, i.scheduled_time, i.status AS interview_status, i.created_at,
+             c.full_name AS candidate_name, c.email AS candidate_email, c.phone_number AS candidate_phone, c.stage AS candidate_stage
+      FROM interviews i
+      JOIN candidates c ON c.id = i.candidate_id
+      WHERE (i.requisition_id = ? OR c.requisition_id = ?) AND i.status <> 'CANCELLED'
+      ORDER BY i.scheduled_time DESC, i.created_at DESC
+    `).all(reqId, reqId);
+
+    const interviewsByCandidate = new Map();
+    for (const row of (interviewRows || [])) {
+      if (!interviewsByCandidate.has(row.candidate_id)) {
+        interviewsByCandidate.set(row.candidate_id, []);
+      }
+      interviewsByCandidate.get(row.candidate_id).push(row);
+    }
+
+    const submittedEvalsByInterview = new Map();
+    for (const row of (interviewRows || [])) {
+      const evals = await this.db.prepare(`
+        SELECT ev.id, ev.interview_id, ev.interviewer_id, ev.recommendation, ev.general_notes, ev.total_score, ev.submitted_at,
+               u.full_name AS interviewer_name, u.email AS interviewer_email
+        FROM interview_evaluations ev
+        LEFT JOIN users u ON u.id = ev.interviewer_id
+        WHERE ev.interview_id = ? AND ev.status = 'SUBMITTED'
+      `).all(row.interview_id);
+      if (evals && evals.length > 0) {
+        submittedEvalsByInterview.set(row.interview_id, evals);
+      }
+    }
+
+    const allSubmittedInterviews = (interviewRows || []).filter(i => submittedEvalsByInterview.has(i.interview_id));
+    let targetRoundFilter = options.roundName ? options.roundName.trim().toLowerCase() : null;
+    let finalRoundNameFound = null;
+
+    if (!targetRoundFilter && options.finalRoundOnly !== false) {
+      const explicitFinal = allSubmittedInterviews.find(i => {
+        const rn = (i.round_name || '').toLowerCase();
+        return rn.includes('cuối') || rn.includes('final');
+      });
+      if (explicitFinal) {
+        targetRoundFilter = explicitFinal.round_name.toLowerCase();
+        finalRoundNameFound = explicitFinal.round_name;
+      }
+    }
+
+    const candidateSelectedInterviews = [];
+    for (const [candId, candInterviews] of interviewsByCandidate.entries()) {
+      const candSubmitted = candInterviews.filter(i => submittedEvalsByInterview.has(i.interview_id));
+      if (candSubmitted.length === 0) continue;
+
+      let chosen = null;
+      if (targetRoundFilter) {
+        chosen = candSubmitted.find(i => (i.round_name || '').toLowerCase() === targetRoundFilter);
+      } else {
+        chosen = candSubmitted[0];
+      }
+
+      if (chosen) {
+        candidateSelectedInterviews.push({
+          interview: chosen,
+          evaluations: submittedEvalsByInterview.get(chosen.interview_id)
+        });
+      }
+    }
+
+    const allCriteriaMap = new Map();
+    const candidateComparisonList = [];
+
+    for (const entry of candidateSelectedInterviews) {
+      const interview = entry.interview;
+      const evals = entry.evaluations;
+      const evalIds = evals.map(e => e.id);
+
+      const items = await this.db.prepare(`
+        SELECT item.evaluation_id, item.criterion_id, item.criterion_name, item.weight, item.score, item.comment, item.display_order,
+               ev.interviewer_id, u.full_name AS interviewer_name
+        FROM interview_evaluation_items item
+        JOIN interview_evaluations ev ON ev.id = item.evaluation_id
+        LEFT JOIN users u ON u.id = ev.interviewer_id
+        WHERE item.evaluation_id IN (${evalIds.map(() => '?').join(',')})
+        ORDER BY item.display_order ASC, item.criterion_id ASC
+      `).all(...evalIds);
+
+      const criteriaGroup = new Map();
+      for (const it of (items || [])) {
+        if (!allCriteriaMap.has(it.criterion_id)) {
+          allCriteriaMap.set(it.criterion_id, {
+            id: it.criterion_id,
+            name: it.criterion_name,
+            weight: Number(it.weight),
+            displayOrder: Number(it.display_order)
+          });
+        }
+        if (!criteriaGroup.has(it.criterion_id)) {
+          criteriaGroup.set(it.criterion_id, {
+            criterionId: it.criterion_id,
+            criterionName: it.criterion_name,
+            weight: Number(it.weight),
+            displayOrder: Number(it.display_order),
+            scores: []
+          });
+        }
+        if (it.score !== null && it.score !== undefined) {
+          criteriaGroup.get(it.criterion_id).scores.push({
+            interviewerId: it.interviewer_id,
+            interviewerName: it.interviewer_name || null,
+            score: Number(it.score),
+            comment: it.comment || ''
+          });
+        }
+      }
+
+      const criteriaDetails = [];
+      const criteriaScores = {};
+      for (const [critId, cg] of criteriaGroup.entries()) {
+        const avgScore = cg.scores.length > 0
+          ? Number((cg.scores.reduce((sum, s) => sum + s.score, 0) / cg.scores.length).toFixed(2))
+          : null;
+        criteriaScores[critId] = avgScore;
+        criteriaDetails.push({
+          criterionId: critId,
+          criterionName: cg.criterionName,
+          weight: cg.weight,
+          displayOrder: cg.displayOrder,
+          averageScore: avgScore,
+          evaluatorScores: cg.scores
+        });
+      }
+
+      const totalScoresList = evals.map(e => Number(e.total_score)).filter(s => !isNaN(s) && s !== null);
+      const overallTotalScore = totalScoresList.length > 0
+        ? Number((totalScoresList.reduce((sum, s) => sum + s, 0) / totalScoresList.length).toFixed(2))
+        : 0;
+
+      const recSummary = { RECOMMENDED: 0, CONSIDER: 0, NOT_RECOMMENDED: 0 };
+      for (const e of evals) {
+        if (e.recommendation && recSummary[e.recommendation] !== undefined) {
+          recSummary[e.recommendation]++;
+        }
+      }
+
+      candidateComparisonList.push({
+        candidateId: interview.candidate_id,
+        candidateName: interview.candidate_name,
+        candidateEmail: interview.candidate_email,
+        candidatePhone: interview.candidate_phone,
+        candidateStage: interview.candidate_stage,
+        interviewId: interview.interview_id,
+        roundName: interview.round_name,
+        scheduledTime: interview.scheduled_time,
+        evaluationCount: evals.length,
+        totalScore: overallTotalScore,
+        recommendationSummary: recSummary,
+        criteriaScores,
+        criteriaDetails,
+        evaluations: evals.map(e => ({
+          interviewerId: e.interviewer_id,
+          interviewerName: e.interviewer_name,
+          totalScore: Number(e.total_score),
+          recommendation: e.recommendation,
+          submittedAt: e.submitted_at,
+          generalNotes: e.general_notes || ''
+        }))
+      });
+    }
+
+    for (const cand of candidateComparisonList) {
+      for (const critId of allCriteriaMap.keys()) {
+        if (cand.criteriaScores[critId] === undefined) {
+          cand.criteriaScores[critId] = null;
+        }
+      }
+    }
+
+    const isAsc = (options.order || '').toUpperCase() === 'ASC';
+    candidateComparisonList.sort((a, b) => {
+      if (a.totalScore !== b.totalScore) {
+        return isAsc ? a.totalScore - b.totalScore : b.totalScore - a.totalScore;
+      }
+      return (a.candidateName || '').localeCompare(b.candidateName || '');
+    });
+
+    candidateComparisonList.forEach((cand, idx) => {
+      cand.rank = idx + 1;
+    });
+
+    const criteriaHeaders = Array.from(allCriteriaMap.values()).sort((a, b) => {
+      if (a.displayOrder !== b.displayOrder) return a.displayOrder - b.displayOrder;
+      return a.id.localeCompare(b.id);
+    });
+
+    return {
+      success: true,
+      statusCode: 200,
+      data: {
+        requisition: {
+          id: reqRow.id,
+          code: reqRow.code,
+          title: reqRow.title,
+          jobTitleName: reqRow.job_title_name || null,
+          departmentName: reqRow.department_name || null,
+          finalRoundName: finalRoundNameFound || (candidateComparisonList[0]?.roundName || null)
+        },
+        criteriaHeaders,
+        totalCandidates: candidateComparisonList.length,
+        candidates: candidateComparisonList
+      }
+    };
+  }
 }
 
 module.exports = InterviewEvaluationService;

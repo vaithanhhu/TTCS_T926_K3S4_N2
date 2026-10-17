@@ -245,6 +245,7 @@
     "/js/components/talent-pool.js",
     "/js/components/candidate-sla.js",
     "/js/pages/candidate-interview-response.js",
+    "/js/components/candidate-comparison-dialog.js",
     "/js/shared/page-lifecycle.js",
     "/js/shared/route-lifecycle.js"
   ],
@@ -291,6 +292,7 @@
     "/components/question-bank-modal.html",
     "/components/interview-detail-modal.html",
     "/components/interview-evaluation-modal.html",
+    "/components/candidate-comparison-modal.html",
     "/components/create-offer-modal.html",
     "/components/offer-detail-modal.html",
     "/components/requisition-detail-modal.html",
