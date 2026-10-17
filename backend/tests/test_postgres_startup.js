@@ -41,7 +41,7 @@ async function startupCases(){
    assert.equal(writes.length,8);assert.ok(writes.includes(postgresSQL(mergeSQL)));
    for(const sql of writes){assert.ok(queries.indexOf(sql)>begin&&queries.indexOf(sql)<commit);assert.ok(sql===postgresSQL(mergeSQL)||/^CREATE TABLE IF NOT EXISTS ats_candidate_merge_migrations\(/.test(sql)||/^INSERT INTO (ats_candidate_merge_migrations|permissions|role_permissions)\(/.test(sql));}
    await mergeMigration.verify(db);
-   assert.equal((await db.prepare('SELECT checksum FROM ats_candidate_merge_migrations WHERE version=1').get()).checksum,digest(mergeSQL));
+   assert.equal((await db.prepare('SELECT checksum FROM ats_candidate_merge_migrations WHERE version=1').get()).checksum,digest(mergeSQL.replace(/\r\n/g,'\n')));
    assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='candidates' AND column_name='merged_into_id'").get()).n,1);
    assert.deepEqual(await db.prepare('SELECT id,password_hash FROM users ORDER BY id').all(),beforeUsers);assert.deepEqual(await db.prepare('SELECT id,stage FROM candidates ORDER BY id').all(),beforeCandidates);
    assert.deepEqual((await db.prepare('SELECT code FROM permissions ORDER BY code').all()).map(row=>row.code),[...beforePermissions,'candidate.merge','candidate.merge.undo'].sort());
