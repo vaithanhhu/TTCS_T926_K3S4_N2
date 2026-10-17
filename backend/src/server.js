@@ -2273,6 +2273,21 @@ async function handleRequest(req, res) {
     return;
   }
 
+  if ((req.method === 'POST' || req.method === 'PUT') && /^\/api\/v1\/interviews\/[^/]+\/cancel$/.test(pathname)) {
+    const user = await rbacMiddleware.authorize(req, res, authController.authService, 'interview.update');
+    if (!user) return;
+    try {
+      const id = pathname.split('/').at(-2);
+      const result = await requisitionService.cancelInterview(id, await parseBody(req), user);
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, code: 'INTERVIEW_CANCEL_UNAVAILABLE', message: 'Unable to cancel interview.' }));
+    }
+    return;
+  }
+
   if (req.method === 'PUT' && ((pathname.startsWith('/api/v1/interviews/') && pathname.endsWith('/status')) || (pathname.startsWith('/interviews/') && pathname.endsWith('/status')))) {
     const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'interview.read'));
     if (!user) return;

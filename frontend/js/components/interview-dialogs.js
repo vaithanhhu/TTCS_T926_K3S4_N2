@@ -294,12 +294,60 @@
     const evaluate = permissions.includes('interview.evaluate') &&
       (currentAuthenticatedUser?.roles?.some(role => ['ADMIN', 'HR_MANAGER'].includes(role)) || isAssigned);
     const operate = permissions.includes('interview.update');
+
+    const guardAlert = document.getElementById('int-eval-guard-alert');
+    const cancelReasonGroup = document.getElementById('int-cancel-reason-group');
+    const cancelReasonInput = document.getElementById('int-cancel-reason');
+    const rescheduleBtn = document.getElementById('reschedule-interview-btn');
+
+    const hasEvaluation = (iv.score !== null && iv.score !== undefined) || (iv.feedback && String(iv.feedback).trim().length > 0) || iv.status === 'COMPLETED';
+    const isCancelled = iv.status === 'CANCELLED';
+
+    if (guardAlert) {
+      if (hasEvaluation) {
+        guardAlert.textContent = 'Buổi phỏng vấn đã được đánh giá hoặc hoàn thành. Không thể dời hoặc hủy lịch phỏng vấn này.';
+        guardAlert.classList.remove('hidden');
+      } else if (isCancelled) {
+        guardAlert.textContent = `Buổi phỏng vấn đã bị hủy.${iv.cancellationReason ? ` Lý do: ${iv.cancellationReason}` : ''}`;
+        guardAlert.classList.remove('hidden');
+      } else {
+        guardAlert.classList.add('hidden');
+      }
+    }
+
+    if (rescheduleBtn) {
+      const canReschedule = operate && !hasEvaluation && !isCancelled;
+      rescheduleBtn.classList.toggle('hidden', !canReschedule);
+      rescheduleBtn.onclick = () => {
+        closeInterviewDetail();
+        openScheduleInterviewForCandidate(iv.candidate?.id || iv.candidate_id || '');
+      };
+    }
+
+    if (cancelReasonGroup) cancelReasonGroup.classList.add('hidden');
+    if (cancelReasonInput) cancelReasonInput.value = iv.cancellationReason || '';
+
+    if (statusSelect) {
+      statusSelect.onchange = () => {
+        if (cancelReasonGroup) {
+          cancelReasonGroup.classList.toggle('hidden', statusSelect.value !== 'CANCELLED');
+        }
+      };
+      if (hasEvaluation || isCancelled) {
+        Array.from(statusSelect.options).forEach(opt => {
+          if (opt.value === 'CANCELLED' && hasEvaluation) opt.disabled = true;
+        });
+      } else {
+        Array.from(statusSelect.options).forEach(opt => { opt.disabled = false; });
+      }
+    }
+
     if (scoreSelect) scoreSelect.disabled = !evaluate;
     if (feedbackInput) feedbackInput.disabled = !evaluate;
-    if (statusSelect) statusSelect.disabled = !evaluate && !operate;
+    if (statusSelect) statusSelect.disabled = (!evaluate && !operate) || isCancelled;
     const submit = document.getElementById('submit-interview-eval-btn');
     if (submit) {
-      submit.classList.toggle('hidden', !evaluate && !operate);
+      submit.classList.toggle('hidden', (!evaluate && !operate) || isCancelled);
       submit.textContent = evaluate ? 'Lưu đánh giá' : 'Cập nhật trạng thái';
     }
 
@@ -321,6 +369,28 @@
       const score = document.getElementById('int-eval-score').value;
       const feedback = document.getElementById('int-eval-feedback').value.trim();
       if (!token || !id) return;
+
+      if (status === 'CANCELLED') {
+        const cancelReason = document.getElementById('int-cancel-reason')?.value.trim();
+        if (!cancelReason || cancelReason.length < 3) {
+          showToast('warning', 'Yêu cầu lý do', 'Vui lòng nhập lý do hủy buổi phỏng vấn (tối thiểu 3 ký tự).');
+          return;
+        }
+        try {
+          const res = await window.ATS_API.cancelInterviewApi(token, id, cancelReason);
+          if (res.ok && res.data && res.data.success) {
+            closeInterviewDetail();
+            showToast('success', 'Đã hủy phỏng vấn', 'Buổi phỏng vấn đã được hủy thành công.');
+            loadInterviews();
+            loadDashboardData();
+          } else {
+            showToast('danger', 'Lỗi hủy lịch', res.data?.message || 'Không thể hủy phỏng vấn.');
+          }
+        } catch (err) {
+          showToast('danger', 'Lỗi kết nối', err.message);
+        }
+        return;
+      }
 
       try {
         const canEvaluate=!document.getElementById('int-eval-feedback').disabled;
