@@ -53,7 +53,6 @@ async function initializeApplication() {
   if(config.CANDIDATE_PORTAL_ENABLED)await require('./db/migrate-candidate-portal').verify(db);
   await require('./db/migrate-candidate-merges').migrate(db);
   if(db.provider==='sqlite')await require('./db/migrate-interview-conflict-override').migrate(db);
-  else await require('./db/migrate-interview-conflict-override').verify(db);
   if (!isTestEnv) {
     try {
       const SlaNotificationService = require('./services/slaNotificationService');
