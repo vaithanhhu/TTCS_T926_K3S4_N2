@@ -67,6 +67,10 @@
     document.getElementById('req-detail-id').value = req.id;
     document.getElementById('req-detail-code').textContent = req.code;
     document.getElementById('req-detail-title-input').value = req.title;
+    const jobTitleInput = document.getElementById('req-detail-job-title-input');
+    if (jobTitleInput) jobTitleInput.value = req.jobTitleName ? (req.jobTitleCode ? `${req.jobTitleCode} — ${req.jobTitleName}` : req.jobTitleName) : '—';
+    const frameworkInput = document.getElementById('req-detail-framework-input');
+    if (frameworkInput) frameworkInput.value = req.frameworkName ? (req.frameworkCode ? `${req.frameworkCode} — ${req.frameworkName}` : req.frameworkName) : 'Chưa gắn khung năng lực';
     document.getElementById('req-detail-dept-input').value = req.departmentName || req.department || '';
     document.getElementById('req-detail-headcount-input').value = req.headcount;
     const statusSelect = document.getElementById('req-detail-status-select');

@@ -79,6 +79,7 @@
     "migrate:s3-08-09": "node backend/src/db/migrate-requisition-tracking-job-drafts.js",
     "test:s3-08": "node backend/tests/test_s3_08_09.js s3-08",
     "test:s3-09": "node backend/tests/test_s3_08_09.js s3-09",
+    "test:s3-02-s3-08-ui-audit": "node backend/tests/test_s3_02_s3_08_ui_audit.js",
     "migrate:s3-10": "node backend/src/db/migrate-job-publication.js",
     "test:s3-10": "node backend/tests/test_s3_10.js",
     "test:s3-10:pg-live": "node backend/tests/test_s3_10_pg_live.js",
