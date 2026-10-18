@@ -3,7 +3,7 @@ const RbacMiddleware = require('../middlewares/rbacMiddleware');
 const RequisitionService = require('./requisitionService');
 const config = require('../config/config');
 
-const candidateStages = Object.freeze(['NEW', 'APPLIED', 'SCREENING', 'INTERVIEW', 'OFFER', 'HIRED', 'REJECTED']);
+const candidateStages = Object.freeze(['NEW', 'APPLIED', 'SCREENING', 'INTERVIEW', 'OFFER', 'HIRED', 'ONBOARDED', 'REJECTED']);
 
 class CandidateStageService {
   constructor(db) {

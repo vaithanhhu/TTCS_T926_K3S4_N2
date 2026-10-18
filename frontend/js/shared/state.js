@@ -95,6 +95,7 @@
     'INTERVIEW': 'Phỏng vấn',
     'OFFER': 'Đề nghị (Offer)',
     'HIRED': 'Đã nhận việc',
+    'ONBOARDED': 'Đã onboard',
     'REJECTED': 'Từ chối'
   };
 
@@ -104,6 +105,7 @@
     'INTERVIEW': 'badge-warning',
     'OFFER': 'badge-primary',
     'HIRED': 'badge-success',
+    'ONBOARDED': 'badge-success',
     'REJECTED': 'badge-danger'
   };
 

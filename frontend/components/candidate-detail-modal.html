@@ -42,6 +42,7 @@
               <option value="INTERVIEW">Phỏng vấn (INTERVIEW)</option>
               <option value="OFFER">Đề nghị nhận việc (OFFER)</option>
               <option value="HIRED">Đã tuyển dụng (HIRED)</option>
+              <option value="ONBOARDED">Đã onboard (ONBOARDED)</option>
               <option value="REJECTED">Từ chối hồ sơ (REJECTED)</option>
             </select>
             <button type="button" id="cand-detail-save-stage-btn" class="btn btn-primary btn-sm">
@@ -101,6 +102,43 @@
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="cand-detail-onboarding-panel" class="panel-card hidden" style="padding: 14px; margin-bottom: 14px;">
+          <div style="font-weight: 600; font-size: 0.875rem; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+            <span style="display: flex; align-items: center; gap: 6px;">
+              <span>🚀 Thủ tục Onboarding nhân sự mới</span>
+              <span id="cand-onboard-status-badge" class="badge badge-primary">Đang thực hiện</span>
+            </span>
+            <span id="cand-onboard-progress-text" style="font-size: 0.8rem; font-weight: 600; color: var(--color-primary);">0%</span>
+          </div>
+
+          <div id="cand-onboard-progress-container" style="background: var(--color-bg-page); border-radius: 9999px; height: 8px; width: 100%; overflow: hidden; margin-bottom: 12px; border: 1px solid var(--color-border);">
+            <div id="cand-onboard-progress-bar" style="background: var(--color-primary); height: 100%; width: 0%; transition: width 0.3s ease;"></div>
+          </div>
+
+          <div id="cand-onboard-init-box" class="hidden" style="background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 6px; padding: 12px; text-align: center;">
+            <p style="font-size: 0.85rem; color: var(--color-text-secondary); margin-bottom: 10px;">
+              Ứng viên đã chấp nhận offer nhận việc. Khởi tạo checklist onboarding để chuẩn bị tài khoản, thiết bị, chỗ ngồi và hồ sơ giấy tờ.
+            </p>
+            <div style="display: flex; gap: 10px; justify-content: center; align-items: center; flex-wrap: wrap;">
+              <select id="cand-onboard-template-select" class="form-input form-input-sm" style="max-width: 260px;">
+                <option value="">-- Mẫu Onboarding theo phòng ban --</option>
+              </select>
+              <button type="button" id="cand-onboard-init-btn" class="btn btn-primary btn-sm">
+                <span>Khởi tạo Checklist Onboarding</span>
+              </button>
+            </div>
+          </div>
+
+          <div id="cand-onboard-items-box" class="hidden">
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; color: var(--color-text-muted); margin-bottom: 8px;">
+              <span>Mẫu áp dụng: <strong id="cand-onboard-template-name" style="color: var(--color-text);">—</strong></span>
+              <span>Ngày bắt đầu: <strong id="cand-onboard-start-date" style="color: var(--color-text);">—</strong></span>
+            </div>
+            <div id="cand-onboard-categories-container" style="display: flex; flex-direction: column; gap: 10px;">
             </div>
           </div>
         </div>

@@ -38,6 +38,7 @@ class CandidatePortalService {
         return { code: 'WITHDRAWN', label: 'Ứng viên đã rút hồ sơ' };
       case 'OFFER':
       case 'HIRED':
+      case 'ONBOARDED':
       case 'REJECTED':
       default:
         return { code: 'CLOSED', label: 'Kết thúc quá trình xét duyệt' };

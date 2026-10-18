@@ -908,6 +908,130 @@ async function addOfferToTalentPoolApi(token, id, data) {
   }
 }
 
+async function getOnboardingTemplatesApi(token, params = {}) {
+  try {
+    const query = new URLSearchParams();
+    if (params.departmentId) query.append('departmentId', params.departmentId);
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    const response = await fetch(`${API_BASE}/onboarding/templates${qs}`, {
+      method: 'GET',
+      headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi tải mẫu onboarding.' } };
+  }
+}
+
+async function createOnboardingTemplateApi(token, data) {
+  try {
+    const response = await fetch(`${API_BASE}/onboarding/templates`, {
+      method: 'POST',
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : '',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+    const resData = await response.json();
+    return { status: response.status, ok: response.ok, data: resData };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi tạo mẫu onboarding.' } };
+  }
+}
+
+async function getOnboardingTemplateByIdApi(token, id) {
+  try {
+    const response = await fetch(`${API_BASE}/onboarding/templates/${encodeURIComponent(id)}`, {
+      method: 'GET',
+      headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi tải chi tiết mẫu onboarding.' } };
+  }
+}
+
+async function initializeOnboardingApi(token, data) {
+  try {
+    const response = await fetch(`${API_BASE}/onboarding/initialize`, {
+      method: 'POST',
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : '',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+    const resData = await response.json();
+    return { status: response.status, ok: response.ok, data: resData };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi khởi tạo onboarding.' } };
+  }
+}
+
+async function getCandidateOnboardingApi(token, candidateId) {
+  try {
+    const response = await fetch(`${API_BASE}/onboarding/candidates/${encodeURIComponent(candidateId)}`, {
+      method: 'GET',
+      headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi tải quy trình onboarding của ứng viên.' } };
+  }
+}
+
+async function getOnboardingChecklistByIdApi(token, id) {
+  try {
+    const response = await fetch(`${API_BASE}/onboarding/checklists/${encodeURIComponent(id)}`, {
+      method: 'GET',
+      headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi tải checklist onboarding.' } };
+  }
+}
+
+async function updateOnboardingChecklistItemApi(token, checklistId, itemId, data) {
+  try {
+    const response = await fetch(`${API_BASE}/onboarding/checklists/${encodeURIComponent(checklistId)}/items/${encodeURIComponent(itemId)}`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : '',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+    const resData = await response.json();
+    return { status: response.status, ok: response.ok, data: resData };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi cập nhật mục onboarding.' } };
+  }
+}
+
+async function listOnboardingChecklistsApi(token, params = {}) {
+  try {
+    const query = new URLSearchParams();
+    if (params.departmentId) query.append('departmentId', params.departmentId);
+    if (params.status) query.append('status', params.status);
+    if (params.search) query.append('search', params.search);
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    const response = await fetch(`${API_BASE}/onboarding/checklists${qs}`, {
+      method: 'GET',
+      headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi tải danh sách onboarding.' } };
+  }
+}
+
 async function getRecruitmentReportsApi(token) {
   try {
     const response = await fetch(`${API_BASE}/reports/recruitment`, {
@@ -2011,6 +2135,14 @@ window.ATS_API = {
   recordOfferRejectionReasonApi,
   reviseOfferApi,
   addOfferToTalentPoolApi,
+  getOnboardingTemplatesApi,
+  createOnboardingTemplateApi,
+  getOnboardingTemplateByIdApi,
+  initializeOnboardingApi,
+  getCandidateOnboardingApi,
+  getOnboardingChecklistByIdApi,
+  updateOnboardingChecklistItemApi,
+  listOnboardingChecklistsApi,
   getRecruitmentReportsApi,
   getProfileApi,
   updateProfileApi,

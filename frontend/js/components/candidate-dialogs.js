@@ -254,6 +254,8 @@
       document.getElementById('cand-detail-parsed-box')?.classList.add('hidden');
     } else loadCandidateUnifiedProfile(id, token);
 
+    loadCandidateOnboarding(c, token);
+
     if(generation!==candidateDetailsGeneration||token!==sessionStorage.getItem('ats_token')||view!==currentActiveView)return;
     if (candidateDetailModal) candidateDetailModal.classList.remove('hidden');
   }
@@ -810,6 +812,166 @@
       if (candidateDetailModal) candidateDetailModal.classList.add('hidden');
       if (id && window.ATS_APP_HELPERS?.openHiringDecisionModal) {
         window.ATS_APP_HELPERS.openHiringDecisionModal(id);
+      }
+    });
+  }
+
+  const candDetailOnboardingPanel = document.getElementById('cand-detail-onboarding-panel');
+  const candOnboardStatusBadge = document.getElementById('cand-onboard-status-badge');
+  const candOnboardProgressText = document.getElementById('cand-onboard-progress-text');
+  const candOnboardProgressBar = document.getElementById('cand-onboard-progress-bar');
+  const candOnboardInitBox = document.getElementById('cand-onboard-init-box');
+  const candOnboardTemplateSelect = document.getElementById('cand-onboard-template-select');
+  const candOnboardInitBtn = document.getElementById('cand-onboard-init-btn');
+  const candOnboardItemsBox = document.getElementById('cand-onboard-items-box');
+  const candOnboardTemplateName = document.getElementById('cand-onboard-template-name');
+  const candOnboardStartDate = document.getElementById('cand-onboard-start-date');
+  const candOnboardCategoriesContainer = document.getElementById('cand-onboard-categories-container');
+  let currentOnboardingCandidate = null;
+
+  async function loadCandidateOnboarding(c, token) {
+    if (!candDetailOnboardingPanel) return;
+    currentOnboardingCandidate = c;
+    const isEligible = c.stage === 'HIRED' || c.stage === 'ONBOARDED';
+    if (!isEligible) {
+      candDetailOnboardingPanel.classList.add('hidden');
+      return;
+    }
+    candDetailOnboardingPanel.classList.remove('hidden');
+
+    try {
+      const res = await window.ATS_API.getCandidateOnboardingApi(token, c.id);
+      if (res.ok && res.data?.data) {
+        const d = res.data.data;
+        if (d.hasOnboarding) {
+          if (candOnboardInitBox) candOnboardInitBox.classList.add('hidden');
+          if (candOnboardItemsBox) candOnboardItemsBox.classList.remove('hidden');
+
+          const pct = d.progressPercentage || 0;
+          if (candOnboardProgressText) candOnboardProgressText.textContent = `${pct}% (${d.completedCount || 0}/${d.totalCount || 0} mục)`;
+          if (candOnboardProgressBar) candOnboardProgressBar.style.width = `${pct}%`;
+
+          if (candOnboardStatusBadge) {
+            if (d.status === 'COMPLETED') {
+              candOnboardStatusBadge.className = 'badge badge-success';
+              candOnboardStatusBadge.textContent = 'Đã hoàn tất';
+            } else {
+              candOnboardStatusBadge.className = 'badge badge-primary';
+              candOnboardStatusBadge.textContent = 'Đang thực hiện';
+            }
+          }
+
+          if (candOnboardTemplateName) candOnboardTemplateName.textContent = d.templateName || d.templateId || 'Mẫu theo phòng ban';
+          if (candOnboardStartDate) candOnboardStartDate.textContent = d.startDate || '—';
+
+          if (candOnboardCategoriesContainer && d.categories) {
+            candOnboardCategoriesContainer.innerHTML = Object.entries(d.categories).map(([catKey, cat]) => {
+              const icon = catKey === 'ACCOUNT' ? '🔑' : catKey === 'EQUIPMENT' ? '💻' : catKey === 'WORKSPACE' ? '🏢' : '📄';
+              const itemsHtml = (cat.items || []).map(it => {
+                const checked = it.status === 'COMPLETED' ? 'checked' : '';
+                const disabled = !it.canUpdate ? 'disabled' : '';
+                return `
+                  <div style="display:flex;align-items:flex-start;gap:8px;padding:6px 8px;background:var(--color-bg-page);border:1px solid var(--color-border);border-radius:4px;font-size:0.825rem;">
+                    <input type="checkbox" class="onboard-item-checkbox" data-checklist-id="${d.id}" data-item-id="${it.id}" ${checked} ${disabled} style="margin-top:2px;cursor:${it.canUpdate ? 'pointer' : 'not-allowed'};" />
+                    <div style="flex:1;">
+                      <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <span style="font-weight:600;color:var(--color-text);text-decoration:${it.status === 'COMPLETED' ? 'line-through' : 'none'};">${escapeHtml(it.title)}</span>
+                        <span class="badge ${it.status === 'COMPLETED' ? 'badge-success' : 'badge-neutral'}" style="font-size:0.7rem;">${it.status === 'COMPLETED' ? 'Xong' : 'Chờ xử lý'}</span>
+                      </div>
+                      ${it.description ? `<div style="color:var(--color-text-secondary);font-size:0.775rem;margin-top:2px;">${escapeHtml(it.description)}</div>` : ''}
+                      <div style="display:flex;gap:12px;color:var(--color-text-muted);font-size:0.75rem;margin-top:3px;">
+                        <span>👤 ${escapeHtml(it.assigneeName || 'Chưa phân công')}</span>
+                        <span>📅 Hạn: ${it.dueDate || 'Chưa định'}</span>
+                        ${it.completedAt ? `<span>✓ Xong lúc: ${new Date(it.completedAt).toLocaleDateString('vi-VN')}</span>` : ''}
+                      </div>
+                    </div>
+                  </div>
+                `;
+              }).join('');
+
+              return `
+                <div style="background:#fff;border:1px solid var(--color-border);border-radius:6px;padding:10px;">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:0.85rem;font-weight:600;color:var(--color-text);">
+                    <span>${icon} ${escapeHtml(cat.name)}</span>
+                    <span style="font-size:0.75rem;color:var(--color-text-muted);">${cat.completed}/${cat.total} mục (${cat.progressPercentage}%)</span>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:6px;">
+                    ${itemsHtml || '<span style="color:var(--color-text-muted);font-size:0.8rem;">Không có mục công việc nào.</span>'}
+                  </div>
+                </div>
+              `;
+            }).join('');
+
+            candOnboardCategoriesContainer.querySelectorAll('.onboard-item-checkbox').forEach(cb => {
+              cb.addEventListener('change', async () => {
+                const ckId = cb.getAttribute('data-checklist-id');
+                const itId = cb.getAttribute('data-item-id');
+                const newStatus = cb.checked ? 'COMPLETED' : 'PENDING';
+                try {
+                  const upRes = await window.ATS_API.updateOnboardingChecklistItemApi(token, ckId, itId, { status: newStatus });
+                  if (upRes.ok && upRes.data?.success) {
+                    showToast('success', 'Đã cập nhật', 'Tiến độ onboarding đã được cập nhật.');
+                    await loadCandidateOnboarding(c, token);
+                    if (upRes.data.data?.status === 'COMPLETED') {
+                      const badge = document.getElementById('cand-detail-stage-badge');
+                      if (badge) {
+                        badge.className = 'badge badge-success';
+                        badge.textContent = 'Đã onboard';
+                      }
+                      const stageSelect = document.getElementById('cand-detail-change-stage-select');
+                      if (stageSelect) stageSelect.value = 'ONBOARDED';
+                    }
+                    if (typeof loadCandidates === 'function') loadCandidates();
+                    if (typeof loadDashboardData === 'function') loadDashboardData();
+                  } else {
+                    cb.checked = !cb.checked;
+                    showToast('danger', 'Lỗi cập nhật', upRes.data?.message || 'Không thể cập nhật mục công việc.');
+                  }
+                } catch (err) {
+                  cb.checked = !cb.checked;
+                  showToast('danger', 'Lỗi kết nối', err.message);
+                }
+              });
+            });
+          }
+        } else {
+          if (candOnboardInitBox) candOnboardInitBox.classList.remove('hidden');
+          if (candOnboardItemsBox) candOnboardItemsBox.classList.add('hidden');
+
+          if (candOnboardTemplateSelect && candOnboardTemplateSelect.children.length <= 1) {
+            const tmplRes = await window.ATS_API.getOnboardingTemplatesApi(token, { departmentId: c.requisition?.department_id });
+            if (tmplRes.ok && Array.isArray(tmplRes.data?.data)) {
+              candOnboardTemplateSelect.innerHTML = '<option value="">-- Chọn mẫu Onboarding --</option>' +
+                tmplRes.data.data.map(t => `<option value="${t.id}">${escapeHtml(t.name)} (${t.items?.length || 0} mục)</option>`).join('');
+            }
+          }
+        }
+      }
+    } catch {}
+  }
+
+  if (candOnboardInitBtn) {
+    candOnboardInitBtn.addEventListener('click', async () => {
+      const token = sessionStorage.getItem('ats_token');
+      if (!currentOnboardingCandidate || !token) return;
+      candOnboardInitBtn.disabled = true;
+      try {
+        const tmplId = candOnboardTemplateSelect?.value || null;
+        const initRes = await window.ATS_API.initializeOnboardingApi(token, {
+          candidateId: currentOnboardingCandidate.id,
+          templateId: tmplId,
+          departmentId: currentOnboardingCandidate.requisition?.department_id || null
+        });
+        if (initRes.ok && initRes.data?.success) {
+          showToast('success', 'Đã khởi tạo Onboarding', 'Quy trình checklist onboarding đã được tạo thành công.');
+          await loadCandidateOnboarding(currentOnboardingCandidate, token);
+        } else {
+          showToast('danger', 'Lỗi khởi tạo', initRes.data?.message || 'Không thể khởi tạo onboarding.');
+        }
+      } catch (err) {
+        showToast('danger', 'Lỗi kết nối', err.message);
+      } finally {
+        candOnboardInitBtn.disabled = false;
       }
     });
   }

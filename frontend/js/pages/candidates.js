@@ -21,6 +21,7 @@
     { key: 'INTERVIEW', label: 'Phỏng vấn' },
     { key: 'OFFER', label: 'Đề nghị (Offer)' },
     { key: 'HIRED', label: 'Đã nhận việc' },
+    { key: 'ONBOARDED', label: 'Đã onboard' },
     { key: 'REJECTED', label: 'Từ chối' }
   ];
 
