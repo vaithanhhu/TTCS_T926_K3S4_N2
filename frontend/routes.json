@@ -236,6 +236,7 @@
     "/js/components/interview-dialogs.js",
     "/js/components/interview-evaluation-dialog.js",
     "/js/components/bulk-interview-dialog.js",
+    "/js/components/bulk-communication-dialog.js",
     "/js/components/offer-dialogs.js",
     "/js/pages/approvals.js",
     "/js/pages/candidate-portal.js",

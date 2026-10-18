@@ -140,7 +140,9 @@
     "migrate:s7-07": "node backend/src/db/migrate-offer-negotiation.js",
     "test:s7-07": "node backend/tests/test_s7_07_offer_negotiation.js",
     "migrate:s7-08": "node backend/src/db/migrate-onboarding-checklists.js",
-    "test:s7-08": "node backend/tests/test_s7_08_onboarding.js"
+    "test:s7-08": "node backend/tests/test_s7_08_onboarding.js",
+    "migrate:s7-09": "node backend/src/db/migrate-bulk-candidate-communications.js",
+    "test:s7-09": "node backend/tests/test_s7_09_bulk_communications.js"
   },
   "keywords": [
     "ats",

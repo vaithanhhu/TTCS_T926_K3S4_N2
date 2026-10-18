@@ -1032,6 +1032,67 @@ async function listOnboardingChecklistsApi(token, params = {}) {
   }
 }
 
+async function getCommunicationTemplatesApi(token) {
+  try {
+    const response = await fetch(`${API_BASE}/communications/templates`, {
+      method: 'GET',
+      headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi tải mẫu thư giao tiếp.' } };
+  }
+}
+
+async function previewBulkCommunicationsApi(token, payload) {
+  try {
+    const response = await fetch(`${API_BASE}/communications/preview`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify(payload)
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi xem trước thư gửi.' } };
+  }
+}
+
+async function sendBulkCommunicationsApi(token, payload) {
+  try {
+    const response = await fetch(`${API_BASE}/communications/bulk-send`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify(payload)
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi gửi thư hàng loạt.' } };
+  }
+}
+
+async function getCommunicationsHistoryApi(token, params = {}) {
+  try {
+    const qs = new URLSearchParams(params).toString();
+    const response = await fetch(`${API_BASE}/communications/history${qs ? '?' + qs : ''}`, {
+      method: 'GET',
+      headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi tải lịch sử gửi thư.' } };
+  }
+}
+
 async function getRecruitmentReportsApi(token) {
   try {
     const response = await fetch(`${API_BASE}/reports/recruitment`, {
@@ -2143,6 +2204,10 @@ window.ATS_API = {
   getOnboardingChecklistByIdApi,
   updateOnboardingChecklistItemApi,
   listOnboardingChecklistsApi,
+  getCommunicationTemplatesApi,
+  previewBulkCommunicationsApi,
+  sendBulkCommunicationsApi,
+  getCommunicationsHistoryApi,
   getRecruitmentReportsApi,
   getProfileApi,
   updateProfileApi,

@@ -1266,7 +1266,7 @@ class OfferService {
 
     await this.expireOverdueOffers();
 
-    return this.db.transaction(async () => {
+    const txResult = await this.db.transaction(async () => {
       const lockSql = this.db.provider === 'postgres' ? ' FOR UPDATE OF o' : '';
       const row = await this.db.prepare(`
         SELECT
@@ -1349,22 +1349,35 @@ class OfferService {
 
       await this.db.prepare("UPDATE candidates SET stage = 'OFFER' WHERE id = ?").run(row.candidate_id);
 
-      const appUrl = process.env.APP_URL || 'http://localhost:3000';
-      const responseUrl = `${appUrl}/candidate-offer.html?token=${responseToken}`;
+      return {
+        success: true,
+        row,
+        responseToken,
+        tokenExpiresAt
+      };
+    });
 
-      let emailSent = false;
-      try {
-        const emailService = require('./emailService').getEmailService(this.db);
-        const candName = row.candidate_name || 'Ứng viên';
-        const jobTitle = row.job_title_name || row.requisition_title || 'Vị trí tuyển dụng';
-        const deptName = row.department_name || 'Công ty';
-        const salaryFormatted = this.formatCurrency(row.salary_monthly);
-        const allowancesFormatted = row.allowances ? this.formatCurrency(row.allowances) + ' VNĐ / tháng' : 'Không có';
-        const startDateFormatted = this.formatDate(row.start_date);
-        const expDateFormatted = this.formatDate(row.expiration_date || tokenExpiresAt);
+    if (!txResult || !txResult.success) {
+      return txResult;
+    }
 
-        const emailSubject = `[ATS] Thư mời nhận việc (Job Offer Letter) - ${jobTitle}`;
-        const emailHtml = `
+    const { row, responseToken, tokenExpiresAt } = txResult;
+    const appUrl = process.env.APP_URL || 'http://localhost:3000';
+    const responseUrl = `${appUrl}/candidate-offer.html?token=${responseToken}`;
+
+    let emailSent = false;
+    try {
+      const emailService = require('./emailService').getEmailService(this.db);
+      const candName = row.candidate_name || 'Ứng viên';
+      const jobTitle = row.job_title_name || row.requisition_title || 'Vị trí tuyển dụng';
+      const deptName = row.department_name || 'Công ty';
+      const salaryFormatted = this.formatCurrency(row.salary_monthly);
+      const allowancesFormatted = row.allowances ? this.formatCurrency(row.allowances) + ' VNĐ / tháng' : 'Không có';
+      const startDateFormatted = this.formatDate(row.start_date);
+      const expDateFormatted = this.formatDate(row.expiration_date || tokenExpiresAt);
+
+      const emailSubject = `[ATS] Thư mời nhận việc (Job Offer Letter) - ${jobTitle}`;
+      const emailHtml = `
           <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1a202c; max-width: 680px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff;">
             <div style="text-align: center; border-bottom: 2px solid #2563eb; padding-bottom: 16px; margin-bottom: 20px;">
               <h3 style="margin: 0; text-transform: uppercase; letter-spacing: 1px; color: #1e3a8a;">HỆ THỐNG TUYỂN DỤNG ATS</h3>
@@ -1400,34 +1413,34 @@ class OfferService {
             </p>
           </div>
         `;
-        const emailText = `Kính gửi ${candName},\n\nChúng tôi trân trọng gửi tới bạn Thư mời nhận việc cho vị trí ${jobTitle} tại ${deptName}.\nMức lương: ${salaryFormatted} VNĐ\nNgày dự kiến nhận việc: ${startDateFormatted}\nThời hạn phản hồi: ${expDateFormatted}\n\nVui lòng truy cập đường dẫn sau để phản hồi thư mời:\n${responseUrl}\n\nTrân trọng,\nPhòng Tuyển dụng`;
+      const emailText = `Kính gửi ${candName},\n\nChúng tôi trân trọng gửi tới bạn Thư mời nhận việc cho vị trí ${jobTitle} tại ${deptName}.\nMức lương: ${salaryFormatted} VNĐ\nNgày dự kiến nhận việc: ${startDateFormatted}\nThời hạn phản hồi: ${expDateFormatted}\n\nVui lòng truy cập đường dẫn sau để phản hồi thư mời:\n${responseUrl}\n\nTrân trọng,\nPhòng Tuyển dụng`;
 
-        const mailRes = await emailService.sendMail({
-          to: row.candidate_email,
-          subject: emailSubject,
-          html: emailHtml,
-          text: emailText,
-          templateName: 'OFFER_DELIVERY'
-        });
-        emailSent = Boolean(mailRes.success);
-      } catch {
-        emailSent = false;
+      const mailRes = await emailService.sendMail({
+        to: row.candidate_email,
+        subject: emailSubject,
+        html: emailHtml,
+        text: emailText,
+        templateName: 'OFFER_DELIVERY'
+      });
+      emailSent = Boolean(mailRes.success);
+    } catch {
+      emailSent = false;
+    }
+
+    return {
+      success: true,
+      statusCode: 200,
+      message: 'Đã gửi thư mời nhận việc đến ứng viên thành công.',
+      data: {
+        id: offerId,
+        status: 'SENT',
+        responseToken,
+        tokenExpiresAt,
+        responseUrl,
+        sentAt: new Date().toISOString(),
+        emailSent
       }
-
-      return {
-        success: true,
-        statusCode: 200,
-        message: 'Đã gửi thư mời nhận việc đến ứng viên thành công.',
-        data: {
-          id: offerId,
-          status: 'SENT',
-          responseToken,
-          tokenExpiresAt,
-          sentAt: new Date().toISOString(),
-          emailSent
-        }
-      };
-    });
+    };
   }
 
   async getOfferByToken(token) {
