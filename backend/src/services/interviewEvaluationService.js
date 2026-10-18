@@ -866,6 +866,30 @@ class InterviewEvaluationService {
       }
     };
   }
+
+  get hiringDecisionService() {
+    if (!this._hiringDecisionService) {
+      const HiringDecisionService = require('./hiringDecisionService');
+      this._hiringDecisionService = new HiringDecisionService(this.db);
+    }
+    return this._hiringDecisionService;
+  }
+
+  async getCandidateInterviewSummary(candidateId, actor = null) {
+    return this.hiringDecisionService.getCandidateInterviewSummary(candidateId, actor);
+  }
+
+  async recordHiringDecision(candidateId, data = {}, actor = null) {
+    return this.hiringDecisionService.recordHiringDecision(candidateId, data, actor);
+  }
+
+  async getInterviewConsensus(interviewId, actor = null) {
+    return this.hiringDecisionService.getInterviewConsensus(interviewId, actor);
+  }
+
+  async recordInterviewConsensus(interviewId, data = {}, actor = null) {
+    return this.hiringDecisionService.recordInterviewConsensus(interviewId, data, actor);
+  }
 }
 
 module.exports = InterviewEvaluationService;
