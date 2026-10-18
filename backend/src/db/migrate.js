@@ -357,9 +357,41 @@ function runMigrations(customPath) {
   if (!offerCols.includes('required_approval_levels')) {
     db.exec('ALTER TABLE offers ADD COLUMN required_approval_levels INTEGER NOT NULL DEFAULT 1');
   }
+  if (!offerCols.includes('sent_at')) {
+    db.exec('ALTER TABLE offers ADD COLUMN sent_at TEXT');
+  }
+  if (!offerCols.includes('sent_by')) {
+    db.exec('ALTER TABLE offers ADD COLUMN sent_by TEXT REFERENCES users(id) ON DELETE SET NULL');
+  }
+  if (!offerCols.includes('response_token')) {
+    db.exec('ALTER TABLE offers ADD COLUMN response_token TEXT');
+  }
+  if (!offerCols.includes('token_expires_at')) {
+    db.exec('ALTER TABLE offers ADD COLUMN token_expires_at TEXT');
+  }
+  if (!offerCols.includes('responded_at')) {
+    db.exec('ALTER TABLE offers ADD COLUMN responded_at TEXT');
+  }
+  if (!offerCols.includes('candidate_response')) {
+    db.exec('ALTER TABLE offers ADD COLUMN candidate_response TEXT');
+  }
+  if (!offerCols.includes('candidate_comment')) {
+    db.exec('ALTER TABLE offers ADD COLUMN candidate_comment TEXT');
+  }
+  if (!offerCols.includes('rejection_reason_category')) {
+    db.exec('ALTER TABLE offers ADD COLUMN rejection_reason_category TEXT');
+  }
+  if (!offerCols.includes('predecessor_offer_id')) {
+    db.exec('ALTER TABLE offers ADD COLUMN predecessor_offer_id TEXT REFERENCES offers(id) ON DELETE SET NULL');
+  }
+  if (!offerCols.includes('superseded_by_offer_id')) {
+    db.exec('ALTER TABLE offers ADD COLUMN superseded_by_offer_id TEXT REFERENCES offers(id) ON DELETE SET NULL');
+  }
   db.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_offers_active_candidate ON offers(candidate_id) WHERE status IN ('DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'SENT');
     CREATE INDEX IF NOT EXISTS idx_offers_job_title ON offers(job_title_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_offers_response_token ON offers(response_token) WHERE response_token IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_offers_status ON offers(status);
     CREATE TABLE IF NOT EXISTS offer_approvals (
       id TEXT PRIMARY KEY,
       offer_id TEXT NOT NULL REFERENCES offers(id) ON DELETE CASCADE,

@@ -134,7 +134,9 @@
     "migrate:s7-04": "node backend/src/db/migrate-offer-proposals.js",
     "test:s7-04": "node backend/tests/test_s7_04_offer_proposals.js",
     "migrate:s7-05": "node backend/src/db/migrate-offer-approvals.js",
-    "test:s7-05": "node backend/tests/test_s7_05_offer_approvals.js"
+    "test:s7-05": "node backend/tests/test_s7_05_offer_approvals.js",
+    "migrate:s7-06": "node backend/src/db/migrate-offer-delivery.js",
+    "test:s7-06": "node backend/tests/test_s7_06_offer_delivery.js"
   },
   "keywords": [
     "ats",

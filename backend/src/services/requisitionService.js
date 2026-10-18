@@ -2352,6 +2352,22 @@ class RequisitionService {
   async getOfferApprovals(id, actor = null) {
     return this.offerService.getOfferApprovals(id, actor);
   }
+
+  async sendOffer(id, actor = null) {
+    return this.offerService.sendOffer(id, actor);
+  }
+
+  async getOfferByToken(token) {
+    return this.offerService.getOfferByToken(token);
+  }
+
+  async respondOffer(token, data = {}) {
+    return this.offerService.respondOffer(token, data);
+  }
+
+  async expireOverdueOffers() {
+    return this.offerService.expireOverdueOffers();
+  }
 }
 
 module.exports = RequisitionService;

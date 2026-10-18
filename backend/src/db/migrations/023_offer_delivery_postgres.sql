@@ -1,0 +1,12 @@
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS sent_at TIMESTAMPTZ;
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS sent_by TEXT REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS response_token TEXT;
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS token_expires_at TIMESTAMPTZ;
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS responded_at TIMESTAMPTZ;
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS candidate_response TEXT;
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS candidate_comment TEXT;
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS rejection_reason_category TEXT;
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS predecessor_offer_id TEXT REFERENCES offers(id) ON DELETE SET NULL;
+ALTER TABLE offers ADD COLUMN IF NOT EXISTS superseded_by_offer_id TEXT REFERENCES offers(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_offers_status ON offers(status);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_offers_response_token ON offers(response_token) WHERE response_token IS NOT NULL;

@@ -610,10 +610,11 @@
       if (!token || !id) return;
 
       try {
-        const res = await window.ATS_API.updateOfferStatusApi(token, id, 'SENT');
+        const sendFn = window.ATS_API.sendOfferApi || window.ATS_API.updateOfferStatusApi;
+        const res = await sendFn(token, id, 'SENT');
         if (res.ok && res.data && res.data.success) {
           if (offerDetailModal) offerDetailModal.classList.add('hidden');
-          showToast('info', 'Đã gửi Offer', 'Đã cập nhật trạng thái phát hành thư mời cho ứng viên.');
+          showToast('success', 'Đã gửi Offer', res.data.message || 'Đã gửi thư mời nhận việc và liên kết phản hồi đến ứng viên.');
           loadOffers();
         } else {
           showToast('danger', 'Lỗi gửi Offer', res.data?.message || 'Không thể gửi offer.');
