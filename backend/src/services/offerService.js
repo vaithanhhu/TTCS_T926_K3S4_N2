@@ -3,7 +3,7 @@ const crypto = require('node:crypto');
 class OfferService {
   constructor(db, requisitionService, rbacMiddleware) {
     this.db = db;
-    this.requisitionService = requisitionService;
+    this.requisitionService = requisitionService || new (require('./requisitionService'))(db);
     this.rbacMiddleware = rbacMiddleware || new (require('../middlewares/rbacMiddleware'))(db);
   }
 
@@ -411,7 +411,10 @@ class OfferService {
           canSend: r.status === 'APPROVED' && (viewer.roles.some(role => ['ADMIN', 'HR_MANAGER'].includes(role)) || (viewer.roles.includes('RECRUITER') && r.in_recruiter_scope === 1)),
           canAccept: r.status === 'SENT' && viewer.roles.every(role => role === 'CANDIDATE') && r.candidate_email.toLowerCase() === viewer.email.toLowerCase(),
           canEdit: ['DRAFT', 'PENDING_APPROVAL', 'REVISION_REQUESTED'].includes(r.status) && (viewer.roles.some(role => ['ADMIN', 'HR_MANAGER'].includes(role)) || (viewer.roles.includes('RECRUITER') && r.in_recruiter_scope === 1)),
-          canCancel: ['DRAFT', 'PENDING_APPROVAL', 'REVISION_REQUESTED'].includes(r.status) && (viewer.roles.some(role => ['ADMIN', 'HR_MANAGER'].includes(role)) || (viewer.roles.includes('RECRUITER') && r.in_recruiter_scope === 1))
+          canCancel: ['DRAFT', 'PENDING_APPROVAL', 'REVISION_REQUESTED'].includes(r.status) && (viewer.roles.some(role => ['ADMIN', 'HR_MANAGER'].includes(role)) || (viewer.roles.includes('RECRUITER') && r.in_recruiter_scope === 1)),
+          canRevise: ['REJECTED', 'EXPIRED', 'SENT', 'APPROVED'].includes(r.status) && (viewer.roles.some(role => ['ADMIN', 'HR_MANAGER'].includes(role)) || (viewer.roles.includes('RECRUITER') && r.in_recruiter_scope === 1)),
+          canRecordRejection: ['SENT', 'APPROVED', 'REJECTED'].includes(r.status) && (viewer.roles.some(role => ['ADMIN', 'HR_MANAGER'].includes(role)) || (viewer.roles.includes('RECRUITER') && r.in_recruiter_scope === 1)),
+          canRecommendTalentPool: (['REJECTED'].includes(r.status) || r.candidate_response === 'REJECTED') && viewer.roles.some(role => ['ADMIN', 'HR_MANAGER', 'RECRUITER'].includes(role))
         } : {}
       };
     });
@@ -433,12 +436,51 @@ class OfferService {
       return { success: false, statusCode: 404, code: 'OFFER_NOT_FOUND', message: 'Không tìm thấy Offer hoặc không có quyền truy cập.' };
     }
     const approvalsRes = await this.getOfferApprovals(id, actor);
+
+    let predecessorOffer = null;
+    if (found.predecessorOfferId) {
+      const pRow = await this.db.prepare('SELECT id, salary_monthly, status, rejection_reason_category, created_at FROM offers WHERE id = ?').get(found.predecessorOfferId);
+      if (pRow) {
+        predecessorOffer = {
+          id: pRow.id,
+          salaryMonthly: Number(pRow.salary_monthly),
+          status: pRow.status,
+          rejectionReasonCategory: pRow.rejection_reason_category,
+          createdAt: pRow.created_at
+        };
+      }
+    }
+
+    let supersededByOffer = null;
+    if (found.supersededByOfferId) {
+      const sRow = await this.db.prepare('SELECT id, salary_monthly, status, created_at FROM offers WHERE id = ?').get(found.supersededByOfferId);
+      if (sRow) {
+        supersededByOffer = {
+          id: sRow.id,
+          salaryMonthly: Number(sRow.salary_monthly),
+          status: sRow.status,
+          createdAt: sRow.created_at
+        };
+      }
+    }
+
+    const talentPoolRecommendation = (['REJECTED'].includes(found.status) || found.candidateResponse === 'REJECTED') ? {
+      recommended: true,
+      candidateId: found.candidateId,
+      candidateName: found.candidateName,
+      interestedTitle: found.jobTitleName || found.requisitionTitle,
+      defaultReason: `Ứng viên từ chối offer (${found.rejectionReasonCategory || 'Khác'}${found.candidateComment ? ': ' + found.candidateComment : ''}) - Lưu hồ sơ tiềm năng.`
+    } : null;
+
     return {
       success: true,
       statusCode: 200,
       data: {
         ...found,
-        approvals: approvalsRes.data || []
+        approvals: approvalsRes.data || [],
+        predecessorOffer,
+        supersededByOffer,
+        talentPoolRecommendation
       }
     };
   }
@@ -1588,6 +1630,382 @@ class OfferService {
         }
       };
     });
+  }
+
+  async recordRejectionReason(offerId, data = {}, actor = null) {
+    if (!offerId) return { success: false, statusCode: 400, message: 'Thiếu mã Offer.' };
+    if (!actor) return { success: false, statusCode: 401, code: 'UNAUTHORIZED', message: 'Vui lòng đăng nhập.' };
+
+    const fresh = await this.rbacMiddleware.getAuthorizedActor(actor.id, 'offer.create');
+    if (!fresh) {
+      return { success: false, statusCode: 403, code: 'FORBIDDEN_PERMISSION_DENIED', message: 'Bạn không có quyền cập nhật Offer.' };
+    }
+    actor = { ...actor, ...fresh };
+
+    const catRaw = (data.rejectionReasonCategory || data.category || '').trim();
+    if (!catRaw) {
+      return { success: false, statusCode: 400, code: 'CATEGORY_REQUIRED', message: 'Vui lòng chọn danh mục lý do từ chối.' };
+    }
+    const catMap = {
+      'lương': 'SALARY', 'salary': 'SALARY',
+      'địa điểm': 'LOCATION', 'location': 'LOCATION',
+      'nhận việc nơi khác': 'COMPETITOR', 'nơi khác': 'COMPETITOR', 'competitor': 'COMPETITOR', 'another_offer': 'COMPETITOR',
+      'lý do cá nhân': 'PERSONAL', 'cá nhân': 'PERSONAL', 'personal': 'PERSONAL',
+      'khác': 'OTHER', 'lý do khác': 'OTHER', 'other': 'OTHER'
+    };
+    const category = catMap[catRaw.toLowerCase()] || catRaw.toUpperCase();
+    const VALID_CATEGORIES = ['SALARY', 'LOCATION', 'COMPETITOR', 'PERSONAL', 'OTHER'];
+    if (!VALID_CATEGORIES.includes(category)) {
+      return {
+        success: false,
+        statusCode: 400,
+        code: 'INVALID_REJECTION_CATEGORY',
+        message: 'Danh mục lý do từ chối không hợp lệ. Chỉ chấp nhận SALARY, LOCATION, COMPETITOR, PERSONAL hoặc OTHER.'
+      };
+    }
+
+    const row = await this.db.prepare(`
+      SELECT o.*, c.stage AS candidate_stage, c.full_name AS candidate_name, c.requisition_id AS cand_req_id
+      FROM offers o
+      JOIN candidates c ON o.candidate_id = c.id
+      WHERE o.id = ?
+    `).get(offerId);
+
+    if (!row) {
+      return { success: false, statusCode: 404, code: 'OFFER_NOT_FOUND', message: 'Không tìm thấy Offer.' };
+    }
+
+    const reqId = row.requisition_id || row.cand_req_id;
+    if (!actor.roles.some(role => ['ADMIN', 'HR_MANAGER'].includes(role))) {
+      const access = await this.requisitionService.candidateAccess(row.candidate_id, actor);
+      if (!access.success) return access;
+      if (!await this.requisitionService.recruiterAssigned(reqId, actor.id)) {
+        return { success: false, statusCode: 403, code: 'OFFER_OUT_OF_SCOPE', message: 'Offer không thuộc vị trí được giao cho bạn.' };
+      }
+    }
+
+    const comment = data.notes !== undefined ? String(data.notes).trim() : (data.candidateComment !== undefined ? String(data.candidateComment).trim() : (row.candidate_comment || null));
+
+    const hasUpdatedAt = await this.hasUpdatedAtCol();
+    await this.db.prepare(`
+      UPDATE offers SET
+        rejection_reason_category = ?,
+        candidate_comment = ?,
+        candidate_response = COALESCE(candidate_response, 'REJECTED'),
+        responded_at = COALESCE(responded_at, ${this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')"}),
+        status = CASE WHEN status IN ('SENT', 'APPROVED', 'DRAFT') THEN 'REJECTED' ELSE status END
+        ${hasUpdatedAt ? `, updated_at = ${this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')"}` : ''}
+      WHERE id = ?
+    `).run(category, comment, offerId);
+
+    if (['SENT', 'APPROVED', 'DRAFT'].includes(row.status)) {
+      await this.db.prepare("UPDATE candidates SET stage = 'REJECTED' WHERE id = ?").run(row.candidate_id);
+    }
+
+    return {
+      success: true,
+      statusCode: 200,
+      message: 'Đã ghi nhận lý do từ chối offer thành công.',
+      data: {
+        id: offerId,
+        rejectionReasonCategory: category,
+        candidateComment: comment,
+        status: row.status === 'SUPERSEDED' ? 'SUPERSEDED' : 'REJECTED',
+        talentPoolRecommendation: {
+          recommended: true,
+          candidateId: row.candidate_id,
+          candidateName: row.candidate_name,
+          defaultReason: `Ứng viên từ chối offer (${category}${comment ? ': ' + comment : ''}) - Lưu hồ sơ tiềm năng.`
+        }
+      }
+    };
+  }
+
+  async reviseOffer(offerId, data = {}, actor = null) {
+    if (!offerId) return { success: false, statusCode: 400, message: 'Thiếu mã Offer.' };
+    if (!actor) return { success: false, statusCode: 401, code: 'UNAUTHORIZED', message: 'Vui lòng đăng nhập.' };
+
+    const fresh = await this.rbacMiddleware.getAuthorizedActor(actor.id, 'offer.create');
+    if (!fresh) {
+      return { success: false, statusCode: 403, code: 'FORBIDDEN_PERMISSION_DENIED', message: 'Bạn không có quyền soạn thảo Offer.' };
+    }
+    actor = { ...actor, ...fresh };
+
+    return this.db.transaction(async () => {
+      const lockSql = this.db.provider === 'postgres' ? ' FOR UPDATE OF o' : '';
+      const row = await this.db.prepare(`
+        SELECT
+          o.*,
+          c.full_name AS candidate_name,
+          c.email AS candidate_email,
+          c.phone_number AS candidate_phone,
+          c.requisition_id AS candidate_req_id,
+          c.stage AS candidate_stage,
+          r.title AS requisition_title,
+          r.department_name,
+          r.proposed_salary_max,
+          r.proposed_salary_min,
+          r.job_title_id AS req_jt_id,
+          r.status AS req_status,
+          jt.name AS job_title_name,
+          jt.min_salary,
+          jt.max_salary
+        FROM offers o
+        JOIN candidates c ON o.candidate_id = c.id
+        LEFT JOIN requisitions r ON COALESCE(o.requisition_id, c.requisition_id) = r.id
+        LEFT JOIN job_titles jt ON COALESCE(o.job_title_id, r.job_title_id) = jt.id
+        WHERE o.id = ?${lockSql}
+      `).get(offerId);
+
+      if (!row) {
+        return { success: false, statusCode: 404, code: 'OFFER_NOT_FOUND', message: 'Không tìm thấy Offer.' };
+      }
+
+      if (row.status === 'SUPERSEDED') {
+        return {
+          success: false,
+          statusCode: 400,
+          code: 'OFFER_ALREADY_SUPERSEDED',
+          message: 'Offer này đã được thay thế bởi một offer khác, không thể sửa đổi tiếp.'
+        };
+      }
+
+      if (row.status === 'ACCEPTED') {
+        return {
+          success: false,
+          statusCode: 400,
+          code: 'OFFER_ALREADY_ACCEPTED',
+          message: 'Offer này đã được ứng viên chấp nhận, không thể sửa đổi.'
+        };
+      }
+
+      const reqId = row.requisition_id || row.candidate_req_id;
+      if (!actor.roles.some(role => ['ADMIN', 'HR_MANAGER'].includes(role))) {
+        const access = await this.requisitionService.candidateAccess(row.candidate_id, actor);
+        if (!access.success) return access;
+        if (!await this.requisitionService.recruiterAssigned(reqId, actor.id)) {
+          return { success: false, statusCode: 403, code: 'OFFER_OUT_OF_SCOPE', message: 'Offer không thuộc vị trí được giao cho bạn.' };
+        }
+      }
+
+      if (row.req_status && ['CANCELLED', 'CLOSED'].includes(row.req_status)) {
+        return {
+          success: false,
+          statusCode: 400,
+          code: 'REQUISITION_NOT_ACTIVE',
+          message: 'Vị trí tuyển dụng đã đóng hoặc bị hủy, không thể lập offer sửa đổi.'
+        };
+      }
+
+      const otherActive = await this.db.prepare(`
+        SELECT id FROM offers
+        WHERE candidate_id = ? AND id != ? AND status IN ('DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'SENT')
+      `).get(row.candidate_id, offerId);
+
+      if (otherActive) {
+        return {
+          success: false,
+          statusCode: 409,
+          code: 'ACTIVE_OFFER_ALREADY_EXISTS',
+          message: 'Ứng viên hiện đã có một đề xuất Offer khác đang hiệu lực.'
+        };
+      }
+
+      const salaryMonthly = data.salaryMonthly !== undefined ? parseInt(data.salaryMonthly, 10) : Number(row.salary_monthly);
+      if (!salaryMonthly || isNaN(salaryMonthly) || salaryMonthly <= 0) {
+        return { success: false, statusCode: 400, code: 'INVALID_SALARY', message: 'Mức lương cơ bản không hợp lệ.' };
+      }
+
+      const allowances = data.allowances !== undefined ? parseInt(data.allowances, 10) : Number(row.allowances || 0);
+      const startDate = data.startDate || row.start_date;
+      if (!startDate) {
+        return { success: false, statusCode: 400, code: 'INVALID_START_DATE', message: 'Vui lòng chọn ngày dự kiến nhận việc.' };
+      }
+      const expirationDate = data.expirationDate !== undefined ? data.expirationDate : row.expiration_date;
+      const salaryJustification = data.salaryJustification !== undefined ? data.salaryJustification : row.salary_justification;
+      const notes = data.notes !== undefined ? data.notes : row.notes;
+      const jobTitleId = data.jobTitleId || row.job_title_id || row.req_jt_id || null;
+
+      const minSalary = row.min_salary || row.proposed_salary_min || 0;
+      const maxSalary = row.max_salary || row.proposed_salary_max || 0;
+      const isOutOfBand = (minSalary > 0 && salaryMonthly < minSalary) || (maxSalary > 0 && salaryMonthly > maxSalary);
+      const requiredApprovalLevels = isOutOfBand ? 2 : 1;
+
+      if (isOutOfBand && (!salaryJustification || !salaryJustification.trim())) {
+        return {
+          success: false,
+          statusCode: 400,
+          code: 'JUSTIFICATION_REQUIRED',
+          message: 'Mức lương vượt dải chuẩn yêu cầu phải có giải trình lý do.'
+        };
+      }
+
+      let offerLetter = data.offerLetter;
+      if (!offerLetter || !offerLetter.trim()) {
+        const letter = this.generateOfferLetter({
+          candidateName: row.candidate_name,
+          candidateEmail: row.candidate_email,
+          candidatePhone: row.candidate_phone,
+          jobTitleName: row.job_title_name || row.requisition_title,
+          requisitionTitle: row.requisition_title,
+          departmentName: row.department_name,
+          salaryMonthly,
+          allowances,
+          startDate,
+          expirationDate
+        });
+        offerLetter = letter.html;
+      }
+
+      const newOfferId = crypto.randomUUID();
+      const submitForApproval = Boolean(data.submitForApproval);
+      const initialStatus = submitForApproval ? 'PENDING_APPROVAL' : 'DRAFT';
+
+      const hasUpdatedAt = await this.hasUpdatedAtCol();
+      await this.db.prepare(`
+        UPDATE offers SET
+          status = 'SUPERSEDED'
+          ${hasUpdatedAt ? `, updated_at = ${this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')"}` : ''}
+        WHERE id = ?
+      `).run(offerId);
+
+      const nowSql = this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')";
+      await this.db.prepare(`
+        INSERT INTO offers (
+          id, candidate_id, requisition_id, job_title_id, salary_monthly, allowances,
+          start_date, expiration_date, salary_justification, offer_letter, notes,
+          status, current_approval_level, required_approval_levels, created_by,
+          predecessor_offer_id, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ${nowSql}, ${nowSql})
+      `).run(
+        newOfferId,
+        row.candidate_id,
+        reqId,
+        jobTitleId,
+        salaryMonthly,
+        allowances,
+        startDate,
+        expirationDate,
+        salaryJustification,
+        offerLetter,
+        notes,
+        initialStatus,
+        requiredApprovalLevels,
+        actor.id,
+        offerId
+      );
+
+      await this.db.prepare(`
+        UPDATE offers SET
+          superseded_by_offer_id = ?
+        WHERE id = ?
+      `).run(newOfferId, offerId);
+
+      await this.db.prepare("UPDATE candidates SET stage = 'OFFER' WHERE id = ?").run(row.candidate_id);
+
+      return {
+        success: true,
+        statusCode: 201,
+        message: 'Đã tạo đề xuất Offer sửa đổi thành công.',
+        data: {
+          id: newOfferId,
+          predecessorOfferId: offerId,
+          candidateId: row.candidate_id,
+          requisitionId: reqId,
+          jobTitleId,
+          salaryMonthly,
+          allowances,
+          startDate,
+          expirationDate,
+          salaryJustification,
+          isOutOfBand,
+          currentApprovalLevel: 1,
+          requiredApprovalLevels,
+          status: initialStatus,
+          predecessorOffer: {
+            id: row.id,
+            salaryMonthly: Number(row.salary_monthly),
+            status: 'SUPERSEDED',
+            rejectionReasonCategory: row.rejection_reason_category
+          }
+        }
+      };
+    });
+  }
+
+  async addToTalentPoolFromOffer(offerId, data = {}, actor = null) {
+    if (!offerId) return { success: false, statusCode: 400, message: 'Thiếu mã Offer.' };
+    if (!actor) return { success: false, statusCode: 401, code: 'UNAUTHORIZED', message: 'Vui lòng đăng nhập.' };
+
+    const fresh = await this.rbacMiddleware.getAuthorizedActor(actor.id, 'candidate.update');
+    if (!fresh || !actor.roles.some(role => ['ADMIN', 'HR_MANAGER'].includes(role))) {
+      return { success: false, statusCode: 403, code: 'FORBIDDEN_PERMISSION_DENIED', message: 'Chỉ HR hoặc Quản trị viên có quyền đưa ứng viên vào kho tiềm năng.' };
+    }
+    actor = { ...actor, ...fresh };
+
+    const row = await this.db.prepare(`
+      SELECT
+        o.*,
+        c.stage AS candidate_stage,
+        c.full_name AS candidate_name,
+        r.title AS requisition_title,
+        jt.name AS job_title_name
+      FROM offers o
+      JOIN candidates c ON o.candidate_id = c.id
+      LEFT JOIN requisitions r ON o.requisition_id = r.id
+      LEFT JOIN job_titles jt ON o.job_title_id = jt.id
+      WHERE o.id = ?
+    `).get(offerId);
+
+    if (!row) {
+      return { success: false, statusCode: 404, code: 'OFFER_NOT_FOUND', message: 'Không tìm thấy Offer.' };
+    }
+
+    if (row.status !== 'REJECTED' && row.candidate_response !== 'REJECTED' && row.candidate_stage !== 'REJECTED') {
+      return {
+        success: false,
+        statusCode: 400,
+        code: 'CANDIDATE_NOT_REJECTED',
+        message: 'Chỉ có thể đưa ứng viên đã từ chối hoặc bị loại vào kho tiềm năng.'
+      };
+    }
+
+    if (row.candidate_stage !== 'REJECTED') {
+      await this.db.prepare("UPDATE candidates SET stage = 'REJECTED' WHERE id = ?").run(row.candidate_id);
+    }
+
+    const TalentPoolService = require('./talentPoolService');
+    const talentPoolService = new TalentPoolService(this.db);
+    const interestedTitle = (data.interestedTitle || row.job_title_name || row.requisition_title || 'Ứng viên tiềm năng').trim();
+    const reason = (data.reason || `Ứng viên từ chối offer (${row.rejection_reason_category || 'Khác'}${row.candidate_comment ? ': ' + row.candidate_comment : ''}) - Lưu hồ sơ tiềm năng.`).trim();
+
+    try {
+      const res = await talentPoolService.add({
+        candidateId: row.candidate_id,
+        interestedTitle,
+        reason,
+        finalRoundConfirmed: true
+      }, actor);
+
+      return {
+        success: true,
+        statusCode: res.statusCode || 200,
+        message: 'Đã lưu ứng viên vào kho tiềm năng thành công.',
+        data: {
+          offerId,
+          candidateId: row.candidate_id,
+          talentPoolId: res.id,
+          alreadyInPool: Boolean(res.alreadyInPool)
+        }
+      };
+    } catch (err) {
+      return {
+        success: false,
+        statusCode: err.statusCode || 400,
+        code: err.code || 'TALENT_POOL_ERROR',
+        message: err.message || 'Không thể đưa ứng viên vào kho tiềm năng.'
+      };
+    }
   }
 }
 

@@ -2567,7 +2567,7 @@ async function handleRequest(req, res) {
     return;
   }
 
-  if (req.method === 'GET' && (pathname.startsWith('/api/v1/offers/') || pathname.startsWith('/offers/')) && !pathname.endsWith('/status') && !pathname.endsWith('/preview') && !pathname.endsWith('/approvals') && !pathname.endsWith('/decide') && !pathname.endsWith('/send') && !pathname.startsWith('/api/v1/offers/public') && !pathname.startsWith('/offers/public')) {
+  if (req.method === 'GET' && (pathname.startsWith('/api/v1/offers/') || pathname.startsWith('/offers/')) && !pathname.endsWith('/status') && !pathname.endsWith('/preview') && !pathname.endsWith('/approvals') && !pathname.endsWith('/decide') && !pathname.endsWith('/send') && !pathname.endsWith('/rejection-reason') && !pathname.endsWith('/revise') && !pathname.endsWith('/talent-pool') && !pathname.startsWith('/api/v1/offers/public') && !pathname.startsWith('/offers/public')) {
     const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'offer.read'));
     if (!user) return;
     const offId = pathname.replace(/^\/api\/v1\/offers\//, '').replace(/^\/offers\//, '');
@@ -2675,6 +2675,54 @@ async function handleRequest(req, res) {
     } catch {
       res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Lỗi thực thi.', code: 'BAD_REQUEST' }));
+    }
+    return;
+  }
+
+  if (req.method === 'POST' && ((pathname.startsWith('/api/v1/offers/') && pathname.endsWith('/rejection-reason')) || (pathname.startsWith('/offers/') && pathname.endsWith('/rejection-reason')))) {
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'offer.create'));
+    if (!user) return;
+    try {
+      const offId = pathname.replace(/^\/api\/v1\/offers\//, '').replace(/^\/offers\//, '').replace(/\/rejection-reason$/, '');
+      const body = await parseBody(req);
+      const result = await requisitionService.recordOfferRejectionReason(offId, body, user);
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
+    }
+    return;
+  }
+
+  if (req.method === 'POST' && ((pathname.startsWith('/api/v1/offers/') && pathname.endsWith('/revise')) || (pathname.startsWith('/offers/') && pathname.endsWith('/revise')))) {
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'offer.create'));
+    if (!user) return;
+    try {
+      const offId = pathname.replace(/^\/api\/v1\/offers\//, '').replace(/^\/offers\//, '').replace(/\/revise$/, '');
+      const body = await parseBody(req);
+      const result = await requisitionService.reviseOffer(offId, body, user);
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
+    }
+    return;
+  }
+
+  if (req.method === 'POST' && ((pathname.startsWith('/api/v1/offers/') && pathname.endsWith('/talent-pool')) || (pathname.startsWith('/offers/') && pathname.endsWith('/talent-pool')))) {
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.update'));
+    if (!user) return;
+    try {
+      const offId = pathname.replace(/^\/api\/v1\/offers\//, '').replace(/^\/offers\//, '').replace(/\/talent-pool$/, '');
+      const body = await parseBody(req);
+      const result = await requisitionService.addToTalentPoolFromOffer(offId, body, user);
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
     }
     return;
   }

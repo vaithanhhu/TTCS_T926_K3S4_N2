@@ -857,6 +857,57 @@ async function respondPublicOfferApi(responseToken, responseData) {
   }
 }
 
+async function recordOfferRejectionReasonApi(token, id, data) {
+  try {
+    const response = await fetch(`${API_BASE}/offers/${id}/rejection-reason`, {
+      method: 'POST',
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : '',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+    const resData = await response.json();
+    return { status: response.status, ok: response.ok, data: resData };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi ghi nhận lý do từ chối offer.' } };
+  }
+}
+
+async function reviseOfferApi(token, id, data) {
+  try {
+    const response = await fetch(`${API_BASE}/offers/${id}/revise`, {
+      method: 'POST',
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : '',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+    const resData = await response.json();
+    return { status: response.status, ok: response.ok, data: resData };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi tạo offer sửa đổi.' } };
+  }
+}
+
+async function addOfferToTalentPoolApi(token, id, data) {
+  try {
+    const response = await fetch(`${API_BASE}/offers/${id}/talent-pool`, {
+      method: 'POST',
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : '',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+    const resData = await response.json();
+    return { status: response.status, ok: response.ok, data: resData };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi đưa ứng viên vào kho tiềm năng.' } };
+  }
+}
+
 async function getRecruitmentReportsApi(token) {
   try {
     const response = await fetch(`${API_BASE}/reports/recruitment`, {
@@ -1957,6 +2008,9 @@ window.ATS_API = {
   sendOfferApi,
   getPublicOfferApi,
   respondPublicOfferApi,
+  recordOfferRejectionReasonApi,
+  reviseOfferApi,
+  addOfferToTalentPoolApi,
   getRecruitmentReportsApi,
   getProfileApi,
   updateProfileApi,
