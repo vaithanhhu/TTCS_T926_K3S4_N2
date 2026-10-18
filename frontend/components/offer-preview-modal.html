@@ -1,0 +1,24 @@
+<div id="offer-preview-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="offer-preview-title">
+  <div class="modal-card" style="max-width: 720px; max-height: 90vh; display: flex; flex-direction: column;">
+    <div class="modal-header">
+      <h3 id="offer-preview-title" class="modal-title">Xem Trước Thư Mời Nhận Việc (Offer Letter)</h3>
+      <button type="button" id="close-offer-preview-modal" class="modal-close" aria-label="Đóng">&times;</button>
+    </div>
+    <p class="modal-desc">Bản xem trước thư mời nhận việc chính thức được tạo tự động từ các điều khoản đề xuất.</p>
+
+    <div class="modal-body" style="overflow-y: auto; flex: 1; padding: 12px 0;">
+      <div id="offer-preview-content" style="background: var(--color-bg-page); border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 16px;">
+      </div>
+    </div>
+
+    <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--color-border); padding-top: 12px;">
+      <button type="button" id="btn-copy-offer-letter" class="btn btn-outline btn-sm">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+        <span>Sao chép nội dung</span>
+      </button>
+      <button type="button" id="btn-close-offer-preview" class="btn btn-primary btn-sm">
+        <span>Đóng xem trước</span>
+      </button>
+    </div>
+  </div>
+</div>

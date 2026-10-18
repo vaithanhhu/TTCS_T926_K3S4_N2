@@ -33,25 +33,33 @@
         }
 
         offersTableBody.innerHTML = list.map(o => {
-          const statusBadge = o.status === 'APPROVED' ? 'badge-success' : (o.status === 'PENDING' ? 'badge-warning' : (o.status === 'SENT' ? 'badge-primary' : 'badge-neutral'));
-          const statusText = o.status === 'APPROVED' ? 'Đã phê duyệt' : (o.status === 'PENDING' ? 'Chờ duyệt' : (o.status === 'SENT' ? 'Đã gửi' : o.status));
-          const candName = (o.candidate && o.candidate.fullName) ? o.candidate.fullName : (o.candidate_name || 'Ứng viên');
-          const reqTitle = (o.requisition && o.requisition.title) ? o.requisition.title : (o.requisition_title || 'Vị trí');
+          const isApproved = o.status === 'APPROVED';
+          const isDraft = o.status === 'DRAFT';
+          const isPending = o.status === 'PENDING' || o.status === 'PENDING_APPROVAL';
+          const isSent = o.status === 'SENT';
+          const isAccepted = o.status === 'ACCEPTED';
+          const isRejected = o.status === 'REJECTED';
+
+          const statusBadge = isApproved ? 'badge-success' : (isDraft ? 'badge-neutral' : (isPending ? 'badge-warning' : (isSent ? 'badge-primary' : (isAccepted ? 'badge-success' : 'badge-danger'))));
+          const statusText = isApproved ? 'Đã phê duyệt' : (isDraft ? 'Bản nháp' : (isPending ? 'Chờ duyệt' : (isSent ? 'Đã gửi' : (isAccepted ? 'Đồng ý' : (isRejected ? 'Từ chối' : o.status)))));
+          const candName = (o.candidate && (o.candidate.fullName || o.candidate.full_name)) ? (o.candidate.fullName || o.candidate.full_name) : (o.candidate_name || 'Ứng viên');
+          const reqTitle = (o.requisition && o.requisition.title) ? o.requisition.title : (o.requisition_title || (o.jobTitleName || o.job_title_name) || 'Vị trí');
           const salaryVal = o.salaryMonthly || o.salary_monthly || o.salary;
           const startDateVal = o.startDate || o.start_date;
           const code = o.code || (o.id ? o.id.toUpperCase() : 'OFF');
+          const outOfBandBadge = o.isOutOfBand ? `<span class="badge badge-warning" style="font-size: 0.7rem; margin-left: 4px;" title="Vượt dải chuẩn">Vượt dải</span>` : '';
 
           return `
             <tr>
               <td><code class="font-mono" style="font-weight: 600; color: var(--color-primary);">${escapeHtml(code)}</code></td>
               <td><strong>${escapeHtml(candName)}</strong></td>
               <td>${escapeHtml(reqTitle)}</td>
-              <td style="font-weight: 600; color: var(--color-primary);">${salaryVal ? Number(salaryVal).toLocaleString('vi-VN') + ' đ' : 'Thỏa thuận'}</td>
+              <td style="font-weight: 600; color: var(--color-primary);">${salaryVal ? Number(salaryVal).toLocaleString('vi-VN') + ' đ' : 'Thỏa thuận'}${outOfBandBadge}</td>
               <td>${startDateVal ? new Date(startDateVal).toLocaleDateString('vi-VN') : 'Thỏa thuận'}</td>
               <td><span class="badge ${statusBadge}">${escapeHtml(statusText)}</span></td>
               <td style="text-align: center;">
                 <button type="button" class="btn btn-outline btn-xs" onclick="window.ATS_APP_HELPERS.viewOfferDetails(${escapeHtml(JSON.stringify(o.id))})">
-                  Hồ sơ
+                  Chi tiết
                 </button>
               </td>
             </tr>

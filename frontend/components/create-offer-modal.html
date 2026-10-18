@@ -1,62 +1,105 @@
 <div id="create-offer-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="create-off-title">
-    <div class="modal-card" style="max-width: 580px;">
-      <div class="modal-header">
-        <h3 id="create-off-title" class="modal-title">Lập Thư Mời Nhận Việc (Offer)</h3>
-        <button type="button" id="close-create-offer-modal" class="modal-close" aria-label="Đóng">&times;</button>
-      </div>
-      <p class="modal-desc">Soạn thảo văn bản đề xuất mức lương, ngày nhận việc và chế độ đãi ngộ.</p>
+  <div class="modal-card" style="max-width: 620px;">
+    <div class="modal-header">
+      <h3 id="create-off-title" class="modal-title">Lập Thư Mời Nhận Việc (Offer)</h3>
+      <button type="button" id="close-create-offer-modal" class="modal-close" aria-label="Đóng">&times;</button>
+    </div>
+    <p class="modal-desc">Soạn thảo văn bản đề xuất mức lương, ngày nhận việc, thời hạn phản hồi và chế độ đãi ngộ.</p>
 
-      <div class="modal-body">
-        <div id="create-offer-alert" class="alert-box hidden" role="alert">
-          <div class="alert-icon">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+    <div class="modal-body">
+      <div id="create-offer-alert" class="alert-box hidden" role="alert">
+        <div class="alert-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+        </div>
+        <div class="alert-content">
+          <p id="create-offer-alert-msg" style="margin: 0;"></p>
+        </div>
+      </div>
+
+      <form id="create-offer-form">
+        <input type="hidden" id="create-offer-id" />
+
+        <div class="form-group">
+          <label for="create-offer-cand-select" class="form-label">Chọn ứng viên tiếp nhận <span class="required">*</span></label>
+          <select id="create-offer-cand-select" class="form-input" required>
+            <option value="">-- Chọn ứng viên --</option>
+          </select>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div class="form-group">
+            <label for="create-offer-req-select" class="form-label">Vị trí tuyển dụng</label>
+            <select id="create-offer-req-select" class="form-input">
+              <option value="">-- Theo vị trí tuyển dụng --</option>
+            </select>
           </div>
-          <div class="alert-content">
-            <p id="create-offer-alert-msg" style="margin: 0;"></p>
+          <div class="form-group">
+            <label for="create-offer-job-title-select" class="form-label">Chức danh chuẩn</label>
+            <select id="create-offer-job-title-select" class="form-input">
+              <option value="">-- Theo chức danh chuẩn --</option>
+            </select>
           </div>
         </div>
 
-        <form id="create-offer-form">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
           <div class="form-group">
-            <label for="create-offer-cand-select" class="form-label">Chọn ứng viên tiếp nhận <span class="required">*</span></label>
-            <select id="create-offer-cand-select" class="form-input" required>
-              <option value="">-- Chọn ứng viên --</option>
+            <label for="create-offer-salary" class="form-label">Lương cơ bản hàng tháng (VNĐ) <span class="required">*</span></label>
+            <input type="number" id="create-offer-salary" class="form-input" placeholder="25000000" min="1000000" step="500000" required />
+            <div id="create-offer-salary-band-info" style="font-size: 0.8rem; margin-top: 4px; color: var(--color-text-muted);"></div>
+          </div>
+          <div class="form-group">
+            <label for="create-offer-allowances" class="form-label">Phụ cấp hàng tháng (VNĐ)</label>
+            <input type="number" id="create-offer-allowances" class="form-input" placeholder="0" min="0" step="100000" />
+          </div>
+        </div>
+
+        <div id="create-offer-justification-group" class="form-group hidden" style="background: #fffaf0; border: 1px solid #feebc8; border-radius: var(--radius-sm); padding: 10px;">
+          <label for="create-offer-justification" class="form-label" style="color: #c05621; font-weight: 600;">
+            Giải trình mức lương ngoài dải chuẩn <span class="required">*</span>
+          </label>
+          <p style="margin: 0 0 6px 0; font-size: 0.8rem; color: #7b341e;">Mức lương đề xuất nằm ngoài dải lương chuẩn của chức danh. Vui lòng nhập lý do giải trình chi tiết.</p>
+          <textarea id="create-offer-justification" class="form-input" rows="2" placeholder="Nêu lý do đặc biệt về kinh nghiệm, năng lực hoặc thị trường..."></textarea>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div class="form-group">
+            <label for="create-offer-start-date" class="form-label">Ngày dự kiến nhận việc <span class="required">*</span></label>
+            <input type="date" id="create-offer-start-date" class="form-input" required />
+          </div>
+          <div class="form-group">
+            <label for="create-offer-expiration-date" class="form-label">Thời hạn phản hồi offer <span class="required">*</span></label>
+            <input type="date" id="create-offer-expiration-date" class="form-input" required />
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div class="form-group">
+            <label for="create-offer-approver-select" class="form-label">Cấp quản lý phê duyệt</label>
+            <select id="create-offer-approver-select" class="form-input">
+              <option value="">-- Chọn người phê duyệt --</option>
             </select>
           </div>
-
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-            <div class="form-group">
-              <label for="create-offer-req-select" class="form-label">Vị trí tuyển dụng</label>
-              <select id="create-offer-req-select" class="form-input">
-                <option value="">-- Theo vị trí tuyển dụng --</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="create-offer-salary" class="form-label">Mức lương hàng tháng (VNĐ) <span class="required">*</span></label>
-              <input type="number" id="create-offer-salary" class="form-input" placeholder="25000000" min="1000000" step="500000" required />
-            </div>
+          <div class="form-group">
+            <label for="create-offer-notes" class="form-label">Ghi chú nội bộ</label>
+            <input type="text" id="create-offer-notes" class="form-input" placeholder="Ghi chú thêm..." />
           </div>
+        </div>
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-            <div class="form-group">
-              <label for="create-offer-start-date" class="form-label">Ngày dự kiến nhận việc</label>
-              <input type="date" id="create-offer-start-date" class="form-input" />
-            </div>
-            <div class="form-group">
-              <label for="create-offer-approver-select" class="form-label">Cấp quản lý phê duyệt</label>
-              <select id="create-offer-approver-select" class="form-input">
-                <option value="">-- Chọn người phê duyệt --</option>
-              </select>
-            </div>
-          </div>
-
-          <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 10px;">
-            <button type="button" id="cancel-create-offer-btn" class="btn btn-outline btn-sm">Hủy bỏ</button>
-            <button type="submit" id="submit-create-offer-btn" class="btn btn-primary btn-sm">
-              <span>Lưu & Chuyển phê duyệt</span>
-            </button>
-          </div>
-        </form>
-      </div>
+        <div style="margin-top: 16px; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; border-top: 1px solid var(--color-border); padding-top: 12px;">
+          <button type="button" id="preview-offer-btn" class="btn btn-outline btn-sm" style="margin-right: auto;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            <span>Xem trước</span>
+          </button>
+          <button type="button" id="cancel-create-offer-btn" class="btn btn-outline btn-sm">Hủy bỏ</button>
+          <button type="button" id="save-draft-offer-btn" class="btn btn-outline btn-sm" style="color: var(--color-primary); border-color: var(--color-primary);">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+            <span>Lưu nháp</span>
+          </button>
+          <button type="submit" id="submit-create-offer-btn" class="btn btn-primary btn-sm">
+            <span>Lưu & Chuyển phê duyệt</span>
+          </button>
+        </div>
+      </form>
     </div>
   </div>
+</div>

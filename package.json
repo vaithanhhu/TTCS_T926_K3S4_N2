@@ -130,7 +130,9 @@
     "migrate:s7-02": "node backend/src/db/migrate-interview-question-suggestions.js",
     "test:s7-02": "node backend/tests/test_s7_02_interview_question_suggestions.js",
     "migrate:s7-03": "node backend/src/db/migrate-hiring-decisions.js",
-    "test:s7-03": "node backend/tests/test_s7_03_hiring_decisions.js"
+    "test:s7-03": "node backend/tests/test_s7_03_hiring_decisions.js",
+    "migrate:s7-04": "node backend/src/db/migrate-offer-proposals.js",
+    "test:s7-04": "node backend/tests/test_s7_04_offer_proposals.js"
   },
   "keywords": [
     "ats",

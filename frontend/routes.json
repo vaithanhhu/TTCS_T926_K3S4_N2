@@ -296,6 +296,7 @@
     "/components/interview-evaluation-modal.html",
     "/components/candidate-comparison-modal.html",
     "/components/create-offer-modal.html",
+    "/components/offer-preview-modal.html",
     "/components/offer-detail-modal.html",
     "/components/requisition-detail-modal.html",
     "/components/admin-reset-pwd-modal.html",
