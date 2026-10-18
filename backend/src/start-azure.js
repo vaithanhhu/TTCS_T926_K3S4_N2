@@ -54,11 +54,13 @@ async function main() {
   const profilePath = path.join(profileDirectory, 'profile.json');
   if (!fs.existsSync(control) || !fs.existsSync(profilePath)) throw Error('AZURE_PROFILE_MISSING');
   const profile = JSON.parse(fs.readFileSync(profilePath, 'utf8'));
-  if (path.resolve(profile.workspace).toLowerCase() !== workspace.toLowerCase()) throw Error('AZURE_PROFILE_WORKSPACE_MISMATCH');
+  const primaryWorkspace = path.resolve(profile.workspace);
+  const isWorktree = workspace.toLowerCase().startsWith(path.join(primaryWorkspace, '.local', 'worktrees').toLowerCase());
+  if (primaryWorkspace.toLowerCase() !== workspace.toLowerCase() && !isWorktree) throw Error('AZURE_PROFILE_WORKSPACE_MISMATCH');
   if (profile.database !== 'ats_migration_validation_7cd908a1' || profile.testDatabase !== 'ats_migration_validation_9ed91916' || profile.httpPort !== 5051) throw Error('AZURE_PROFILE_TARGET_MISMATCH');
   for (const file of [profile.secretFile, profile.caFile, profile.ssh?.keyPath]) {
     if (!file || !path.isAbsolute(file) || !fs.existsSync(file)) throw Error('AZURE_PROFILE_RESOURCE_MISSING');
-    const relative = path.relative(workspace, fs.realpathSync(file));
+    const relative = path.relative(primaryWorkspace, fs.realpathSync(file));
     if (!relative.startsWith('..' + path.sep) && !path.isAbsolute(relative)) throw Error('AZURE_SECRET_RESOURCE_IN_REPOSITORY');
   }
   const operation = process.argv.includes('--stop') ? 'stop' : process.argv.includes('--status') ? 'status' : process.argv.includes('--test') ? 'test' : 'start';
