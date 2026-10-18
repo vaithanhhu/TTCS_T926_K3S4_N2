@@ -814,6 +814,49 @@ async function getOfferApprovalsApi(token, id) {
   }
 }
 
+async function sendOfferApi(token, id) {
+  try {
+    const response = await fetch(`${API_BASE}/offers/${id}/send`, {
+      method: 'POST',
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : ''
+      }
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi gửi offer.' } };
+  }
+}
+
+async function getPublicOfferApi(responseToken) {
+  try {
+    const response = await fetch(`${API_BASE}/public/offers/${responseToken}`, {
+      method: 'GET'
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi lấy thông tin thư mời nhận việc.' } };
+  }
+}
+
+async function respondPublicOfferApi(responseToken, responseData) {
+  try {
+    const response = await fetch(`${API_BASE}/public/offers/${responseToken}/respond`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(responseData)
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi gửi phản hồi offer.' } };
+  }
+}
+
 async function getRecruitmentReportsApi(token) {
   try {
     const response = await fetch(`${API_BASE}/reports/recruitment`, {
@@ -1911,6 +1954,9 @@ window.ATS_API = {
   validateOfferSalaryApi,
   decideOfferApi,
   getOfferApprovalsApi,
+  sendOfferApi,
+  getPublicOfferApi,
+  respondPublicOfferApi,
   getRecruitmentReportsApi,
   getProfileApi,
   updateProfileApi,

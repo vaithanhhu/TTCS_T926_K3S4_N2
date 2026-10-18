@@ -71,6 +71,22 @@ class OfferService {
     return this._hasApprovalsTable;
   }
 
+  async hasDeliveryCols() {
+    if (this._hasDeliveryCols !== undefined) return this._hasDeliveryCols;
+    try {
+      if (this.db.provider === 'postgres') {
+        const row = await this.db.prepare("SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='offers' AND column_name='response_token'").get();
+        this._hasDeliveryCols = Boolean(row);
+      } else {
+        const cols = (await this.db.prepare("PRAGMA table_info(offers)").all()).map(c => c.name);
+        this._hasDeliveryCols = cols.includes('response_token');
+      }
+    } catch {
+      this._hasDeliveryCols = false;
+    }
+    return this._hasDeliveryCols;
+  }
+
   formatCurrency(amount) {
     if (amount === null || amount === undefined || isNaN(amount)) return 'Thỏa thuận';
     return Number(amount).toLocaleString('vi-VN');
@@ -185,6 +201,7 @@ class OfferService {
   }
 
   async getOffers(options = {}) {
+    await this.expireOverdueOffers();
     let viewer = options.viewer;
     if (viewer) {
       const fresh = await this.rbacMiddleware.getAuthorizedActor(viewer.id, 'offer.read');
@@ -245,6 +262,7 @@ class OfferService {
 
     const hasCols = await this.hasProposalCols();
     const hasApprovalCols = await this.hasApprovalCols();
+    const hasDeliveryCols = await this.hasDeliveryCols();
 
     const stmt = this.db.prepare(`
       SELECT
@@ -253,6 +271,7 @@ class OfferService {
         o.requisition_id,
         ${hasCols ? 'o.job_title_id, o.allowances, o.expiration_date, o.salary_justification, o.offer_letter, o.notes, o.created_by, o.updated_at,' : 'NULL AS job_title_id, 0 AS allowances, NULL AS expiration_date, NULL AS salary_justification, NULL AS offer_letter, NULL AS notes, NULL AS created_by, o.created_at AS updated_at,'}
         ${hasApprovalCols ? 'o.current_approval_level, o.required_approval_levels,' : '1 AS current_approval_level, 1 AS required_approval_levels,'}
+        ${hasDeliveryCols ? 'o.sent_at, o.sent_by, o.response_token, o.token_expires_at, o.responded_at, o.candidate_response, o.candidate_comment, o.rejection_reason_category, o.predecessor_offer_id, o.superseded_by_offer_id,' : 'NULL AS sent_at, NULL AS sent_by, NULL AS response_token, NULL AS token_expires_at, NULL AS responded_at, NULL AS candidate_response, NULL AS candidate_comment, NULL AS rejection_reason_category, NULL AS predecessor_offer_id, NULL AS superseded_by_offer_id,'}
         o.salary_monthly,
         o.start_date,
         o.status,
@@ -363,13 +382,33 @@ class OfferService {
         created_at: r.created_at,
         updatedAt: r.updated_at,
         updated_at: r.updated_at,
+        sentAt: r.sent_at,
+        sent_at: r.sent_at,
+        sentBy: r.sent_by,
+        sent_by: r.sent_by,
+        responseToken: r.response_token,
+        response_token: r.response_token,
+        tokenExpiresAt: r.token_expires_at,
+        token_expires_at: r.token_expires_at,
+        respondedAt: r.responded_at,
+        responded_at: r.responded_at,
+        candidateResponse: r.candidate_response,
+        candidate_response: r.candidate_response,
+        candidateComment: r.candidate_comment,
+        candidate_comment: r.candidate_comment,
+        rejectionReasonCategory: r.rejection_reason_category,
+        rejection_reason_category: r.rejection_reason_category,
+        predecessorOfferId: r.predecessor_offer_id,
+        predecessor_offer_id: r.predecessor_offer_id,
+        supersededByOfferId: r.superseded_by_offer_id,
+        superseded_by_offer_id: r.superseded_by_offer_id,
         capabilities: viewer ? {
           canApprove: (r.status === 'PENDING_APPROVAL' || (!hasCols && !hasApprovalCols)) && (
             (curLevel === 2)
               ? viewer.roles.includes('ADMIN')
               : (viewer.roles.some(role => ['ADMIN', 'HR_MANAGER'].includes(role)) || (viewer.roles.includes('APPROVER') && r.approver_id === viewer.id))
           ),
-          canSend: viewer.roles.some(role => ['ADMIN', 'HR_MANAGER'].includes(role)) || (viewer.roles.includes('RECRUITER') && r.in_recruiter_scope === 1),
+          canSend: r.status === 'APPROVED' && (viewer.roles.some(role => ['ADMIN', 'HR_MANAGER'].includes(role)) || (viewer.roles.includes('RECRUITER') && r.in_recruiter_scope === 1)),
           canAccept: r.status === 'SENT' && viewer.roles.every(role => role === 'CANDIDATE') && r.candidate_email.toLowerCase() === viewer.email.toLowerCase(),
           canEdit: ['DRAFT', 'PENDING_APPROVAL', 'REVISION_REQUESTED'].includes(r.status) && (viewer.roles.some(role => ['ADMIN', 'HR_MANAGER'].includes(role)) || (viewer.roles.includes('RECRUITER') && r.in_recruiter_scope === 1)),
           canCancel: ['DRAFT', 'PENDING_APPROVAL', 'REVISION_REQUESTED'].includes(r.status) && (viewer.roles.some(role => ['ADMIN', 'HR_MANAGER'].includes(role)) || (viewer.roles.includes('RECRUITER') && r.in_recruiter_scope === 1))
@@ -902,10 +941,15 @@ class OfferService {
       return { success: false, statusCode: 404, message: 'Không tìm thấy offer.' };
     }
 
-    if (status === 'APPROVED') {
+    if (status === 'ACCEPTED') {
       const off = await this.db.prepare('SELECT candidate_id FROM offers WHERE id = ?').get(id);
       if (off && off.candidate_id) {
         await this.db.prepare("UPDATE candidates SET stage = 'HIRED' WHERE id = ?").run(off.candidate_id);
+      }
+    } else if (status === 'APPROVED') {
+      const off = await this.db.prepare('SELECT candidate_id FROM offers WHERE id = ?').get(id);
+      if (off && off.candidate_id) {
+        await this.db.prepare("UPDATE candidates SET stage = 'OFFER' WHERE id = ?").run(off.candidate_id);
       }
     }
     return { success: true, statusCode: 200, message: 'Cập nhật trạng thái offer thành công.' };
@@ -1090,7 +1134,7 @@ class OfferService {
       `).run(actor.id, offerId);
 
       if (row.candidate_id) {
-        await this.db.prepare("UPDATE candidates SET stage = 'HIRED' WHERE id = ?").run(row.candidate_id);
+        await this.db.prepare("UPDATE candidates SET stage = 'OFFER' WHERE id = ?").run(row.candidate_id);
       }
 
       return {
@@ -1148,6 +1192,402 @@ class OfferService {
         createdAt: r.created_at
       }))
     };
+  }
+
+  async expireOverdueOffers() {
+    try {
+      const hasDelivery = await this.hasDeliveryCols();
+      const hasUpdatedAt = await this.hasUpdatedAtCol();
+      if (hasDelivery) {
+        const query = this.db.provider === 'postgres'
+          ? `UPDATE offers SET status = 'EXPIRED', updated_at = CURRENT_TIMESTAMP WHERE status = 'SENT' AND ((token_expires_at IS NOT NULL AND token_expires_at < CURRENT_TIMESTAMP) OR (expiration_date IS NOT NULL AND expiration_date < CURRENT_DATE))`
+          : `UPDATE offers SET status = 'EXPIRED' ${hasUpdatedAt ? ", updated_at = datetime('now')" : ""} WHERE status = 'SENT' AND ((token_expires_at IS NOT NULL AND token_expires_at < datetime('now')) OR (expiration_date IS NOT NULL AND date(expiration_date) < date('now')))`;
+        const res = await this.db.prepare(query).run();
+        return res.changes || 0;
+      }
+    } catch {
+      return 0;
+    }
+  }
+
+  async sendOffer(offerId, actor = null) {
+    if (!offerId) return { success: false, statusCode: 400, message: 'Thiếu mã Offer.' };
+    if (!actor) {
+      return { success: false, statusCode: 401, code: 'UNAUTHORIZED', message: 'Vui lòng đăng nhập.' };
+    }
+
+    const fresh = await this.rbacMiddleware.getAuthorizedActor(actor.id, 'offer.create');
+    if (!fresh) {
+      return { success: false, statusCode: 403, code: 'FORBIDDEN_PERMISSION_DENIED', message: 'Bạn không có quyền gửi Offer.' };
+    }
+    actor = { ...actor, ...fresh };
+
+    await this.expireOverdueOffers();
+
+    return this.db.transaction(async () => {
+      const lockSql = this.db.provider === 'postgres' ? ' FOR UPDATE OF o' : '';
+      const row = await this.db.prepare(`
+        SELECT
+          o.*,
+          c.full_name AS candidate_name,
+          c.email AS candidate_email,
+          c.phone_number AS candidate_phone,
+          c.requisition_id AS candidate_req_id,
+          r.title AS requisition_title,
+          r.department_name,
+          jt.name AS job_title_name
+        FROM offers o
+        JOIN candidates c ON o.candidate_id = c.id
+        LEFT JOIN requisitions r ON COALESCE(o.requisition_id, c.requisition_id) = r.id
+        LEFT JOIN job_titles jt ON COALESCE(o.job_title_id, r.job_title_id) = jt.id
+        WHERE o.id = ?${lockSql}
+      `).get(offerId);
+
+      if (!row) {
+        return { success: false, statusCode: 404, code: 'OFFER_NOT_FOUND', message: 'Không tìm thấy Offer.' };
+      }
+
+      if (row.status === 'SENT') {
+        return { success: false, statusCode: 400, code: 'OFFER_ALREADY_SENT', message: 'Offer đã được gửi đến ứng viên trước đó.' };
+      }
+
+      if (row.status !== 'APPROVED') {
+        return {
+          success: false,
+          statusCode: 400,
+          code: 'OFFER_NOT_APPROVED',
+          message: 'Chỉ được gửi thư mời nhận việc cho Offer đã hoàn tất phê duyệt.'
+        };
+      }
+
+      const reqId = row.requisition_id || row.candidate_req_id;
+      if (!actor.roles.some(role => ['ADMIN', 'HR_MANAGER'].includes(role))) {
+        const access = await this.requisitionService.candidateAccess(row.candidate_id, actor);
+        if (!access.success) return access;
+        if (!await this.requisitionService.recruiterAssigned(reqId, actor.id)) {
+          return { success: false, statusCode: 403, code: 'OFFER_OUT_OF_SCOPE', message: 'Offer không thuộc vị trí được giao cho bạn.' };
+        }
+      }
+
+      const responseToken = crypto.randomBytes(32).toString('hex');
+      let tokenExpiresAt = null;
+      if (row.expiration_date) {
+        if (row.expiration_date instanceof Date) {
+          tokenExpiresAt = row.expiration_date.toISOString();
+        } else {
+          const expStr = String(row.expiration_date).trim();
+          tokenExpiresAt = expStr.includes('T') ? expStr : `${expStr}T23:59:59.999Z`;
+        }
+      } else {
+        tokenExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      }
+
+      const hasDelivery = await this.hasDeliveryCols();
+      const hasUpdatedAt = await this.hasUpdatedAtCol();
+
+      if (hasDelivery) {
+        await this.db.prepare(`
+          UPDATE offers SET
+            status = 'SENT',
+            sent_at = ${this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')"},
+            sent_by = ?,
+            response_token = ?,
+            token_expires_at = ?
+            ${hasUpdatedAt ? `, updated_at = ${this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')"}` : ''}
+          WHERE id = ? AND status = 'APPROVED'
+        `).run(actor.id, responseToken, tokenExpiresAt, offerId);
+      } else {
+        await this.db.prepare(`
+          UPDATE offers SET
+            status = 'SENT'
+            ${hasUpdatedAt ? `, updated_at = ${this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')"}` : ''}
+          WHERE id = ? AND status = 'APPROVED'
+        `).run(offerId);
+      }
+
+      await this.db.prepare("UPDATE candidates SET stage = 'OFFER' WHERE id = ?").run(row.candidate_id);
+
+      const appUrl = process.env.APP_URL || 'http://localhost:3000';
+      const responseUrl = `${appUrl}/candidate-offer.html?token=${responseToken}`;
+
+      let emailSent = false;
+      try {
+        const emailService = require('./emailService').getEmailService(this.db);
+        const candName = row.candidate_name || 'Ứng viên';
+        const jobTitle = row.job_title_name || row.requisition_title || 'Vị trí tuyển dụng';
+        const deptName = row.department_name || 'Công ty';
+        const salaryFormatted = this.formatCurrency(row.salary_monthly);
+        const allowancesFormatted = row.allowances ? this.formatCurrency(row.allowances) + ' VNĐ / tháng' : 'Không có';
+        const startDateFormatted = this.formatDate(row.start_date);
+        const expDateFormatted = this.formatDate(row.expiration_date || tokenExpiresAt);
+
+        const emailSubject = `[ATS] Thư mời nhận việc (Job Offer Letter) - ${jobTitle}`;
+        const emailHtml = `
+          <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1a202c; max-width: 680px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff;">
+            <div style="text-align: center; border-bottom: 2px solid #2563eb; padding-bottom: 16px; margin-bottom: 20px;">
+              <h3 style="margin: 0; text-transform: uppercase; letter-spacing: 1px; color: #1e3a8a;">HỆ THỐNG TUYỂN DỤNG ATS</h3>
+              <h2 style="margin: 12px 0 0 0; color: #2563eb; font-size: 1.4rem;">THƯ MỜI NHẬN VIỆC (JOB OFFER LETTER)</h2>
+            </div>
+            <p>Kính gửi: <strong>${candName}</strong>,</p>
+            <p>Chúng tôi rất vui mừng thông báo Ông/Bà đã trúng tuyển vị trí <strong>${jobTitle}</strong> tại <strong>${deptName}</strong>.</p>
+            <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+              <tbody>
+                <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; color: #4a5568; width: 40%;">Vị trí / Chức danh:</td><td style="padding: 8px 0; font-weight: 600;">${jobTitle}</td></tr>
+                <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; color: #4a5568;">Bộ phận / Phòng ban:</td><td style="padding: 8px 0; font-weight: 600;">${deptName}</td></tr>
+                <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; color: #4a5568;">Mức lương hàng tháng:</td><td style="padding: 8px 0; font-weight: 600; color: #2563eb;">${salaryFormatted} VNĐ</td></tr>
+                <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; color: #4a5568;">Phụ cấp:</td><td style="padding: 8px 0;">${allowancesFormatted}</td></tr>
+                <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; color: #4a5568;">Ngày dự kiến nhận việc:</td><td style="padding: 8px 0; font-weight: 600;">${startDateFormatted}</td></tr>
+                <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; color: #4a5568;">Thời hạn phản hồi:</td><td style="padding: 8px 0; font-weight: 600; color: #dc2626;">${expDateFormatted}</td></tr>
+              </tbody>
+            </table>
+            <div style="background: #f8fafc; border-left: 4px solid #2563eb; padding: 12px 16px; margin: 20px 0; border-radius: 4px;">
+              <p style="margin: 0; font-weight: 600; color: #1e293b;">Nội dung thư mời:</p>
+              <div style="white-space: pre-wrap; font-size: 0.9rem; color: #475569; margin-top: 8px;">${row.offer_letter || ''}</div>
+            </div>
+            <div style="text-align: center; margin: 32px 0;">
+              <a href="${responseUrl}" style="background-color: #2563eb; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 700; font-size: 1rem; display: inline-block;">
+                👉 Xem và Phản hồi Thư Mời Nhận Việc
+              </a>
+            </div>
+            <p style="font-size: 0.85rem; color: #64748b; text-align: center;">
+              Nếu nút trên không mở được, vui lòng truy cập đường dẫn sau:<br/>
+              <span style="color: #2563eb; word-break: break-all;">${responseUrl}</span>
+            </p>
+            <p style="font-size: 0.85rem; color: #94a3b8; margin-top: 24px; border-top: 1px solid #e2e8f0; padding-top: 12px; text-align: center;">
+              Liên kết này dành riêng cho bạn và sẽ hết hiệu lực sau ngày ${expDateFormatted}.
+            </p>
+          </div>
+        `;
+        const emailText = `Kính gửi ${candName},\n\nChúng tôi trân trọng gửi tới bạn Thư mời nhận việc cho vị trí ${jobTitle} tại ${deptName}.\nMức lương: ${salaryFormatted} VNĐ\nNgày dự kiến nhận việc: ${startDateFormatted}\nThời hạn phản hồi: ${expDateFormatted}\n\nVui lòng truy cập đường dẫn sau để phản hồi thư mời:\n${responseUrl}\n\nTrân trọng,\nPhòng Tuyển dụng`;
+
+        const mailRes = await emailService.sendMail({
+          to: row.candidate_email,
+          subject: emailSubject,
+          html: emailHtml,
+          text: emailText,
+          templateName: 'OFFER_DELIVERY'
+        });
+        emailSent = Boolean(mailRes.success);
+      } catch {
+        emailSent = false;
+      }
+
+      return {
+        success: true,
+        statusCode: 200,
+        message: 'Đã gửi thư mời nhận việc đến ứng viên thành công.',
+        data: {
+          id: offerId,
+          status: 'SENT',
+          responseToken,
+          tokenExpiresAt,
+          sentAt: new Date().toISOString(),
+          emailSent
+        }
+      };
+    });
+  }
+
+  async getOfferByToken(token) {
+    if (!token || typeof token !== 'string' || !token.trim()) {
+      return { success: false, statusCode: 400, code: 'INVALID_TOKEN', message: 'Mã phản hồi không hợp lệ.' };
+    }
+    const cleanToken = token.trim();
+    const hasDelivery = await this.hasDeliveryCols();
+    if (!hasDelivery) {
+      return { success: false, statusCode: 404, code: 'OFFER_NOT_FOUND', message: 'Không tìm thấy Offer.' };
+    }
+
+    const row = await this.db.prepare(`
+      SELECT
+        o.*,
+        c.full_name AS candidate_name,
+        c.email AS candidate_email,
+        r.title AS requisition_title,
+        r.department_name,
+        jt.name AS job_title_name
+      FROM offers o
+      JOIN candidates c ON o.candidate_id = c.id
+      LEFT JOIN requisitions r ON COALESCE(o.requisition_id, c.requisition_id) = r.id
+      LEFT JOIN job_titles jt ON COALESCE(o.job_title_id, r.job_title_id) = jt.id
+      WHERE o.response_token = ?
+    `).get(cleanToken);
+
+    if (!row) {
+      return { success: false, statusCode: 404, code: 'OFFER_NOT_FOUND', message: 'Liên kết không tồn tại hoặc không hợp lệ.' };
+    }
+
+    let isExpired = row.status === 'EXPIRED';
+    if (!isExpired && row.status === 'SENT') {
+      const now = new Date();
+      if (row.token_expires_at && new Date(row.token_expires_at) < now) {
+        isExpired = true;
+      } else if (row.expiration_date) {
+        const expDate = row.expiration_date instanceof Date
+          ? row.expiration_date
+          : new Date(String(row.expiration_date).includes('T') ? row.expiration_date : `${row.expiration_date}T23:59:59.999Z`);
+        if (expDate < now) isExpired = true;
+      }
+      if (isExpired) {
+        const hasUpdatedAt = await this.hasUpdatedAtCol();
+        await this.db.prepare(`
+          UPDATE offers SET
+            status = 'EXPIRED'
+            ${hasUpdatedAt ? `, updated_at = ${this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')"}` : ''}
+          WHERE id = ?
+        `).run(row.id);
+        row.status = 'EXPIRED';
+      }
+    }
+
+    const isResponded = ['ACCEPTED', 'REJECTED'].includes(row.status) || Boolean(row.responded_at);
+
+    return {
+      success: true,
+      statusCode: 200,
+      data: {
+        id: row.id,
+        candidateName: row.candidate_name,
+        candidateEmail: row.candidate_email,
+        jobTitleName: row.job_title_name || row.requisition_title,
+        departmentName: row.department_name,
+        salaryMonthly: Number(row.salary_monthly),
+        allowances: Number(row.allowances || 0),
+        startDate: row.start_date,
+        expirationDate: row.expiration_date,
+        tokenExpiresAt: row.token_expires_at,
+        offerLetter: row.offer_letter,
+        status: row.status,
+        isExpired,
+        isResponded,
+        candidateResponse: row.candidate_response,
+        candidateComment: row.candidate_comment,
+        respondedAt: row.responded_at
+      }
+    };
+  }
+
+  async respondOffer(token, data = {}) {
+    if (!token || typeof token !== 'string' || !token.trim()) {
+      return { success: false, statusCode: 400, code: 'INVALID_TOKEN', message: 'Mã phản hồi không hợp lệ.' };
+    }
+    const cleanToken = token.trim();
+    let decision = (data.decision || '').toUpperCase().trim();
+    if (decision === 'ACCEPT') decision = 'ACCEPTED';
+    if (decision === 'REJECT' || decision === 'DECLINE') decision = 'REJECTED';
+
+    if (!['ACCEPTED', 'REJECTED'].includes(decision)) {
+      return {
+        success: false,
+        statusCode: 400,
+        code: 'INVALID_DECISION',
+        message: 'Quyết định không hợp lệ. Chỉ chấp nhận ACCEPTED hoặc REJECTED.'
+      };
+    }
+
+    const comment = data.comment !== undefined && data.comment !== null ? String(data.comment).trim() : null;
+    const rejectionReasonCategory = data.rejectionReasonCategory || null;
+
+    const hasDelivery = await this.hasDeliveryCols();
+    if (!hasDelivery) {
+      return { success: false, statusCode: 404, code: 'OFFER_NOT_FOUND', message: 'Không tìm thấy Offer.' };
+    }
+
+    return this.db.transaction(async () => {
+      const lockSql = this.db.provider === 'postgres' ? ' FOR UPDATE OF o' : '';
+      const row = await this.db.prepare(`
+        SELECT o.*, c.id AS cand_id, c.stage AS candidate_stage
+        FROM offers o
+        JOIN candidates c ON o.candidate_id = c.id
+        WHERE o.response_token = ?${lockSql}
+      `).get(cleanToken);
+
+      if (!row) {
+        return { success: false, statusCode: 404, code: 'OFFER_NOT_FOUND', message: 'Liên kết không tồn tại hoặc không hợp lệ.' };
+      }
+
+      if (['ACCEPTED', 'REJECTED'].includes(row.status) || row.responded_at) {
+        return {
+          success: false,
+          statusCode: 409,
+          code: 'OFFER_ALREADY_RESPONDED',
+          message: 'Offer đã được phản hồi trước đó, không thể thay đổi quyết định.'
+        };
+      }
+
+      const now = new Date();
+      let isExpired = row.status === 'EXPIRED';
+      if (!isExpired) {
+        if (row.token_expires_at && new Date(row.token_expires_at) < now) {
+          isExpired = true;
+        } else if (row.expiration_date) {
+          const expDate = row.expiration_date instanceof Date
+            ? row.expiration_date
+            : new Date(String(row.expiration_date).includes('T') ? row.expiration_date : `${row.expiration_date}T23:59:59.999Z`);
+          if (expDate < now) isExpired = true;
+        }
+      }
+
+      if (isExpired) {
+        const hasUpdatedAt = await this.hasUpdatedAtCol();
+        await this.db.prepare(`
+          UPDATE offers SET
+            status = 'EXPIRED'
+            ${hasUpdatedAt ? `, updated_at = ${this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')"}` : ''}
+          WHERE id = ?
+        `).run(row.id);
+
+        return {
+          success: false,
+          statusCode: 410,
+          code: 'OFFER_EXPIRED',
+          message: 'Thời hạn phản hồi Offer đã kết thúc, không thể gửi phản hồi.'
+        };
+      }
+
+      if (row.status !== 'SENT') {
+        return {
+          success: false,
+          statusCode: 400,
+          code: 'OFFER_NOT_OPEN_FOR_RESPONSE',
+          message: 'Offer không ở trạng thái chờ ứng viên phản hồi.'
+        };
+      }
+
+      const hasUpdatedAt = await this.hasUpdatedAtCol();
+      await this.db.prepare(`
+        UPDATE offers SET
+          status = ?,
+          candidate_response = ?,
+          candidate_comment = ?,
+          rejection_reason_category = ?,
+          responded_at = ${this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')"}
+          ${hasUpdatedAt ? `, updated_at = ${this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')"}` : ''}
+        WHERE id = ? AND status = 'SENT'
+      `).run(decision, decision, comment, rejectionReasonCategory, row.id);
+
+      if (decision === 'ACCEPTED') {
+        await this.db.prepare("UPDATE candidates SET stage = 'HIRED' WHERE id = ?").run(row.candidate_id);
+      } else if (decision === 'REJECTED') {
+        await this.db.prepare("UPDATE candidates SET stage = 'REJECTED' WHERE id = ?").run(row.candidate_id);
+      }
+
+      return {
+        success: true,
+        statusCode: 200,
+        message: decision === 'ACCEPTED'
+          ? 'Chúc mừng bạn đã đồng ý nhận việc! Chúng tôi sẽ liên hệ để chuẩn bị thủ tục nhận việc.'
+          : 'Cảm ơn bạn đã phản hồi. Bộ phận Tuyển dụng đã ghi nhận ý kiến của bạn.',
+        data: {
+          offerId: row.id,
+          candidateId: row.candidate_id,
+          status: decision,
+          candidateResponse: decision,
+          candidateComment: comment,
+          respondedAt: new Date().toISOString()
+        }
+      };
+    });
   }
 }
 

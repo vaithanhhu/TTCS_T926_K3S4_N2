@@ -2567,7 +2567,7 @@ async function handleRequest(req, res) {
     return;
   }
 
-  if (req.method === 'GET' && (pathname.startsWith('/api/v1/offers/') || pathname.startsWith('/offers/')) && !pathname.endsWith('/status') && !pathname.endsWith('/preview') && !pathname.endsWith('/approvals') && !pathname.endsWith('/decide')) {
+  if (req.method === 'GET' && (pathname.startsWith('/api/v1/offers/') || pathname.startsWith('/offers/')) && !pathname.endsWith('/status') && !pathname.endsWith('/preview') && !pathname.endsWith('/approvals') && !pathname.endsWith('/decide') && !pathname.endsWith('/send') && !pathname.startsWith('/api/v1/offers/public') && !pathname.startsWith('/offers/public')) {
     const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'offer.read'));
     if (!user) return;
     const offId = pathname.replace(/^\/api\/v1\/offers\//, '').replace(/^\/offers\//, '');
@@ -2634,13 +2634,69 @@ async function handleRequest(req, res) {
     return;
   }
 
-  if (req.method === 'PUT' && (pathname.startsWith('/api/v1/offers/') || pathname.startsWith('/offers/')) && !pathname.endsWith('/status') && !pathname.endsWith('/decide')) {
+  if (req.method === 'PUT' && (pathname.startsWith('/api/v1/offers/') || pathname.startsWith('/offers/')) && !pathname.endsWith('/status') && !pathname.endsWith('/decide') && !pathname.endsWith('/send')) {
     const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'offer.create'));
     if (!user) return;
     try {
       const offId = pathname.replace(/^\/api\/v1\/offers\//, '').replace(/^\/offers\//, '');
       const body = await parseBody(req);
       const result = await requisitionService.updateOffer(offId, body, user);
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
+    }
+    return;
+  }
+
+  if (req.method === 'POST' && ((pathname.startsWith('/api/v1/offers/') && pathname.endsWith('/send')) || (pathname.startsWith('/offers/') && pathname.endsWith('/send')))) {
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'offer.create'));
+    if (!user) return;
+    try {
+      const offId = pathname.replace(/^\/api\/v1\/offers\//, '').replace(/^\/offers\//, '').replace(/\/send$/, '');
+      const result = await requisitionService.sendOffer(offId, user);
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
+    }
+    return;
+  }
+
+  if (req.method === 'POST' && (pathname === '/api/v1/offers/expire-overdue' || pathname === '/offers/expire-overdue')) {
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'offer.create'));
+    if (!user) return;
+    try {
+      const count = await requisitionService.expireOverdueOffers();
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: true, statusCode: 200, message: 'Đã tự động chuyển trạng thái các Offer quá hạn.', count }));
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Lỗi thực thi.', code: 'BAD_REQUEST' }));
+    }
+    return;
+  }
+
+  if (req.method === 'POST' && (pathname.startsWith('/api/v1/public/offers/') && pathname.endsWith('/respond') || pathname.startsWith('/public/offers/') && pathname.endsWith('/respond') || pathname.startsWith('/api/v1/candidate-offers/') && pathname.endsWith('/respond') || pathname.startsWith('/candidate-offers/') && pathname.endsWith('/respond'))) {
+    try {
+      const token = pathname.replace(/^\/api\/v1\/public\/offers\//, '').replace(/^\/public\/offers\//, '').replace(/^\/api\/v1\/candidate-offers\//, '').replace(/^\/candidate-offers\//, '').replace(/\/respond$/, '');
+      const body = await parseBody(req);
+      const result = await requisitionService.respondOffer(token, body);
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
+    }
+    return;
+  }
+
+  if (req.method === 'GET' && (pathname.startsWith('/api/v1/public/offers/') || pathname.startsWith('/public/offers/') || pathname.startsWith('/api/v1/candidate-offers/') || pathname.startsWith('/candidate-offers/'))) {
+    try {
+      const token = pathname.replace(/^\/api\/v1\/public\/offers\//, '').replace(/^\/public\/offers\//, '').replace(/^\/api\/v1\/candidate-offers\//, '').replace(/^\/candidate-offers\//, '').replace(/\/respond$/, '');
+      const result = await requisitionService.getOfferByToken(token);
       res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
     } catch {

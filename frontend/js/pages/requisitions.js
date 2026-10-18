@@ -30,7 +30,7 @@
         if(res.data.features?.requisitionLifecycle&&reqStatusFilter&&!reqStatusFilter.querySelector('[value="PAUSED"]')){for(const [value,text] of [['PAUSED','Tạm dừng'],['CANCELLED','Huỷ']]){const option=document.createElement('option');option.value=value;option.textContent=text;reqStatusFilter.appendChild(option);}}
         requisitionTrackingEnabled=Boolean(res.data.features?.requisitionTracking);document.getElementById('s308-filters')?.classList.toggle('hidden',!requisitionTrackingEnabled);document.getElementById('s308-age-head')?.classList.toggle('hidden',!requisitionTrackingEnabled);document.getElementById('s308-pagination')?.classList.toggle('hidden',!requisitionTrackingEnabled);
         if(requisitionTrackingEnabled&&!res.data.pagination){return loadRequisitions();}
-        if(requisitionTrackingEnabled){const p=res.data.pagination;if(p.currentPage>Math.max(1,p.totalPages)){requisitionPage=Math.max(1,p.totalPages);return loadRequisitions();}document.getElementById('req-page-info').textContent=p.totalItems===0?'0 yêu cầu':p.currentPage+' / '+p.totalPages+' — '+p.totalItems+' yêu cầu';document.getElementById('req-prev-page').disabled=p.currentPage<=1;document.getElementById('req-next-page').disabled=p.currentPage>=p.totalPages;window.ATS_API.requisitionTrackingOptionsApi(token).then(result=>{if(!isCurrent())return;document.getElementById('req-tracking-options-message').textContent=result.ok?'':result.data?.message||'Không tải được bộ lọc.';if(!result.ok)return;for(const [key,id,title] of [['departments','req-department-filter','Tất cả phòng ban'],['recruiters','req-recruiter-filter','Recruiter chính hoặc hỗ trợ']]){const select=document.getElementById(id),selected=select.value;select.textContent='';const empty=document.createElement('option');empty.value='';empty.textContent=title;select.appendChild(empty);for(const item of result.data.data[key]){const option=document.createElement('option');option.value=item.id;option.textContent=item.name;select.appendChild(option);}select.value=selected;}});}
+        if(requisitionTrackingEnabled){const p=res.data.pagination;if(p.currentPage>Math.max(1,p.totalPages)){requisitionPage=Math.max(1,p.totalPages);return loadRequisitions();}document.getElementById('req-prev-page').disabled=p.currentPage<=1;document.getElementById('req-next-page').disabled=p.currentPage>=p.totalPages;window.ATS_API.requisitionTrackingOptionsApi(token).then(result=>{if(!isCurrent())return;document.getElementById('req-tracking-options-message').textContent=result.ok?'':result.data?.message||'Không tải được bộ lọc.';if(!result.ok)return;for(const [key,id,title] of [['departments','req-department-filter','Tất cả phòng ban'],['recruiters','req-recruiter-filter','Recruiter chính hoặc hỗ trợ']]){const select=document.getElementById(id),selected=select.value;select.textContent='';const empty=document.createElement('option');empty.value='';empty.textContent=title;select.appendChild(empty);for(const item of result.data.data[key]){const option=document.createElement('option');option.value=item.id;option.textContent=item.name;select.appendChild(option);}select.value=selected;}});}
         const list = res.data.requisitions || res.data.data || [];
         currentRequisitionsList = list;
         window.ATS_TALENT_POOL?.refreshRequisitions(list);
@@ -39,6 +39,7 @@
         }
 
         if (list.length === 0) {
+          if(requisitionTrackingEnabled&&res.data.pagination){const p=res.data.pagination;document.getElementById('req-page-info').textContent=p.totalItems===0?'0 yêu cầu':p.currentPage+' / '+p.totalPages+' — '+p.totalItems+' yêu cầu';}
           requisitionsTableBody.innerHTML = `<tr><td colspan="${requisitionTrackingEnabled?8:7}" style="text-align: center; color: var(--color-text-muted); padding: 24px;">Không tìm thấy vị trí tuyển dụng phù hợp.</td></tr>`;
           return;
         }
@@ -88,6 +89,7 @@
             </tr>
           `;
         }).join('');
+        if(requisitionTrackingEnabled&&res.data.pagination){const p=res.data.pagination;document.getElementById('req-page-info').textContent=p.totalItems===0?'0 yêu cầu':p.currentPage+' / '+p.totalPages+' — '+p.totalItems+' yêu cầu';}
 
         // Wire Action Buttons
         document.querySelectorAll('.btn-edit-req').forEach(btn => {
