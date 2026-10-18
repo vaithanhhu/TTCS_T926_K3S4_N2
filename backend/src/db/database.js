@@ -496,6 +496,36 @@ function initSchema(db) {
     CREATE INDEX IF NOT EXISTS idx_hiring_decisions_decided_by ON hiring_decisions(decided_by);
   `);
 
+  const offerCols = db.prepare('PRAGMA table_info(offers)').all().map(c => c.name);
+  if (!offerCols.includes('job_title_id')) {
+    db.exec('ALTER TABLE offers ADD COLUMN job_title_id TEXT REFERENCES job_titles(id) ON DELETE SET NULL');
+  }
+  if (!offerCols.includes('allowances')) {
+    db.exec('ALTER TABLE offers ADD COLUMN allowances NUMERIC DEFAULT 0');
+  }
+  if (!offerCols.includes('expiration_date')) {
+    db.exec('ALTER TABLE offers ADD COLUMN expiration_date TEXT');
+  }
+  if (!offerCols.includes('salary_justification')) {
+    db.exec('ALTER TABLE offers ADD COLUMN salary_justification TEXT');
+  }
+  if (!offerCols.includes('offer_letter')) {
+    db.exec('ALTER TABLE offers ADD COLUMN offer_letter TEXT');
+  }
+  if (!offerCols.includes('notes')) {
+    db.exec('ALTER TABLE offers ADD COLUMN notes TEXT');
+  }
+  if (!offerCols.includes('created_by')) {
+    db.exec('ALTER TABLE offers ADD COLUMN created_by TEXT REFERENCES users(id) ON DELETE SET NULL');
+  }
+  if (!offerCols.includes('updated_at')) {
+    db.exec('ALTER TABLE offers ADD COLUMN updated_at TEXT');
+  }
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_offers_active_candidate ON offers(candidate_id) WHERE status IN ('DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'SENT');
+    CREATE INDEX IF NOT EXISTS idx_offers_job_title ON offers(job_title_id);
+  `);
+
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_departments_parent ON departments(parent_id);
     CREATE INDEX IF NOT EXISTS idx_departments_manager ON departments(manager_id);

@@ -1,6 +1,6 @@
 (function () {
   if (typeof MutationObserver === 'undefined') return;
-  const managed = new Set(['create-user-modal', 'bulk-import-user-modal', 'create-candidate-modal', 'schedule-interview-modal', 'bulk-interview-modal', 'create-offer-modal', 'question-bank-modal']);
+  const managed = new Set(['create-user-modal', 'bulk-import-user-modal', 'create-candidate-modal', 'schedule-interview-modal', 'bulk-interview-modal', 'create-offer-modal', 'offer-preview-modal', 'question-bank-modal']);
   const openers = new Map();
   const visible = modal => !modal.classList.contains('hidden') && modal.getClientRects().length;
   const controls = modal => [...modal.querySelectorAll('button,input,select,textarea,a[href],[tabindex]')].filter(node => !node.disabled && node.getAttribute('tabindex') !== '-1' && node.getClientRects().length);

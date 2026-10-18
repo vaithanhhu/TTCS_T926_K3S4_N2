@@ -6,6 +6,7 @@ class RequisitionService {
   constructor(db) {
     this.db = db || getDatabase();
     this.openPolicy = new (require('./requisitionOpenPolicyService'))(this.db);
+    this.offerService = new (require('./offerService'))(this.db, this);
   }
 
   /**
@@ -1710,71 +1711,7 @@ class RequisitionService {
    * Get offers list
    */
   async getOffers(options = {}) {
-    if(options.viewer){const fresh=await new(require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(options.viewer.id,'offer.read');if(!fresh)return{success:false,statusCode:403,code:'OFFER_FORBIDDEN',message:'Bạn không có quyền xem Offer.',offers:[]};options={...options,viewer:fresh};}
-    const conditions=[],params=[];
-    if(options.candidateEmail){conditions.push('LOWER(c.email)=LOWER(?)');params.push(options.candidateEmail);}
-    const viewer=options.viewer;
-    if(viewer&&!viewer.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))){
-      const scopes=[];
-      if(viewer.roles.includes('HIRING_MGR')){scopes.push(this.hiringRequisitionScope());params.push(viewer.id,viewer.id,viewer.id);}
-      if(viewer.roles.includes('RECRUITER')){const scope=this.recruiterScope('r',viewer.id),candidateScope=this.recruiterScope('candidate_position',viewer.id);scopes.push('('+scope.condition+' AND EXISTS(SELECT 1 FROM requisitions candidate_position WHERE candidate_position.id=c.requisition_id AND '+candidateScope.condition+'))');params.push(...scope.params,...candidateScope.params);}
-      if(viewer.roles.includes('APPROVER')){scopes.push('o.approver_id=?');params.push(viewer.id);}
-      if(viewer.roles.includes('CANDIDATE')){scopes.push('LOWER(c.email)=LOWER(?)');params.push(viewer.email);}
-      conditions.push(scopes.length?'('+scopes.join(' OR ')+')':'1=0');
-    }
-    const stmt = this.db.prepare(`
-      SELECT
-        o.id,
-        o.salary_monthly,
-        o.start_date,
-        o.status,
-        r.recruiter_id AS responsible_recruiter_id,
-        CASE WHEN ${viewer?.roles.includes('RECRUITER')?this.recruiterScope('r',viewer.id).condition:'1=0'} THEN 1 ELSE 0 END AS in_recruiter_scope,
-        o.created_at,
-        c.id AS candidate_id,
-        c.full_name AS candidate_name,
-        c.email AS candidate_email,
-        r.id AS requisition_id,
-        r.title AS requisition_title,
-        r.department_id,
-        r.department_name,
-        u.id AS approver_id,
-        u.full_name AS approver_name
-      FROM offers o
-      LEFT JOIN candidates c ON o.candidate_id = c.id
-      LEFT JOIN requisitions r ON COALESCE(o.requisition_id,c.requisition_id) = r.id
-      LEFT JOIN users u ON o.approver_id = u.id
-      ${conditions.length?'WHERE '+conditions.join(' AND '):''}
-      ORDER BY o.created_at DESC
-    `);
-
-    const rows = (await stmt.all(...(viewer?.roles.includes('RECRUITER')?this.recruiterScope('r',viewer.id).params:[]),...params));
-    return {
-      success: true,
-      total: rows.length,
-      offers: rows.map(r => ({
-        id: r.id,
-        ...(viewer?{capabilities:{canApprove:viewer.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))||viewer.roles.includes('APPROVER')&&r.approver_id===viewer.id,canSend:viewer.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))||viewer.roles.includes('RECRUITER')&&r.in_recruiter_scope===1,canAccept:r.status==='SENT'&&viewer.roles.every(role=>role==='CANDIDATE')&&r.candidate_email.toLowerCase()===viewer.email.toLowerCase()}}:{}),
-        salaryMonthly: r.salary_monthly,
-        startDate: r.start_date,
-        status: r.status,
-        createdAt: r.created_at,
-        candidate: {
-          id: r.candidate_id,
-          fullName: r.candidate_name,
-          email: r.candidate_email
-        },
-        requisition: {
-          id: r.requisition_id,
-          title: r.requisition_title,
-          departmentName: r.department_name
-        },
-        approver: r.approver_id ? {
-          id: r.approver_id,
-          fullName: r.approver_name
-        } : null
-      }))
-    };
+    return this.offerService.getOffers(options);
   }
 
   /**
@@ -2389,81 +2326,23 @@ class RequisitionService {
    * Create Job Offer
    */
   async createOffer(data = {}, actor = null) {
-    if(actor)return this.db.transaction(async()=>{
-      const fresh=await new (require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(actor.id,'offer.create');
-      if(!fresh)return{success:false,statusCode:403,code:'FORBIDDEN_PERMISSION_DENIED',message:'Bạn không có quyền soạn thảo Offer.'};
-      actor={...actor,...fresh};
-      const candidate=await this.db.prepare('SELECT requisition_id FROM candidates WHERE id=?').get(data.candidateId);
-      if(!candidate)return{success:false,statusCode:404,code:'CANDIDATE_NOT_FOUND',message:'Không tìm thấy ứng viên.'};
-      if(candidate.requisition_id&&data.requisitionId&&candidate.requisition_id!==data.requisitionId)return{success:false,statusCode:400,code:'OFFER_REQUISITION_MISMATCH',message:'Vị trí của Offer không khớp hồ sơ ứng viên.'};
-      const requisitionId=data.requisitionId||candidate.requisition_id||null;
-      if(!actor.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))){const access=await this.candidateAccess(data.candidateId,actor);if(!access.success)return access;}
-      if(!actor.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))&&!await this.recruiterAssigned(requisitionId,actor.id))return{success:false,statusCode:403,code:'OFFER_OUT_OF_SCOPE',message:'Offer không thuộc vị trí được giao cho bạn.'};
-      return this.createOffer({...data,requisitionId},null);
-    });
-    const policyRequisitionId=data.requisitionId||(await this.db.prepare('SELECT requisition_id FROM candidates WHERE id=?').get(data.candidateId))?.requisition_id;
-    if(policyRequisitionId)await this.openPolicy.notDraft(policyRequisitionId);
-    const candidateId = data.candidateId;
-    const requisitionId = data.requisitionId || null;
-    const salaryMonthly = parseInt(data.salaryMonthly, 10) || 0;
-    const startDate = data.startDate || null;
-    const approverId = data.approverId || null;
-
-    if (!candidateId) return { success: false, statusCode: 400, message: 'Vui lòng chọn ứng viên.' };
-    if (!salaryMonthly) return { success: false, statusCode: 400, message: 'Vui lòng nhập mức lương đề xuất.' };
-
-    const id = 'off-' + crypto.randomUUID();
-    const stmt = this.db.prepare(`
-      INSERT INTO offers (id, candidate_id, requisition_id, salary_monthly, start_date, status, approver_id, created_at)
-      VALUES (?, ?, ?, ?, ?, 'PENDING_APPROVAL', ?, datetime('now'))
-    `);
-    (await stmt.run(id, candidateId, requisitionId, salaryMonthly, startDate, approverId));
-
-    // Update candidate stage to OFFER
-    (await this.db.prepare("UPDATE candidates SET stage = 'OFFER' WHERE id = ?").run(candidateId));
-
-    return { success: true, statusCode: 201, message: 'Khởi tạo đề xuất việc làm (Offer) thành công.', data: { id } };
+    return this.offerService.createOffer(data, actor);
   }
 
-  /**
-   * Approve / Reject Offer
-   */
-  async updateOfferStatus(id, status, actor = null) {
-    if(actor)return this.db.transaction(async()=>{
-      const rbac=new (require('../middlewares/rbacMiddleware'))(this.db);
-      const reader=await rbac.getAuthorizedActor(actor.id,'offer.read');
-      if(!reader)return{success:false,statusCode:403,code:'FORBIDDEN_PERMISSION_DENIED',message:'Bạn không có quyền cập nhật Offer.'};
-      const candidateResponse=reader.roles.length>0&&reader.roles.every(role=>role==='CANDIDATE')&&status==='ACCEPTED';
-      const permission=candidateResponse?'offer.read':['APPROVED','REJECTED'].includes(status)?'offer.approve':'offer.create';
-      const fresh=await rbac.getAuthorizedActor(actor.id,permission);
-      if(!fresh)return{success:false,statusCode:403,code:'FORBIDDEN_PERMISSION_DENIED',message:'Bạn không có quyền cập nhật Offer.'};
-      actor={...actor,...fresh};
-      const row=await this.db.prepare('SELECT o.id,o.status,o.approver_id,o.candidate_id,c.email,r.recruiter_id,r.id AS requisition_id FROM offers o JOIN candidates c ON c.id=o.candidate_id LEFT JOIN requisitions r ON r.id=COALESCE(o.requisition_id,c.requisition_id) WHERE o.id=?'+(this.db.provider==='postgres'?' FOR UPDATE OF o':'')).get(id);
-      if(!row)return{success:false,statusCode:404,code:'OFFER_NOT_FOUND',message:'Không tìm thấy Offer.'};
-      if(!actor.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))){
-        if(!candidateResponse&&!['APPROVED','REJECTED'].includes(status)){const access=await this.candidateAccess(row.candidate_id,actor);if(!access.success)return access;}
-        const allowed=candidateResponse?row.email.toLowerCase()===actor.email.toLowerCase():['APPROVED','REJECTED'].includes(status)?row.approver_id===actor.id:await this.recruiterAssigned(row.requisition_id,actor.id);
-        if(!allowed)return{success:false,statusCode:403,code:'OFFER_OUT_OF_SCOPE',message:'Offer không thuộc phạm vi xử lý của bạn.'};
-      }
-      if(status==='ACCEPTED'&&row.status!=='SENT')return{success:false,statusCode:409,code:'OFFER_NOT_SENT',message:'Chỉ được chấp nhận Offer đã gửi.'};
-      return this.updateOfferStatus(id,status,null);
-    });
-    await this.openPolicy.notDraft((await this.db.prepare('SELECT COALESCE(x.requisition_id,c.requisition_id) AS requisition_id FROM offers x LEFT JOIN candidates c ON c.id=x.candidate_id WHERE x.id=?').get(id))?.requisition_id);
-    if (!id) return { success: false, statusCode: 400, message: 'Thiếu mã offer.' };
-    const stmt = this.db.prepare(`UPDATE offers SET status = ? WHERE id = ? AND (? <> 'ACCEPTED' OR status = 'SENT')`);
-    const res = (await stmt.run(status, id, status));
-    if (res.changes === 0) {
-      if (status==='ACCEPTED' && await this.db.prepare('SELECT id FROM offers WHERE id=?').get(id)) return {success:false,statusCode:409,code:'OFFER_NOT_SENT',message:'Chỉ được chấp nhận Offer đã gửi.'};
-      return { success: false, statusCode: 404, message: 'Không tìm thấy offer.' };
-    }
+  async updateOffer(id, data = {}, actor = null) {
+    return this.offerService.updateOffer(id, data, actor);
+  }
 
-    if (status === 'APPROVED') {
-      const off = (await this.db.prepare('SELECT candidate_id FROM offers WHERE id = ?').get(id));
-      if (off && off.candidate_id) {
-        (await this.db.prepare("UPDATE candidates SET stage = 'HIRED' WHERE id = ?").run(off.candidate_id));
-      }
-    }
-    return { success: true, statusCode: 200, message: 'Cập nhật trạng thái offer thành công.' };
+  async getOfferById(id, actor = null) {
+    return this.offerService.getOfferById(id, actor);
+  }
+
+  async previewOffer(data = {}, actor = null) {
+    return this.offerService.previewOffer(data, actor);
+  }
+
+  async updateOfferStatus(id, status, actor = null) {
+    return this.offerService.updateOfferStatus(id, status, actor);
   }
 }
 
