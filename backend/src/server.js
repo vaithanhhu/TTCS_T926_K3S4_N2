@@ -2423,7 +2423,7 @@ async function handleRequest(req, res) {
   }
 
   if (req.method === 'POST' && /^\/(?:api\/v1\/)?candidates\/[^/]+\/hiring-decision$/.test(pathname)) {
-    const user = await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.update');
+    const user = await rbacMiddleware.authorize(req, res, authController.authService, 'interview.evaluation.read');
     if (!user) return;
     try {
       const candId = pathname.replace(/^\/(?:api\/v1\/)?candidates\//, '').replace(/\/hiring-decision$/, '');

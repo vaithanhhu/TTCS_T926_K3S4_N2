@@ -35,7 +35,7 @@ function postgresSQL(source) {
     }).replace(/\bAS\s+([A-Za-z_]\w*)/gi, (match, alias) => /[a-z]/.test(alias) && /[A-Z]/.test(alias) ? 'AS "' + alias + '"' : match)
       .replace(/([\w.]+)\s*=\s*\?\s+COLLATE NOCASE/gi, 'lower($1) = lower(?)')
       .replace(/([\w.]+)\s+COLLATE NOCASE/gi, 'lower($1)')
-      .replace(/\b([\w.]*email)\s*=\s*\?/gi, 'lower($1) = lower(?)')
+      .replace(/(\b(?:WHERE|AND|OR|ON|WHEN)\s*(?:NOT\s*)?(?:\(\s*)*)([\w.]*email)\s*=\s*\?/gi, '$1lower($2) = lower(?)')
       .replace(/\browid\b/gi, 'sequence_id').replace(/\bLIKE\b/gi, 'ILIKE')
       .replace(/\?/g, () => '$' + (++count));
     if (ignore) part = part.trim() + ' ON CONFLICT DO NOTHING';

@@ -110,6 +110,7 @@ class InterviewEvaluationService {
   }
 
   async getOrCreateEvaluationForm(interviewId, interviewerId = null, actor = null) {
+    const access=await require('./interviewScopeService').authorizeInterview(this.db,interviewId,actor,'interview.read');if(!access.success)return access;actor=access.actor;
     if (!await this.hasEvaluationTables()) {
       return { success: false, statusCode: 503, code: 'EVALUATION_SERVICE_UNAVAILABLE', message: 'Bảng đánh giá chưa sẵn sàng.' };
     }
@@ -256,6 +257,7 @@ class InterviewEvaluationService {
   }
 
   async saveEvaluation(interviewId, data = {}, actor = null) {
+    const access=await require('./interviewScopeService').authorizeInterview(this.db,interviewId,actor,'interview.evaluate');if(!access.success)return access;actor=access.actor;
     if (!await this.hasEvaluationTables()) {
       return { success: false, statusCode: 503, code: 'EVALUATION_SERVICE_UNAVAILABLE', message: 'Bảng đánh giá chưa sẵn sàng.' };
     }
@@ -381,7 +383,7 @@ class InterviewEvaluationService {
         const locked = await this.db.prepare(
           'SELECT id, status FROM interview_evaluations WHERE id = ?' + (this.db.provider === 'postgres' ? ' FOR UPDATE' : '')
         ).get(evaluation.id);
-        if (locked && locked.status === 'SUBMITTED' && isSubmitting) {
+        if (locked && locked.status === 'SUBMITTED') {
           throw new Error('EVALUATION_ALREADY_SUBMITTED');
         }
 
@@ -434,6 +436,7 @@ class InterviewEvaluationService {
   }
 
   async reopenEvaluation(interviewId, interviewerId, actor, data = {}) {
+    const access=await require('./interviewScopeService').authorizeInterview(this.db,interviewId,actor,'interview.update');if(!access.success)return access.statusCode===403?{...access,code:'FORBIDDEN'}:access;actor=access.actor;
     if (!await this.hasEvaluationTables()) {
       return { success: false, statusCode: 503, code: 'EVALUATION_SERVICE_UNAVAILABLE', message: 'Bảng đánh giá chưa sẵn sàng.' };
     }
@@ -528,6 +531,7 @@ class InterviewEvaluationService {
   }
 
   async getEvaluationsForInterview(interviewId, actor = null) {
+    const access=await require('./interviewScopeService').authorizeInterview(this.db,interviewId,actor,'interview.evaluation.read');if(!access.success)return access;actor=access.actor;
     if (!await this.hasEvaluationTables()) {
       return { success: true, evaluations: [] };
     }
@@ -607,6 +611,7 @@ class InterviewEvaluationService {
   }
 
   async compareCandidateEvaluations(requisitionId, options = {}, actor = null) {
+    actor=await new(require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(actor?.id,'interview.evaluation.read');if(!actor)return {success:false,statusCode:403,code:'FORBIDDEN',message:'Access denied.'};
     if (!await this.hasEvaluationTables()) {
       return { success: false, statusCode: 503, code: 'EVALUATION_SERVICE_UNAVAILABLE', message: 'Bảng đánh giá chưa sẵn sàng.' };
     }

@@ -96,7 +96,8 @@ async function bootstrapSqlite(db) {
       full_name TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'ACTIVE',
       failed_login_attempts INTEGER DEFAULT 0,
-      locked_until TEXT
+      locked_until TEXT,
+      must_change_password BOOLEAN NOT NULL DEFAULT FALSE
     );
     CREATE TABLE roles (
       id TEXT PRIMARY KEY,
@@ -287,7 +288,7 @@ async function bootstrapSqlite(db) {
     ['u-iv-stranger', 'stranger@example.com', 'Stranger Interviewer', 'INTERVIEWER']
   ];
   for (const [uid, email, name, rCode] of users) {
-    db.prepare("INSERT INTO users VALUES (?, ?, ?, 'ACTIVE', 0, NULL)").run(uid, email, name);
+    db.prepare("INSERT INTO users(id,email,full_name,status,failed_login_attempts,locked_until) VALUES (?, ?, ?, 'ACTIVE', 0, NULL)").run(uid, email, name);
     const role = db.prepare('SELECT id FROM roles WHERE code = ?').get(rCode);
     db.prepare('INSERT INTO user_roles VALUES (?, ?)').run(uid, role.id);
   }
@@ -539,7 +540,9 @@ async function runTests() {
           id TEXT PRIMARY KEY,
           email TEXT UNIQUE NOT NULL,
           full_name TEXT NOT NULL,
-          status TEXT NOT NULL DEFAULT 'ACTIVE'
+          status TEXT NOT NULL DEFAULT 'ACTIVE',
+          locked_until TEXT,
+          must_change_password BOOLEAN NOT NULL DEFAULT FALSE
         );
         CREATE TABLE departments (
           id TEXT PRIMARY KEY,
@@ -617,7 +620,8 @@ async function runTests() {
         );
       `);
 
-      await pgDb.prepare("INSERT INTO users VALUES ('pg-u1', 'u1@pg.com', 'PG Admin', 'ACTIVE')").run();
+      await pgDb.prepare("INSERT INTO users(id,email,full_name,status) VALUES ('pg-u1', 'u1@pg.com', 'PG Admin', 'ACTIVE')").run();
+      await pgDb.exec("CREATE TABLE roles(id TEXT PRIMARY KEY,code TEXT NOT NULL); CREATE TABLE user_roles(user_id TEXT REFERENCES users(id),role_id TEXT REFERENCES roles(id)); INSERT INTO roles VALUES('pg-admin','ADMIN'); INSERT INTO user_roles VALUES('pg-u1','pg-admin');");
       await pgDb.prepare("INSERT INTO requisitions (id, code, title, status) VALUES ('pg-req', 'REQ-PG', 'PG Position', 'OPEN')").run();
       await pgDb.prepare("INSERT INTO candidates (id, full_name, email, requisition_id) VALUES ('pg-c1', 'PG Candidate 1', 'c1@pg.com', 'pg-req')").run();
       await pgDb.prepare("INSERT INTO interviews (id, candidate_id, requisition_id, interviewer_id, round_name, scheduled_time, status) VALUES ('pg-int-1', 'pg-c1', 'pg-req', 'pg-u1', 'Vòng Cuối', '2026-11-20T10:00:00Z', 'COMPLETED')").run();
