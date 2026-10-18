@@ -2411,6 +2411,78 @@ async function handleRequest(req, res) {
     return;
   }
 
+  if (req.method === 'GET' && /^\/(?:api\/v1\/)?candidates\/[^/]+\/interview-summary$/.test(pathname)) {
+    const user = await rbacMiddleware.authorize(req, res, authController.authService, 'interview.evaluation.read');
+    if (!user) return;
+    const candId = pathname.replace(/^\/(?:api\/v1\/)?candidates\//, '').replace(/\/interview-summary$/, '');
+    const service = new (require('./services/hiringDecisionService'))(db);
+    const result = await service.getCandidateInterviewSummary(candId, user);
+    res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(result));
+    return;
+  }
+
+  if (req.method === 'POST' && /^\/(?:api\/v1\/)?candidates\/[^/]+\/hiring-decision$/.test(pathname)) {
+    const user = await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.update');
+    if (!user) return;
+    try {
+      const candId = pathname.replace(/^\/(?:api\/v1\/)?candidates\//, '').replace(/\/hiring-decision$/, '');
+      const body = await parseBody(req);
+      const service = new (require('./services/hiringDecisionService'))(db);
+      const result = await service.recordHiringDecision(candId, body, user);
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 400, code: 'BAD_REQUEST', message: 'Dữ liệu không hợp lệ.' }));
+    }
+    return;
+  }
+
+  if (req.method === 'GET' && /^\/(?:api\/v1\/)?candidates\/[^/]+\/hiring-decisions$/.test(pathname)) {
+    const user = await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.read');
+    if (!user) return;
+    const candId = pathname.replace(/^\/(?:api\/v1\/)?candidates\//, '').replace(/\/hiring-decisions$/, '');
+    const service = new (require('./services/hiringDecisionService'))(db);
+    const result = await service.getCandidateInterviewSummary(candId, user);
+    if (!result.success) {
+      res.writeHead(result.statusCode || 400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ success: true, statusCode: 200, candidateId: candId, decisions: result.data.decisions }));
+    return;
+  }
+
+  if (req.method === 'GET' && /^\/(?:api\/v1\/)?interviews\/[^/]+\/consensus$/.test(pathname)) {
+    const user = await rbacMiddleware.authorize(req, res, authController.authService, 'interview.read');
+    if (!user) return;
+    const intId = pathname.replace(/^\/(?:api\/v1\/)?interviews\//, '').replace(/\/consensus$/, '');
+    const service = new (require('./services/hiringDecisionService'))(db);
+    const result = await service.getInterviewConsensus(intId, user);
+    res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(result));
+    return;
+  }
+
+  if (req.method === 'POST' && /^\/(?:api\/v1\/)?interviews\/[^/]+\/consensus$/.test(pathname)) {
+    const user = await rbacMiddleware.authorize(req, res, authController.authService, 'interview.read');
+    if (!user) return;
+    try {
+      const intId = pathname.replace(/^\/(?:api\/v1\/)?interviews\//, '').replace(/\/consensus$/, '');
+      const body = await parseBody(req);
+      const service = new (require('./services/hiringDecisionService'))(db);
+      const result = await service.recordInterviewConsensus(intId, body, user);
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 400, code: 'BAD_REQUEST', message: 'Dữ liệu không hợp lệ.' }));
+    }
+    return;
+  }
+
   if (req.method === 'PUT' && ((pathname.startsWith('/api/v1/interviews/') && pathname.endsWith('/status')) || (pathname.startsWith('/interviews/') && pathname.endsWith('/status')))) {
     const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'interview.read'));
     if (!user) return;

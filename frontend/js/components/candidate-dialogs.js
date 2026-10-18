@@ -802,3 +802,14 @@
       openCreateOfferForCandidate(id);
     });
   }
+
+  const candDetailHiringDecisionBtn = document.getElementById('cand-detail-hiring-decision-btn');
+  if (candDetailHiringDecisionBtn) {
+    candDetailHiringDecisionBtn.addEventListener('click', () => {
+      const id = document.getElementById('cand-detail-id')?.value;
+      if (candidateDetailModal) candidateDetailModal.classList.add('hidden');
+      if (id && window.ATS_APP_HELPERS?.openHiringDecisionModal) {
+        window.ATS_APP_HELPERS.openHiringDecisionModal(id);
+      }
+    });
+  }

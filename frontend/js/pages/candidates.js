@@ -233,6 +233,9 @@
                 <button type="button" class="btn btn-outline btn-xs" onclick="window.ATS_APP_HELPERS.viewCandidateDetails(${escapeHtml(JSON.stringify(c.id))})">
                   Chi tiết
                 </button>
+                <button type="button" class="btn btn-outline btn-xs" onclick="window.ATS_APP_HELPERS.openHiringDecisionModal ? window.ATS_APP_HELPERS.openHiringDecisionModal(${escapeHtml(JSON.stringify(c.id))}) : window.ATS_APP_HELPERS.viewCandidateDetails(${escapeHtml(JSON.stringify(c.id))})">
+                  Quyết định
+                </button>
                 <button type="button" class="btn btn-outline btn-xs candidate-merge-select" data-candidate-id="${escapeHtml(c.id)}">Chọn gộp</button>
               </td>
             </tr>

@@ -128,7 +128,9 @@
     "test:s6-09": "node backend/tests/test_s6_09_candidate_comparison.js",
     "test:s7-01": "node backend/tests/test_s7_01_interviewer_schedule.js",
     "migrate:s7-02": "node backend/src/db/migrate-interview-question-suggestions.js",
-    "test:s7-02": "node backend/tests/test_s7_02_interview_question_suggestions.js"
+    "test:s7-02": "node backend/tests/test_s7_02_interview_question_suggestions.js",
+    "migrate:s7-03": "node backend/src/db/migrate-hiring-decisions.js",
+    "test:s7-03": "node backend/tests/test_s7_03_hiring_decisions.js"
   },
   "keywords": [
     "ats",

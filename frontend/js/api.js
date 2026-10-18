@@ -1971,3 +1971,59 @@ window.ATS_API.toggleInterviewQuestionAskedApi = async function(token, interview
     return { ok: false, status: 0, data: { success: false, message: 'Lỗi kết nối khi đánh dấu câu hỏi.' } };
   }
 };
+
+window.ATS_API.getCandidateInterviewSummaryApi = async function(token, candidateId) {
+  try {
+    const response = await fetch(`${API_BASE}/candidates/${encodeURIComponent(candidateId)}/interview-summary`, {
+      method: 'GET',
+      headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+    });
+    return { ok: response.ok, status: response.status, data: await response.json() };
+  } catch {
+    return { ok: false, status: 0, data: { success: false, message: 'Lỗi kết nối khi lấy tổng hợp đánh giá.' } };
+  }
+};
+
+window.ATS_API.recordCandidateHiringDecisionApi = async function(token, candidateId, data) {
+  try {
+    const response = await fetch(`${API_BASE}/candidates/${encodeURIComponent(candidateId)}/hiring-decision`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify(data)
+    });
+    return { ok: response.ok, status: response.status, data: await response.json() };
+  } catch {
+    return { ok: false, status: 0, data: { success: false, message: 'Lỗi kết nối khi ra quyết định tuyển dụng.' } };
+  }
+};
+
+window.ATS_API.getInterviewConsensusApi = async function(token, interviewId) {
+  try {
+    const response = await fetch(`${API_BASE}/interviews/${encodeURIComponent(interviewId)}/consensus`, {
+      method: 'GET',
+      headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+    });
+    return { ok: response.ok, status: response.status, data: await response.json() };
+  } catch {
+    return { ok: false, status: 0, data: { success: false, message: 'Lỗi kết nối khi lấy kết quả đồng thuận.' } };
+  }
+};
+
+window.ATS_API.recordInterviewConsensusApi = async function(token, interviewId, data) {
+  try {
+    const response = await fetch(`${API_BASE}/interviews/${encodeURIComponent(interviewId)}/consensus`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify(data)
+    });
+    return { ok: response.ok, status: response.status, data: await response.json() };
+  } catch {
+    return { ok: false, status: 0, data: { success: false, message: 'Lỗi kết nối khi lưu kết quả đồng thuận.' } };
+  }
+};

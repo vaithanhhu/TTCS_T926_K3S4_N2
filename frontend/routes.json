@@ -246,6 +246,7 @@
     "/js/components/candidate-sla.js",
     "/js/pages/candidate-interview-response.js",
     "/js/components/candidate-comparison-dialog.js",
+    "/js/components/candidate-hiring-decision-dialog.js",
     "/js/shared/page-lifecycle.js",
     "/js/shared/route-lifecycle.js"
   ],
@@ -287,6 +288,7 @@
     "/components/change-pwd-modal.html",
     "/components/create-candidate-modal.html",
     "/components/candidate-detail-modal.html",
+    "/components/candidate-hiring-decision-modal.html",
     "/components/schedule-interview-modal.html",
     "/components/bulk-interview-modal.html",
     "/components/question-bank-modal.html",
