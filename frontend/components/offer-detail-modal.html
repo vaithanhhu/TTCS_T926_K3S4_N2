@@ -27,6 +27,9 @@
           Thời hạn phản hồi: <span id="off-detail-expiration-date" style="font-weight: 600; color: var(--color-text);"></span>
         </div>
         <div style="color: var(--color-text-muted); font-size: 0.825rem; margin-top: 2px;">
+          Cấp phê duyệt: <span id="off-detail-approval-level" style="font-weight: 600; color: var(--color-primary);">Cấp 1 / 1</span>
+        </div>
+        <div style="color: var(--color-text-muted); font-size: 0.825rem; margin-top: 2px;">
           Người phê duyệt: <span id="off-detail-approver" style="font-weight: 600; color: var(--color-text);"></span>
         </div>
         <div id="off-detail-justification-box" class="hidden" style="margin-top: 10px; padding: 8px; background: #fffaf0; border: 1px solid #feebc8; border-radius: 4px; font-size: 0.85rem;">
@@ -37,30 +40,44 @@
 
       <input type="hidden" id="off-detail-id" />
 
+      <div id="off-detail-decision-panel" class="hidden" style="margin-bottom: 16px; padding: 12px; background: var(--color-bg-page); border: 1px solid var(--color-border); border-radius: var(--radius-sm);">
+        <label for="off-detail-comment" style="display: block; font-weight: 600; font-size: 0.85rem; margin-bottom: 6px;">
+          Ý kiến người duyệt (bắt buộc khi Từ chối hoặc Yêu cầu sửa):
+        </label>
+        <textarea id="off-detail-comment" class="form-input" rows="2" placeholder="Nhập ý kiến hoặc lý do phê duyệt..."></textarea>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 10px;">
+          <button type="button" id="btn-action-approve-offer" class="btn btn-primary btn-sm" style="background: var(--color-success); border-color: var(--color-success);">
+            Duyệt Offer
+          </button>
+          <button type="button" id="btn-action-revision-offer" class="btn btn-outline btn-sm" style="color: var(--color-warning); border-color: var(--color-warning);">
+            Yêu cầu sửa
+          </button>
+          <button type="button" id="btn-action-reject-offer" class="btn btn-outline btn-sm" style="color: var(--color-danger); border-color: var(--color-danger);">
+            Từ chối
+          </button>
+        </div>
+      </div>
+
       <div style="display: flex; flex-direction: column; gap: 8px;">
-        <button type="button" id="btn-action-approve-offer" class="btn btn-primary btn-block" style="background: var(--color-success); border-color: var(--color-success);">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-          <span>Phê duyệt Offer (Chấp thuận tuyển dụng - Hired)</span>
-        </button>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
           <button type="button" id="btn-action-send-offer" class="btn btn-outline btn-sm">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
             <span>Đánh dấu Đã gửi Offer</span>
           </button>
-          <button type="button" id="btn-action-reject-offer" class="btn btn-outline btn-sm" style="color: var(--color-danger); border-color: var(--color-danger);">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
-            <span>Từ chối Offer</span>
-          </button>
-        </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px;">
           <button type="button" id="btn-action-view-letter" class="btn btn-outline btn-sm">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
             <span>Xem Thư Mời (Preview)</span>
           </button>
-          <button type="button" id="btn-action-edit-draft" class="btn btn-outline btn-sm hidden">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-            <span>Sửa bản nháp / Gửi duyệt</span>
-          </button>
+        </div>
+        <button type="button" id="btn-action-edit-draft" class="btn btn-outline btn-sm hidden">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+          <span>Chỉnh sửa / Gửi duyệt lại</span>
+        </button>
+      </div>
+
+      <div style="margin-top: 16px; border-top: 1px solid var(--color-border); padding-top: 12px;">
+        <h4 style="margin: 0 0 8px 0; font-size: 0.95rem; font-weight: 600;">Lịch sử phê duyệt</h4>
+        <div id="off-detail-approval-timeline" style="display: flex; flex-direction: column; gap: 8px;">
         </div>
       </div>
     </div>

@@ -359,16 +359,18 @@
   const btnActionApproveOffer = document.getElementById('btn-action-approve-offer');
   const btnActionSendOffer = document.getElementById('btn-action-send-offer');
   const btnActionRejectOffer = document.getElementById('btn-action-reject-offer');
+  const btnActionRevisionOffer = document.getElementById('btn-action-revision-offer');
   const btnActionViewLetter = document.getElementById('btn-action-view-letter');
   const btnActionEditDraft = document.getElementById('btn-action-edit-draft');
 
-  function openOfferDetails(id) {
+  async function openOfferDetails(id) {
     const o = currentOffersList.find(x => x.id === id);
     if (!o) {
       showToast('warning', 'Offer', `Đang tải chi tiết offer...`);
       return;
     }
 
+    const token = sessionStorage.getItem('ats_token');
     const candName = (o.candidate && (o.candidate.fullName || o.candidate.full_name)) ? (o.candidate.fullName || o.candidate.full_name) : (o.candidate_name || 'Ứng viên');
     const reqTitle = (o.requisition && o.requisition.title) ? o.requisition.title : (o.requisition_title || (o.jobTitleName || o.job_title_name) || 'Vị trí');
     const salaryVal = o.salaryMonthly || o.salary_monthly || o.salary;
@@ -386,10 +388,14 @@
     const allowancesEl = document.getElementById('off-detail-allowances');
     const startDateEl = document.getElementById('off-detail-start-date');
     const expirationDateEl = document.getElementById('off-detail-expiration-date');
+    const levelEl = document.getElementById('off-detail-approval-level');
     const approverEl = document.getElementById('off-detail-approver');
     const justificationBox = document.getElementById('off-detail-justification-box');
     const justificationEl = document.getElementById('off-detail-justification');
     const idInput = document.getElementById('off-detail-id');
+    const decisionPanel = document.getElementById('off-detail-decision-panel');
+    const commentInput = document.getElementById('off-detail-comment');
+    const timelineEl = document.getElementById('off-detail-approval-timeline');
 
     if (codeEl) codeEl.textContent = o.code || (o.id ? o.id.toUpperCase() : 'OFF');
     if (statusBadge) {
@@ -397,9 +403,10 @@
       const isDraft = o.status === 'DRAFT';
       const isPending = o.status === 'PENDING' || o.status === 'PENDING_APPROVAL';
       const isSent = o.status === 'SENT';
+      const isRevision = o.status === 'REVISION_REQUESTED';
 
-      statusBadge.className = `badge ${isApproved ? 'badge-success' : (isDraft ? 'badge-neutral' : (isPending ? 'badge-warning' : (isSent ? 'badge-primary' : 'badge-danger')))}`;
-      statusBadge.textContent = isApproved ? 'Đã phê duyệt' : (isDraft ? 'Bản nháp' : (isPending ? 'Chờ duyệt' : (isSent ? 'Đã gửi' : o.status)));
+      statusBadge.className = `badge ${isApproved ? 'badge-success' : (isDraft ? 'badge-neutral' : (isPending ? 'badge-warning' : (isSent ? 'badge-primary' : (isRevision ? 'badge-warning' : 'badge-danger'))))}`;
+      statusBadge.textContent = isApproved ? 'Đã phê duyệt' : (isDraft ? 'Bản nháp' : (isPending ? 'Chờ duyệt' : (isSent ? 'Đã gửi' : (isRevision ? 'Yêu cầu sửa' : o.status))));
     }
     if (candNameEl) candNameEl.textContent = candName;
     if (reqTitleEl) reqTitleEl.textContent = reqTitle;
@@ -407,6 +414,11 @@
     if (allowancesEl) allowancesEl.textContent = allowancesVal ? Number(allowancesVal).toLocaleString('vi-VN') + ' đ/tháng' : 'Không có';
     if (startDateEl) startDateEl.textContent = startDateVal ? new Date(startDateVal).toLocaleDateString('vi-VN') : 'Thỏa thuận';
     if (expirationDateEl) expirationDateEl.textContent = expirationDateVal ? new Date(expirationDateVal).toLocaleDateString('vi-VN') : 'Không quy định';
+
+    const curLvl = o.currentApprovalLevel || o.current_approval_level || 1;
+    const reqLvls = o.requiredApprovalLevels || o.required_approval_levels || (o.isOutOfBand ? 2 : 1);
+    if (levelEl) levelEl.textContent = `Cấp ${curLvl} / ${reqLvls}${o.isOutOfBand ? ' (Vượt dải chuẩn)' : ''}`;
+
     if (approverEl) approverEl.textContent = approverName;
     if (idInput) idInput.value = o.id;
 
@@ -419,14 +431,56 @@
       }
     }
 
+    if (commentInput) commentInput.value = '';
+
     if (btnActionEditDraft) {
-      btnActionEditDraft.classList.toggle('hidden', o.status !== 'DRAFT');
+      btnActionEditDraft.classList.toggle('hidden', !['DRAFT', 'REVISION_REQUESTED'].includes(o.status));
+    }
+
+    if (decisionPanel) {
+      decisionPanel.classList.toggle('hidden', !o.capabilities?.canApprove);
     }
 
     if (o.capabilities) {
-      btnActionApproveOffer?.classList.toggle('hidden', !o.capabilities.canApprove);
-      btnActionRejectOffer?.classList.toggle('hidden', !o.capabilities.canApprove);
       btnActionSendOffer?.classList.toggle('hidden', !o.capabilities.canSend);
+    }
+
+    if (timelineEl) {
+      timelineEl.innerHTML = `<div style="color: var(--color-text-muted); font-size: 0.825rem;">Đang tải lịch sử...</div>`;
+      try {
+        const appRes = await window.ATS_API.getOfferApprovalsApi(token, o.id);
+        const items = (appRes.ok && appRes.data && appRes.data.data) ? appRes.data.data : (o.approvals || []);
+        if (items.length === 0) {
+          timelineEl.innerHTML = `<div style="color: var(--color-text-muted); font-size: 0.825rem; font-style: italic;">Chưa có lượt phê duyệt nào.</div>`;
+        } else {
+          timelineEl.innerHTML = items.map(item => {
+            const actionMap = {
+              APPROVE: { text: 'Đã duyệt', cls: 'badge-success' },
+              REJECT: { text: 'Từ chối', cls: 'badge-danger' },
+              REQUEST_REVISION: { text: 'Yêu cầu sửa', cls: 'badge-warning' }
+            };
+            const act = actionMap[item.action] || { text: item.action, cls: 'badge-neutral' };
+            const timeStr = item.createdAt ? new Date(item.createdAt).toLocaleString('vi-VN') : '';
+            return `
+              <div style="background: var(--color-bg-page); border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 8px 12px; font-size: 0.85rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                  <div>
+                    <strong>${escapeHtml(item.approverName || 'Người duyệt')}</strong>
+                    <span style="color: var(--color-text-muted); font-size: 0.8rem; margin-left: 4px;">(Cấp ${item.level})</span>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="badge ${act.cls}">${act.text}</span>
+                    <span style="color: var(--color-text-muted); font-size: 0.75rem;">${escapeHtml(timeStr)}</span>
+                  </div>
+                </div>
+                ${item.comment ? `<div style="color: var(--color-text); margin-top: 4px; font-style: italic; background: rgba(0,0,0,0.02); padding: 4px 8px; border-radius: 4px;">"${escapeHtml(item.comment)}"</div>` : ''}
+              </div>
+            `;
+          }).join('');
+        }
+      } catch {
+        timelineEl.innerHTML = `<div style="color: var(--color-text-muted); font-size: 0.825rem; font-style: italic;">Chưa có lịch sử phê duyệt.</div>`;
+      }
     }
 
     if (offerDetailModal) offerDetailModal.classList.remove('hidden');
@@ -471,18 +525,77 @@
     btnActionApproveOffer.addEventListener('click', async () => {
       const token = sessionStorage.getItem('ats_token');
       const id = document.getElementById('off-detail-id').value;
+      const comment = document.getElementById('off-detail-comment')?.value || '';
       if (!token || !id) return;
 
       try {
-        const res = await window.ATS_API.updateOfferStatusApi(token, id, 'APPROVED');
+        const res = await window.ATS_API.decideOfferApi(token, id, { action: 'APPROVE', comment });
         if (res.ok && res.data && res.data.success) {
           if (offerDetailModal) offerDetailModal.classList.add('hidden');
-          showToast('success', 'Tuyển dụng thành công!', 'Offer đã được duyệt. Ứng viên chính thức chuyển sang giai đoạn Đã nhận việc (Hired).');
+          showToast('success', 'Phê duyệt thành công', res.data.message || 'Đã phê duyệt đề xuất Offer.');
           loadOffers();
-          loadCandidates();
-          loadDashboardData();
+          if (typeof loadCandidates === 'function') loadCandidates();
+          if (typeof loadDashboardData === 'function') loadDashboardData();
         } else {
-          showToast('danger', 'Lỗi phê duyệt', res.data.message || 'Không thể phê duyệt offer.');
+          showToast('danger', 'Lỗi phê duyệt', res.data?.message || 'Không thể phê duyệt offer.');
+        }
+      } catch (err) {
+        showToast('danger', 'Lỗi kết nối', err.message);
+      }
+    });
+  }
+
+  if (btnActionRevisionOffer) {
+    btnActionRevisionOffer.addEventListener('click', async () => {
+      const token = sessionStorage.getItem('ats_token');
+      const id = document.getElementById('off-detail-id').value;
+      const commentInput = document.getElementById('off-detail-comment');
+      const comment = commentInput ? commentInput.value.trim() : '';
+
+      if (!comment) {
+        showToast('warning', 'Yêu cầu ý kiến', 'Vui lòng nhập ý kiến yêu cầu chỉnh sửa.');
+        if (commentInput) commentInput.focus();
+        return;
+      }
+      if (!token || !id) return;
+
+      try {
+        const res = await window.ATS_API.decideOfferApi(token, id, { action: 'REQUEST_REVISION', comment });
+        if (res.ok && res.data && res.data.success) {
+          if (offerDetailModal) offerDetailModal.classList.add('hidden');
+          showToast('info', 'Yêu cầu chỉnh sửa', res.data.message || 'Đã chuyển Offer về trạng thái yêu cầu chỉnh sửa.');
+          loadOffers();
+        } else {
+          showToast('danger', 'Lỗi', res.data?.message || 'Không thể yêu cầu chỉnh sửa.');
+        }
+      } catch (err) {
+        showToast('danger', 'Lỗi kết nối', err.message);
+      }
+    });
+  }
+
+  if (btnActionRejectOffer) {
+    btnActionRejectOffer.addEventListener('click', async () => {
+      const token = sessionStorage.getItem('ats_token');
+      const id = document.getElementById('off-detail-id').value;
+      const commentInput = document.getElementById('off-detail-comment');
+      const comment = commentInput ? commentInput.value.trim() : '';
+
+      if (!comment) {
+        showToast('warning', 'Yêu cầu lý do', 'Vui lòng nhập lý do từ chối Offer.');
+        if (commentInput) commentInput.focus();
+        return;
+      }
+      if (!token || !id) return;
+
+      try {
+        const res = await window.ATS_API.decideOfferApi(token, id, { action: 'REJECT', comment });
+        if (res.ok && res.data && res.data.success) {
+          if (offerDetailModal) offerDetailModal.classList.add('hidden');
+          showToast('warning', 'Từ chối Offer', res.data.message || 'Đã từ chối bản đề xuất offer.');
+          loadOffers();
+        } else {
+          showToast('danger', 'Lỗi', res.data?.message || 'Không thể từ chối offer.');
         }
       } catch (err) {
         showToast('danger', 'Lỗi kết nối', err.message);
@@ -503,28 +616,7 @@
           showToast('info', 'Đã gửi Offer', 'Đã cập nhật trạng thái phát hành thư mời cho ứng viên.');
           loadOffers();
         } else {
-          showToast('danger', 'Lỗi gửi Offer', res.data.message || 'Không thể gửi offer.');
-        }
-      } catch (err) {
-        showToast('danger', 'Lỗi kết nối', err.message);
-      }
-    });
-  }
-
-  if (btnActionRejectOffer) {
-    btnActionRejectOffer.addEventListener('click', async () => {
-      const token = sessionStorage.getItem('ats_token');
-      const id = document.getElementById('off-detail-id').value;
-      if (!token || !id) return;
-
-      try {
-        const res = await window.ATS_API.updateOfferStatusApi(token, id, 'REJECTED');
-        if (res.ok && res.data && res.data.success) {
-          if (offerDetailModal) offerDetailModal.classList.add('hidden');
-          showToast('warning', 'Từ chối Offer', 'Đã từ chối bản đề xuất offer.');
-          loadOffers();
-        } else {
-          showToast('danger', 'Lỗi', res.data.message || 'Không thể từ chối offer.');
+          showToast('danger', 'Lỗi gửi Offer', res.data?.message || 'Không thể gửi offer.');
         }
       } catch (err) {
         showToast('danger', 'Lỗi kết nối', err.message);

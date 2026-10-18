@@ -39,6 +39,38 @@ class OfferService {
     return this._hasUpdatedAtCol;
   }
 
+  async hasApprovalCols() {
+    if (this._hasApprovalCols !== undefined) return this._hasApprovalCols;
+    try {
+      if (this.db.provider === 'postgres') {
+        const row = await this.db.prepare("SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='offers' AND column_name='current_approval_level'").get();
+        this._hasApprovalCols = Boolean(row);
+      } else {
+        const cols = (await this.db.prepare("PRAGMA table_info(offers)").all()).map(c => c.name);
+        this._hasApprovalCols = cols.includes('current_approval_level');
+      }
+    } catch {
+      this._hasApprovalCols = false;
+    }
+    return this._hasApprovalCols;
+  }
+
+  async hasApprovalsTable() {
+    if (this._hasApprovalsTable !== undefined) return this._hasApprovalsTable;
+    try {
+      if (this.db.provider === 'postgres') {
+        const row = await this.db.prepare("SELECT 1 FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='offer_approvals'").get();
+        this._hasApprovalsTable = Boolean(row);
+      } else {
+        const row = await this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='offer_approvals'").get();
+        this._hasApprovalsTable = Boolean(row);
+      }
+    } catch {
+      this._hasApprovalsTable = false;
+    }
+    return this._hasApprovalsTable;
+  }
+
   formatCurrency(amount) {
     if (amount === null || amount === undefined || isNaN(amount)) return 'Thỏa thuận';
     return Number(amount).toLocaleString('vi-VN');
@@ -212,6 +244,7 @@ class OfferService {
       : [];
 
     const hasCols = await this.hasProposalCols();
+    const hasApprovalCols = await this.hasApprovalCols();
 
     const stmt = this.db.prepare(`
       SELECT
@@ -219,6 +252,7 @@ class OfferService {
         o.candidate_id,
         o.requisition_id,
         ${hasCols ? 'o.job_title_id, o.allowances, o.expiration_date, o.salary_justification, o.offer_letter, o.notes, o.created_by, o.updated_at,' : 'NULL AS job_title_id, 0 AS allowances, NULL AS expiration_date, NULL AS salary_justification, NULL AS offer_letter, NULL AS notes, NULL AS created_by, o.created_at AS updated_at,'}
+        ${hasApprovalCols ? 'o.current_approval_level, o.required_approval_levels,' : '1 AS current_approval_level, 1 AS required_approval_levels,'}
         o.salary_monthly,
         o.start_date,
         o.status,
@@ -259,6 +293,8 @@ class OfferService {
       const maxSal = r.job_max_salary !== null && r.job_max_salary !== undefined ? Number(r.job_max_salary) : null;
       const sal = Number(r.salary_monthly) || 0;
       const isOutOfBand = (minSal !== null && sal < minSal) || (maxSal !== null && sal > maxSal);
+      const curLevel = r.current_approval_level ? Number(r.current_approval_level) : 1;
+      const reqLevels = r.required_approval_levels ? Number(r.required_approval_levels) : (isOutOfBand ? 2 : 1);
 
       return {
         id: r.id,
@@ -296,6 +332,10 @@ class OfferService {
         minSalary: minSal,
         maxSalary: maxSal,
         isOutOfBand,
+        currentApprovalLevel: curLevel,
+        current_approval_level: curLevel,
+        requiredApprovalLevels: reqLevels,
+        required_approval_levels: reqLevels,
         salaryMonthly: r.salary_monthly,
         salary_monthly: r.salary_monthly,
         salary: r.salary_monthly,
@@ -324,11 +364,15 @@ class OfferService {
         updatedAt: r.updated_at,
         updated_at: r.updated_at,
         capabilities: viewer ? {
-          canApprove: viewer.roles.some(role => ['ADMIN', 'HR_MANAGER'].includes(role)) || (viewer.roles.includes('APPROVER') && r.approver_id === viewer.id),
+          canApprove: (r.status === 'PENDING_APPROVAL' || (!hasCols && !hasApprovalCols)) && (
+            (curLevel === 2)
+              ? viewer.roles.includes('ADMIN')
+              : (viewer.roles.some(role => ['ADMIN', 'HR_MANAGER'].includes(role)) || (viewer.roles.includes('APPROVER') && r.approver_id === viewer.id))
+          ),
           canSend: viewer.roles.some(role => ['ADMIN', 'HR_MANAGER'].includes(role)) || (viewer.roles.includes('RECRUITER') && r.in_recruiter_scope === 1),
           canAccept: r.status === 'SENT' && viewer.roles.every(role => role === 'CANDIDATE') && r.candidate_email.toLowerCase() === viewer.email.toLowerCase(),
-          canEdit: (r.status === 'DRAFT' || r.status === 'PENDING_APPROVAL') && (viewer.roles.some(role => ['ADMIN', 'HR_MANAGER'].includes(role)) || (viewer.roles.includes('RECRUITER') && r.in_recruiter_scope === 1)),
-          canCancel: (r.status === 'DRAFT' || r.status === 'PENDING_APPROVAL') && (viewer.roles.some(role => ['ADMIN', 'HR_MANAGER'].includes(role)) || (viewer.roles.includes('RECRUITER') && r.in_recruiter_scope === 1))
+          canEdit: ['DRAFT', 'PENDING_APPROVAL', 'REVISION_REQUESTED'].includes(r.status) && (viewer.roles.some(role => ['ADMIN', 'HR_MANAGER'].includes(role)) || (viewer.roles.includes('RECRUITER') && r.in_recruiter_scope === 1)),
+          canCancel: ['DRAFT', 'PENDING_APPROVAL', 'REVISION_REQUESTED'].includes(r.status) && (viewer.roles.some(role => ['ADMIN', 'HR_MANAGER'].includes(role)) || (viewer.roles.includes('RECRUITER') && r.in_recruiter_scope === 1))
         } : {}
       };
     });
@@ -349,10 +393,14 @@ class OfferService {
     if (!found) {
       return { success: false, statusCode: 404, code: 'OFFER_NOT_FOUND', message: 'Không tìm thấy Offer hoặc không có quyền truy cập.' };
     }
+    const approvalsRes = await this.getOfferApprovals(id, actor);
     return {
       success: true,
       statusCode: 200,
-      data: found
+      data: {
+        ...found,
+        approvals: approvalsRes.data || []
+      }
     };
   }
 
@@ -549,26 +597,48 @@ class OfferService {
 
     const offerLetter = data.offerLetter || letterPreview.text;
     const hasCols = await this.hasProposalCols();
+    const hasApprovalCols = await this.hasApprovalCols();
+    const requiredApprovalLevels = isOutOfBand ? 2 : 1;
+    const currentApprovalLevel = 1;
 
     try {
       return await this.db.transaction(async () => {
         if (hasCols) {
-          const stmt = this.db.prepare(`
-            INSERT INTO offers (
-              id, candidate_id, requisition_id, job_title_id, salary_monthly, allowances,
-              start_date, expiration_date, salary_justification, offer_letter, notes,
-              status, approver_id, created_by, created_at, updated_at
-            ) VALUES (
-              ?, ?, ?, ?, ?, ?,
-              ?, ?, ?, ?, ?,
-              ?, ?, ?, ${this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')"}, ${this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')"}
-            )
-          `);
-          await stmt.run(
-            offerId, candidateId, requisitionId, jobTitleId, salaryMonthly, allowances,
-            startDate, expirationDate, salaryJustification, offerLetter, notes,
-            initialStatus, approverId, actor?.id || null
-          );
+          if (hasApprovalCols) {
+            const stmt = this.db.prepare(`
+              INSERT INTO offers (
+                id, candidate_id, requisition_id, job_title_id, salary_monthly, allowances,
+                start_date, expiration_date, salary_justification, offer_letter, notes,
+                status, approver_id, created_by, current_approval_level, required_approval_levels, created_at, updated_at
+              ) VALUES (
+                ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ${this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')"}, ${this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')"}
+              )
+            `);
+            await stmt.run(
+              offerId, candidateId, requisitionId, jobTitleId, salaryMonthly, allowances,
+              startDate, expirationDate, salaryJustification, offerLetter, notes,
+              initialStatus, approverId, actor?.id || null, currentApprovalLevel, requiredApprovalLevels
+            );
+          } else {
+            const stmt = this.db.prepare(`
+              INSERT INTO offers (
+                id, candidate_id, requisition_id, job_title_id, salary_monthly, allowances,
+                start_date, expiration_date, salary_justification, offer_letter, notes,
+                status, approver_id, created_by, created_at, updated_at
+              ) VALUES (
+                ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?,
+                ?, ?, ?, ${this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')"}, ${this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')"}
+              )
+            `);
+            await stmt.run(
+              offerId, candidateId, requisitionId, jobTitleId, salaryMonthly, allowances,
+              startDate, expirationDate, salaryJustification, offerLetter, notes,
+              initialStatus, approverId, actor?.id || null
+            );
+          }
         } else {
           const stmt = this.db.prepare(`
             INSERT INTO offers (
@@ -604,6 +674,8 @@ class OfferService {
             expirationDate,
             salaryJustification,
             isOutOfBand,
+            currentApprovalLevel,
+            requiredApprovalLevels,
             status: initialStatus
           }
         };
@@ -691,27 +763,59 @@ class OfferService {
       const offerLetter = data.offerLetter !== undefined ? data.offerLetter : existing.offer_letter;
 
       const hasCols = await this.hasProposalCols();
+      const hasApprovalCols = await this.hasApprovalCols();
       const hasUpdatedAt = await this.hasUpdatedAtCol();
 
+      let isOutOfBand = false;
+      if (jobTitleId) {
+        const band = await this.validateSalaryBand(jobTitleId, salaryMonthly);
+        isOutOfBand = band.isOutOfBand;
+      }
+      const reqLevels = isOutOfBand ? 2 : 1;
+      const curLevel = 1;
+
       if (hasCols) {
-        await this.db.prepare(`
-          UPDATE offers SET
-            job_title_id = ?,
-            salary_monthly = ?,
-            allowances = ?,
-            start_date = ?,
-            expiration_date = ?,
-            salary_justification = ?,
-            offer_letter = ?,
-            notes = ?,
-            status = ?,
-            approver_id = ?,
-            updated_at = ${this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')"}
-          WHERE id = ?
-        `).run(
-          jobTitleId, salaryMonthly, allowances, startDate, expirationDate,
-          salaryJustification, offerLetter, notes, newStatus, approverId, id
-        );
+        if (hasApprovalCols && newStatus === 'PENDING_APPROVAL') {
+          await this.db.prepare(`
+            UPDATE offers SET
+              job_title_id = ?,
+              salary_monthly = ?,
+              allowances = ?,
+              start_date = ?,
+              expiration_date = ?,
+              salary_justification = ?,
+              offer_letter = ?,
+              notes = ?,
+              status = ?,
+              approver_id = ?,
+              current_approval_level = ?,
+              required_approval_levels = ?,
+              updated_at = ${this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')"}
+            WHERE id = ?
+          `).run(
+            jobTitleId, salaryMonthly, allowances, startDate, expirationDate,
+            salaryJustification, offerLetter, notes, newStatus, approverId, curLevel, reqLevels, id
+          );
+        } else {
+          await this.db.prepare(`
+            UPDATE offers SET
+              job_title_id = ?,
+              salary_monthly = ?,
+              allowances = ?,
+              start_date = ?,
+              expiration_date = ?,
+              salary_justification = ?,
+              offer_letter = ?,
+              notes = ?,
+              status = ?,
+              approver_id = ?,
+              updated_at = ${this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')"}
+            WHERE id = ?
+          `).run(
+            jobTitleId, salaryMonthly, allowances, startDate, expirationDate,
+            salaryJustification, offerLetter, notes, newStatus, approverId, id
+          );
+        }
       } else {
         await this.db.prepare(`
           UPDATE offers SET
@@ -724,7 +828,7 @@ class OfferService {
         `).run(salaryMonthly, startDate, newStatus, approverId, id);
       }
 
-      if (newStatus === 'PENDING_APPROVAL' && existing.status === 'DRAFT') {
+      if (newStatus === 'PENDING_APPROVAL' && ['DRAFT', 'REVISION_REQUESTED'].includes(existing.status)) {
         await this.db.prepare("UPDATE candidates SET stage = 'OFFER' WHERE id = ?").run(existing.candidate_id);
       }
 
@@ -805,6 +909,245 @@ class OfferService {
       }
     }
     return { success: true, statusCode: 200, message: 'Cập nhật trạng thái offer thành công.' };
+  }
+
+  async decideOffer(params = {}, actor = null) {
+    const offerId = params.offerId || params.id;
+    if (!offerId) return { success: false, statusCode: 400, message: 'Thiếu mã Offer.' };
+
+    if (!actor) {
+      return { success: false, statusCode: 401, code: 'UNAUTHORIZED', message: 'Vui lòng đăng nhập.' };
+    }
+
+    const fresh = await this.rbacMiddleware.getAuthorizedActor(actor.id, 'offer.approve');
+    if (!fresh) {
+      return { success: false, statusCode: 403, code: 'FORBIDDEN_PERMISSION_DENIED', message: 'Bạn không có quyền phê duyệt Offer.' };
+    }
+    actor = { ...actor, ...fresh };
+
+    let action = (params.action || '').toUpperCase().trim();
+    if (action === 'APPROVED') action = 'APPROVE';
+    if (action === 'REJECTED') action = 'REJECT';
+    if (action === 'REVISION_REQUESTED') action = 'REQUEST_REVISION';
+
+    if (!['APPROVE', 'REJECT', 'REQUEST_REVISION'].includes(action)) {
+      return { success: false, statusCode: 400, code: 'INVALID_ACTION', message: 'Hành động không hợp lệ. Chỉ chấp nhận APPROVE, REJECT hoặc REQUEST_REVISION.' };
+    }
+
+    const comment = params.comment !== undefined && params.comment !== null ? String(params.comment).trim() : '';
+    if (['REJECT', 'REQUEST_REVISION'].includes(action) && !comment) {
+      return {
+        success: false,
+        statusCode: 400,
+        code: 'COMMENT_REQUIRED',
+        message: action === 'REJECT'
+          ? 'Ý kiến giải trình là bắt buộc khi từ chối Offer.'
+          : 'Ý kiến yêu cầu chỉnh sửa là bắt buộc khi yêu cầu sửa Offer.'
+      };
+    }
+
+    return this.db.transaction(async () => {
+      const lockSql = this.db.provider === 'postgres' ? ' FOR UPDATE OF o' : '';
+      const row = await this.db.prepare(`
+        SELECT
+          o.*,
+          c.full_name AS candidate_name,
+          c.email AS candidate_email,
+          r.title AS requisition_title,
+          jt.name AS job_title_name,
+          jt.min_salary AS job_min_salary,
+          jt.max_salary AS job_max_salary
+        FROM offers o
+        LEFT JOIN candidates c ON o.candidate_id = c.id
+        LEFT JOIN requisitions r ON COALESCE(o.requisition_id, c.requisition_id) = r.id
+        LEFT JOIN job_titles jt ON COALESCE(o.job_title_id, r.job_title_id) = jt.id
+        WHERE o.id = ?${lockSql}
+      `).get(offerId);
+
+      if (!row) {
+        return { success: false, statusCode: 404, code: 'OFFER_NOT_FOUND', message: 'Không tìm thấy Offer.' };
+      }
+
+      if (row.status === 'APPROVED') {
+        return { success: false, statusCode: 400, code: 'OFFER_ALREADY_APPROVED', message: 'Offer đã được phê duyệt, không thể thao tác lại.' };
+      }
+      if (row.status === 'REJECTED') {
+        return { success: false, statusCode: 400, code: 'OFFER_ALREADY_REJECTED', message: 'Offer đã bị từ chối.' };
+      }
+      if (row.status === 'REVISION_REQUESTED') {
+        return { success: false, statusCode: 400, code: 'OFFER_AWAITING_REVISION', message: 'Offer đang chờ người lập chỉnh sửa lại.' };
+      }
+      if (row.status === 'DRAFT') {
+        return { success: false, statusCode: 400, code: 'OFFER_NOT_SUBMITTED', message: 'Offer đang ở trạng thái nháp, chưa gửi phê duyệt.' };
+      }
+      if (row.status !== 'PENDING_APPROVAL') {
+        return { success: false, statusCode: 400, code: 'OFFER_NOT_PENDING_APPROVAL', message: 'Offer không ở trạng thái chờ phê duyệt.' };
+      }
+
+      const minSal = row.job_min_salary !== null && row.job_min_salary !== undefined ? Number(row.job_min_salary) : null;
+      const maxSal = row.job_max_salary !== null && row.job_max_salary !== undefined ? Number(row.job_max_salary) : null;
+      const sal = Number(row.salary_monthly) || 0;
+      const isOutOfBand = (minSal !== null && sal < minSal) || (maxSal !== null && sal > maxSal);
+
+      const hasApprovalCols = await this.hasApprovalCols();
+      const currentLevel = hasApprovalCols && row.current_approval_level ? Number(row.current_approval_level) : 1;
+      const requiredLevels = hasApprovalCols && row.required_approval_levels ? Number(row.required_approval_levels) : (isOutOfBand ? 2 : 1);
+
+      if (params.level && Number(params.level) !== currentLevel) {
+        return { success: false, statusCode: 400, code: 'INVALID_APPROVAL_LEVEL_SEQUENCE', message: 'Không thể bỏ qua cấp duyệt bắt buộc.' };
+      }
+
+      const isAdmin = actor.roles.includes('ADMIN');
+      const isHrMgr = actor.roles.includes('HR_MANAGER');
+      const isAssignedApprover = actor.roles.includes('APPROVER') && row.approver_id === actor.id;
+
+      if (currentLevel === 1) {
+        if (!isAdmin && !isHrMgr && !isAssignedApprover) {
+          return { success: false, statusCode: 403, code: 'FORBIDDEN_APPROVER_ROLE', message: 'Bạn không có thẩm quyền phê duyệt cấp 1 cho Offer này.' };
+        }
+      } else if (currentLevel === 2) {
+        if (!isAdmin) {
+          return { success: false, statusCode: 403, code: 'FORBIDDEN_HIGHER_APPROVAL_REQUIRED', message: 'Chỉ cấp quản lý cao hơn (ADMIN) mới có thẩm quyền phê duyệt cấp 2 cho offer vượt khung lương.' };
+        }
+      }
+
+      const hasApprovalsTable = await this.hasApprovalsTable();
+      if (hasApprovalsTable) {
+        const approvalId = 'appr-' + crypto.randomUUID();
+        const approverName = actor.fullName || actor.full_name || actor.email;
+        const approverRole = isAdmin ? 'ADMIN' : (isHrMgr ? 'HR_MANAGER' : (actor.roles[0] || 'APPROVER'));
+        await this.db.prepare(`
+          INSERT INTO offer_approvals (
+            id, offer_id, level, action, approver_id, approver_name, approver_role, comment, created_at
+          ) VALUES (
+            ?, ?, ?, ?, ?, ?, ?, ?, ${this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')"}
+          )
+        `).run(approvalId, offerId, currentLevel, action, actor.id, approverName, approverRole, comment || null);
+      }
+
+      const hasUpdatedAt = await this.hasUpdatedAtCol();
+
+      if (action === 'REJECT') {
+        await this.db.prepare(`
+          UPDATE offers SET
+            status = 'REJECTED'
+            ${hasUpdatedAt ? `, updated_at = ${this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')"}` : ''}
+          WHERE id = ?
+        `).run(offerId);
+
+        return {
+          success: true,
+          statusCode: 200,
+          code: 'OFFER_REJECTED',
+          message: 'Đã từ chối đề xuất Offer.',
+          data: { id: offerId, status: 'REJECTED', action: 'REJECT', level: currentLevel }
+        };
+      }
+
+      if (action === 'REQUEST_REVISION') {
+        await this.db.prepare(`
+          UPDATE offers SET
+            status = 'REVISION_REQUESTED'
+            ${hasUpdatedAt ? `, updated_at = ${this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')"}` : ''}
+          WHERE id = ?
+        `).run(offerId);
+
+        return {
+          success: true,
+          statusCode: 200,
+          code: 'OFFER_REVISION_REQUESTED',
+          message: 'Đã yêu cầu chỉnh sửa đề xuất Offer.',
+          data: { id: offerId, status: 'REVISION_REQUESTED', action: 'REQUEST_REVISION', level: currentLevel }
+        };
+      }
+
+      if (currentLevel < requiredLevels) {
+        const nextLevel = currentLevel + 1;
+        if (hasApprovalCols) {
+          await this.db.prepare(`
+            UPDATE offers SET
+              current_approval_level = ?
+              ${hasUpdatedAt ? `, updated_at = ${this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')"}` : ''}
+            WHERE id = ?
+          `).run(nextLevel, offerId);
+        }
+
+        return {
+          success: true,
+          statusCode: 200,
+          code: 'OFFER_LEVEL_APPROVED',
+          message: `Đã phê duyệt Cấp ${currentLevel} thành công. Offer được chuyển tiếp lên Cấp ${nextLevel} phê duyệt.`,
+          data: { id: offerId, status: 'PENDING_APPROVAL', currentApprovalLevel: nextLevel, requiredApprovalLevels: requiredLevels }
+        };
+      }
+
+      await this.db.prepare(`
+        UPDATE offers SET
+          status = 'APPROVED',
+          approver_id = ?
+          ${hasUpdatedAt ? `, updated_at = ${this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')"}` : ''}
+        WHERE id = ?
+      `).run(actor.id, offerId);
+
+      if (row.candidate_id) {
+        await this.db.prepare("UPDATE candidates SET stage = 'HIRED' WHERE id = ?").run(row.candidate_id);
+      }
+
+      return {
+        success: true,
+        statusCode: 200,
+        code: 'OFFER_APPROVED',
+        message: 'Đã hoàn tất phê duyệt Offer thành công.',
+        data: { id: offerId, status: 'APPROVED', action: 'APPROVE', level: currentLevel }
+      };
+    });
+  }
+
+  async getOfferApprovals(offerId, actor = null) {
+    if (!offerId) return { success: false, statusCode: 400, message: 'Thiếu mã Offer.' };
+    if (actor) {
+      const fresh = await this.rbacMiddleware.getAuthorizedActor(actor.id, 'offer.read');
+      if (!fresh) {
+        return { success: false, statusCode: 403, code: 'OFFER_FORBIDDEN', message: 'Bạn không có quyền xem thông tin phê duyệt.' };
+      }
+    }
+
+    const hasApprovalsTable = await this.hasApprovalsTable();
+    if (!hasApprovalsTable) {
+      return { success: true, statusCode: 200, data: [] };
+    }
+
+    const rows = await this.db.prepare(`
+      SELECT
+        id,
+        offer_id,
+        level,
+        action,
+        approver_id,
+        approver_name,
+        approver_role,
+        comment,
+        created_at
+      FROM offer_approvals
+      WHERE offer_id = ?
+      ORDER BY created_at ASC, level ASC
+    `).all(offerId);
+
+    return {
+      success: true,
+      statusCode: 200,
+      data: rows.map(r => ({
+        id: r.id,
+        offerId: r.offer_id,
+        level: r.level,
+        action: r.action,
+        approverId: r.approver_id,
+        approverName: r.approver_name,
+        approverRole: r.approver_role,
+        comment: r.comment,
+        createdAt: r.created_at
+      }))
+    };
   }
 }
 

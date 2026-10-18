@@ -2344,6 +2344,14 @@ class RequisitionService {
   async updateOfferStatus(id, status, actor = null) {
     return this.offerService.updateOfferStatus(id, status, actor);
   }
+
+  async decideOffer(id, data = {}, actor = null) {
+    return this.offerService.decideOffer({ ...data, id, offerId: id }, actor);
+  }
+
+  async getOfferApprovals(id, actor = null) {
+    return this.offerService.getOfferApprovals(id, actor);
+  }
 }
 
 module.exports = RequisitionService;
