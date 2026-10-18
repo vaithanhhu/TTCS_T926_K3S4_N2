@@ -211,6 +211,7 @@ async function main() {
     });
     await test('Offer approval sending and candidate response enforce distinct permissions and ownership', async () => {
       const candidateId = (await api('GET', '/candidates', 'CANDIDATE')).data.candidates[0].id;
+      await db.prepare('DELETE FROM offers WHERE candidate_id = ?').run(candidateId);
       const created = await api('POST', '/offers', 'RECRUITER', { candidateId, salaryMonthly: 18000000, startDate: '2027-01-01',approverId:'usr-approver' }); assert.equal(created.status, 201);
       const id = created.data.data.id;
       assert.equal((await api('PUT', '/offers/' + id + '/status', 'APPROVER', { status: 'SENT' })).status, 403);

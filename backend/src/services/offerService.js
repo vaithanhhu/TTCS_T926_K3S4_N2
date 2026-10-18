@@ -7,6 +7,38 @@ class OfferService {
     this.rbacMiddleware = rbacMiddleware || new (require('../middlewares/rbacMiddleware'))(db);
   }
 
+  async hasProposalCols() {
+    if (this._hasProposalCols !== undefined) return this._hasProposalCols;
+    try {
+      if (this.db.provider === 'postgres') {
+        const row = await this.db.prepare("SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='offers' AND column_name='job_title_id'").get();
+        this._hasProposalCols = Boolean(row);
+      } else {
+        const cols = (await this.db.prepare("PRAGMA table_info(offers)").all()).map(c => c.name);
+        this._hasProposalCols = cols.includes('job_title_id');
+      }
+    } catch {
+      this._hasProposalCols = false;
+    }
+    return this._hasProposalCols;
+  }
+
+  async hasUpdatedAtCol() {
+    if (this._hasUpdatedAtCol !== undefined) return this._hasUpdatedAtCol;
+    try {
+      if (this.db.provider === 'postgres') {
+        const row = await this.db.prepare("SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='offers' AND column_name='updated_at'").get();
+        this._hasUpdatedAtCol = Boolean(row);
+      } else {
+        const cols = (await this.db.prepare("PRAGMA table_info(offers)").all()).map(c => c.name);
+        this._hasUpdatedAtCol = cols.includes('updated_at');
+      }
+    } catch {
+      this._hasUpdatedAtCol = false;
+    }
+    return this._hasUpdatedAtCol;
+  }
+
   formatCurrency(amount) {
     if (amount === null || amount === undefined || isNaN(amount)) return 'Thỏa thuận';
     return Number(amount).toLocaleString('vi-VN');
@@ -169,7 +201,7 @@ class OfferService {
         params.push(viewer.id);
       }
       if (viewer.roles.includes('CANDIDATE')) {
-        scopes.push('(LOWER(c.email) = LOWER(?) AND o.status IN (\'SENT\', \'ACCEPTED\', \'APPROVED\'))');
+        scopes.push('LOWER(c.email) = LOWER(?)');
         params.push(viewer.email);
       }
       conditions.push(scopes.length ? '(' + scopes.join(' OR ')+ ')' : '1=0');
@@ -179,24 +211,19 @@ class OfferService {
       ? this.requisitionService.recruiterScope('r', viewer.id).params
       : [];
 
+    const hasCols = await this.hasProposalCols();
+
     const stmt = this.db.prepare(`
       SELECT
         o.id,
         o.candidate_id,
         o.requisition_id,
-        o.job_title_id,
+        ${hasCols ? 'o.job_title_id, o.allowances, o.expiration_date, o.salary_justification, o.offer_letter, o.notes, o.created_by, o.updated_at,' : 'NULL AS job_title_id, 0 AS allowances, NULL AS expiration_date, NULL AS salary_justification, NULL AS offer_letter, NULL AS notes, NULL AS created_by, o.created_at AS updated_at,'}
         o.salary_monthly,
-        o.allowances,
         o.start_date,
-        o.expiration_date,
-        o.salary_justification,
-        o.offer_letter,
-        o.notes,
         o.status,
         o.approver_id,
-        o.created_by,
         o.created_at,
-        o.updated_at,
         r.recruiter_id AS responsible_recruiter_id,
         CASE WHEN ${viewer?.roles.includes('RECRUITER') ? this.requisitionService.recruiterScope('r', viewer.id).condition : '1=0'} THEN 1 ELSE 0 END AS in_recruiter_scope,
         c.id AS candidate_id_alias,
@@ -214,13 +241,13 @@ class OfferService {
         jt.max_salary AS job_max_salary,
         u.id AS approver_id_alias,
         u.full_name AS approver_name,
-        cb.full_name AS creator_name
+        ${hasCols ? 'cb.full_name AS creator_name' : 'NULL AS creator_name'}
       FROM offers o
       LEFT JOIN candidates c ON o.candidate_id = c.id
       LEFT JOIN requisitions r ON COALESCE(o.requisition_id, c.requisition_id) = r.id
-      LEFT JOIN job_titles jt ON COALESCE(o.job_title_id, r.job_title_id) = jt.id
+      LEFT JOIN job_titles jt ON COALESCE(${hasCols ? 'o.job_title_id' : 'NULL'}, r.job_title_id) = jt.id
       LEFT JOIN users u ON o.approver_id = u.id
-      LEFT JOIN users cb ON o.created_by = cb.id
+      ${hasCols ? 'LEFT JOIN users cb ON o.created_by = cb.id' : ''}
       ${conditions.length ? 'WHERE ' + conditions.join(' AND ') : ''}
       ORDER BY o.created_at DESC
     `);
@@ -521,25 +548,42 @@ class OfferService {
     });
 
     const offerLetter = data.offerLetter || letterPreview.text;
+    const hasCols = await this.hasProposalCols();
 
     try {
       return await this.db.transaction(async () => {
-        const stmt = this.db.prepare(`
-          INSERT INTO offers (
-            id, candidate_id, requisition_id, job_title_id, salary_monthly, allowances,
-            start_date, expiration_date, salary_justification, offer_letter, notes,
-            status, approver_id, created_by, created_at, updated_at
-          ) VALUES (
-            ?, ?, ?, ?, ?, ?,
-            ?, ?, ?, ?, ?,
-            ?, ?, ?, ${this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')"}, ${this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')"}
-          )
-        `);
-        await stmt.run(
-          offerId, candidateId, requisitionId, jobTitleId, salaryMonthly, allowances,
-          startDate, expirationDate, salaryJustification, offerLetter, notes,
-          initialStatus, approverId, actor?.id || null
-        );
+        if (hasCols) {
+          const stmt = this.db.prepare(`
+            INSERT INTO offers (
+              id, candidate_id, requisition_id, job_title_id, salary_monthly, allowances,
+              start_date, expiration_date, salary_justification, offer_letter, notes,
+              status, approver_id, created_by, created_at, updated_at
+            ) VALUES (
+              ?, ?, ?, ?, ?, ?,
+              ?, ?, ?, ?, ?,
+              ?, ?, ?, ${this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')"}, ${this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')"}
+            )
+          `);
+          await stmt.run(
+            offerId, candidateId, requisitionId, jobTitleId, salaryMonthly, allowances,
+            startDate, expirationDate, salaryJustification, offerLetter, notes,
+            initialStatus, approverId, actor?.id || null
+          );
+        } else {
+          const stmt = this.db.prepare(`
+            INSERT INTO offers (
+              id, candidate_id, requisition_id, salary_monthly,
+              start_date, status, approver_id, created_at
+            ) VALUES (
+              ?, ?, ?, ?,
+              ?, ?, ?, ${this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')"}
+            )
+          `);
+          await stmt.run(
+            offerId, candidateId, requisitionId, salaryMonthly,
+            startDate, initialStatus, approverId
+          );
+        }
 
         if (initialStatus === 'PENDING_APPROVAL') {
           await this.db.prepare("UPDATE candidates SET stage = 'OFFER' WHERE id = ?").run(candidateId);
@@ -646,24 +690,39 @@ class OfferService {
       const approverId = data.approverId !== undefined ? data.approverId : existing.approver_id;
       const offerLetter = data.offerLetter !== undefined ? data.offerLetter : existing.offer_letter;
 
-      await this.db.prepare(`
-        UPDATE offers SET
-          job_title_id = ?,
-          salary_monthly = ?,
-          allowances = ?,
-          start_date = ?,
-          expiration_date = ?,
-          salary_justification = ?,
-          offer_letter = ?,
-          notes = ?,
-          status = ?,
-          approver_id = ?,
-          updated_at = ${this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')"}
-        WHERE id = ?
-      `).run(
-        jobTitleId, salaryMonthly, allowances, startDate, expirationDate,
-        salaryJustification, offerLetter, notes, newStatus, approverId, id
-      );
+      const hasCols = await this.hasProposalCols();
+      const hasUpdatedAt = await this.hasUpdatedAtCol();
+
+      if (hasCols) {
+        await this.db.prepare(`
+          UPDATE offers SET
+            job_title_id = ?,
+            salary_monthly = ?,
+            allowances = ?,
+            start_date = ?,
+            expiration_date = ?,
+            salary_justification = ?,
+            offer_letter = ?,
+            notes = ?,
+            status = ?,
+            approver_id = ?,
+            updated_at = ${this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')"}
+          WHERE id = ?
+        `).run(
+          jobTitleId, salaryMonthly, allowances, startDate, expirationDate,
+          salaryJustification, offerLetter, notes, newStatus, approverId, id
+        );
+      } else {
+        await this.db.prepare(`
+          UPDATE offers SET
+            salary_monthly = ?,
+            start_date = ?,
+            status = ?,
+            approver_id = ?
+            ${hasUpdatedAt ? `, updated_at = ${this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')"}` : ''}
+          WHERE id = ?
+        `).run(salaryMonthly, startDate, newStatus, approverId, id);
+      }
 
       if (newStatus === 'PENDING_APPROVAL' && existing.status === 'DRAFT') {
         await this.db.prepare("UPDATE candidates SET stage = 'OFFER' WHERE id = ?").run(existing.candidate_id);
@@ -729,7 +788,8 @@ class OfferService {
     }
     if (!id) return { success: false, statusCode: 400, message: 'Thiếu mã offer.' };
 
-    const stmt = this.db.prepare(`UPDATE offers SET status = ?, updated_at = ${this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')"} WHERE id = ? AND (? <> 'ACCEPTED' OR status = 'SENT')`);
+    const hasUpdatedAt = await this.hasUpdatedAtCol();
+    const stmt = this.db.prepare(`UPDATE offers SET status = ? ${hasUpdatedAt ? `, updated_at = ${this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')"}` : ''} WHERE id = ? AND (? <> 'ACCEPTED' OR status = 'SENT')`);
     const res = await stmt.run(status, id, status);
     if (res.changes === 0) {
       if (status === 'ACCEPTED' && await this.db.prepare('SELECT id FROM offers WHERE id=?').get(id)) {

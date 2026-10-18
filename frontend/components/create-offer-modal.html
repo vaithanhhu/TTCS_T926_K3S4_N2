@@ -85,21 +85,19 @@
           </div>
         </div>
 
-        <div style="margin-top: 16px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--color-border); padding-top: 12px;">
-          <button type="button" id="preview-offer-btn" class="btn btn-outline btn-sm">
+        <div style="margin-top: 16px; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; border-top: 1px solid var(--color-border); padding-top: 12px;">
+          <button type="button" id="preview-offer-btn" class="btn btn-outline btn-sm" style="margin-right: auto;">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-            <span>Xem trước thư Offer</span>
+            <span>Xem trước</span>
           </button>
-          <div style="display: flex; gap: 10px;">
-            <button type="button" id="cancel-create-offer-btn" class="btn btn-outline btn-sm">Hủy bỏ</button>
-            <button type="button" id="save-draft-offer-btn" class="btn btn-outline btn-sm" style="color: var(--color-primary); border-color: var(--color-primary);">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
-              <span>Lưu nháp</span>
-            </button>
-            <button type="submit" id="submit-create-offer-btn" class="btn btn-primary btn-sm">
-              <span>Lưu & Chuyển phê duyệt</span>
-            </button>
-          </div>
+          <button type="button" id="cancel-create-offer-btn" class="btn btn-outline btn-sm">Hủy bỏ</button>
+          <button type="button" id="save-draft-offer-btn" class="btn btn-outline btn-sm" style="color: var(--color-primary); border-color: var(--color-primary);">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+            <span>Lưu nháp</span>
+          </button>
+          <button type="submit" id="submit-create-offer-btn" class="btn btn-primary btn-sm">
+            <span>Lưu & Chuyển phê duyệt</span>
+          </button>
         </div>
       </form>
     </div>
