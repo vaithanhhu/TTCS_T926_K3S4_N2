@@ -782,6 +782,38 @@ async function validateOfferSalaryApi(token, validationData) {
   }
 }
 
+async function decideOfferApi(token, id, decisionData) {
+  try {
+    const response = await fetch(`${API_BASE}/offers/${id}/decide`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify(decisionData)
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi gửi quyết định phê duyệt offer.' } };
+  }
+}
+
+async function getOfferApprovalsApi(token, id) {
+  try {
+    const response = await fetch(`${API_BASE}/offers/${id}/approvals`, {
+      method: 'GET',
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : ''
+      }
+    });
+    const data = await response.json();
+    return { status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { status: 0, ok: false, data: { success: false, message: 'Lỗi kết nối khi lấy lịch sử phê duyệt offer.' } };
+  }
+}
+
 async function getRecruitmentReportsApi(token) {
   try {
     const response = await fetch(`${API_BASE}/reports/recruitment`, {
@@ -1877,6 +1909,8 @@ window.ATS_API = {
   updateOfferStatusApi,
   previewOfferApi,
   validateOfferSalaryApi,
+  decideOfferApi,
+  getOfferApprovalsApi,
   getRecruitmentReportsApi,
   getProfileApi,
   updateProfileApi,

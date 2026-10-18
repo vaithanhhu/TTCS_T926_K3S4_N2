@@ -2557,7 +2557,17 @@ async function handleRequest(req, res) {
     return;
   }
 
-  if (req.method === 'GET' && (pathname.startsWith('/api/v1/offers/') || pathname.startsWith('/offers/')) && !pathname.endsWith('/status') && !pathname.endsWith('/preview')) {
+  if (req.method === 'GET' && ((pathname.startsWith('/api/v1/offers/') && pathname.endsWith('/approvals')) || (pathname.startsWith('/offers/') && pathname.endsWith('/approvals')))) {
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'offer.read'));
+    if (!user) return;
+    const offId = pathname.replace(/^\/api\/v1\/offers\//, '').replace(/^\/offers\//, '').replace(/\/approvals$/, '');
+    const result = await requisitionService.getOfferApprovals(offId, user);
+    res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(result));
+    return;
+  }
+
+  if (req.method === 'GET' && (pathname.startsWith('/api/v1/offers/') || pathname.startsWith('/offers/')) && !pathname.endsWith('/status') && !pathname.endsWith('/preview') && !pathname.endsWith('/approvals') && !pathname.endsWith('/decide')) {
     const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'offer.read'));
     if (!user) return;
     const offId = pathname.replace(/^\/api\/v1\/offers\//, '').replace(/^\/offers\//, '');
@@ -2577,6 +2587,22 @@ async function handleRequest(req, res) {
       res.end(JSON.stringify(result));
     } catch (err) {
       if(err instanceof require('./services/approvalConfigurationService').ApprovalConfigurationError){res.writeHead(err.statusCode,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({success:false,code:err.code,message:err.message}));return;}
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
+    }
+    return;
+  }
+
+  if ((req.method === 'POST' || req.method === 'PUT') && ((pathname.startsWith('/api/v1/offers/') && pathname.endsWith('/decide')) || (pathname.startsWith('/offers/') && pathname.endsWith('/decide')))) {
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'offer.approve'));
+    if (!user) return;
+    try {
+      const offId = pathname.replace(/^\/api\/v1\/offers\//, '').replace(/^\/offers\//, '').replace(/\/decide$/, '');
+      const body = await parseBody(req);
+      const result = await requisitionService.decideOffer(offId, body, user);
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch (err) {
       res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
     }
@@ -2608,7 +2634,7 @@ async function handleRequest(req, res) {
     return;
   }
 
-  if (req.method === 'PUT' && (pathname.startsWith('/api/v1/offers/') || pathname.startsWith('/offers/')) && !pathname.endsWith('/status')) {
+  if (req.method === 'PUT' && (pathname.startsWith('/api/v1/offers/') || pathname.startsWith('/offers/')) && !pathname.endsWith('/status') && !pathname.endsWith('/decide')) {
     const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'offer.create'));
     if (!user) return;
     try {
