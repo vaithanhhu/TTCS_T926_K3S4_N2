@@ -2754,6 +2754,148 @@ async function handleRequest(req, res) {
     return;
   }
 
+  if (req.method === 'GET' && (pathname === '/api/v1/onboarding/templates' || pathname === '/onboarding/templates')) {
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.read'));
+    if (!user) return;
+    try {
+      const departmentId = url.searchParams.get('departmentId');
+      const result = await requisitionService.getOnboardingTemplates({ departmentId }, user);
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
+    }
+    return;
+  }
+
+  if (req.method === 'POST' && (pathname === '/api/v1/onboarding/templates' || pathname === '/onboarding/templates')) {
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.update'));
+    if (!user) return;
+    try {
+      const body = await parseBody(req);
+      const result = await requisitionService.createOnboardingTemplate(body, user);
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
+    }
+    return;
+  }
+
+  if (req.method === 'GET' && (pathname.startsWith('/api/v1/onboarding/templates/') || pathname.startsWith('/onboarding/templates/'))) {
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.read'));
+    if (!user) return;
+    try {
+      const tmplId = pathname.replace(/^\/api\/v1\/onboarding\/templates\//, '').replace(/^\/onboarding\/templates\//, '');
+      const result = await requisitionService.getOnboardingTemplateById(tmplId, user);
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
+    }
+    return;
+  }
+
+  if (req.method === 'POST' && (pathname === '/api/v1/onboarding/initialize' || pathname === '/onboarding/initialize')) {
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.update'));
+    if (!user) return;
+    try {
+      const body = await parseBody(req);
+      const result = await requisitionService.initializeOnboarding(body, user);
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
+    }
+    return;
+  }
+
+  if (req.method === 'GET' && (pathname.startsWith('/api/v1/onboarding/candidates/') || pathname.startsWith('/onboarding/candidates/'))) {
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.read'));
+    if (!user) return;
+    try {
+      const candId = pathname.replace(/^\/api\/v1\/onboarding\/candidates\//, '').replace(/^\/onboarding\/candidates\//, '');
+      const result = await requisitionService.getOnboardingByCandidate(candId, user);
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
+    }
+    return;
+  }
+
+  if ((req.method === 'PATCH' || req.method === 'PUT' || req.method === 'POST') && (pathname.includes('/onboarding/checklists/') && pathname.includes('/items/'))) {
+    const authHeader = req.headers['authorization'] || '';
+    if (!authHeader.startsWith('Bearer ')) {
+      res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 401, message: 'Yêu cầu thiếu token xác thực.', code: 'UNAUTHORIZED' }));
+      return;
+    }
+    const token = authHeader.substring(7).trim();
+    const sessionResult = (await authController.authService.validateSession(token, true));
+    if (!sessionResult.valid) {
+      res.writeHead(sessionResult.statusCode || 401, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: sessionResult.statusCode || 401, message: sessionResult.message, code: sessionResult.code }));
+      return;
+    }
+    const user = sessionResult.user;
+    try {
+      const match = pathname.match(/\/onboarding\/checklists\/([^/]+)\/items\/([^/]+)/);
+      if (!match) {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Đường dẫn không hợp lệ.', code: 'BAD_REQUEST' }));
+        return;
+      }
+      const checklistId = match[1];
+      const itemId = match[2];
+      const body = await parseBody(req);
+      const result = await requisitionService.updateOnboardingChecklistItem(checklistId, itemId, body, user);
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
+    }
+    return;
+  }
+
+  if (req.method === 'GET' && (pathname.startsWith('/api/v1/onboarding/checklists/') || pathname.startsWith('/onboarding/checklists/'))) {
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.read'));
+    if (!user) return;
+    try {
+      const ckId = pathname.replace(/^\/api\/v1\/onboarding\/checklists\//, '').replace(/^\/onboarding\/checklists\//, '');
+      const result = await requisitionService.getOnboardingChecklistById(ckId, user);
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
+    }
+    return;
+  }
+
+  if (req.method === 'GET' && (pathname === '/api/v1/onboarding/checklists' || pathname === '/onboarding/checklists')) {
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.read'));
+    if (!user) return;
+    try {
+      const departmentId = url.searchParams.get('departmentId');
+      const status = url.searchParams.get('status');
+      const search = url.searchParams.get('search');
+      const result = await requisitionService.listOnboardingChecklists({ departmentId, status, search }, user);
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: 400, message: 'Dữ liệu không hợp lệ.', code: 'BAD_REQUEST' }));
+    }
+    return;
+  }
+
   // 13.10 API: Recruitment Reports (Real SQLite Analytics)
   if (req.method === 'GET' && (pathname === '/api/v1/reports/recruitment' || pathname === '/reports/recruitment')) {
     const authHeader = req.headers['authorization'] || '';

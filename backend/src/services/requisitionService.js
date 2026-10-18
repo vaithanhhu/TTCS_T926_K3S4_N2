@@ -1,12 +1,13 @@
 const crypto = require('node:crypto');
 const { getDatabase } = require('../db/database');
-const candidateStages = Object.freeze(['NEW', 'APPLIED', 'SCREENING', 'INTERVIEW', 'OFFER', 'HIRED', 'REJECTED']);
+const candidateStages = Object.freeze(['NEW', 'APPLIED', 'SCREENING', 'INTERVIEW', 'OFFER', 'HIRED', 'ONBOARDED', 'REJECTED']);
 
 class RequisitionService {
   constructor(db) {
     this.db = db || getDatabase();
     this.openPolicy = new (require('./requisitionOpenPolicyService'))(this.db);
     this.offerService = new (require('./offerService'))(this.db, this);
+    this.onboardingService = new (require('./onboardingService'))(this.db, this);
   }
 
   /**
@@ -2379,6 +2380,38 @@ class RequisitionService {
 
   async addToTalentPoolFromOffer(id, data = {}, actor = null) {
     return this.offerService.addToTalentPoolFromOffer(id, data, actor);
+  }
+
+  async getOnboardingTemplates(options = {}, actor = null) {
+    return this.onboardingService.getTemplates(options);
+  }
+
+  async getOnboardingTemplateById(id, actor = null) {
+    return this.onboardingService.getTemplateById(id);
+  }
+
+  async createOnboardingTemplate(data = {}, actor = null) {
+    return this.onboardingService.createTemplate(data, actor);
+  }
+
+  async initializeOnboarding(data = {}, actor = null) {
+    return this.onboardingService.initializeOnboarding(data, actor);
+  }
+
+  async getOnboardingByCandidate(candidateId, actor = null) {
+    return this.onboardingService.getOnboardingByCandidate(candidateId, actor);
+  }
+
+  async getOnboardingChecklistById(id, actor = null) {
+    return this.onboardingService.getChecklistById(id, actor);
+  }
+
+  async updateOnboardingChecklistItem(checklistId, itemId, data = {}, actor = null) {
+    return this.onboardingService.updateChecklistItem(checklistId, itemId, data, actor);
+  }
+
+  async listOnboardingChecklists(options = {}, actor = null) {
+    return this.onboardingService.listChecklists(options, actor);
   }
 }
 
