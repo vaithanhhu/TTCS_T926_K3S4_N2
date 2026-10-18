@@ -67,16 +67,39 @@
     document.getElementById('req-detail-id').value = req.id;
     document.getElementById('req-detail-code').textContent = req.code;
     document.getElementById('req-detail-title-input').value = req.title;
+    const jobTitleInput = document.getElementById('req-detail-job-title-input');
+    if (jobTitleInput) jobTitleInput.value = req.jobTitleName ? (req.jobTitleCode ? `${req.jobTitleCode} — ${req.jobTitleName}` : req.jobTitleName) : '—';
+    const frameworkInput = document.getElementById('req-detail-framework-input');
+    if (frameworkInput) frameworkInput.value = req.frameworkName ? (req.frameworkCode ? `${req.frameworkCode} — ${req.frameworkName}` : req.frameworkName) : 'Chưa gắn khung năng lực';
     document.getElementById('req-detail-dept-input').value = req.departmentName || req.department || '';
     document.getElementById('req-detail-headcount-input').value = req.headcount;
-    document.getElementById('req-detail-status-select').value = req.status;
+    const statusSelect = document.getElementById('req-detail-status-select');
+    if (statusSelect) {
+      if (req.status === 'DRAFT') {
+        statusSelect.innerHTML = '<option value="DRAFT">Nháp (DRAFT - Chờ phê duyệt)</option>';
+        statusSelect.value = 'DRAFT';
+        statusSelect.disabled = true;
+      } else {
+        statusSelect.innerHTML = '<option value="OPEN">Đang mở tuyển (OPEN)</option><option value="IN_PROGRESS">Đang phỏng vấn (IN_PROGRESS)</option><option value="CLOSED">Đã đóng / Đủ chỉ tiêu (CLOSED)</option>';
+        statusSelect.value = req.status;
+      }
+    }
     editingLegacyRequisition = req;
     document.getElementById('req-detail-handover-notes').value=req.handoverNotes||'';
 
     const statusBadge = document.getElementById('req-detail-status-badge');
     if (statusBadge) {
-      statusBadge.className = `badge ${req.status === 'OPEN' ? 'badge-primary' : (req.status === 'IN_PROGRESS' ? 'badge-warning' : 'badge-neutral')}`;
-      statusBadge.textContent = req.status === 'PAUSED' ? 'Tạm dừng' : req.status === 'CANCELLED' ? 'Huỷ' : req.status === 'OPEN' ? 'Đang mở' : (req.status === 'IN_PROGRESS' ? 'Đang tuyển' : 'Đã đóng');
+      let badgeCls = req.status === 'OPEN' ? 'badge-primary' : (req.status === 'IN_PROGRESS' ? 'badge-warning' : 'badge-neutral');
+      let badgeText = req.status === 'PAUSED' ? 'Tạm dừng' : req.status === 'CANCELLED' ? 'Huỷ' : req.status === 'DRAFT' ? 'Nháp' : (req.status === 'OPEN' ? 'Đang mở' : (req.status === 'IN_PROGRESS' ? 'Đang tuyển' : 'Đã đóng'));
+      if (req.approvalStatus === 'PENDING') {
+        badgeCls = 'badge-warning';
+        badgeText = 'Chờ duyệt';
+      } else if (req.approvalStatus === 'REJECTED') {
+        badgeCls = 'badge-danger';
+        badgeText = 'Từ chối';
+      }
+      statusBadge.className = `badge ${badgeCls}`;
+      statusBadge.textContent = badgeText;
     }
 
     if (token && reqDetailRecruiterSelect) {
@@ -163,7 +186,7 @@
     const significant=Boolean(edit&&legacyRequisitionEditAccess?.canChangeSignificant);
     for(const id of ['req-detail-title-input','req-detail-dept-input','req-detail-headcount-input','req-detail-work-location-select','req-detail-work-mode-select'])document.getElementById(id).disabled=!significant;
     if(reqDetailRecruiterSelect)reqDetailRecruiterSelect.disabled=!legacyRequisitionEditAccess?.operationalFields?.includes('recruiterId');
-    document.getElementById('req-detail-status-select').disabled=!legacyRequisitionEditAccess?.operationalFields?.includes('status');
+    document.getElementById('req-detail-status-select').disabled=req.status==='DRAFT'||!legacyRequisitionEditAccess?.operationalFields?.includes('status');
     document.getElementById('submit-req-detail-btn').classList.toggle('hidden',!edit);
     if (reqDetailAlert) reqDetailAlert.classList.add('hidden');
     reqDetailModal.classList.remove('hidden');

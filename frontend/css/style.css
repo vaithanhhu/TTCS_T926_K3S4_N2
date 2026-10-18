@@ -1783,7 +1783,8 @@ button, input, select, textarea {
 
 #s302-modal .modal-card { overflow-y: auto; overscroll-behavior: contain; }
 #s302-modal .modal-header { position: sticky; top: 0; background: #fff; z-index: 1; flex-shrink: 0; }
-#s310-modal { z-index: 110; }
+#s310-modal { z-index: 1050; }
+#s310-modal .modal-card { width: min(92vw, 800px); max-width: 800px; min-width: min(100%, 640px); max-height: 90vh; }
 #s310-body { overscroll-behavior: contain; }
 
 #create-req-modal .modal-card { width: min(92vw, 1680px); max-width: 1680px; max-height: 94vh; max-height: 94dvh; }

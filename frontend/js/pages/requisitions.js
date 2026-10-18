@@ -45,9 +45,14 @@
         }
 
         const authUser = typeof currentAuthenticatedUser !== 'undefined' ? currentAuthenticatedUser : (typeof window !== 'undefined' ? window.currentAuthenticatedUser : null);
-        requisitionsTableBody.innerHTML = list.map(req => {
-          const statusBadge = req.status === 'OPEN' ? 'badge-primary' : (req.status === 'IN_PROGRESS' ? 'badge-warning' : 'badge-neutral');
+          requisitionsTableBody.innerHTML = list.map(req => {
+          let statusBadge = req.status === 'OPEN' ? 'badge-primary' : (req.status === 'IN_PROGRESS' ? 'badge-warning' : 'badge-neutral');
           let statusText = req.status === 'PAUSED' ? 'Tạm dừng' : req.status === 'CANCELLED' ? 'Huỷ' : req.status === 'DRAFT' ? 'Nháp' : (req.status === 'OPEN' ? 'Đang mở' : (req.status === 'IN_PROGRESS' ? 'Đang tuyển' : 'Đã đóng'));
+          if (req.approvalStatus === 'PENDING') {
+            statusBadge = 'badge-warning';
+          } else if (req.approvalStatus === 'REJECTED') {
+            statusBadge = 'badge-danger';
+          }
           if(req.approvalStatus)statusText+=' — '+({NOT_SUBMITTED:'Chưa gửi',PENDING:'Chờ phê duyệt',APPROVED:'Đã duyệt',REJECTED:'Từ chối',NEEDS_INFO:'Yêu cầu bổ sung'}[req.approvalStatus]||req.approvalStatus)+(req.waitingFor?' ('+req.waitingFor+')':'');
           const isHandover = req.handover_required || req.handoverRequired;
           const handoverAlert = isHandover ? `<span class="badge badge-warning" style="margin-left: 6px;">Cần bàn giao</span>` : '';
@@ -55,7 +60,7 @@
           const recName = req.recruiter_name || req.recruiterName || (req.recruiter ? req.recruiter.fullName : '');
 
           return `
-            <tr ${req.overdue?'style="background:var(--color-danger-light, #fff1f0);"':''}>
+            <tr ${req.overdue?'style="background: var(--color-danger-light, #fff1f0); border-left: 4px solid var(--color-danger, #e11d48);"':''}>
               <td><code class="font-mono" style="font-weight: 600; color: var(--color-primary);">${escapeDepartmentHtml(req.code || '')}</code></td>
               <td>
                 <div style="font-weight: 600; color: var(--color-text);">${escapeDepartmentHtml(req.title || 'Yêu cầu chưa đặt tên')}</div>
@@ -64,13 +69,14 @@
               <td>${escapeDepartmentHtml(dept)}</td>
               <td style="text-align: center; font-weight: 600;">${req.headcount ?? '—'}</td>
               <td>${recName ? escapeDepartmentHtml(recName) : '<span style="color: var(--color-text-muted); font-style: italic;">Chưa phân công</span>'}${req.supportRecruiters?.length?'<div>Hỗ trợ: '+req.supportRecruiters.map(user=>escapeDepartmentHtml(user.name)).join(', ')+'</div>':''}</td>
-              <td><span class="badge ${statusBadge}">${escapeDepartmentHtml(statusText)}</span></td>
+              <td><span class="badge ${statusBadge}">${escapeDepartmentHtml(statusText)}</span>${req.overdue&&!requisitionTrackingEnabled?'<span class="badge badge-danger" style="margin-left: 4px;">Trễ hạn</span>':''}</td>
               ${requisitionTrackingEnabled?`<td><div>${req.daysOpen==null?'Chưa mở':(req.daysOpenEstimated?'~':'')+req.daysOpen+' ngày mở'}</div><div>${req.daysRemaining==null?'Chưa có ngày cần người':req.daysRemaining>=0?'Còn '+req.daysRemaining+' ngày':'Qua ngày cần người '+Math.abs(req.daysRemaining)+' ngày'}</div>${req.overdue?'<span class="badge badge-danger">Trễ hạn</span>':''}${req.paused?'<span class="badge badge-neutral">Đang tạm dừng</span>':''}</td>`:''}
               <td style="text-align: center;">
                 <div style="display: flex; gap: 6px; justify-content: center;">
                   <button type="button" class="btn btn-outline btn-xs btn-detail-req" data-id="${escapeDepartmentHtml(req.id).replace(/"/g, '&quot;')}">
                     Chi tiết
                   </button>
+                  ${req.status === 'DRAFT' && req.approvalStatus !== 'PENDING' && (!req.created_by && !req.createdBy || (req.created_by || req.createdBy) === authUser?.id || authUser?.roles?.some(role => ['ADMIN', 'HR_MANAGER', 'HIRING_MGR'].includes(role))) ? `<button type="button" class="btn btn-primary btn-xs btn-submit-approval-req" data-id="${escapeDepartmentHtml(req.id).replace(/"/g, '&quot;')}" data-draft-version="${req.draftVersion ?? req.s210_version ?? 0}">Gửi Chờ duyệt</button>` : ''}
                   ${res.data.features?.requisitionOperations&&authUser?.roles?.some(role=>['ADMIN','HR_MANAGER','HIRING_MGR'].includes(role))?`<button type="button" class="btn btn-outline btn-xs btn-copy-req" data-id="${escapeDepartmentHtml(req.id).replace(/"/g, '&quot;')}">Sao chép</button>`:''}
                   <button type="button" class="btn btn-outline btn-xs btn-edit-req" data-id="${escapeDepartmentHtml(req.id).replace(/"/g, '&quot;')}">
                     Sửa
@@ -92,6 +98,30 @@
         if(requisitionTrackingEnabled&&res.data.pagination){const p=res.data.pagination;document.getElementById('req-page-info').textContent=p.totalItems===0?'0 yêu cầu':p.currentPage+' / '+p.totalPages+' — '+p.totalItems+' yêu cầu';}
 
         // Wire Action Buttons
+        document.querySelectorAll('.btn-submit-approval-req').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const reqId = btn.getAttribute('data-id');
+            const draftVersion = Number(btn.getAttribute('data-draft-version') || 0);
+            btn.disabled = true;
+            try {
+              const res = await window.ATS_REQUISITION_APPROVAL_API.request('', 'POST', {
+                requisitionId: reqId,
+                requestId: window.crypto?.randomUUID?.() || ('submit-' + Date.now()),
+                expectedDraftVersion: draftVersion
+              });
+              if (res.ok && res.data?.success) {
+                showToast('success', 'Gửi phê duyệt', 'Hồ sơ đã được gửi chờ duyệt.');
+                await loadRequisitions();
+              } else {
+                showToast('danger', 'Không thể gửi phê duyệt', res.data?.message || 'Có lỗi xảy ra khi gửi phê duyệt.');
+              }
+            } catch (err) {
+              showToast('danger', 'Lỗi', 'Không thể kết nối đến máy chủ.');
+            } finally {
+              btn.disabled = false;
+            }
+          });
+        });
         document.querySelectorAll('.btn-edit-req').forEach(btn => {
           btn.addEventListener('click', () => {
             const reqId = btn.getAttribute('data-id');

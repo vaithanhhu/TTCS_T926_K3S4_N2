@@ -5,7 +5,7 @@ class CandidateMergeError extends Error {
   constructor(code, message, statusCode = 400) { super(message); this.code = code; this.statusCode = statusCode; }
 }
 
-const CHILD_TABLES = ['interviews', 'offers', 'candidate_documents', 'candidate_status_history', 'candidate_tags', 'candidate_notes', 'application_tracking_tokens', 'candidate_stage_exceptions'];
+const CHILD_TABLES = ['interviews', 'offers', 'candidate_documents', 'candidate_status_history', 'candidate_tags', 'candidate_notes', 'application_tracking_tokens', 'candidate_stage_exceptions', 'hiring_decisions'];
 
 class CandidateMergeService {
   constructor(db) { this.db = db; this.rbac = new Rbac(db); }
@@ -37,7 +37,7 @@ class CandidateMergeService {
     const summary = async row => {
       const result = Object.fromEntries(['id','full_name','email','phone_number','requisition_id','stage','experience_years','current_company','expected_salary','notes','source_id','created_at','job_posting_id','cover_letter','referrer_name','referral_notes','is_internal_referral'].filter(key => Object.hasOwn(row,key)).map(key => [key,row[key]]));
       result.related = {};
-      for (const table of CHILD_TABLES.concat('candidate_talent_pool')) {
+      for (const table of CHILD_TABLES.concat('candidate_talent_pool', 'onboarding_checklists', 'candidate_communications', 'interview_batch_items')) {
         if (!await this.tableExists(table)) { result.related[table] = 0; continue; }
         result.related[table] = (await this.db.prepare(`SELECT COUNT(*) AS count FROM ${table} WHERE candidate_id=?`).get(row.id)).count;
       }
@@ -55,6 +55,11 @@ class CandidateMergeService {
       const primary = byId.get(primaryId), secondary = byId.get(secondaryId);
       await Promise.all([this.assertScope(primaryId, actor, 'candidate.merge'), this.assertScope(secondaryId, actor, 'candidate.merge')]);
       if (primary.merged_into_id || secondary.merged_into_id) this.fail('CANDIDATE_ALREADY_MERGED', 'Một hồ sơ đã thuộc về một lần gộp khác.', 409);
+      if (await this.tableExists('offers')) {
+        const primaryOffer = await this.db.prepare("SELECT 1 FROM offers WHERE candidate_id=? AND status IN ('DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'SENT') LIMIT 1").get(primaryId);
+        const secondaryOffer = await this.db.prepare("SELECT 1 FROM offers WHERE candidate_id=? AND status IN ('DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'SENT') LIMIT 1").get(secondaryId);
+        if (primaryOffer && secondaryOffer) this.fail('CANDIDATE_MERGE_OFFER_CONFLICT', 'Cả hai hồ sơ đều có thư mời nhận việc đang hoạt động. Vui lòng xử lý trước khi gộp.', 409);
+      }
       const eventId = `merge-${crypto.randomUUID()}`;
       const moved = {};
       for (const table of CHILD_TABLES) {
@@ -70,6 +75,34 @@ class CandidateMergeService {
         const poolRows = await this.db.prepare('SELECT id FROM candidate_talent_pool WHERE candidate_id=? ORDER BY id').all(secondaryId);
         moved.candidate_talent_pool = hasPrimary ? [] : poolRows.map(row => row.id);
         if (moved.candidate_talent_pool.length) await this.db.prepare('UPDATE candidate_talent_pool SET candidate_id=? WHERE candidate_id=?').run(primaryId, secondaryId);
+      }
+      if (await this.tableExists('onboarding_checklists')) {
+        const hasPrimary = await this.db.prepare('SELECT id FROM onboarding_checklists WHERE candidate_id=?').get(primaryId);
+        const checklistRows = await this.db.prepare('SELECT id FROM onboarding_checklists WHERE candidate_id=? ORDER BY id').all(secondaryId);
+        moved.onboarding_checklists = hasPrimary ? [] : checklistRows.map(row => row.id);
+        if (moved.onboarding_checklists.length) await this.db.prepare('UPDATE onboarding_checklists SET candidate_id=? WHERE candidate_id=?').run(primaryId, secondaryId);
+      }
+      if (await this.tableExists('candidate_communications')) {
+        const hasPrimaryRejection = Boolean(await this.db.prepare("SELECT 1 FROM candidate_communications WHERE candidate_id=? AND type='REJECTION' AND status IN ('DELIVERED', 'SENT_LOCAL') LIMIT 1").get(primaryId));
+        const commRows = await this.db.prepare('SELECT id, type, status FROM candidate_communications WHERE candidate_id=? ORDER BY id').all(secondaryId);
+        const commIds = commRows.filter(row => !(hasPrimaryRejection && row.type === 'REJECTION' && ['DELIVERED', 'SENT_LOCAL'].includes(row.status))).map(row => row.id);
+        moved.candidate_communications = commIds;
+        if (commIds.length) {
+          const placeholders = commIds.map(() => '?').join(',');
+          await this.db.prepare(`UPDATE candidate_communications SET candidate_id=? WHERE candidate_id=? AND id IN (${placeholders})`).run(primaryId, secondaryId, ...commIds);
+        }
+      }
+      if (await this.tableExists('interview_batch_items')) {
+        const batchRows = await this.db.prepare('SELECT interview_id, batch_id FROM interview_batch_items WHERE candidate_id=? ORDER BY interview_id').all(secondaryId);
+        const batchMoveIds = [];
+        for (const row of batchRows) {
+          const inBatch = await this.db.prepare('SELECT 1 FROM interview_batch_items WHERE batch_id=? AND candidate_id=? LIMIT 1').get(row.batch_id, primaryId);
+          if (!inBatch) batchMoveIds.push(row.interview_id);
+        }
+        moved.interview_batch_items = batchMoveIds;
+        for (const interviewId of batchMoveIds) {
+          await this.db.prepare('UPDATE interview_batch_items SET candidate_id=? WHERE candidate_id=? AND interview_id=?').run(primaryId, secondaryId, interviewId);
+        }
       }
       const before = { primary, secondary };
       const now = new Date().toISOString();
@@ -95,6 +128,13 @@ class CandidateMergeService {
       const moved = JSON.parse(event.moved_rows_json || '{}');
       for (const [table, rowIds] of Object.entries(moved)) {
         if (!rowIds.length || !await this.tableExists(table)) continue;
+        if (table === 'interview_batch_items') {
+          const placeholders = rowIds.map(() => '?').join(',');
+          await this.db.prepare(`UPDATE interview_batch_items SET candidate_id=? WHERE candidate_id=? AND interview_id IN (${placeholders})`).run(event.secondary_candidate_id, event.primary_candidate_id, ...rowIds);
+          const movedElsewhere = await this.db.prepare(`SELECT COUNT(*) AS count FROM interview_batch_items WHERE candidate_id NOT IN (?,?) AND interview_id IN (${placeholders})`).get(event.primary_candidate_id, event.secondary_candidate_id, ...rowIds);
+          if (Number(movedElsewhere.count)) this.fail('CANDIDATE_MERGE_UNDO_CONFLICT', 'Một số dữ liệu đã thay đổi sau khi gộp; hoàn tác đã bị hủy để tránh ghi đè.', 409);
+          continue;
+        }
         const placeholders = rowIds.map(() => '?').join(',');
         await this.db.prepare(`UPDATE ${table} SET candidate_id=? WHERE candidate_id=? AND id IN (${placeholders})`).run(event.secondary_candidate_id, event.primary_candidate_id, ...rowIds);
         const movedElsewhere = await this.db.prepare(`SELECT COUNT(*) AS count FROM ${table} WHERE candidate_id NOT IN (?,?) AND id IN (${placeholders})`).get(event.primary_candidate_id, event.secondary_candidate_id, ...rowIds);
