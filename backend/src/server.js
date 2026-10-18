@@ -2372,6 +2372,30 @@ async function handleRequest(req, res) {
     return;
   }
 
+  if (req.method === 'GET' && /^\/(?:api\/v1\/)?interviews\/[^/]+\/suggested-questions$/.test(pathname)) {
+    const user = await rbacMiddleware.authorize(req, res, authController.authService, 'interview.read');
+    if (!user) return;
+    const intId = pathname.replace(/^\/(?:api\/v1\/)?interviews\//, '').replace(/\/suggested-questions$/, '');
+    const questionBankService = new (require('./services/questionBankService'))(db);
+    const result = await questionBankService.getSuggestedQuestionsForInterview(intId, parsedUrl.query || {}, user);
+    res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(result));
+    return;
+  }
+
+  if (req.method === 'POST' && /^\/(?:api\/v1\/)?interviews\/[^/]+\/questions\/[^/]+\/toggle-asked$/.test(pathname)) {
+    const user = await rbacMiddleware.authorize(req, res, authController.authService, 'interview.read');
+    if (!user) return;
+    const match = pathname.match(/^\/(?:api\/v1\/)?interviews\/([^/]+)\/questions\/([^/]+)\/toggle-asked$/);
+    const intId = match ? match[1] : null;
+    const questionId = match ? match[2] : null;
+    const questionBankService = new (require('./services/questionBankService'))(db);
+    const result = await questionBankService.toggleAskedQuestion(intId, questionId, user);
+    res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(result));
+    return;
+  }
+
   if (req.method === 'GET' && /^\/(?:api\/v1\/)?requisitions\/[^/]+\/candidate-evaluations-comparison$/.test(pathname)) {
     const user = await rbacMiddleware.authorize(req, res, authController.authService, 'interview.evaluation.read');
     if (!user) return;

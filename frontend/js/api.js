@@ -1939,3 +1939,35 @@ window.ATS_API.getCandidateEvaluationsComparisonApi = async function(token, requ
     return { ok: false, status: 0, data: { success: false, message: 'Lỗi kết nối khi lấy bảng so sánh ứng viên.' } };
   }
 };
+
+window.ATS_API.getInterviewSuggestedQuestionsApi = async function(token, interviewId, params = {}) {
+  try {
+    const query = new URLSearchParams();
+    if (params.criterionId) query.set('criterionId', params.criterionId);
+    if (params.difficulty) query.set('difficulty', params.difficulty);
+    if (params.search) query.set('search', params.search);
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    const response = await fetch(`${API_BASE}/interviews/${encodeURIComponent(interviewId)}/suggested-questions${qs}`, {
+      method: 'GET',
+      headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+    });
+    return { ok: response.ok, status: response.status, data: await response.json() };
+  } catch {
+    return { ok: false, status: 0, data: { success: false, message: 'Lỗi kết nối khi lấy câu hỏi gợi ý.' } };
+  }
+};
+
+window.ATS_API.toggleInterviewQuestionAskedApi = async function(token, interviewId, questionId) {
+  try {
+    const response = await fetch(`${API_BASE}/interviews/${encodeURIComponent(interviewId)}/questions/${encodeURIComponent(questionId)}/toggle-asked`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      }
+    });
+    return { ok: response.ok, status: response.status, data: await response.json() };
+  } catch {
+    return { ok: false, status: 0, data: { success: false, message: 'Lỗi kết nối khi đánh dấu câu hỏi.' } };
+  }
+};
