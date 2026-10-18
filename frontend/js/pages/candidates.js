@@ -159,6 +159,7 @@
   async function loadCandidates() {
     const request = ++candidateSearchSequence;
     window.ATS_BULK_INTERVIEWS?.refresh([]);
+    window.ATS_BULK_COMMUNICATIONS?.refresh([]);
     const token = sessionStorage.getItem('ats_token');
     if (!token) return;
 
@@ -244,6 +245,7 @@
         }).join('');
         renderCandidatesKanban(list);
 window.ATS_BULK_INTERVIEWS?.refresh(list);
+window.ATS_BULK_COMMUNICATIONS?.refresh(list);
 candidatesTableBody.querySelectorAll('.candidate-merge-select').forEach(button => button.addEventListener('click', () => selectCandidateForMerge(button.dataset.candidateId)));
         window.CandidateSlaModule?.renderTableBadges();
       }

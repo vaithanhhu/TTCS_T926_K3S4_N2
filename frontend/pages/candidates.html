@@ -72,6 +72,24 @@
             <button id="bulk-open-button" type="button" class="btn btn-outline">Đặt lịch hàng loạt</button>
             <span id="bulk-selected-count" aria-live="polite"></span>
           </div>
+          <div id="bulk-communication-toolbar" class="bulk-communication-toolbar hidden" hidden style="margin: 12px 0; box-sizing: border-box; width: 100%;">
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; background: var(--color-bg-subtle, #f8fafc); border-radius: 8px; border: 1px solid var(--color-border, #e2e8f0); box-sizing: border-box; width: 100%;">
+              <label style="display: flex; align-items: center; gap: 6px; font-weight: 500; cursor: pointer; margin: 0; font-size: 13px;">
+                <input id="bulk-comm-select-all" type="checkbox"> Chọn ứng viên trên trang
+              </label>
+              <span id="bulk-comm-selected-count" class="badge badge-primary font-mono" style="font-size: 12px;">0 đã chọn</span>
+              <span id="bulk-comm-stage-badge" class="badge badge-info" style="display: none; font-size: 12px;"></span>
+              <span id="bulk-comm-warning" style="display: none; color: #dc2626; font-size: 12px; font-weight: 500;"></span>
+              <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto;">
+                <button id="bulk-comm-thankyou-btn" type="button" class="btn btn-outline btn-sm" style="font-size: 12px; padding: 4px 8px; max-width: 100%;" disabled>
+                  💌 Thư cảm ơn
+                </button>
+                <button id="bulk-comm-rejection-btn" type="button" class="btn btn-outline btn-sm" style="font-size: 12px; padding: 4px 8px; color: #dc2626; border-color: #fca5a5; max-width: 100%;" disabled>
+                  🚫 Thư từ chối
+                </button>
+              </div>
+            </div>
+          </div>
           <details id="candidate-advanced-filters" style="margin-bottom:16px">
             <summary>Bộ lọc nâng cao và bộ lọc đã lưu</summary>
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px;margin-top:12px">

@@ -100,9 +100,10 @@ class EmailService {
   async logEmail(recipient, subject, templateName, status, errorMessage = null) {
     try {
       const id = 'eml-' + crypto.randomUUID();
+      const nowSql = this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')";
       const stmt = this.db.prepare(`
         INSERT INTO email_logs (id, recipient, subject, template_name, status, error_message, sent_at)
-        VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+        VALUES (?, ?, ?, ?, ?, ?, ${nowSql})
       `);
       (await stmt.run(id, recipient, subject, templateName, status, errorMessage));
     } catch (err) {
@@ -407,7 +408,7 @@ class EmailService {
 // Singleton export
 let emailServiceInstance = null;
 function getEmailService(db) {
-  if (!emailServiceInstance) {
+  if (!emailServiceInstance || (db && emailServiceInstance.db !== db)) {
     emailServiceInstance = new EmailService(db);
   }
   return emailServiceInstance;

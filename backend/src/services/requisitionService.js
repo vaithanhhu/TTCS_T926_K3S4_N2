@@ -8,6 +8,7 @@ class RequisitionService {
     this.openPolicy = new (require('./requisitionOpenPolicyService'))(this.db);
     this.offerService = new (require('./offerService'))(this.db, this);
     this.onboardingService = new (require('./onboardingService'))(this.db, this);
+    this.candidateCommunicationService = new (require('./candidateCommunicationService')).CandidateCommunicationService(this.db);
   }
 
   /**
@@ -2412,6 +2413,22 @@ class RequisitionService {
 
   async listOnboardingChecklists(options = {}, actor = null) {
     return this.onboardingService.listChecklists(options, actor);
+  }
+
+  async getCommunicationTemplates(actor = null) {
+    return this.candidateCommunicationService.getTemplates(actor);
+  }
+
+  async previewBulkCommunications(payload = {}, actor = null) {
+    return this.candidateCommunicationService.previewBulk(payload, actor);
+  }
+
+  async sendBulkCommunications(payload = {}, actor = null) {
+    return this.candidateCommunicationService.sendBulk(payload, actor);
+  }
+
+  async getCommunicationsHistory(filters = {}, actor = null) {
+    return this.candidateCommunicationService.getHistory(filters, actor);
   }
 }
 

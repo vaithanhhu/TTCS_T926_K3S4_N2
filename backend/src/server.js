@@ -2896,6 +2896,69 @@ async function handleRequest(req, res) {
     return;
   }
 
+  if (req.method === 'GET' && (pathname === '/api/v1/communications/templates' || pathname === '/communications/templates')) {
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.read'));
+    if (!user) return;
+    try {
+      const result = await requisitionService.getCommunicationTemplates(user);
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch (err) {
+      res.writeHead(err.statusCode || 400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: err.statusCode || 400, message: err.message || 'Lỗi khi tải mẫu thư.', code: err.code || 'BAD_REQUEST' }));
+    }
+    return;
+  }
+
+  if (req.method === 'POST' && (pathname === '/api/v1/communications/preview' || pathname === '/communications/preview')) {
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.read'));
+    if (!user) return;
+    try {
+      const body = await parseBody(req);
+      const result = await requisitionService.previewBulkCommunications(body, user);
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch (err) {
+      res.writeHead(err.statusCode || 400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: err.statusCode || 400, message: err.message || 'Lỗi khi xem trước nội dung.', code: err.code || 'BAD_REQUEST' }));
+    }
+    return;
+  }
+
+  if (req.method === 'POST' && (pathname === '/api/v1/communications/bulk-send' || pathname === '/communications/bulk-send')) {
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.read'));
+    if (!user) return;
+    try {
+      const body = await parseBody(req);
+      const result = await requisitionService.sendBulkCommunications(body, user);
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch (err) {
+      res.writeHead(err.statusCode || 400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: err.statusCode || 400, message: err.message || 'Lỗi khi gửi thư hàng loạt.', code: err.code || 'BAD_REQUEST' }));
+    }
+    return;
+  }
+
+  if (req.method === 'GET' && (pathname === '/api/v1/communications/history' || pathname === '/communications/history')) {
+    const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.read'));
+    if (!user) return;
+    try {
+      const candidateId = url.searchParams.get('candidateId');
+      const batchId = url.searchParams.get('batchId');
+      const type = url.searchParams.get('type');
+      const limit = url.searchParams.get('limit');
+      const offset = url.searchParams.get('offset');
+      const result = await requisitionService.getCommunicationsHistory({ candidateId, batchId, type, limit, offset }, user);
+      res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+    } catch (err) {
+      res.writeHead(err.statusCode || 400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, statusCode: err.statusCode || 400, message: err.message || 'Lỗi khi tải lịch sử gửi thư.', code: err.code || 'BAD_REQUEST' }));
+    }
+    return;
+  }
+
   // 13.10 API: Recruitment Reports (Real SQLite Analytics)
   if (req.method === 'GET' && (pathname === '/api/v1/reports/recruitment' || pathname === '/reports/recruitment')) {
     const authHeader = req.headers['authorization'] || '';

@@ -1,0 +1,103 @@
+<div id="bulk-communication-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="bulk-comm-modal-title">
+  <div class="modal-card" style="width: min(880px, 96vw); max-height: 90vh; overflow-y: auto; padding: 24px; background: var(--color-bg-card, #ffffff); border-radius: 12px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);">
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--color-border, #e2e8f0); padding-bottom: 16px; margin-bottom: 20px;">
+      <div>
+        <h2 id="bulk-comm-modal-title" style="margin: 0; font-size: 1.25rem; font-weight: 700; color: var(--color-text, #0f172a);">Gửi thư ứng viên hàng loạt</h2>
+        <p style="margin: 4px 0 0; font-size: 0.85rem; color: var(--color-text-muted, #64748b);">Gửi thư cảm ơn hoặc thông báo từ chối đến nhiều ứng viên cùng trạng thái</p>
+      </div>
+      <button type="button" id="bulk-comm-close-btn" class="modal-close" aria-label="Đóng" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--color-text-muted, #64748b);">×</button>
+    </div>
+
+    <p id="bulk-comm-message" role="status" aria-live="polite" style="font-size: 0.9rem; margin-bottom: 16px;"></p>
+
+    <div id="bulk-comm-warning-banner" class="alert alert-warning" style="display: none; padding: 12px 16px; border-radius: 6px; background: #fffbeb; border: 1px solid #fef3c7; color: #92400e; font-size: 0.875rem; margin-bottom: 16px;"></div>
+
+    <form id="bulk-comm-form">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+        <div>
+          <label style="display: block; font-weight: 600; font-size: 0.875rem; margin-bottom: 6px;">Loại thư gửi</label>
+          <select id="bulk-comm-type" class="form-input" style="width: 100%;">
+            <option value="THANK_YOU">💌 Thư cảm ơn ứng tuyển (THANK_YOU)</option>
+            <option value="REJECTION">🚫 Thư từ chối ứng viên (REJECTION)</option>
+          </select>
+        </div>
+        <div>
+          <label style="display: block; font-weight: 600; font-size: 0.875rem; margin-bottom: 6px;">Giai đoạn ứng viên</label>
+          <input type="text" id="bulk-comm-stage-display" class="form-input" style="width: 100%; background: var(--color-bg-subtle, #f1f5f9);" readonly />
+        </div>
+      </div>
+
+      <div style="margin-bottom: 16px;">
+        <label style="display: block; font-weight: 600; font-size: 0.875rem; margin-bottom: 6px;">Tiêu đề email (Hỗ trợ biến {{candidateName}}, {{jobTitle}}, {{department}})</label>
+        <input type="text" id="bulk-comm-subject" class="form-input" style="width: 100%;" required />
+      </div>
+
+      <div style="margin-bottom: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <label style="font-weight: 600; font-size: 0.875rem; margin: 0;">Nội dung thư (HTML/Text)</label>
+          <span style="font-size: 0.75rem; color: var(--color-text-muted, #64748b);">Biến khả dụng: {{candidateName}}, {{jobTitle}}, {{department}}</span>
+        </div>
+        <textarea id="bulk-comm-body" class="form-input" rows="8" style="width: 100%; font-family: monospace; font-size: 0.85rem;" required></textarea>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px;">
+        <button type="button" id="bulk-comm-cancel-btn" class="btn btn-outline">Hủy bỏ</button>
+        <button type="submit" id="bulk-comm-preview-btn" class="btn btn-primary">Xem trước nội dung từng người</button>
+      </div>
+    </form>
+
+    <section id="bulk-comm-preview-section" style="display: none; margin-top: 16px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; background: var(--color-bg-subtle, #f8fafc); padding: 12px 16px; border-radius: 8px; border: 1px solid var(--color-border, #e2e8f0); margin-bottom: 16px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-weight: 600; font-size: 0.9rem;">Xem trước:</span>
+          <select id="bulk-comm-preview-select" class="form-input" style="font-size: 0.85rem; padding: 4px 8px;"></select>
+        </div>
+        <div style="display: flex; gap: 6px; align-items: center;">
+          <button type="button" id="bulk-comm-prev-preview-btn" class="btn btn-outline btn-xs">◀ Trước</button>
+          <span id="bulk-comm-preview-counter" style="font-size: 0.85rem; font-weight: 500; min-width: 60px; text-align: center;">1 / 1</span>
+          <button type="button" id="bulk-comm-next-preview-btn" class="btn btn-outline btn-xs">Tiếp ▶</button>
+        </div>
+      </div>
+
+      <div id="bulk-comm-preview-card" style="border: 1px solid var(--color-border, #cbd5e1); border-radius: 8px; padding: 20px; background: #ffffff; margin-bottom: 20px;">
+        <div style="border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="font-size: 0.85rem; color: #64748b;">
+              Gửi tới: <strong id="bulk-comm-card-recipient" style="color: #0f172a;"></strong>
+            </div>
+            <span id="bulk-comm-card-status-badge" class="badge"></span>
+          </div>
+          <div style="font-size: 0.95rem; font-weight: 600; color: #1e3a8a; margin-top: 6px;">
+            Tiêu đề: <span id="bulk-comm-card-subject"></span>
+          </div>
+        </div>
+        <div id="bulk-comm-card-body" style="font-size: 0.9rem; line-height: 1.6; color: #334155; min-height: 120px;"></div>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <button type="button" id="bulk-comm-back-to-edit-btn" class="btn btn-outline">Quay lại chỉnh sửa</button>
+        <button type="button" id="bulk-comm-confirm-send-btn" class="btn btn-primary" style="background-color: #2563eb;">Xác nhận gửi hàng loạt</button>
+      </div>
+    </section>
+
+    <section id="bulk-comm-results-section" style="display: none; margin-top: 16px;">
+      <div id="bulk-comm-results-summary" style="padding: 16px; border-radius: 8px; margin-bottom: 16px; background: #f0fdf4; border: 1px solid #bbf7d0;"></div>
+      <div style="max-height: 240px; overflow-y: auto; border: 1px solid var(--color-border, #e2e8f0); border-radius: 6px; margin-bottom: 16px;">
+        <table class="data-table" style="width: 100%; font-size: 0.85rem;">
+          <thead>
+            <tr>
+              <th>Ứng viên</th>
+              <th>Email</th>
+              <th>Trạng thái</th>
+              <th>Chi tiết</th>
+            </tr>
+          </thead>
+          <tbody id="bulk-comm-results-table-body"></tbody>
+        </table>
+      </div>
+      <div style="display: flex; justify-content: flex-end;">
+        <button type="button" id="bulk-comm-finish-btn" class="btn btn-primary">Hoàn tất & Đóng</button>
+      </div>
+    </section>
+  </div>
+</div>
