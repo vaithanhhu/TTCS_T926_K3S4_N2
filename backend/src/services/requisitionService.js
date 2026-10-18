@@ -2368,6 +2368,18 @@ class RequisitionService {
   async expireOverdueOffers() {
     return this.offerService.expireOverdueOffers();
   }
+
+  async recordOfferRejectionReason(id, data = {}, actor = null) {
+    return this.offerService.recordRejectionReason(id, data, actor);
+  }
+
+  async reviseOffer(id, data = {}, actor = null) {
+    return this.offerService.reviseOffer(id, data, actor);
+  }
+
+  async addToTalentPoolFromOffer(id, data = {}, actor = null) {
+    return this.offerService.addToTalentPoolFromOffer(id, data, actor);
+  }
 }
 
 module.exports = RequisitionService;

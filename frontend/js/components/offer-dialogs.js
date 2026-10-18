@@ -7,6 +7,9 @@
   const createOfferAlertMsg = document.getElementById('create-offer-alert-msg');
   const createOfferIdInput = document.getElementById('create-offer-id');
 
+  let isRevisionMode = false;
+  let revisionPredecessorId = null;
+
   const createOfferCandSelect = document.getElementById('create-offer-cand-select');
   const createOfferReqSelect = document.getElementById('create-offer-req-select');
   const createOfferJobTitleSelect = document.getElementById('create-offer-job-title-select');
@@ -102,7 +105,9 @@
   if (createOfferSalaryInput) createOfferSalaryInput.addEventListener('input', checkSalaryBand);
   if (createOfferJobTitleSelect) createOfferJobTitleSelect.addEventListener('change', checkSalaryBand);
 
-  function openCreateOfferForCandidate(preselectedCandidateId = '', existingOffer = null) {
+  function openCreateOfferForCandidate(preselectedCandidateId = '', existingOffer = null, isRevision = false) {
+    isRevisionMode = Boolean(isRevision);
+    revisionPredecessorId = isRevision ? (existingOffer?.id || null) : null;
     if (createOfferModal) createOfferModal.classList.remove('hidden');
     if (createOfferForm) createOfferForm.reset();
     if (createOfferAlert) createOfferAlert.classList.add('hidden');
@@ -113,11 +118,17 @@
 
     const titleEl = document.getElementById('create-off-title');
     if (titleEl) {
-      titleEl.textContent = existingOffer ? 'Chỉnh Sửa Đề Xuất Offer' : 'Lập Thư Mời Nhận Việc (Offer)';
+      if (isRevision) {
+        titleEl.textContent = 'Lập Thư Mời Sửa Đổi (Thương Lượng)';
+      } else if (existingOffer) {
+        titleEl.textContent = 'Chỉnh Sửa Đề Xuất Offer';
+      } else {
+        titleEl.textContent = 'Lập Thư Mời Nhận Việc (Offer)';
+      }
     }
 
     if (createOfferIdInput) {
-      createOfferIdInput.value = existingOffer?.id || '';
+      createOfferIdInput.value = isRevision ? '' : (existingOffer?.id || '');
     }
 
     if (createOfferCandSelect) {
@@ -214,6 +225,8 @@
   }
 
   function closeCreateOffer() {
+    isRevisionMode = false;
+    revisionPredecessorId = null;
     if (createOfferModal) createOfferModal.classList.add('hidden');
   }
   if (closeCreateOfferModal) closeCreateOfferModal.addEventListener('click', closeCreateOffer);
@@ -273,7 +286,9 @@
 
     try {
       let res;
-      if (payload.offerId) {
+      if (isRevisionMode && revisionPredecessorId) {
+        res = await window.ATS_API.reviseOfferApi(token, revisionPredecessorId, payload);
+      } else if (payload.offerId) {
         res = await window.ATS_API.updateOfferApi(token, payload.offerId, payload);
       } else {
         res = await window.ATS_API.createOfferApi(token, payload);
@@ -281,10 +296,12 @@
 
       if (res.ok && res.data && res.data.success) {
         closeCreateOffer();
-        const msg = isDraftMode
+        const msg = isRevisionMode
+          ? 'Bản đề xuất offer sửa đổi đã được tạo. Offer trước đã chuyển sang trạng thái Đã thay thế (SUPERSEDED).'
+          : isDraftMode
           ? 'Bản đề xuất offer đã được lưu vào danh sách nháp.'
           : 'Bản đề xuất offer đã được gửi tới cấp quản lý phê duyệt.';
-        showToast('success', isDraftMode ? 'Đã lưu nháp Offer' : 'Lập Offer thành công', msg);
+        showToast('success', isRevisionMode ? 'Tạo Offer sửa đổi thành công' : isDraftMode ? 'Đã lưu nháp Offer' : 'Lập Offer thành công', msg);
         if (typeof loadOffers === 'function') loadOffers();
         if (typeof loadCandidates === 'function') loadCandidates();
         if (typeof loadDashboardData === 'function') loadDashboardData();
@@ -362,15 +379,40 @@
   const btnActionRevisionOffer = document.getElementById('btn-action-revision-offer');
   const btnActionViewLetter = document.getElementById('btn-action-view-letter');
   const btnActionEditDraft = document.getElementById('btn-action-edit-draft');
+  const btnActionReviseOffer = document.getElementById('btn-action-revise-offer');
+  const btnActionToggleRecordRejection = document.getElementById('btn-action-toggle-record-rejection');
+  const offDetailRecordRejectionPanel = document.getElementById('off-detail-record-rejection-panel');
+  const offRecordRejectionCategory = document.getElementById('off-record-rejection-category');
+  const offRecordRejectionNotes = document.getElementById('off-record-rejection-notes');
+  const btnSaveRejectionReason = document.getElementById('btn-save-rejection-reason');
+  const offDetailTalentPoolBox = document.getElementById('off-detail-talent-pool-box');
+  const offTalentPoolReason = document.getElementById('off-talent-pool-reason');
+  const btnActionAddTalentPool = document.getElementById('btn-action-add-talent-pool');
+  const offDetailLineageBox = document.getElementById('off-detail-lineage-box');
+  const offDetailPredecessorInfo = document.getElementById('off-detail-predecessor-info');
+  const offDetailPredecessorCode = document.getElementById('off-detail-predecessor-code');
+  const offDetailSupersededInfo = document.getElementById('off-detail-superseded-info');
+  const offDetailSupersededCode = document.getElementById('off-detail-superseded-code');
+  const offDetailRejectionBox = document.getElementById('off-detail-rejection-box');
+  const offDetailRejectionCat = document.getElementById('off-detail-rejection-cat');
+  const offDetailRejectionComment = document.getElementById('off-detail-rejection-comment');
 
   async function openOfferDetails(id) {
-    const o = currentOffersList.find(x => x.id === id);
+    let o = currentOffersList.find(x => x.id === id);
+    const token = sessionStorage.getItem('ats_token');
+    if (token) {
+      try {
+        const fullRes = await window.ATS_API.getOfferByIdApi(token, id);
+        if (fullRes.ok && fullRes.data && (fullRes.data.data || fullRes.data.offer)) {
+          o = fullRes.data.data || fullRes.data.offer;
+        }
+      } catch {}
+    }
     if (!o) {
       showToast('warning', 'Offer', `Đang tải chi tiết offer...`);
       return;
     }
 
-    const token = sessionStorage.getItem('ats_token');
     const candName = (o.candidate && (o.candidate.fullName || o.candidate.full_name)) ? (o.candidate.fullName || o.candidate.full_name) : (o.candidate_name || 'Ứng viên');
     const reqTitle = (o.requisition && o.requisition.title) ? o.requisition.title : (o.requisition_title || (o.jobTitleName || o.job_title_name) || 'Vị trí');
     const salaryVal = o.salaryMonthly || o.salary_monthly || o.salary;
@@ -404,9 +446,12 @@
       const isPending = o.status === 'PENDING' || o.status === 'PENDING_APPROVAL';
       const isSent = o.status === 'SENT';
       const isRevision = o.status === 'REVISION_REQUESTED';
+      const isSuperseded = o.status === 'SUPERSEDED';
+      const isExpired = o.status === 'EXPIRED';
+      const isRejected = o.status === 'REJECTED';
 
-      statusBadge.className = `badge ${isApproved ? 'badge-success' : (isDraft ? 'badge-neutral' : (isPending ? 'badge-warning' : (isSent ? 'badge-primary' : (isRevision ? 'badge-warning' : 'badge-danger'))))}`;
-      statusBadge.textContent = isApproved ? 'Đã phê duyệt' : (isDraft ? 'Bản nháp' : (isPending ? 'Chờ duyệt' : (isSent ? 'Đã gửi' : (isRevision ? 'Yêu cầu sửa' : o.status))));
+      statusBadge.className = `badge ${isApproved ? 'badge-success' : (isDraft ? 'badge-neutral' : (isPending ? 'badge-warning' : (isSent ? 'badge-primary' : (isRevision ? 'badge-warning' : (isSuperseded ? 'badge-neutral' : (isExpired ? 'badge-danger' : 'badge-danger'))))))}`;
+      statusBadge.textContent = isApproved ? 'Đã phê duyệt' : (isDraft ? 'Bản nháp' : (isPending ? 'Chờ duyệt' : (isSent ? 'Đã gửi' : (isRevision ? 'Yêu cầu sửa' : (isSuperseded ? 'Đã thay thế' : (isExpired ? 'Hết hạn' : (isRejected ? 'Từ chối' : o.status)))))));
     }
     if (candNameEl) candNameEl.textContent = candName;
     if (reqTitleEl) reqTitleEl.textContent = reqTitle;
@@ -429,6 +474,71 @@
       } else {
         justificationBox.classList.add('hidden');
       }
+    }
+
+    let hasLineage = false;
+    if (offDetailLineageBox) {
+      if (o.predecessorOffer || o.predecessorOfferId || o.predecessor_offer_id) {
+        hasLineage = true;
+        if (offDetailPredecessorInfo) offDetailPredecessorInfo.classList.remove('hidden');
+        if (offDetailPredecessorCode) offDetailPredecessorCode.textContent = (o.predecessorOffer?.id || o.predecessorOfferId || o.predecessor_offer_id || '').toUpperCase();
+      } else {
+        if (offDetailPredecessorInfo) offDetailPredecessorInfo.classList.add('hidden');
+      }
+
+      if (o.supersededByOffer || o.supersededByOfferId || o.superseded_by_offer_id) {
+        hasLineage = true;
+        if (offDetailSupersededInfo) offDetailSupersededInfo.classList.remove('hidden');
+        if (offDetailSupersededCode) offDetailSupersededCode.textContent = (o.supersededByOffer?.id || o.supersededByOfferId || o.superseded_by_offer_id || '').toUpperCase();
+      } else {
+        if (offDetailSupersededInfo) offDetailSupersededInfo.classList.add('hidden');
+      }
+
+      offDetailLineageBox.classList.toggle('hidden', !hasLineage);
+    }
+
+    const catLabels = {
+      'SALARY': 'Lương (Chế độ đãi ngộ)',
+      'LOCATION': 'Địa điểm làm việc',
+      'COMPETITOR': 'Nhận việc nơi khác (Offer cạnh tranh)',
+      'PERSONAL': 'Lý do cá nhân / Gia đình',
+      'OTHER': 'Lý do khác'
+    };
+    const rejCat = o.rejectionReasonCategory || o.rejection_reason_category;
+    const rejComment = o.candidateComment || o.candidate_comment;
+    if (offDetailRejectionBox) {
+      if (rejCat || o.candidateResponse === 'REJECTED' || o.status === 'REJECTED') {
+        offDetailRejectionBox.classList.remove('hidden');
+        if (offDetailRejectionCat) offDetailRejectionCat.textContent = catLabels[rejCat] || rejCat || 'Chưa phân loại';
+        if (offDetailRejectionComment) offDetailRejectionComment.textContent = rejComment || '(Không có ghi chú thêm)';
+      } else {
+        offDetailRejectionBox.classList.add('hidden');
+      }
+    }
+
+    if (offDetailRecordRejectionPanel) {
+      offDetailRecordRejectionPanel.classList.add('hidden');
+      if (offRecordRejectionNotes) offRecordRejectionNotes.value = rejComment || '';
+      if (offRecordRejectionCategory && rejCat) offRecordRejectionCategory.value = rejCat;
+    }
+
+    if (offDetailTalentPoolBox) {
+      const rec = o.talentPoolRecommendation;
+      if (rec && rec.recommended && o.capabilities?.canRecommendTalentPool) {
+        offDetailTalentPoolBox.classList.remove('hidden');
+        if (offTalentPoolReason) {
+          offTalentPoolReason.value = rec.defaultReason || `Ứng viên từ chối offer (${catLabels[rejCat] || 'Khác'}) - Lưu hồ sơ tiềm năng.`;
+        }
+      } else {
+        offDetailTalentPoolBox.classList.add('hidden');
+      }
+    }
+
+    if (btnActionReviseOffer) {
+      btnActionReviseOffer.classList.toggle('hidden', !o.capabilities?.canRevise);
+    }
+    if (btnActionToggleRecordRejection) {
+      btnActionToggleRecordRejection.classList.toggle('hidden', !o.capabilities?.canRecordRejection);
     }
 
     if (commentInput) commentInput.value = '';
@@ -618,6 +728,73 @@
           loadOffers();
         } else {
           showToast('danger', 'Lỗi gửi Offer', res.data?.message || 'Không thể gửi offer.');
+        }
+      } catch (err) {
+        showToast('danger', 'Lỗi kết nối', err.message);
+      }
+    });
+  }
+
+  if (btnActionReviseOffer) {
+    btnActionReviseOffer.addEventListener('click', () => {
+      const id = document.getElementById('off-detail-id').value;
+      const o = currentOffersList.find(x => x.id === id);
+      if (offerDetailModal) offerDetailModal.classList.add('hidden');
+      if (o) openCreateOfferForCandidate(o.candidateId || o.candidate_id, o, true);
+    });
+  }
+
+  if (btnActionToggleRecordRejection) {
+    btnActionToggleRecordRejection.addEventListener('click', () => {
+      if (offDetailRecordRejectionPanel) {
+        offDetailRecordRejectionPanel.classList.toggle('hidden');
+      }
+    });
+  }
+
+  if (btnSaveRejectionReason) {
+    btnSaveRejectionReason.addEventListener('click', async () => {
+      const token = sessionStorage.getItem('ats_token');
+      const id = document.getElementById('off-detail-id').value;
+      const cat = offRecordRejectionCategory?.value || 'OTHER';
+      const notes = offRecordRejectionNotes?.value || '';
+      if (!token || !id) return;
+
+      try {
+        const res = await window.ATS_API.recordOfferRejectionReasonApi(token, id, {
+          rejectionReasonCategory: cat,
+          notes
+        });
+        if (res.ok && res.data && res.data.success) {
+          showToast('success', 'Đã ghi nhận lý do', 'Đã lưu lý do từ chối offer thành công.');
+          if (offDetailRecordRejectionPanel) offDetailRecordRejectionPanel.classList.add('hidden');
+          openOfferDetails(id);
+          if (typeof loadOffers === 'function') loadOffers();
+          if (typeof loadCandidates === 'function') loadCandidates();
+        } else {
+          showToast('danger', 'Lỗi ghi nhận', res.data?.message || 'Không thể lưu lý do từ chối.');
+        }
+      } catch (err) {
+        showToast('danger', 'Lỗi kết nối', err.message);
+      }
+    });
+  }
+
+  if (btnActionAddTalentPool) {
+    btnActionAddTalentPool.addEventListener('click', async () => {
+      const token = sessionStorage.getItem('ats_token');
+      const id = document.getElementById('off-detail-id').value;
+      const reason = offTalentPoolReason?.value || '';
+      if (!token || !id) return;
+
+      try {
+        const res = await window.ATS_API.addOfferToTalentPoolApi(token, id, { reason });
+        if (res.ok && res.data && res.data.success) {
+          showToast('success', 'Đã lưu vào Kho tiềm năng', res.data.message || 'Hồ sơ ứng viên đã được lưu vào Kho tiềm năng.');
+          if (offDetailTalentPoolBox) offDetailTalentPoolBox.classList.add('hidden');
+          if (typeof loadOffers === 'function') loadOffers();
+        } else {
+          showToast('danger', 'Lỗi lưu kho tiềm năng', res.data?.message || 'Không thể đưa vào kho tiềm năng.');
         }
       } catch (err) {
         showToast('danger', 'Lỗi kết nối', err.message);
