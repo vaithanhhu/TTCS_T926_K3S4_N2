@@ -30,8 +30,12 @@ class RequisitionService {
     }
 
     if (status && status !== 'ALL') {
-      conditions.push('r.status = ?');
-      params.push(status);
+      if (status === 'PENDING_APPROVAL' || status === 'PENDING') {
+        conditions.push("EXISTS (SELECT 1 FROM requisition_approval_workflows raw WHERE raw.requisition_id = r.id AND raw.status = 'PENDING')");
+      } else {
+        conditions.push('r.status = ?');
+        params.push(status);
+      }
     }
 
     if (handoverOnly) {
@@ -434,6 +438,7 @@ class RequisitionService {
       if (!access.success) return access;
       if (data.expectedOperationVersion && data.expectedOperationVersion!==this.operationContentHash(current)) return {success:false,statusCode:409,code:'REQUISITION_REVISION_STALE',message:'Yêu cầu đã được cập nhật bởi người khác. Vui lòng tải lại.'};
       data={...data};delete data.expectedOperationVersion;
+      if((initial?.status==='DRAFT'||current?.status==='DRAFT')&&data.status&&data.status.trim().toUpperCase()!=='DRAFT'){this.openPolicy.enabled();this.openPolicy.fail('REQUISITION_APPROVAL_REQUIRED','Hãy lưu nháp hoặc Lưu và Gửi phê duyệt. Chỉ cấp cuối được mở tuyển dụng.');}
       if (current.status==='OPEN') return this.updateOpenRequisition(current,data,actor,access,options);
       if (current.formVersion==='S2-10' || this.isS210Request(data)) return this.saveS210Requisition(current,data,actor);
       return this.updateRequisition(id,data,null,options);
@@ -458,6 +463,11 @@ class RequisitionService {
 
     if (current.formVersion === 'S2-10' || this.isS210Request(data)) {
       return (await this.saveS210Requisition(current, data, actor));
+    }
+
+    if (current.status === 'DRAFT' && data.status && data.status.trim().toUpperCase() !== 'DRAFT') {
+      this.openPolicy.enabled();
+      this.openPolicy.fail('REQUISITION_APPROVAL_REQUIRED', 'Hãy lưu nháp hoặc Lưu và Gửi phê duyệt. Chỉ cấp cuối được mở tuyển dụng.');
     }
 
     const title = typeof data.title === 'string' && data.title.trim()
