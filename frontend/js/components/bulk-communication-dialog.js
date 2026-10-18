@@ -28,12 +28,12 @@
 
     if (!isAllowed()) {
       toolbar.hidden = true;
-      toolbar.style.display = 'none';
+      toolbar.classList.add('hidden');
       return;
     }
 
     toolbar.hidden = false;
-    toolbar.style.display = 'flex';
+    toolbar.classList.remove('hidden');
 
     const selected = getSelectedCandidates();
     const countBadge = getEl('bulk-comm-selected-count');
@@ -102,14 +102,17 @@
       }
 
       box.checked = selectedCandidateIds.has(row.id);
-      box.onchange = () => {
-        if (box.checked) {
-          selectedCandidateIds.add(row.id);
-        } else {
-          selectedCandidateIds.delete(row.id);
-        }
-        updateToolbarState();
-      };
+      if (!box.dataset.commBound) {
+        box.dataset.commBound = 'true';
+        box.addEventListener('change', () => {
+          if (box.checked) {
+            selectedCandidateIds.add(row.id);
+          } else {
+            selectedCandidateIds.delete(row.id);
+          }
+          updateToolbarState();
+        });
+      }
     }
   }
 
