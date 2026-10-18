@@ -19,6 +19,21 @@ class OnboardingService {
     return roles.includes('ADMIN') || roles.includes('HR_MANAGER');
   }
 
+  async authorize(actor,permission='candidate.read') {
+    return this.rbacMiddleware.getAuthorizedActor(actor?.id,permission);
+  }
+
+  denied() { return {success:false,statusCode:403,code:'ONBOARDING_FORBIDDEN',message:'Access denied.'}; }
+
+  readScope(actor) {
+    return this.requisitionService.candidateVisibility({...actor,roles:actor.roles.filter(role=>['ADMIN','HR_MANAGER','RECRUITER','HIRING_MGR','APPROVER'].includes(role))})||{condition:'1=1',params:[]};
+  }
+
+  async canRead(candidateId,actor) {
+    const scope=this.readScope(actor);
+    return Boolean(await this.db.prepare('SELECT c.id FROM candidates c LEFT JOIN requisitions r ON r.id=c.requisition_id WHERE c.id=? AND (('+scope.condition+') OR EXISTS (SELECT 1 FROM onboarding_checklists oc JOIN onboarding_checklist_items oi ON oi.checklist_id=oc.id WHERE oc.candidate_id=c.id AND oi.assignee_id=?))').get(candidateId,...scope.params,actor.id));
+  }
+
   formatDateOnly(d) {
     if (!d) return null;
     if (d instanceof Date) return d.toISOString().split('T')[0];
@@ -43,7 +58,8 @@ class OnboardingService {
     }
   }
 
-  async getTemplates(options = {}) {
+  async getTemplates(options = {}, actor = null) {
+    actor=await this.authorize(actor);if(!actor||!this.isManager(actor))return this.denied();
     const departmentId = options.departmentId ? String(options.departmentId).trim() : null;
     let sql = `SELECT * FROM onboarding_templates`;
     const params = [];
@@ -62,7 +78,8 @@ class OnboardingService {
     return { success: true, statusCode: 200, data: templates };
   }
 
-  async getTemplateById(templateId) {
+  async getTemplateById(templateId, actor = null) {
+    actor=await this.authorize(actor);if(!actor||!this.isManager(actor))return this.denied();
     if (!templateId) {
       return { success: false, statusCode: 400, code: 'TEMPLATE_ID_REQUIRED', message: 'Thiếu mã mẫu onboarding.' };
     }
@@ -77,6 +94,7 @@ class OnboardingService {
   }
 
   async createTemplate(data = {}, actor = null) {
+    actor=await this.authorize(actor,'candidate.update');
     if (!this.isManager(actor)) {
       return { success: false, statusCode: 403, code: 'FORBIDDEN', message: 'Chỉ Trưởng phòng Nhân sự hoặc Quản trị viên mới có quyền tạo mẫu onboarding.' };
     }
@@ -139,6 +157,11 @@ class OnboardingService {
   }
 
   async initializeOnboarding(data = {}, actor = null) {
+    return this.db.transaction(()=>this.#initializeOnboarding(data,actor));
+  }
+
+  async #initializeOnboarding(data,actor) {
+    actor=await this.authorize(actor,'candidate.update');
     if (!this.isManager(actor)) {
       return { success: false, statusCode: 403, code: 'FORBIDDEN', message: 'Chỉ Trưởng phòng Nhân sự hoặc Quản trị viên mới có quyền khởi tạo checklist onboarding.' };
     }
@@ -147,7 +170,7 @@ class OnboardingService {
       return { success: false, statusCode: 400, code: 'CANDIDATE_ID_REQUIRED', message: 'Thiếu mã ứng viên cần khởi tạo onboarding.' };
     }
 
-    const candidate = await this.db.prepare(`SELECT * FROM candidates WHERE id = ?`).get(candidateId);
+    const candidate = await this.db.prepare('SELECT * FROM candidates WHERE id = ?'+(this.db.provider==='postgres'?' FOR UPDATE':'')).get(candidateId);
     if (!candidate) {
       return { success: false, statusCode: 404, code: 'CANDIDATE_NOT_FOUND', message: 'Không tìm thấy ứng viên.' };
     }
@@ -167,7 +190,7 @@ class OnboardingService {
 
     const existingChecklist = await this.db.prepare(`SELECT * FROM onboarding_checklists WHERE candidate_id = ?`).get(candidateId);
     if (existingChecklist) {
-      if (existingChecklist.status === 'IN_PROGRESS') {
+      if (existingChecklist.status) {
         const full = await this.getOnboardingByCandidate(candidateId, actor);
         return {
           success: false,
@@ -215,7 +238,7 @@ class OnboardingService {
 
     const startDate = data.startDate || latestOffer?.start_date || new Date().toISOString().split('T')[0];
 
-    return this.db.transaction(async () => {
+    return (async () => {
       const checklistId = 'obc-' + crypto.randomUUID();
       const insertCkSql = this.db.provider === 'postgres'
         ? `INSERT INTO onboarding_checklists (id, candidate_id, requisition_id, department_id, template_id, status, progress_percentage, start_date, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'IN_PROGRESS', 0, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
@@ -279,10 +302,11 @@ class OnboardingService {
           items: itemsCreated
         }
       };
-    });
+    })();
   }
 
   async getOnboardingByCandidate(candidateId, actor = null) {
+    actor=await this.authorize(actor);if(!actor||!await this.canRead(candidateId,actor))return this.denied();
     if (!candidateId) {
       return { success: false, statusCode: 400, code: 'CANDIDATE_ID_REQUIRED', message: 'Thiếu mã ứng viên.' };
     }
@@ -311,6 +335,7 @@ class OnboardingService {
   }
 
   async getChecklistById(checklistId, actor = null) {
+    actor=await this.authorize(actor);if(!actor)return this.denied();
     if (!checklistId) {
       return { success: false, statusCode: 400, code: 'CHECKLIST_ID_REQUIRED', message: 'Thiếu mã checklist.' };
     }
@@ -323,6 +348,7 @@ class OnboardingService {
   }
 
   async buildChecklistResponse(checklist, candidate, actor = null) {
+    actor=await this.authorize(actor);if(!actor||!await this.canRead(checklist.candidate_id,actor))return this.denied();
     const rawItems = await this.db.prepare(
       `SELECT i.*, u.full_name AS assignee_name, u.email AS assignee_email, cb.full_name AS completed_by_name
        FROM onboarding_checklist_items i
@@ -415,11 +441,17 @@ class OnboardingService {
   }
 
   async updateChecklistItem(checklistId, itemId, data = {}, actor = null) {
+    return this.db.transaction(()=>this.#updateChecklistItem(checklistId,itemId,data,actor));
+  }
+
+  async #updateChecklistItem(checklistId,itemId,data,actor) {
+    actor=await this.authorize(actor);if(!actor)return this.denied();
+    if(this.isManager(actor)&&!await this.authorize(actor,'candidate.update'))return this.denied();
     if (!checklistId || !itemId) {
       return { success: false, statusCode: 400, code: 'PARAM_REQUIRED', message: 'Thiếu mã checklist hoặc mã công việc.' };
     }
 
-    const checklist = await this.db.prepare(`SELECT * FROM onboarding_checklists WHERE id = ?`).get(checklistId);
+    const checklist = await this.db.prepare('SELECT * FROM onboarding_checklists WHERE id = ?'+(this.db.provider==='postgres'?' FOR UPDATE':'')).get(checklistId);
     if (!checklist) {
       return { success: false, statusCode: 404, code: 'CHECKLIST_NOT_FOUND', message: 'Không tìm thấy checklist onboarding.' };
     }
@@ -477,7 +509,7 @@ class OnboardingService {
       newNotes = data.notes ? String(data.notes).trim() : null;
     }
 
-    return this.db.transaction(async () => {
+    return (async () => {
       const updateItemSql = this.db.provider === 'postgres'
         ? `UPDATE onboarding_checklist_items SET status = ?, completed_at = ?, completed_by = ?, assignee_id = ?, due_date = ?, notes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
         : `UPDATE onboarding_checklist_items SET status = ?, completed_at = ?, completed_by = ?, assignee_id = ?, due_date = ?, notes = ?, updated_at = datetime('now') WHERE id = ?`;
@@ -496,20 +528,20 @@ class OnboardingService {
       let checklistCompletedAt = checklist.completed_at;
       let checklistCompletedBy = checklist.completed_by;
 
-      if (allCompleted) {
+      if (allCompleted && checklist.status !== 'COMPLETED') {
         newChecklistStatus = 'COMPLETED';
         checklistCompletedAt = checklist.completed_at || new Date().toISOString();
         checklistCompletedBy = checklist.completed_by || (actor ? actor.id : 'system');
 
         await this.db.prepare(`UPDATE candidates SET stage = 'ONBOARDED' WHERE id = ?`).run(checklist.candidate_id);
 
-        try {
+        {
           const histId = 'csh-' + crypto.randomUUID();
           const insertHistSql = this.db.provider === 'postgres'
             ? `INSERT INTO candidate_status_history (id, candidate_id, before_stage, after_stage, actor_id, actor_name, action, reason, created_at) VALUES (?, ?, 'HIRED', 'ONBOARDED', ?, ?, 'ONBOARD_COMPLETE', 'Hoàn tất toàn bộ checklist onboarding', CURRENT_TIMESTAMP)`
             : `INSERT INTO candidate_status_history (id, candidate_id, before_stage, after_stage, actor_id, actor_name, action, reason, created_at) VALUES (?, ?, 'HIRED', 'ONBOARDED', ?, ?, 'ONBOARD_COMPLETE', 'Hoàn tất toàn bộ checklist onboarding', datetime('now'))`;
           await this.db.prepare(insertHistSql).run(histId, checklist.candidate_id, actor ? actor.id : 'system', actor ? (actor.fullName || actor.id) : 'Hệ thống');
-        } catch {}
+        }
       } else if (checklist.status === 'COMPLETED' && !allCompleted) {
         newChecklistStatus = 'IN_PROGRESS';
         checklistCompletedAt = null;
@@ -518,13 +550,13 @@ class OnboardingService {
         const cand = await this.db.prepare(`SELECT stage FROM candidates WHERE id = ?`).get(checklist.candidate_id);
         if (cand && cand.stage === 'ONBOARDED') {
           await this.db.prepare(`UPDATE candidates SET stage = 'HIRED' WHERE id = ?`).run(checklist.candidate_id);
-          try {
+          {
             const histId = 'csh-' + crypto.randomUUID();
             const insertHistSql = this.db.provider === 'postgres'
               ? `INSERT INTO candidate_status_history (id, candidate_id, before_stage, after_stage, actor_id, actor_name, action, reason, created_at) VALUES (?, ?, 'ONBOARDED', 'HIRED', ?, ?, 'ONBOARD_REOPEN', 'Mục onboarding được mở lại', CURRENT_TIMESTAMP)`
               : `INSERT INTO candidate_status_history (id, candidate_id, before_stage, after_stage, actor_id, actor_name, action, reason, created_at) VALUES (?, ?, 'ONBOARDED', 'HIRED', ?, ?, 'ONBOARD_REOPEN', 'Mục onboarding được mở lại', datetime('now'))`;
             await this.db.prepare(insertHistSql).run(histId, checklist.candidate_id, actor ? actor.id : 'system', actor ? (actor.fullName || actor.id) : 'Hệ thống');
-          } catch {}
+          }
         }
       }
 
@@ -548,10 +580,11 @@ class OnboardingService {
       const candidate = await this.db.prepare(`SELECT * FROM candidates WHERE id = ?`).get(checklist.candidate_id);
       const updatedChecklist = await this.db.prepare(`SELECT * FROM onboarding_checklists WHERE id = ?`).get(checklistId);
       return this.buildChecklistResponse(updatedChecklist, candidate, actor);
-    });
+    })();
   }
 
   async listChecklists(options = {}, actor = null) {
+    actor=await this.authorize(actor);if(!actor)return this.denied();
     let sql = `
       SELECT c.*, cd.full_name AS candidate_name, cd.email AS candidate_email, cd.stage AS candidate_stage,
              d.name AS department_name, t.name AS template_name
@@ -562,6 +595,9 @@ class OnboardingService {
       WHERE 1=1
     `;
     const params = [];
+    const scope=this.readScope(actor);
+    sql+=' AND (c.candidate_id IN (SELECT c.id FROM candidates c LEFT JOIN requisitions r ON r.id=c.requisition_id WHERE '+scope.condition+') OR EXISTS (SELECT 1 FROM onboarding_checklist_items assigned WHERE assigned.checklist_id=c.id AND assigned.assignee_id=?))';
+    params.push(...scope.params,actor.id);
     if (options.departmentId) {
       sql += ` AND c.department_id = ?`;
       params.push(options.departmentId);

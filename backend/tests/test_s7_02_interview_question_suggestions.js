@@ -100,7 +100,9 @@ async function seedTestSchema(db) {
       id TEXT PRIMARY KEY,
       email TEXT UNIQUE NOT NULL,
       full_name TEXT NOT NULL,
-      status TEXT DEFAULT 'ACTIVE'
+      status TEXT DEFAULT 'ACTIVE',
+      locked_until TEXT,
+      must_change_password BOOLEAN NOT NULL DEFAULT FALSE
     );
 
     CREATE TABLE IF NOT EXISTS competency_frameworks (
@@ -142,6 +144,7 @@ async function seedTestSchema(db) {
       code TEXT UNIQUE NOT NULL,
       title TEXT NOT NULL,
       job_title_id TEXT REFERENCES job_titles(id),
+      recruiter_id TEXT REFERENCES users(id),
       department_name TEXT DEFAULT 'Kỹ thuật',
       status TEXT DEFAULT 'OPEN'
     );
@@ -185,12 +188,23 @@ async function seedTestSchema(db) {
 }
 
 async function seedData(db) {
+  await db.exec('CREATE TABLE roles(id TEXT PRIMARY KEY,code TEXT UNIQUE NOT NULL); CREATE TABLE user_roles(user_id TEXT REFERENCES users(id),role_id TEXT REFERENCES roles(id),PRIMARY KEY(user_id,role_id)); CREATE TABLE permissions(id TEXT PRIMARY KEY,code TEXT UNIQUE NOT NULL); CREATE TABLE role_permissions(role_id TEXT REFERENCES roles(id),permission_id TEXT REFERENCES permissions(id),PRIMARY KEY(role_id,permission_id));');
+
   await db.prepare('INSERT INTO users (id, email, full_name) VALUES (?, ?, ?)').run('usr-admin', 'admin@company.com', 'Admin System');
   await db.prepare('INSERT INTO users (id, email, full_name) VALUES (?, ?, ?)').run('usr-recruiter', 'recruiter@company.com', 'Recruiter One');
   await db.prepare('INSERT INTO users (id, email, full_name) VALUES (?, ?, ?)').run('usr-int-1', 'interviewer1@company.com', 'Interviewer One');
   await db.prepare('INSERT INTO users (id, email, full_name) VALUES (?, ?, ?)').run('usr-int-2', 'interviewer2@company.com', 'Interviewer Two');
   await db.prepare('INSERT INTO users (id, email, full_name) VALUES (?, ?, ?)').run('usr-other', 'other@company.com', 'Other User');
 
+
+  for(const [id,role]of [['usr-admin','ADMIN'],['usr-recruiter','RECRUITER'],['usr-int-1','INTERVIEWER'],['usr-int-2','INTERVIEWER'],['usr-other','INTERVIEWER']]){
+    await db.prepare('INSERT INTO roles(id,code) VALUES(?,?) ON CONFLICT DO NOTHING').run(role,role);
+    await db.prepare('INSERT INTO user_roles(user_id,role_id) VALUES(?,?)').run(id,role);
+    for(const permission of require('../src/db/sync-permissions').ROLE_PERMISSIONS[role]||[]){
+      await db.prepare('INSERT INTO permissions(id,code) VALUES(?,?) ON CONFLICT DO NOTHING').run(permission,permission);
+      await db.prepare('INSERT INTO role_permissions(role_id,permission_id) VALUES(?,?) ON CONFLICT DO NOTHING').run(role,permission);
+    }
+  }
   await db.prepare('INSERT INTO competency_frameworks (id, code, name) VALUES (?, ?, ?)').run('fw-backend', 'FW-BE', 'Khung Backend Developer');
 
   await db.prepare('INSERT INTO competency_criteria (id, framework_id, name, weight, display_order) VALUES (?, ?, ?, ?, ?)').run('crit-db', 'fw-backend', 'Thiết kế cơ sở dữ liệu', 4, 1);
@@ -199,6 +213,7 @@ async function seedData(db) {
   await db.prepare('INSERT INTO job_titles (id, code, name, framework_id) VALUES (?, ?, ?, ?)').run('jt-be-senior', 'SR-BE', 'Senior Backend Engineer', 'fw-backend');
 
   await db.prepare('INSERT INTO requisitions (id, code, title, job_title_id) VALUES (?, ?, ?, ?)').run('req-101', 'REQ-101', 'Tuyển Senior Node.js', 'jt-be-senior');
+  await db.prepare('UPDATE requisitions SET recruiter_id=? WHERE id=?').run('usr-recruiter','req-101');
 
   await db.prepare('INSERT INTO candidates (id, full_name, email, requisition_id) VALUES (?, ?, ?, ?)').run('cand-1', 'Nguyễn Văn Ứng Viên', 'cand1@test.com', 'req-101');
 

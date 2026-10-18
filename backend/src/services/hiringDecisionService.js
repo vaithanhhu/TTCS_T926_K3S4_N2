@@ -6,6 +6,20 @@ class HiringDecisionService {
   constructor(db) {
     this.db = db || getDatabase();
     this.requisitionService = new RequisitionService(this.db);
+    this.rbac=new(require('../middlewares/rbacMiddleware'))(this.db);
+  }
+
+
+  denied(){return {success:false,statusCode:403,code:'FORBIDDEN',message:'Access denied.'};}
+  async consensusAccess(interview,actor){
+    if(actor.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role)))return true;
+    if(actor.roles.includes('INTERVIEWER')&&interview.interviewer_id===actor.id)return true;
+    const candidate=await this.db.prepare('SELECT requisition_id FROM candidates WHERE id=?').get(interview.candidate_id);
+    const ids=[...new Set([interview.requisition_id,candidate?.requisition_id].filter(Boolean))].sort();
+    if(!ids.length)return false;
+    if(actor.roles.includes('HIRING_MGR')&&(await Promise.all(ids.map(id=>this.requisitionService.canReadHiringRequisition(id,actor.id)))).every(Boolean))return true;
+    if(actor.roles.includes('RECRUITER')&&(await Promise.all(ids.map(id=>this.requisitionService.recruiterAssigned(id,actor.id)))).every(Boolean))return true;
+    return false;
   }
 
   async hasHiringDecisionsTable() {
@@ -35,6 +49,7 @@ class HiringDecisionService {
   }
 
   async getCandidateInterviewSummary(candidateId, actor = null) {
+    actor=await this.rbac.getAuthorizedActor(actor?.id,'interview.evaluation.read');if(!actor)return this.denied();
     if (!candidateId || typeof candidateId !== 'string') {
       return { success: false, statusCode: 400, code: 'BAD_REQUEST', message: 'Mã ứng viên không hợp lệ.' };
     }
@@ -204,7 +219,7 @@ class HiringDecisionService {
         };
       });
 
-    const totalScores = allSubmittedEvals.map(e => Number(e.total_score)).filter(s => !isNaN(s) && s !== null);
+    const totalScores = allSubmittedEvals.filter(e=>e.total_score!==null&&e.total_score!==undefined).map(e=>Number(e.total_score)).filter(Number.isFinite);
     const overallAverageScore = totalScores.length > 0
       ? Number((totalScores.reduce((s, x) => s + x, 0) / totalScores.length).toFixed(2))
       : null;
@@ -276,6 +291,11 @@ class HiringDecisionService {
   }
 
   async recordHiringDecision(candidateId, data = {}, actor = null) {
+    return this.db.transaction(()=>this.#recordHiringDecision(candidateId,data,actor));
+  }
+
+  async #recordHiringDecision(candidateId,data,actor) {
+    actor=await this.rbac.getAuthorizedActor(actor?.id,'interview.evaluation.read');if(!actor)return this.denied();
     if (!candidateId || typeof candidateId !== 'string') {
       return { success: false, statusCode: 400, code: 'BAD_REQUEST', message: 'Mã ứng viên không hợp lệ.' };
     }
@@ -289,6 +309,7 @@ class HiringDecisionService {
       };
     }
 
+    if(this.db.provider==='postgres')await this.db.prepare('SELECT id FROM candidates WHERE id=? FOR UPDATE').get(candidateId.trim());
     const candidate = await this.db.prepare(`
       SELECT c.id, c.stage, c.requisition_id, c.full_name, c.email, c.notes, r.hiring_manager_id
       FROM candidates c
@@ -300,6 +321,7 @@ class HiringDecisionService {
       return { success: false, statusCode: 404, code: 'CANDIDATE_NOT_FOUND', message: 'Không tìm thấy hồ sơ ứng viên.' };
     }
 
+    if(candidate.requisition_id&&this.db.provider==='postgres')await this.db.prepare('SELECT id FROM requisitions WHERE id=? FOR SHARE').get(candidate.requisition_id);
     const roles = actor.roles || [];
     const isAdminOrHr = roles.some(r => ['ADMIN', 'HR_MANAGER'].includes(r));
     if (!isAdminOrHr && roles.includes('HIRING_MGR')) {
@@ -400,8 +422,11 @@ class HiringDecisionService {
     const consensusScore = data.consensusScore !== undefined && data.consensusScore !== null ? Number(data.consensusScore) : null;
     const nextAction = data.nextAction || (rawDecision === 'OFFER' ? 'PROCEED_TO_OFFER' : 'REJECT');
     const interviewId = data.interviewId || null;
+    if(interviewId){
+      if(typeof interviewId!=='string'||!await this.db.prepare('SELECT id FROM interviews WHERE id=? AND candidate_id=?').get(interviewId,candidate.id))return {success:false,statusCode:400,code:'INTERVIEW_CANDIDATE_MISMATCH',message:'Interview does not belong to this application.'};
+    }
 
-    await this.db.transaction(async () => {
+    await (async () => {
       if (await this.hasHiringDecisionsTable()) {
         const sql = this.db.provider === 'postgres'
           ? `
@@ -442,7 +467,7 @@ class HiringDecisionService {
       const action = rawDecision === 'OFFER' ? 'HIRING_DECISION_OFFER' : 'HIRING_DECISION_REJECT';
       const actorName = actor.fullName || actor.id;
 
-      try {
+      {
         const insertHistorySql = this.db.provider === 'postgres'
           ? `
             INSERT INTO candidate_status_history (
@@ -468,8 +493,8 @@ class HiringDecisionService {
           notes || null,
           rejectionReasonId
         );
-      } catch {}
-    });
+      }
+    })();
 
     return {
       success: true,
@@ -492,6 +517,7 @@ class HiringDecisionService {
   }
 
   async getInterviewConsensus(interviewId, actor = null) {
+    actor=await this.rbac.getAuthorizedActor(actor?.id,'interview.evaluation.read');if(!actor)return this.denied();
     if (!interviewId || typeof interviewId !== 'string') {
       return { success: false, statusCode: 400, code: 'BAD_REQUEST', message: 'Mã phỏng vấn không hợp lệ.' };
     }
@@ -508,6 +534,8 @@ class HiringDecisionService {
       return { success: false, statusCode: 404, code: 'INTERVIEW_NOT_FOUND', message: 'Không tìm thấy buổi phỏng vấn.' };
     }
 
+    if(!await this.consensusAccess(interview,actor))return this.denied();
+
     const evals = await this.db.prepare(`
       SELECT ev.id, ev.interviewer_id, ev.status, ev.recommendation, ev.general_notes,
              ev.total_score, ev.submitted_at, u.full_name AS interviewer_name, u.email AS interviewer_email
@@ -518,7 +546,7 @@ class HiringDecisionService {
     `).all(interview.id);
 
     const submittedEvals = evals.filter(e => e.status === 'SUBMITTED');
-    const totalScores = submittedEvals.map(e => Number(e.total_score)).filter(s => !isNaN(s) && s !== null);
+    const totalScores = submittedEvals.filter(e=>e.total_score!==null&&e.total_score!==undefined).map(e=>Number(e.total_score)).filter(Number.isFinite);
     const averageScore = totalScores.length > 0
       ? Number((totalScores.reduce((s, x) => s + x, 0) / totalScores.length).toFixed(2))
       : null;
@@ -571,6 +599,7 @@ class HiringDecisionService {
   }
 
   async recordInterviewConsensus(interviewId, data = {}, actor = null) {
+    actor=await this.rbac.getAuthorizedActor(actor?.id,'interview.evaluation.read');if(!actor)return this.denied();
     if (!interviewId || typeof interviewId !== 'string') {
       return { success: false, statusCode: 400, code: 'BAD_REQUEST', message: 'Mã phỏng vấn không hợp lệ.' };
     }
@@ -584,6 +613,8 @@ class HiringDecisionService {
     if (!interview) {
       return { success: false, statusCode: 404, code: 'INTERVIEW_NOT_FOUND', message: 'Không tìm thấy buổi phỏng vấn.' };
     }
+
+    if(!await this.consensusAccess(interview,actor))return this.denied();
 
     const roles = actor?.roles || [];
     const isLeadInterviewer = interview.interviewer_id && actor?.id && interview.interviewer_id === actor.id;

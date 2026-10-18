@@ -406,7 +406,7 @@ async function runTestsFor(provider) {
   const actorOther = { id: 'u-other-staff', email: 'other@example.com', fullName: 'Nhân Viên Khác', roles: [] };
 
   console.log('Test 1: Verify seeded default template');
-  const defaultTemplates = await onboardingService.getTemplates();
+  const defaultTemplates = await onboardingService.getTemplates({}, actorHrMgr);
   assert.equal(defaultTemplates.success, true);
   assert.ok(defaultTemplates.data.length >= 1);
   const defTmpl = defaultTemplates.data.find(t => t.id === 'tmpl-default');

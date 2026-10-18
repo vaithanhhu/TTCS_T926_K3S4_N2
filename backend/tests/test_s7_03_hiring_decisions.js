@@ -97,7 +97,9 @@ async function setupBaselineSchema(db) {
         email TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL DEFAULT '',
         full_name TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'ACTIVE'
+        status TEXT NOT NULL DEFAULT 'ACTIVE',
+        locked_until TEXT,
+        must_change_password BOOLEAN NOT NULL DEFAULT FALSE
       );
       CREATE TABLE IF NOT EXISTS roles (
         id TEXT PRIMARY KEY,
@@ -233,7 +235,9 @@ async function setupBaselineSchema(db) {
         email TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL DEFAULT '',
         full_name TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'ACTIVE'
+        status TEXT NOT NULL DEFAULT 'ACTIVE',
+        locked_until TEXT,
+        must_change_password BOOLEAN NOT NULL DEFAULT FALSE
       );
       CREATE TABLE IF NOT EXISTS roles (
         id TEXT PRIMARY KEY,
@@ -417,6 +421,17 @@ async function runTestSuite(providerName, createDbFn) {
   const db = await createDbFn();
   await setupBaselineSchema(db);
   await seedTestData(db);
+  await db.exec('CREATE TABLE permissions (id TEXT PRIMARY KEY, code TEXT UNIQUE NOT NULL); CREATE TABLE role_permissions (role_id TEXT NOT NULL REFERENCES roles(id), permission_id TEXT NOT NULL REFERENCES permissions(id), PRIMARY KEY(role_id,permission_id));');
+  const matrix = require('../src/db/sync-permissions').ROLE_PERMISSIONS;
+  for (const [userId, role] of [['u-admin','ADMIN'],['u-hr','HR_MANAGER'],['u-hm-it','HIRING_MGR'],['u-hm-hr','HIRING_MGR'],['u-rec','RECRUITER'],['u-iv1','INTERVIEWER'],['u-iv2','INTERVIEWER']]) {
+    await db.prepare('INSERT INTO roles (id,code,name) VALUES (?,?,?) ON CONFLICT DO NOTHING').run(role,role,role);
+    await db.prepare('INSERT INTO user_roles (user_id,role_id) VALUES (?,?)').run(userId,role);
+    for (const permission of matrix[role] || []) {
+      await db.prepare('INSERT INTO permissions (id,code) VALUES (?,?) ON CONFLICT DO NOTHING').run(permission,permission);
+      await db.prepare('INSERT INTO role_permissions (role_id,permission_id) VALUES (?,?) ON CONFLICT DO NOTHING').run(role,permission);
+    }
+  }
+
 
   const hiringService = new HiringDecisionService(db);
   const evaluationService = new InterviewEvaluationService(db);

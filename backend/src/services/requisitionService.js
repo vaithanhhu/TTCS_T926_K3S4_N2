@@ -2384,11 +2384,11 @@ class RequisitionService {
   }
 
   async getOnboardingTemplates(options = {}, actor = null) {
-    return this.onboardingService.getTemplates(options);
+    return this.onboardingService.getTemplates(options,actor);
   }
 
   async getOnboardingTemplateById(id, actor = null) {
-    return this.onboardingService.getTemplateById(id);
+    return this.onboardingService.getTemplateById(id,actor);
   }
 
   async createOnboardingTemplate(data = {}, actor = null) {

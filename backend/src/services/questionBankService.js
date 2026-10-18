@@ -524,6 +524,7 @@ class QuestionBankService {
   }
 
   async getSuggestedQuestionsForInterview(interviewId, options = {}, actor = null) {
+    const access=await require('./interviewScopeService').authorizeInterview(this.db,interviewId,actor,'interview.read');if(!access.success)return access;actor=access.actor;
     if (!interviewId) {
       return { success: false, statusCode: 400, code: 'INTERVIEW_ID_REQUIRED', message: 'Mã phỏng vấn không được để trống.' };
     }
@@ -701,10 +702,15 @@ class QuestionBankService {
   }
 
   async toggleAskedQuestion(interviewId, questionId, actor = null) {
+    return this.db.transaction(()=>this.#toggleAskedQuestion(interviewId,questionId,actor));
+  }
+
+  async #toggleAskedQuestion(interviewId,questionId,actor) {
+    const access=await require('./interviewScopeService').authorizeInterview(this.db,interviewId,actor,'interview.read');if(!access.success)return access;actor=access.actor;
     if (!interviewId || !questionId) {
       return { success: false, statusCode: 400, code: 'PARAMS_REQUIRED', message: 'Mã phỏng vấn và câu hỏi không được để trống.' };
     }
-    const interview = await this.db.prepare('SELECT id, interviewer_id FROM interviews WHERE id = ?').get(interviewId);
+    const interview = await this.db.prepare('SELECT id, interviewer_id FROM interviews WHERE id = ?'+(this.db.provider==='postgres'?' FOR UPDATE':'')).get(interviewId);
     if (!interview) {
       return { success: false, statusCode: 404, code: 'INTERVIEW_NOT_FOUND', message: 'Không tìm thấy buổi phỏng vấn.' };
     }

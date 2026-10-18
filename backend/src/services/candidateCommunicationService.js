@@ -4,13 +4,7 @@ const RBAC = require('../middlewares/rbacMiddleware');
 const { getEmailService, escapeEmailHtml } = require('./emailService');
 
 function renderTextVariables(text, vars) {
-  let output = String(text || '');
-  for (const [key, value] of Object.entries(vars)) {
-    const regex1 = new RegExp('{{' + key + '}}', 'g');
-    const regex2 = new RegExp('{' + key + '}', 'g');
-    output = output.replace(regex1, String(value ?? '')).replace(regex2, String(value ?? ''));
-  }
-  return output;
+  return String(text || '').replace(/\{\{([A-Za-z_]\w*)\}\}|\{([A-Za-z_]\w*)\}/g,(match,double,single)=>Object.hasOwn(vars,double||single)?String(vars[double||single]??''):match);
 }
 
 class CandidateCommunicationService {
@@ -241,7 +235,7 @@ class CandidateCommunicationService {
 
     for (const cand of candidates) {
       if (type === 'REJECTION') {
-        const existingRejection = await this.db.prepare("SELECT id, sent_at FROM candidate_communications WHERE candidate_id = ? AND type = 'REJECTION' AND status IN ('DELIVERED', 'SENT_LOCAL')").get(cand.id);
+        const existingRejection = await this.db.prepare("SELECT id, sent_at FROM candidate_communications WHERE candidate_id = ? AND type = 'REJECTION' AND status IN ('PENDING', 'DELIVERED', 'SENT_LOCAL')").get(cand.id);
         if (existingRejection) {
           skippedCount++;
           results.push({
@@ -277,11 +271,24 @@ class CandidateCommunicationService {
       const renderedText = renderTextVariables(bodyTextTemplate, vars);
 
       const commId = 'comm-' + crypto.randomUUID();
+      let attempted=false;
       try {
+        const reserved=await this.db.transaction(async()=>{
+          const current=await this.actor(actor);
+          const row=await this.db.prepare('SELECT id,email,stage,requisition_id FROM candidates WHERE id=?'+(this.db.provider==='postgres'?' FOR UPDATE':'')).get(cand.id);
+          if(!row||row.email!==cand.email||row.stage!==cand.stage||row.requisition_id!==cand.requisition_id)throw Error('COMMUNICATION_PREVIEW_STALE');
+          if(row.requisition_id)await this.db.prepare('SELECT id FROM requisitions WHERE id=?'+(this.db.provider==='postgres'?' FOR SHARE':'')).get(row.requisition_id);
+          const access=await this.getReqService().candidateAccess(cand.id,current,'candidate.read');
+          if(!access.success)throw Error('COMMUNICATION_FORBIDDEN');
+          if(type==='REJECTION'&&await this.db.prepare("SELECT id FROM candidate_communications WHERE candidate_id=? AND type='REJECTION' AND status IN ('PENDING','DELIVERED','SENT_LOCAL')").get(cand.id))return false;
         await this.db.prepare(`
           INSERT INTO candidate_communications (id, candidate_id, requisition_id, batch_id, type, sender_id, recipient_email, recipient_name, subject, body_html, body_text, status, error_message, sent_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', NULL, ` + (this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')") + `)
         `).run(commId, cand.id, cand.requisition_id, batchId, type, fresh.id, cand.email, cand.full_name, renderedSubject, renderedHtml, renderedText);
+          return true;
+        });
+        if(!reserved){skippedCount++;results.push({candidateId:cand.id,candidateName:cand.full_name,email:cand.email,status:'SKIPPED_DUPLICATE',reason:'REJECTION_ALREADY_SENT'});continue;}
+        attempted=true;
 
         const mailRes = await this.emailService.sendMail({
           to: cand.email,
@@ -304,28 +311,28 @@ class CandidateCommunicationService {
           });
         } else {
           const errorCode = mailRes.error || 'SMTP_SEND_FAILED';
-          await this.db.prepare('UPDATE candidate_communications SET status = ?, error_message = ? WHERE id = ?').run('FAILED', errorCode, commId);
+          await this.db.prepare('UPDATE candidate_communications SET status = ?, error_message = ? WHERE id = ?').run(errorCode==='SMTP_SEND_FAILED'?'PENDING':'FAILED', errorCode, commId);
           failedCount++;
           results.push({
             candidateId: cand.id,
             candidateName: cand.full_name,
             email: cand.email,
-            status: 'FAILED',
+            status: errorCode==='SMTP_SEND_FAILED'?'PENDING':'FAILED',
             error: errorCode,
             communicationId: commId
           });
         }
       } catch (err) {
         try {
-          await this.db.prepare('UPDATE candidate_communications SET status = ?, error_message = ? WHERE id = ?').run('FAILED', err.message || 'EMAIL_SEND_EXCEPTION', commId);
+          await this.db.prepare('UPDATE candidate_communications SET status = ?, error_message = ? WHERE id = ?').run(attempted?'PENDING':'FAILED', attempted?'COMMUNICATION_DELIVERY_UNKNOWN':'COMMUNICATION_SEND_FAILED', commId);
         } catch {}
         failedCount++;
         results.push({
           candidateId: cand.id,
           candidateName: cand.full_name,
           email: cand.email,
-          status: 'FAILED',
-          error: err.message || 'EMAIL_SEND_EXCEPTION',
+          status: attempted?'PENDING':'FAILED',
+          error: attempted?'COMMUNICATION_DELIVERY_UNKNOWN':'COMMUNICATION_SEND_FAILED',
           communicationId: commId
         });
       }

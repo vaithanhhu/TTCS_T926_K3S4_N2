@@ -1,3 +1,4 @@
+const {escapeEmailHtml}=require('./emailService');
 const crypto = require('node:crypto');
 
 class OfferService {
@@ -148,17 +149,17 @@ class OfferService {
           <p style="margin: 4px 0 0 0; font-size: 0.9rem; color: #718096;">Độc lập - Tự do - Hạnh phúc</p>
           <h2 style="margin: 16px 0 0 0; color: #2b6cb0; font-size: 1.4rem;">THƯ MỜI NHẬN VIỆC</h2>
         </div>
-        <p>Kính gửi: <strong>${candName}</strong></p>
-        <p>Email: ${candEmail} | SĐT: ${candPhone}</p>
-        <p>Chúng tôi trân trọng gửi tới Ông/Bà lời mời làm việc tại <strong>${deptName}</strong> với các thông tin chi tiết sau:</p>
+        <p>Kính gửi: <strong>${escapeEmailHtml(candName)}</strong></p>
+        <p>Email: ${escapeEmailHtml(candEmail)} | SĐT: ${escapeEmailHtml(candPhone)}</p>
+        <p>Chúng tôi trân trọng gửi tới Ông/Bà lời mời làm việc tại <strong>${escapeEmailHtml(deptName)}</strong> với các thông tin chi tiết sau:</p>
         <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
           <tbody>
-            <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; color: #4a5568; width: 40%;">Vị trí / Chức danh:</td><td style="padding: 8px 0; font-weight: 600;">${jobTitle}</td></tr>
-            <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; color: #4a5568;">Bộ phận / Phòng ban:</td><td style="padding: 8px 0; font-weight: 600;">${deptName}</td></tr>
-            <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; color: #4a5568;">Mức lương hàng tháng:</td><td style="padding: 8px 0; font-weight: 600; color: #2b6cb0;">${salary} VNĐ</td></tr>
-            <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; color: #4a5568;">Phụ cấp:</td><td style="padding: 8px 0;">${allowances}</td></tr>
-            <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; color: #4a5568;">Ngày dự kiến nhận việc:</td><td style="padding: 8px 0; font-weight: 600;">${startDate}</td></tr>
-            <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; color: #4a5568;">Thời hạn phản hồi:</td><td style="padding: 8px 0; font-weight: 600; color: #c53030;">${expirationDate}</td></tr>
+            <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; color: #4a5568; width: 40%;">Vị trí / Chức danh:</td><td style="padding: 8px 0; font-weight: 600;">${escapeEmailHtml(jobTitle)}</td></tr>
+            <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; color: #4a5568;">Bộ phận / Phòng ban:</td><td style="padding: 8px 0; font-weight: 600;">${escapeEmailHtml(deptName)}</td></tr>
+            <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; color: #4a5568;">Mức lương hàng tháng:</td><td style="padding: 8px 0; font-weight: 600; color: #2b6cb0;">${escapeEmailHtml(salary)} VNĐ</td></tr>
+            <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; color: #4a5568;">Phụ cấp:</td><td style="padding: 8px 0;">${escapeEmailHtml(allowances)}</td></tr>
+            <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; color: #4a5568;">Ngày dự kiến nhận việc:</td><td style="padding: 8px 0; font-weight: 600;">${escapeEmailHtml(startDate)}</td></tr>
+            <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; color: #4a5568;">Thời hạn phản hồi:</td><td style="padding: 8px 0; font-weight: 600; color: #c53030;">${escapeEmailHtml(expirationDate)}</td></tr>
           </tbody>
         </table>
         <p style="margin-top: 20px;">Vui lòng phản hồi thư mời trước thời hạn nêu trên. Rất mong được đồng hành cùng Ông/Bà.</p>
@@ -201,8 +202,8 @@ class OfferService {
   }
 
   async getOffers(options = {}) {
-    await this.expireOverdueOffers();
     let viewer = options.viewer;
+    if(!viewer?.id)return {success:false,statusCode:403,code:'OFFER_FORBIDDEN',message:'Access denied.',offers:[]};
     if (viewer) {
       const fresh = await this.rbacMiddleware.getAuthorizedActor(viewer.id, 'offer.read');
       if (!fresh) {
@@ -211,6 +212,8 @@ class OfferService {
       viewer = { ...viewer, ...fresh };
       options = { ...options, viewer };
     }
+
+    await this.expireOverdueOffers();
 
     const conditions = [];
     const params = [];
@@ -1383,33 +1386,33 @@ class OfferService {
               <h3 style="margin: 0; text-transform: uppercase; letter-spacing: 1px; color: #1e3a8a;">HỆ THỐNG TUYỂN DỤNG ATS</h3>
               <h2 style="margin: 12px 0 0 0; color: #2563eb; font-size: 1.4rem;">THƯ MỜI NHẬN VIỆC (JOB OFFER LETTER)</h2>
             </div>
-            <p>Kính gửi: <strong>${candName}</strong>,</p>
-            <p>Chúng tôi rất vui mừng thông báo Ông/Bà đã trúng tuyển vị trí <strong>${jobTitle}</strong> tại <strong>${deptName}</strong>.</p>
+            <p>Kính gửi: <strong>${escapeEmailHtml(candName)}</strong>,</p>
+            <p>Chúng tôi rất vui mừng thông báo Ông/Bà đã trúng tuyển vị trí <strong>${escapeEmailHtml(jobTitle)}</strong> tại <strong>${escapeEmailHtml(deptName)}</strong>.</p>
             <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
               <tbody>
-                <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; color: #4a5568; width: 40%;">Vị trí / Chức danh:</td><td style="padding: 8px 0; font-weight: 600;">${jobTitle}</td></tr>
-                <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; color: #4a5568;">Bộ phận / Phòng ban:</td><td style="padding: 8px 0; font-weight: 600;">${deptName}</td></tr>
-                <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; color: #4a5568;">Mức lương hàng tháng:</td><td style="padding: 8px 0; font-weight: 600; color: #2563eb;">${salaryFormatted} VNĐ</td></tr>
-                <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; color: #4a5568;">Phụ cấp:</td><td style="padding: 8px 0;">${allowancesFormatted}</td></tr>
-                <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; color: #4a5568;">Ngày dự kiến nhận việc:</td><td style="padding: 8px 0; font-weight: 600;">${startDateFormatted}</td></tr>
-                <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; color: #4a5568;">Thời hạn phản hồi:</td><td style="padding: 8px 0; font-weight: 600; color: #dc2626;">${expDateFormatted}</td></tr>
+                <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; color: #4a5568; width: 40%;">Vị trí / Chức danh:</td><td style="padding: 8px 0; font-weight: 600;">${escapeEmailHtml(jobTitle)}</td></tr>
+                <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; color: #4a5568;">Bộ phận / Phòng ban:</td><td style="padding: 8px 0; font-weight: 600;">${escapeEmailHtml(deptName)}</td></tr>
+                <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; color: #4a5568;">Mức lương hàng tháng:</td><td style="padding: 8px 0; font-weight: 600; color: #2563eb;">${escapeEmailHtml(salaryFormatted)} VNĐ</td></tr>
+                <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; color: #4a5568;">Phụ cấp:</td><td style="padding: 8px 0;">${escapeEmailHtml(allowancesFormatted)}</td></tr>
+                <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; color: #4a5568;">Ngày dự kiến nhận việc:</td><td style="padding: 8px 0; font-weight: 600;">${escapeEmailHtml(startDateFormatted)}</td></tr>
+                <tr style="border-bottom: 1px solid #edf2f7;"><td style="padding: 8px 0; color: #4a5568;">Thời hạn phản hồi:</td><td style="padding: 8px 0; font-weight: 600; color: #dc2626;">${escapeEmailHtml(expDateFormatted)}</td></tr>
               </tbody>
             </table>
             <div style="background: #f8fafc; border-left: 4px solid #2563eb; padding: 12px 16px; margin: 20px 0; border-radius: 4px;">
               <p style="margin: 0; font-weight: 600; color: #1e293b;">Nội dung thư mời:</p>
-              <div style="white-space: pre-wrap; font-size: 0.9rem; color: #475569; margin-top: 8px;">${row.offer_letter || ''}</div>
+              <div style="white-space: pre-wrap; font-size: 0.9rem; color: #475569; margin-top: 8px;">${escapeEmailHtml(row.offer_letter || '')}</div>
             </div>
             <div style="text-align: center; margin: 32px 0;">
-              <a href="${responseUrl}" style="background-color: #2563eb; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 700; font-size: 1rem; display: inline-block;">
+              <a href="${escapeEmailHtml(responseUrl)}" style="background-color: #2563eb; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 700; font-size: 1rem; display: inline-block;">
                 👉 Xem và Phản hồi Thư Mời Nhận Việc
               </a>
             </div>
             <p style="font-size: 0.85rem; color: #64748b; text-align: center;">
               Nếu nút trên không mở được, vui lòng truy cập đường dẫn sau:<br/>
-              <span style="color: #2563eb; word-break: break-all;">${responseUrl}</span>
+              <span style="color: #2563eb; word-break: break-all;">${escapeEmailHtml(responseUrl)}</span>
             </p>
             <p style="font-size: 0.85rem; color: #94a3b8; margin-top: 24px; border-top: 1px solid #e2e8f0; padding-top: 12px; text-align: center;">
-              Liên kết này dành riêng cho bạn và sẽ hết hiệu lực sau ngày ${expDateFormatted}.
+              Liên kết này dành riêng cho bạn và sẽ hết hiệu lực sau ngày ${escapeEmailHtml(expDateFormatted)}.
             </p>
           </div>
         `;
@@ -1485,12 +1488,13 @@ class OfferService {
       }
       if (isExpired) {
         const hasUpdatedAt = await this.hasUpdatedAtCol();
-        await this.db.prepare(`
+        const changed = await this.db.prepare(`
           UPDATE offers SET
             status = 'EXPIRED'
             ${hasUpdatedAt ? `, updated_at = ${this.db.provider === 'postgres' ? 'CURRENT_TIMESTAMP' : "datetime('now')"}` : ''}
-          WHERE id = ?
+          WHERE id = ? AND status = 'SENT'
         `).run(row.id);
+        if(!changed.changes)return this.getOfferByToken(cleanToken);
         row.status = 'EXPIRED';
       }
     }
@@ -1570,6 +1574,7 @@ class OfferService {
         };
       }
 
+      if(!['SENT','EXPIRED'].includes(row.status))return {success:false,statusCode:400,code:'OFFER_NOT_OPEN_FOR_RESPONSE',message:'Offer is not open for response.'};
       const now = new Date();
       let isExpired = row.status === 'EXPIRED';
       if (!isExpired) {

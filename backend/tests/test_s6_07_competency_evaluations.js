@@ -537,6 +537,7 @@ async function runTests() {
   });
 
   await runAsyncCase('Case 10: Recruiter/HR reopen within 24h allows edits; expires after 24h', async () => {
+    db.prepare('UPDATE requisitions SET recruiter_id=? WHERE id=?').run('u-rec1','req-dev');
     const recActor = { id: 'u-rec1', roles: ['RECRUITER'] };
 
     const noReason = await evalService.reopenEvaluation('int-dev-1', 'u-iv1', recActor, { reason: ' ' });
