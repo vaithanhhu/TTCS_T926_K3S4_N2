@@ -476,6 +476,297 @@ class QuestionBankService {
       data: (await this.getQuestionById(id))
     };
   }
+
+  async hasAskedQuestionsTable() {
+    try {
+      if (this.db.provider === 'postgres') {
+        const row = await this.db.prepare("SELECT table_name FROM information_schema.tables WHERE table_name = 'interview_asked_questions'").get();
+        return Boolean(row);
+      }
+      const row = await this.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='interview_asked_questions'").get();
+      return Boolean(row);
+    } catch {
+      return false;
+    }
+  }
+
+  async ensureAskedQuestionsTable() {
+    if (await this.hasAskedQuestionsTable()) return;
+    try {
+      if (this.db.provider === 'postgres') {
+        await this.db.exec(`
+          CREATE TABLE IF NOT EXISTS interview_asked_questions (
+            id TEXT PRIMARY KEY,
+            interview_id TEXT NOT NULL REFERENCES interviews(id) ON DELETE CASCADE,
+            question_id TEXT NOT NULL REFERENCES interview_questions(id) ON DELETE CASCADE,
+            asked_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            asked_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            CONSTRAINT uq_interview_asked_questions UNIQUE(interview_id, question_id)
+          );
+          CREATE INDEX IF NOT EXISTS idx_asked_questions_int ON interview_asked_questions(interview_id);
+          CREATE INDEX IF NOT EXISTS idx_asked_questions_q ON interview_asked_questions(question_id);
+        `);
+      } else {
+        await this.db.exec(`
+          CREATE TABLE IF NOT EXISTS interview_asked_questions (
+            id TEXT PRIMARY KEY,
+            interview_id TEXT NOT NULL REFERENCES interviews(id) ON DELETE CASCADE,
+            question_id TEXT NOT NULL REFERENCES interview_questions(id) ON DELETE CASCADE,
+            asked_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            asked_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(interview_id, question_id)
+          );
+          CREATE INDEX IF NOT EXISTS idx_asked_questions_int ON interview_asked_questions(interview_id);
+          CREATE INDEX IF NOT EXISTS idx_asked_questions_q ON interview_asked_questions(question_id);
+        `);
+      }
+    } catch {}
+  }
+
+  async getSuggestedQuestionsForInterview(interviewId, options = {}, actor = null) {
+    if (!interviewId) {
+      return { success: false, statusCode: 400, code: 'INTERVIEW_ID_REQUIRED', message: 'Mã phỏng vấn không được để trống.' };
+    }
+    const interview = await this.db.prepare(`
+      SELECT
+        i.id,
+        i.candidate_id,
+        i.requisition_id,
+        i.interviewer_id,
+        i.round_name,
+        i.scheduled_time,
+        i.status,
+        c.requisition_id AS cand_requisition_id,
+        COALESCE(i.requisition_id, c.requisition_id) AS effective_requisition_id,
+        r.job_title_id,
+        r.title AS requisition_title,
+        jt.name AS job_title_name,
+        jt.framework_id,
+        cf.name AS framework_name
+      FROM interviews i
+      LEFT JOIN candidates c ON c.id = i.candidate_id
+      LEFT JOIN requisitions r ON r.id = COALESCE(i.requisition_id, c.requisition_id)
+      LEFT JOIN job_titles jt ON jt.id = r.job_title_id
+      LEFT JOIN competency_frameworks cf ON cf.id = jt.framework_id
+      WHERE i.id = ?
+    `).get(interviewId);
+
+    if (!interview) {
+      return { success: false, statusCode: 404, code: 'INTERVIEW_NOT_FOUND', message: 'Không tìm thấy buổi phỏng vấn.' };
+    }
+
+    if (actor) {
+      const isPrivileged = actor.roles && actor.roles.some(r => ['ADMIN', 'HR_MANAGER', 'RECRUITER'].includes(r));
+      if (!isPrivileged) {
+        let isAssigned = interview.interviewer_id === actor.id;
+        if (!isAssigned) {
+          try {
+            const row = await this.db.prepare('SELECT user_id FROM interview_interviewers WHERE interview_id = ? AND user_id = ?').get(interviewId, actor.id);
+            isAssigned = Boolean(row);
+          } catch {}
+        }
+        if (!isAssigned) {
+          return { success: false, statusCode: 403, code: 'INTERVIEW_ACCESS_DENIED', message: 'Bạn không có quyền trong phiên phỏng vấn này.' };
+        }
+      }
+    }
+
+    await this.ensureAskedQuestionsTable();
+
+    let frameworkId = interview.framework_id;
+    let criteriaIds = [];
+    try {
+      const evalRow = await this.db.prepare('SELECT snapshot_criteria FROM interview_evaluations WHERE interview_id = ? LIMIT 1').get(interviewId);
+      if (evalRow?.snapshot_criteria) {
+        const parsed = JSON.parse(evalRow.snapshot_criteria);
+        if (Array.isArray(parsed)) criteriaIds = parsed.map(c => c.id).filter(Boolean);
+      }
+    } catch {}
+
+    const conditions = ["iq.status = 'ACTIVE'"];
+    const params = [];
+
+    if (options.criterionId) {
+      conditions.push('iq.criterion_id = ?');
+      params.push(options.criterionId);
+    } else if (frameworkId) {
+      conditions.push('cc.framework_id = ?');
+      params.push(frameworkId);
+    } else if (criteriaIds.length > 0) {
+      conditions.push(`iq.criterion_id IN (${criteriaIds.map(() => '?').join(', ')})`);
+      params.push(...criteriaIds);
+    } else if (interview.job_title_id) {
+      conditions.push('EXISTS (SELECT 1 FROM job_titles jt WHERE jt.id = ? AND jt.framework_id = cc.framework_id)');
+      params.push(interview.job_title_id);
+    }
+
+    if (options.difficulty && options.difficulty !== 'ALL') {
+      conditions.push('iq.difficulty = ?');
+      params.push(options.difficulty.toUpperCase());
+    }
+
+    if (options.search && typeof options.search === 'string' && options.search.trim()) {
+      const p = `%${options.search.trim()}%`;
+      conditions.push('(iq.question_text LIKE ? OR iq.good_answer_hint LIKE ? OR cc.name LIKE ?)');
+      params.push(p, p, p);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const questions = await this.db.prepare(`
+      SELECT
+        iq.id,
+        iq.criterion_id,
+        iq.question_text,
+        iq.difficulty,
+        iq.good_answer_hint,
+        iq.status,
+        cc.name AS criterion_name,
+        cc.weight AS criterion_weight,
+        cc.display_order AS criterion_display_order,
+        cc.framework_id,
+        cf.name AS framework_name
+      FROM interview_questions iq
+      JOIN competency_criteria cc ON iq.criterion_id = cc.id
+      JOIN competency_frameworks cf ON cc.framework_id = cf.id
+      ${whereClause}
+      ORDER BY cc.display_order ASC, iq.difficulty ASC, iq.created_at ASC
+    `).all(...params);
+
+    let currentAskedQuestionIds = new Set();
+    try {
+      const rows = await this.db.prepare('SELECT question_id FROM interview_asked_questions WHERE interview_id = ?').all(interviewId);
+      currentAskedQuestionIds = new Set((rows || []).map(r => r.question_id));
+    } catch {}
+
+    const previousAskedMap = new Map();
+    try {
+      const prevInterviews = await this.db.prepare(`
+        SELECT i.id, i.round_name, i.scheduled_time
+        FROM interviews i
+        WHERE i.candidate_id = ?
+          AND COALESCE(i.requisition_id, ?) = ?
+          AND i.id != ?
+          AND i.status != 'CANCELLED'
+        ORDER BY i.scheduled_time ASC, i.created_at ASC
+      `).all(interview.candidate_id, interview.effective_requisition_id, interview.effective_requisition_id, interviewId);
+
+      if (prevInterviews && prevInterviews.length > 0) {
+        for (const prev of prevInterviews) {
+          const askedRows = await this.db.prepare('SELECT question_id FROM interview_asked_questions WHERE interview_id = ?').all(prev.id);
+          for (const ar of (askedRows || [])) {
+            if (!previousAskedMap.has(ar.question_id)) {
+              previousAskedMap.set(ar.question_id, prev.round_name || 'Vòng trước');
+            }
+          }
+        }
+      }
+    } catch {}
+
+    const suggested = (questions || []).map(q => {
+      const isAskedInCurrentRound = currentAskedQuestionIds.has(q.id);
+      const isAskedInPreviousRound = previousAskedMap.has(q.id);
+      const previousRoundName = isAskedInPreviousRound ? previousAskedMap.get(q.id) : null;
+
+      return {
+        id: q.id,
+        questionText: q.question_text,
+        criterionId: q.criterion_id,
+        criterionName: q.criterion_name,
+        category: q.criterion_name,
+        goodAnswerHint: q.good_answer_hint,
+        difficultyLevel: q.difficulty,
+        difficulty: q.difficulty,
+        isAskedInCurrentRound,
+        isAskedInPreviousRound,
+        previousRoundName,
+        frameworkId: q.framework_id,
+        frameworkName: q.framework_name
+      };
+    });
+
+    return {
+      success: true,
+      statusCode: 200,
+      interviewId,
+      candidateId: interview.candidate_id,
+      requisitionId: interview.effective_requisition_id,
+      jobTitleId: interview.job_title_id || null,
+      jobTitleName: interview.job_title_name || null,
+      frameworkId: interview.framework_id || null,
+      frameworkName: interview.framework_name || null,
+      questions: suggested,
+      data: suggested
+    };
+  }
+
+  async toggleAskedQuestion(interviewId, questionId, actor = null) {
+    if (!interviewId || !questionId) {
+      return { success: false, statusCode: 400, code: 'PARAMS_REQUIRED', message: 'Mã phỏng vấn và câu hỏi không được để trống.' };
+    }
+    const interview = await this.db.prepare('SELECT id, interviewer_id FROM interviews WHERE id = ?').get(interviewId);
+    if (!interview) {
+      return { success: false, statusCode: 404, code: 'INTERVIEW_NOT_FOUND', message: 'Không tìm thấy buổi phỏng vấn.' };
+    }
+
+    if (actor) {
+      const isPrivileged = actor.roles && actor.roles.some(r => ['ADMIN', 'HR_MANAGER', 'RECRUITER'].includes(r));
+      if (!isPrivileged) {
+        let isAssigned = interview.interviewer_id === actor.id;
+        if (!isAssigned) {
+          try {
+            const row = await this.db.prepare('SELECT user_id FROM interview_interviewers WHERE interview_id = ? AND user_id = ?').get(interviewId, actor.id);
+            isAssigned = Boolean(row);
+          } catch {}
+        }
+        if (!isAssigned) {
+          return { success: false, statusCode: 403, code: 'INTERVIEW_ACCESS_DENIED', message: 'Bạn không có quyền trong phiên phỏng vấn này.' };
+        }
+      }
+    }
+
+    const question = await this.db.prepare('SELECT id FROM interview_questions WHERE id = ?').get(questionId);
+    if (!question) {
+      return { success: false, statusCode: 404, code: 'QUESTION_NOT_FOUND', message: 'Không tìm thấy câu hỏi.' };
+    }
+
+    await this.ensureAskedQuestionsTable();
+
+    const existing = await this.db.prepare('SELECT id FROM interview_asked_questions WHERE interview_id = ? AND question_id = ?').get(interviewId, questionId);
+    if (existing) {
+      await this.db.prepare('DELETE FROM interview_asked_questions WHERE interview_id = ? AND question_id = ?').run(interviewId, questionId);
+      return {
+        success: true,
+        statusCode: 200,
+        interviewId,
+        questionId,
+        asked: false,
+        isAskedInCurrentRound: false
+      };
+    } else {
+      const rowId = 'iaq-' + crypto.randomUUID();
+      const askedBy = actor?.id || interview.interviewer_id || 'system';
+      if (this.db.provider === 'postgres') {
+        await this.db.prepare(`
+          INSERT INTO interview_asked_questions (id, interview_id, question_id, asked_by, asked_at)
+          VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+        `).run(rowId, interviewId, questionId, askedBy);
+      } else {
+        await this.db.prepare(`
+          INSERT INTO interview_asked_questions (id, interview_id, question_id, asked_by, asked_at)
+          VALUES (?, ?, ?, ?, datetime('now'))
+        `).run(rowId, interviewId, questionId, askedBy);
+      }
+      return {
+        success: true,
+        statusCode: 200,
+        interviewId,
+        questionId,
+        asked: true,
+        isAskedInCurrentRound: true
+      };
+    }
+  }
 }
 
 module.exports = QuestionBankService;

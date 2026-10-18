@@ -42,6 +42,13 @@
     const jobTitleEl = document.getElementById('eval-job-title');
     if (jobTitleEl) jobTitleEl.textContent = evalData.jobTitleName || 'Chưa gắn chức danh';
 
+    switchTab('criteria');
+    const critSelect = document.getElementById('eval-questions-criterion-filter');
+    if (critSelect && evalData.criteria) {
+      critSelect.innerHTML = '<option value="">Tất cả tiêu chí</option>' +
+        evalData.criteria.map(c => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`).join('');
+    }
+
     const templateEl = document.getElementById('eval-template-name');
     if (templateEl) templateEl.textContent = evalData.templateName || 'Tiêu chuẩn';
 
@@ -235,12 +242,141 @@
     }
   }
 
+  function switchTab(tab) {
+    const critBtn = document.getElementById('eval-tab-criteria-btn');
+    const qBtn = document.getElementById('eval-tab-questions-btn');
+    const critPane = document.getElementById('eval-tab-criteria-pane');
+    const qPane = document.getElementById('eval-tab-questions-pane');
+    if (!critBtn || !qBtn || !critPane || !qPane) return;
+
+    if (tab === 'criteria') {
+      critBtn.className = 'btn btn-sm btn-primary active';
+      qBtn.className = 'btn btn-sm btn-outline';
+      critPane.classList.remove('hidden');
+      qPane.classList.add('hidden');
+    } else {
+      qBtn.className = 'btn btn-sm btn-primary active';
+      critBtn.className = 'btn btn-sm btn-outline';
+      qPane.classList.remove('hidden');
+      critPane.classList.add('hidden');
+      loadSuggestedQuestions();
+    }
+  }
+
+  async function loadSuggestedQuestions() {
+    if (!activeInterviewId) return;
+    const token = sessionStorage.getItem('ats_token');
+    const container = document.getElementById('eval-suggested-questions-container');
+    const countBadge = document.getElementById('eval-questions-count-badge');
+    const critFilter = document.getElementById('eval-questions-criterion-filter')?.value || '';
+    const diffFilter = document.getElementById('eval-questions-difficulty-filter')?.value || 'ALL';
+
+    if (container) {
+      container.innerHTML = '<div style="text-align: center; color: var(--color-text-secondary); padding: 20px;">Đang tải câu hỏi gợi ý...</div>';
+    }
+
+    const res = await window.ATS_API.getInterviewSuggestedQuestionsApi(token, activeInterviewId, {
+      criterionId: critFilter,
+      difficulty: diffFilter
+    });
+
+    if (!res.ok || !res.data || !res.data.success) {
+      if (container) {
+        container.innerHTML = `<div style="text-align: center; color: var(--color-danger); padding: 20px;">${escapeHtml(res.data?.message || 'Không thể tải câu hỏi gợi ý.')}</div>`;
+      }
+      return;
+    }
+
+    const questions = res.data.questions || res.data.data || [];
+    if (countBadge) {
+      countBadge.textContent = `${questions.length} câu hỏi`;
+    }
+
+    if (questions.length === 0) {
+      if (container) {
+        container.innerHTML = '<div style="text-align: center; color: var(--color-text-secondary); padding: 24px;">Không có câu hỏi gợi ý phù hợp với tiêu chí lọc.</div>';
+      }
+      return;
+    }
+
+    if (container) {
+      container.innerHTML = questions.map(q => {
+        const diffBadge = q.difficultyLevel === 'EASY'
+          ? '<span class="badge" style="background: #dcfce7; color: #15803d; font-size: 0.7rem;">Dễ</span>'
+          : (q.difficultyLevel === 'HARD'
+            ? '<span class="badge" style="background: #fee2e2; color: #b91c1c; font-size: 0.7rem;">Khó</span>'
+            : '<span class="badge" style="background: #fef3c7; color: #b45309; font-size: 0.7rem;">Trung bình</span>');
+
+        const prevBadge = q.isAskedInPreviousRound
+          ? `<span class="badge" style="background: #fef3c7; color: #b45309; font-size: 0.7rem;">⚠️ Đã hỏi ở: ${escapeHtml(q.previousRoundName || 'Vòng trước')}</span>`
+          : '';
+
+        const hintHtml = q.goodAnswerHint
+          ? `<div style="margin-top: 6px; font-size: 0.8rem; color: var(--color-text-secondary); background: var(--color-bg-page); padding: 6px 10px; border-radius: var(--radius-sm); border-left: 3px solid var(--color-primary);"><strong>Gợi ý câu trả lời tốt:</strong> ${escapeHtml(q.goodAnswerHint)}</div>`
+          : '';
+
+        const askedBtnClass = q.isAskedInCurrentRound ? 'btn-success' : 'btn-outline';
+        const askedBtnText = q.isAskedInCurrentRound ? '✓ Đã hỏi' : 'Đánh dấu đã hỏi';
+
+        return `
+          <div class="suggested-question-card" style="border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 12px; background: var(--color-bg-card, #fff);">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
+              <div style="flex: 1;">
+                <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 4px; flex-wrap: wrap;">
+                  <span class="badge badge-outline" style="font-size: 0.7rem; font-weight: 600;">${escapeHtml(q.criterionName || q.category || 'Tiêu chí')}</span>
+                  ${diffBadge}
+                  ${prevBadge}
+                </div>
+                <div style="font-weight: 600; font-size: 0.95rem; margin-top: 6px; line-height: 1.4;">${escapeHtml(q.questionText)}</div>
+                ${hintHtml}
+              </div>
+              <button type="button" class="btn btn-sm ${askedBtnClass} btn-toggle-question" data-question-id="${escapeHtml(q.id)}" style="white-space: nowrap; margin-left: 8px; align-self: flex-start;">
+                ${askedBtnText}
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+  }
+
   function init() {
     const modal = document.getElementById('interview-evaluation-modal');
     if (!modal) return;
 
     document.getElementById('close-interview-evaluation-modal')?.addEventListener('click', () => modal.classList.add('hidden'));
     document.getElementById('close-eval-modal-btn')?.addEventListener('click', () => modal.classList.add('hidden'));
+
+    document.getElementById('eval-tab-criteria-btn')?.addEventListener('click', () => switchTab('criteria'));
+    document.getElementById('eval-tab-questions-btn')?.addEventListener('click', () => switchTab('questions'));
+    document.getElementById('eval-questions-criterion-filter')?.addEventListener('change', loadSuggestedQuestions);
+    document.getElementById('eval-questions-difficulty-filter')?.addEventListener('change', loadSuggestedQuestions);
+
+    const questionsContainer = document.getElementById('eval-suggested-questions-container');
+    if (questionsContainer) {
+      questionsContainer.addEventListener('click', async (e) => {
+        const btn = e.target.closest('.btn-toggle-question');
+        if (!btn) return;
+        const qId = btn.dataset.questionId;
+        if (!qId || !activeInterviewId) return;
+        btn.disabled = true;
+        const token = sessionStorage.getItem('ats_token');
+        const res = await window.ATS_API.toggleInterviewQuestionAskedApi(token, activeInterviewId, qId);
+        btn.disabled = false;
+        if (res.ok && res.data && res.data.success) {
+          const isAsked = res.data.asked ?? res.data.isAskedInCurrentRound;
+          btn.className = `btn btn-sm ${isAsked ? 'btn-success' : 'btn-outline'} btn-toggle-question`;
+          btn.textContent = isAsked ? '✓ Đã hỏi' : 'Đánh dấu đã hỏi';
+          if (typeof showToast === 'function') {
+            showToast('success', isAsked ? 'Đã đánh dấu' : 'Đã bỏ đánh dấu', isAsked ? 'Đã ghi nhận câu hỏi đã hỏi.' : 'Đã bỏ đánh dấu câu hỏi.');
+          }
+        } else {
+          if (typeof showToast === 'function') {
+            showToast('danger', 'Lỗi', res.data?.message || 'Không thể thay đổi trạng thái.');
+          }
+        }
+      });
+    }
 
     document.getElementById('eval-save-draft-btn')?.addEventListener('click', () => handleSave('DRAFT'));
     document.getElementById('eval-submit-btn')?.addEventListener('click', () => handleSave('SUBMITTED'));

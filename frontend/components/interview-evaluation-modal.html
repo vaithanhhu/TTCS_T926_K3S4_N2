@@ -24,27 +24,54 @@
         <div id="eval-reopen-notice" class="alert alert-info hidden" style="margin-top: 8px; font-size: 0.8rem; padding: 6px 10px;"></div>
       </div>
 
-      <div id="eval-criteria-container" style="display: flex; flex-direction: column; gap: 14px;"></div>
+      <div style="display: flex; gap: 8px; border-bottom: 1px solid var(--color-border); margin-bottom: 16px;">
+        <button type="button" id="eval-tab-criteria-btn" class="btn btn-sm btn-primary active" style="border-bottom-left-radius: 0; border-bottom-right-radius: 0;">Tiêu chí đánh giá</button>
+        <button type="button" id="eval-tab-questions-btn" class="btn btn-sm btn-outline" style="border-bottom-left-radius: 0; border-bottom-right-radius: 0;">Câu hỏi gợi ý</button>
+      </div>
 
-      <div style="background: var(--color-bg-page); border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 14px; margin-top: 16px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-          <span style="font-weight: 600; font-size: 1rem;">Điểm tổng trọng số:</span>
-          <span id="eval-total-score-display" style="font-size: 1.25rem; font-weight: 700; color: var(--color-primary);">-- / 5.00</span>
+      <div id="eval-tab-criteria-pane">
+        <div id="eval-criteria-container" style="display: flex; flex-direction: column; gap: 14px;"></div>
+
+        <div style="background: var(--color-bg-page); border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 14px; margin-top: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <span style="font-weight: 600; font-size: 1rem;">Điểm tổng trọng số:</span>
+            <span id="eval-total-score-display" style="font-size: 1.25rem; font-weight: 700; color: var(--color-primary);">-- / 5.00</span>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 12px;">
+            <label for="eval-recommendation-select" class="form-label">Kết luận phỏng vấn <span style="color: var(--color-danger)">*</span></label>
+            <select id="eval-recommendation-select" class="form-input">
+              <option value="">-- Chọn kết luận --</option>
+              <option value="RECOMMENDED">Nên tuyển (RECOMMENDED)</option>
+              <option value="CONSIDER">Cân nhắc (CONSIDER)</option>
+              <option value="NOT_RECOMMENDED">Không nên tuyển (NOT_RECOMMENDED)</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="eval-general-notes" class="form-label">Nhận xét tổng quát</label>
+            <textarea id="eval-general-notes" class="form-input" rows="3" placeholder="Nhận xét tổng thể về ứng viên sau buổi phỏng vấn..."></textarea>
+          </div>
         </div>
+      </div>
 
-        <div class="form-group" style="margin-bottom: 12px;">
-          <label for="eval-recommendation-select" class="form-label">Kết luận phỏng vấn <span style="color: var(--color-danger)">*</span></label>
-          <select id="eval-recommendation-select" class="form-input">
-            <option value="">-- Chọn kết luận --</option>
-            <option value="RECOMMENDED">Nên tuyển (RECOMMENDED)</option>
-            <option value="CONSIDER">Cân nhắc (CONSIDER)</option>
-            <option value="NOT_RECOMMENDED">Không nên tuyển (NOT_RECOMMENDED)</option>
-          </select>
+      <div id="eval-tab-questions-pane" class="hidden">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px; flex-wrap: wrap;">
+          <div style="display: flex; gap: 8px; align-items: center; flex: 1;">
+            <select id="eval-questions-criterion-filter" class="form-input" style="font-size: 0.8rem; padding: 4px 8px; max-width: 220px;">
+              <option value="">Tất cả tiêu chí</option>
+            </select>
+            <select id="eval-questions-difficulty-filter" class="form-input" style="font-size: 0.8rem; padding: 4px 8px; max-width: 140px;">
+              <option value="ALL">Mọi độ khó</option>
+              <option value="EASY">Dễ</option>
+              <option value="MEDIUM">Trung bình</option>
+              <option value="HARD">Khó</option>
+            </select>
+          </div>
+          <span id="eval-questions-count-badge" class="badge badge-secondary" style="font-size: 0.75rem;">0 câu hỏi</span>
         </div>
-
-        <div class="form-group" style="margin-bottom: 0;">
-          <label for="eval-general-notes" class="form-label">Nhận xét tổng quát</label>
-          <textarea id="eval-general-notes" class="form-input" rows="3" placeholder="Nhận xét tổng thể về ứng viên sau buổi phỏng vấn..."></textarea>
+        <div id="eval-suggested-questions-container" style="display: flex; flex-direction: column; gap: 12px; max-height: 480px; overflow-y: auto;">
+          <div style="text-align: center; color: var(--color-text-secondary); padding: 20px;">Đang tải câu hỏi gợi ý...</div>
         </div>
       </div>
 
