@@ -13,6 +13,7 @@
     "test:sprint7-deep-audit": "node backend/tests/test_sprint7_deep_audit.js",
     "test:full-system-deep-audit": "node backend/tests/test_full_system_deep_audit.js",
     "test:requisition-audit": "node backend/tests/test_requisition_headcount_approval_audit.js",
+    "test:concurrency-security-audit": "node backend/tests/test_concurrency_security_audit.js",
     "test:git-safety": "node backend/tests/test_git_safety.js",
     "start:local": "node backend/src/start-local.js",
     "test:browser-e2e": "node backend/tests/run_browser_e2e.js",
