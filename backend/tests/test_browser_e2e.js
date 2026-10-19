@@ -313,6 +313,77 @@ async function main() {
         await hr.screenshot({ path: path.join(output, action.toLowerCase() + '-history.png'), fullPage: true });
       });
     }
+    await check('S3-08 TC08-09 overdue highlight and badge evaluation across all statuses and dates', hr, async () => {
+      const today = s.service.businessDate(new Date());
+      const yesterday = s.service.businessDate(new Date(Date.now() - 86400000));
+      const tomorrow = s.service.businessDate(new Date(Date.now() + 86400000));
+      const tcItems = [
+        { id: 'tc08-open-overdue', code: 'TC08-OPEN-OVERDUE', title: 'TC08-09 Open Overdue', status: 'OPEN', neededDate: yesterday, overdue: true },
+        { id: 'tc08-prog-overdue', code: 'TC08-PROG-OVERDUE', title: 'TC08-09 InProgress Overdue', status: 'IN_PROGRESS', neededDate: yesterday, overdue: true },
+        { id: 'tc08-open-today', code: 'TC08-OPEN-TODAY', title: 'TC08-09 Open Today', status: 'OPEN', neededDate: today, overdue: false },
+        { id: 'tc08-open-future', code: 'TC08-OPEN-FUTURE', title: 'TC08-09 Open Future', status: 'OPEN', neededDate: tomorrow, overdue: false },
+        { id: 'tc08-closed-past', code: 'TC08-CLOSED-PAST', title: 'TC08-09 Closed Past', status: 'CLOSED', neededDate: yesterday, overdue: false },
+        { id: 'tc08-cancel-past', code: 'TC08-CANCEL-PAST', title: 'TC08-09 Cancelled Past', status: 'CANCELLED', neededDate: yesterday, overdue: false },
+        { id: 'tc08-paused-past', code: 'TC08-PAUSED-PAST', title: 'TC08-09 Paused Past', status: 'PAUSED', neededDate: yesterday, overdue: false },
+        { id: 'tc08-draft-past', code: 'TC08-DRAFT-PAST', title: 'TC08-09 Draft Past', status: 'DRAFT', neededDate: yesterday, overdue: false }
+      ];
+      const insertReq = app.db.prepare("INSERT INTO requisitions (id, code, title, job_title_id, department_id, department_name, status, headcount, needed_date, created_by, opened_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'DRAFT', 2, ?, ?, ?, datetime('now'), datetime('now'))");
+      const updatePolicy = app.db.prepare("UPDATE requisition_open_policy SET effective_submission_id='sub', activation_event_id='evt', effective_hash='hash' WHERE requisition_id=?");
+      const updateReq = app.db.prepare("UPDATE requisitions SET status=? WHERE id=?");
+      for (const item of tcItems) {
+        insertReq.run(item.id, item.code, item.title, s.title.data.id, 'dept-3', 'Phòng Kỹ Thuật', item.neededDate, s.hr.id, item.status === 'DRAFT' ? null : '2026-10-01 08:00:00');
+        updatePolicy.run(item.id);
+        updateReq.run(item.status, item.id);
+      }
+      try {
+        await hr.goto(app.base + '/requisitions');
+        await hr.locator('#req-search-input').fill('TC08-09');
+        await hr.locator('#req-search-input').press('Enter');
+        await hr.locator('#requisitions-table-body tr').first().waitFor();
+        for (const item of tcItems) {
+          const tr = hr.locator('#requisitions-table-body tr').filter({ hasText: item.code });
+          await tr.waitFor({ state: 'visible' });
+          const style = await tr.getAttribute('style') || '';
+          const computed = await tr.evaluate(el => {
+            const cs = window.getComputedStyle(el);
+            return {
+              backgroundColor: cs.backgroundColor,
+              borderLeftWidth: cs.borderLeftWidth,
+              borderLeftStyle: cs.borderLeftStyle,
+              borderLeftColor: cs.borderLeftColor
+            };
+          });
+          const badgeCount = await tr.locator('.badge.badge-danger:has-text("Trễ hạn")').count();
+          if (item.overdue) {
+            assert.ok(style.includes('#fff1f0'), item.code + ' must include pink background in style');
+            assert.ok(style.includes('4px solid'), item.code + ' must include 4px solid in style');
+            assert.ok(style.includes('#e11d48'), item.code + ' must include danger color in style');
+            assert.equal(computed.backgroundColor, 'rgb(255, 241, 240)');
+            assert.equal(computed.borderLeftWidth, '4px');
+            assert.equal(computed.borderLeftStyle, 'solid');
+            assert.ok(['rgb(220, 38, 38)', 'rgb(225, 29, 72)'].includes(computed.borderLeftColor), item.code + ' border color mismatch: ' + computed.borderLeftColor);
+            assert.equal(badgeCount, 1, item.code + ' must have Trễ hạn badge');
+          } else {
+            assert.ok(!style.includes('#fff1f0'), item.code + ' must NOT include pink background in style');
+            assert.ok(!style.includes('4px solid'), item.code + ' must NOT include 4px solid in style');
+            assert.notEqual(computed.backgroundColor, 'rgb(255, 241, 240)');
+            assert.equal(badgeCount, 0, item.code + ' must NOT have Trễ hạn badge');
+            if (item.status === 'PAUSED') {
+              assert.equal(await tr.locator('.badge.badge-neutral:has-text("Đang tạm dừng")').count(), 1);
+            }
+          }
+        }
+        const screenshotFile = path.join(output, 'tc08-09-overdue-browser.png');
+        await hr.screenshot({ path: screenshotFile, fullPage: true });
+        const workspaceRoot = process.env.ATS_WORKSPACE_ROOT || path.resolve(__dirname, '../..');
+        const repoEvidence = path.join(workspaceRoot, 'docs/evidence/tc08-09-overdue-browser.png');
+        if (fs.existsSync(path.dirname(repoEvidence))) {
+          fs.copyFileSync(screenshotFile, repoEvidence);
+        }
+      } finally {
+        app.db.prepare("DELETE FROM requisitions WHERE code LIKE 'TC08-%'").run();
+      }
+    });
     await check('Feature flags ON agree with backend capabilities and navigation', admin, async () => {
       assert.ok(flags.every(flag => config[flag] === true));
       const list = await app.api('GET', '/requisitions', adminSession.token);

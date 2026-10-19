@@ -132,7 +132,7 @@ async function main() {
     const name = script.replaceAll(':', '-'), root = path.join(directory, name);
     copySource(root);
     linkDependencies(path.join(cache, 'node_modules'), path.join(root, 'node_modules'));
-    const env = { ...environment, ATS_E2E_ARTIFACTS: path.join(directory, name + '-browser') };
+    const env = { ...environment, ATS_E2E_ARTIFACTS: path.join(directory, name + '-browser'), ATS_WORKSPACE_ROOT: source };
     console.log('LOCAL_TEST_START ' + script);
     const result = await execute([npm, 'run', script], root, path.join(directory, name + '.log'), env);
     const output = fs.readFileSync(result.log, 'utf8');

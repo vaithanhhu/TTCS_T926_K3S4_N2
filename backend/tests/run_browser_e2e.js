@@ -7,7 +7,7 @@ const environment = { ...process.env };
 for (const key of Object.keys(environment)) {
   if (/^(ATS_POSTGRES_|DATABASE_|DB_|PG|SMTP_|MAIL_|EMAIL_|GOOGLE_|APPROVAL_|REQUISITION_|HEADCOUNT_|JOB_POSTING_|NODE_OPTIONS$)/.test(key)) delete environment[key];
 }
-Object.assign(environment, { NODE_ENV: 'test', DB_PROVIDER: 'sqlite', EMAIL_MODE: 'simulated' });
+Object.assign(environment, { NODE_ENV: 'test', DB_PROVIDER: 'sqlite', EMAIL_MODE: 'simulated', ATS_WORKSPACE_ROOT: source });
 const artifacts = process.env.ATS_E2E_ARTIFACTS
   ? path.resolve(process.env.ATS_E2E_ARTIFACTS)
   : fs.mkdtempSync(path.join(os.tmpdir(), 'ats-browser-e2e-evidence-'));
