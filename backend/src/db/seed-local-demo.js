@@ -26,7 +26,7 @@ async function seedLocalDemo(db) {
     const config = await configurations.create({ departmentId: department.id, levels: [{ order: 1, salaryLimit: 30000000, approverUserId: actors.hr.id }, { order: 2, salaryLimit: 100000000, approverUserId: actors.approver.id }] }, actors.hr.id);
     await configurations.publish(config.id, config.versions[0].id, actors.hr.id);
     for (const budgetYear of [...new Set([Number(requisitions.businessDate().slice(0, 4)), year])]) {
-      await budgets.save({ departmentId: department.id, year: budgetYear, approvedHeadcount: 100, annualSalaryBudget: 20000000000 }, actors.hr);
+      await budgets.save({ departmentId: department.id, year: budgetYear, approvedHeadcount: 1000, annualSalaryBudget: 500000000000 }, actors.hr);
     }
   }
   const competency = new Competencies(db);
