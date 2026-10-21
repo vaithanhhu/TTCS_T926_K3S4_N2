@@ -2041,9 +2041,12 @@ async function handleRequest(req, res) {
         const slaConfigs = await slaService.getSlaConfigs();
         const cfgMap = {};
         for (const sc of slaConfigs) cfgMap[sc.stage] = sc;
+        const slaBatch = parsedUrl.searchParams.get('advanced') === '1'
+          ? await slaService.prepareCandidateSlaBatch(result.candidates.filter(c => Object.hasOwn(c, 'stage')), cfgMap)
+          : null;
         for (const c of result.candidates) {
           if (!Object.hasOwn(c, 'stage')) continue;
-          const sla = await slaService.calculateCandidateSla(c, cfgMap);
+          const sla = await slaService.calculateCandidateSla(c, cfgMap, null, slaBatch);
           c.sla = sla;
           c.is_sla_violated = Boolean(sla && sla.isOverdue);
           c.sla_status = sla ? sla.flag : 'ON_TRACK';

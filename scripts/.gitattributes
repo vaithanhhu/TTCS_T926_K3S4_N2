@@ -1,0 +1,2 @@
+# Preserve the new POSIX launcher's shebang on Windows checkouts too.
+start-ats-mac.sh text eol=lf

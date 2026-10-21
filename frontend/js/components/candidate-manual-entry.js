@@ -16,6 +16,9 @@
   'use strict';
 
   // Quản lý trạng thái phát hiện trùng lặp
+  let initialized = false;
+  let generation = 0;
+  const allowed = () => window.ATS_AUTHENTICATED_FEATURES?.canUse('candidate.create');
   const state = {
     debounceTimer: null,
     isCheckingDuplicate: false,
@@ -28,6 +31,7 @@
    * API Helper: Kiểm tra trùng lặp thời gian thực
    */
   async function checkDuplicateApi(token, { email, phoneNumber, requisitionId }) {
+    if (!allowed() || token !== sessionStorage.getItem('ats_token')) return { success: false, code: 'SESSION_REQUIRED' };
     try {
       const response = await fetch('/api/v1/candidates/check-duplicate', {
         method: 'POST',
@@ -48,6 +52,7 @@
    * API Helper: Thêm ứng viên thủ công kèm CV
    */
   async function submitManualCandidateApi(token, formData) {
+    if (!allowed() || token !== sessionStorage.getItem('ats_token')) return { ok: false, status: 401, data: { success: false, code: 'SESSION_REQUIRED' } };
     try {
       const response = await fetch('/api/v1/candidates/manual', {
         method: 'POST',
@@ -245,6 +250,8 @@
       return;
     }
 
+    if (!allowed()) return;
+    const revision = generation;
     const checkKey = `${email}|${phoneNumber}|${requisitionId}`;
     if (checkKey === state.lastCheckedKey) return;
 
@@ -252,11 +259,12 @@
     state.debounceTimer = setTimeout(async () => {
       state.lastCheckedKey = checkKey;
       const token = sessionStorage.getItem('ats_token');
-      if (!token) return;
+      if (!token || !allowed() || revision !== generation) return;
 
       const alertDiv = ensureDuplicateWarningContainer(form);
       const res = await checkDuplicateApi(token, { email, phoneNumber, requisitionId });
 
+      if (revision !== generation || !allowed() || token !== sessionStorage.getItem('ats_token')) return;
       if (res && res.success && res.data) {
         state.duplicateResult = res.data;
         renderDuplicateAlert(alertDiv, res.data);
@@ -275,9 +283,11 @@
    * Khởi tạo tính năng thêm ứng viên thủ công trên giao diện
    */
   function initManualEntryEnhancement() {
+    if (initialized || !allowed()) return;
     const form = document.getElementById('create-candidate-form');
     if (!form) return;
 
+    initialized = true;
     // 1. Thêm trường tải CV
     ensureCvUploadField(form);
 
@@ -317,20 +327,13 @@
       });
     }
 
-    console.log('[ManualCandidateEntry] Frontend module initialized successfully (S5-08).');
-  }
-
-  // Tự động khởi chạy khi DOM sẵn sàng
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initManualEntryEnhancement);
-  } else {
-    initManualEntryEnhancement();
   }
 
   // Xuất ra global scope để tích hợp hoặc kiểm thử
   window.CandidateManualEntry = {
     checkDuplicateApi,
     submitManualCandidateApi,
-    init: initManualEntryEnhancement
+    init: initManualEntryEnhancement,
+    leave() { generation++; clearTimeout(state.debounceTimer); state.lastCheckedKey = ''; state.duplicateResult = null; state.cvFile = null; }
   };
 })();

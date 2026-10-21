@@ -1,5 +1,6 @@
 /** Navigation activates retained pages without rebinding their listeners. */
 function leaveActivePage() {
+  window.ATS_AUTHENTICATED_FEATURES?.leave({ keepSla: true });
   window.ATS_REQUISITION_APPROVAL_UI?.leave();
   window.ATS_REQUISITION_TRACKING?.leave();
   window.ATS_REQUISITION_OPERATIONS_UI?.leave();
@@ -41,6 +42,7 @@ function activateRoute(route) {
     return;
   }
   if (publicPage) {
+    window.CandidateSlaModule?.leave();
     currentActiveView = route.view;
     if(route.view==='public-jobs'){loginView.classList.add('hidden');document.getElementById('public-jobs-view').classList.remove('hidden');window.ATS_PUBLIC_JOBS_PAGE.load();return;}
     if (route.view === 'forgot-password') {
@@ -58,5 +60,6 @@ function activateRoute(route) {
     return;
   }
   activateView(route.view);
+  window.ATS_AUTHENTICATED_FEATURES?.refresh();
   if(route.view==='approvals')window.ATS_JOB_PUBLICATION_UI?.loadQueue();
 }

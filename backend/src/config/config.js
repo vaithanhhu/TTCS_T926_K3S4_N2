@@ -4,7 +4,9 @@ const path = require('node:path');
 // Auto-load .env file if present
 function loadEnv() {
   if (process.env.ATS_LOCAL_DEMO === 'true') return;
-  const envPath = path.join(__dirname, '..', '..', '..', '.env');
+  const envPath = process.env.ATS_ENV_FILE
+    ? path.resolve(process.env.ATS_ENV_FILE)
+    : path.join(__dirname, '..', '..', '..', '.env');
   if (fs.existsSync(envPath)) {
     try {
       const lines = fs.readFileSync(envPath, 'utf8').split('\n');
