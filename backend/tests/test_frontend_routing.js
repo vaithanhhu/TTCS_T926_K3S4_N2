@@ -219,6 +219,11 @@ async function main() {
     auth.window.ATS_ROUTER.navigate('/login');assert.equal(auth.intervals.size,0);assert.deepEqual(auth.errors,[]);
   });
   await test('Global search sets filter before guarded navigation and issues one candidate request',async()=>{
+    // The refreshed-runtime logout test invalidates the shared token on the server.
+    // Search needs its own valid session, rather than relying on ignored private-API 401s.
+    const runtime = await createFrontendRuntime(base, '/profile');
+    runtime.nodes.get('email').value='hrmanager@company.com';runtime.nodes.get('password').value='Ats@123456';
+    await runtime.nodes.get('login-form').dispatch('submit');await runtime.settle();
     runtime.window.ATS_ROUTER.navigate('/profile');await runtime.settle();runtime.requests.length=0;
     runtime.nodes.get('global-search-input').value='RoutingSearch';
     await runtime.nodes.get('global-search-input').dispatch('keydown',{key:'Enter'});await runtime.settle();

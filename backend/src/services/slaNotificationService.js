@@ -417,13 +417,66 @@ class SlaNotificationService {
   // TÍNH TOÁN SLA CHO MỘT HỒ SƠ ỨNG VIÊN (CALCULATE CANDIDATE SLA)
   // ============================================================================
 
+  /** Prefetch only the authorized candidate set; never retain it across requests. */
+  async prepareCandidateSlaBatch(candidates, configMap = null) {
+    const active = (candidates || []).filter(c => c?.id &&
+      !['HIRED', 'REJECTED', 'WITHDRAWN'].includes((c.stage || 'NEW').toUpperCase()));
+    const batch = { scoped: new Map(), fallback: new Map(), history: new Map() };
+    if (!active.length) return batch;
+    const requisitionId = c => c.requisition_id || c.requisitionId || c.requisition?.id || null;
+    // One bound JSON array avoids parameter limits; this context lives only for this read.
+    const members = this.db.provider === 'postgres'
+      ? 'SELECT jsonb_array_elements_text(?::jsonb)' : 'SELECT value FROM json_each(?)';
+    try {
+      const reqIds = [...new Set(active.map(requisitionId).filter(Boolean))];
+      if (reqIds.length) {
+        const rows = await this.db.prepare(`SELECT stage,requisition_id,threshold_days,warning_days
+          FROM sla_configurations WHERE requisition_id IN (${members})`).all(JSON.stringify(reqIds));
+        for (const row of rows) batch.scoped.set(JSON.stringify([row.stage, row.requisition_id]), row);
+      }
+      for (const c of active) {
+        const stage = (c.stage || 'NEW').toUpperCase();
+        const key = JSON.stringify([stage, requisitionId(c)]);
+        if (batch.scoped.has(key) || configMap?.[stage] || batch.fallback.has(key)) continue;
+        // Preserve the exact legacy fallback and bind values, including ambiguous
+        // duplicate global rows. Reuse only identical stage/requisition lookups.
+        try {
+          const found = await this.db.prepare(`SELECT threshold_days, warning_days FROM sla_configurations
+            WHERE stage = ? AND (requisition_id = ? OR requisition_id IS NULL)
+            ORDER BY requisition_id DESC LIMIT 1`).get(stage, requisitionId(c));
+          batch.fallback.set(key, found || null);
+        } catch {
+          batch.fallback.set(key, null);
+        }
+      }
+      const present = await this.db.prepare(this.db.provider === 'postgres'
+        ? "SELECT table_name FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='candidate_status_history'"
+        : "SELECT name FROM sqlite_master WHERE type='table' AND name='candidate_status_history'").get();
+      if (present) {
+        const ids = [...new Set(active.map(c => c.id))];
+        const rows = await this.db.prepare(`SELECT candidate_id,after_stage,created_at FROM (
+          SELECT candidate_id,after_stage,created_at,
+            ROW_NUMBER() OVER (PARTITION BY candidate_id,after_stage ORDER BY created_at DESC) AS sla_rank
+          FROM candidate_status_history WHERE candidate_id IN (${members})
+        ) ranked WHERE sla_rank=1`).all(JSON.stringify(ids));
+        for (const row of rows) batch.history.set(JSON.stringify([row.candidate_id, row.after_stage]), row);
+      }
+      return batch;
+    } catch {
+      // A bulk-read failure retries through the original per-row path. Its errors
+      // still propagate to the existing caller; do not silently drop SLA fields.
+      return null;
+    }
+  }
+
   /**
-   * Tính số ngày hồ sơ đã ở giai đoạn hiện tại và đối chiếu với ngưỡng SLA
+   * Tính số ngày hồ sơ đã ở giai đoạn hiện tại và đối chiếu với ngưỡng SLA.
    * @param {object} candidate Thông tin hồ sơ ứng viên
    * @param {object} configMap Map cấu hình SLA theo stage
-   * @param {Date|string} referenceDate Ngày mốc để tính toán (mặc định là hiện tại)
+   * @param {Date|string} referenceDate Ngày mốc (mặc định là hiện tại)
+   * @param {object|null} batch Ngữ cảnh đọc nội bộ của cùng tập ứng viên/request
    */
-  async calculateCandidateSla(candidate, configMap = null, referenceDate = null) {
+  async calculateCandidateSla(candidate, configMap = null, referenceDate = null, batch = null) {
     if (!candidate || !candidate.id) {
       return null;
     }
@@ -449,7 +502,7 @@ class SlaNotificationService {
     let warningDays = DEFAULT_SLA_THRESHOLDS[stage]?.warningDays || 2;
 
     const requisitionId = candidate.requisition_id || candidate.requisitionId || candidate.requisition?.id || null;
-    const scopedConfig = requisitionId ? await this.db.prepare(
+    const scopedConfig = batch ? batch.scoped.get(JSON.stringify([stage, requisitionId])) : requisitionId ? await this.db.prepare(
       'SELECT threshold_days,warning_days FROM sla_configurations WHERE stage=? AND requisition_id=?'
     ).get(stage,requisitionId) : null;
     if (scopedConfig) {
@@ -461,7 +514,7 @@ class SlaNotificationService {
     } else {
       try {
         const reqId = candidate.requisition_id || candidate.requisitionId || (candidate.requisition && candidate.requisition.id) || null;
-        const found = await this.db.prepare(
+        const found = batch ? batch.fallback.get(JSON.stringify([stage, reqId])) : await this.db.prepare(
           `SELECT threshold_days, warning_days FROM sla_configurations
            WHERE stage = ? AND (requisition_id = ? OR requisition_id IS NULL)
            ORDER BY requisition_id DESC LIMIT 1`
@@ -478,11 +531,11 @@ class SlaNotificationService {
     // 2. Xác định thời điểm ứng viên bắt đầu ở giai đoạn hiện tại (stageEntryTime)
     // Ưu tiên tìm trong candidate_status_history, nếu không có lấy candidate.created_at
     let stageEntryTime = null;
-    const historyPresent = await this.db.prepare(this.db.provider === 'postgres'
+    const historyPresent = batch || await this.db.prepare(this.db.provider === 'postgres'
       ? "SELECT table_name FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='candidate_status_history'"
       : "SELECT name FROM sqlite_master WHERE type='table' AND name='candidate_status_history'").get();
     if (historyPresent) {
-      const historyEntry = await this.db.prepare(
+      const historyEntry = batch ? batch.history.get(JSON.stringify([candidate.id, stage])) : await this.db.prepare(
         'SELECT created_at FROM candidate_status_history WHERE candidate_id=? AND after_stage=? ORDER BY created_at DESC LIMIT 1'
       ).get(candidate.id, stage);
       if (historyEntry?.created_at) stageEntryTime = databaseDate(historyEntry.created_at);
@@ -603,9 +656,10 @@ class SlaNotificationService {
 
     const overdueList = [];
     const referenceDate = options.referenceDate ? new Date(options.referenceDate) : new Date();
+    const slaBatch = await this.prepareCandidateSlaBatch(candidates, configMap);
 
     for (const cand of (candidates || [])) {
-      const sla = await this.calculateCandidateSla(cand, configMap, referenceDate);
+      const sla = await this.calculateCandidateSla(cand, configMap, referenceDate, slaBatch);
       if (sla && (sla.isOverdue || options.includeAll === true)) {
         overdueList.push({
           id: cand.id,

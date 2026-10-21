@@ -151,7 +151,9 @@
                     "test:sla-security":  "node backend/tests/test_sla_security.js",
                     "test:e2e213-reports":  "node backend/tests/test_e2e213_reports.js",
                     "test:e2e213-interview-integration":  "node backend/tests/test_e2e213_bulk_invitation_integration.js",
-                    "test:candidate-quick-rating":  "node backend/tests/test_candidate_quick_rating.js"
+                    "test:candidate-quick-rating":  "node backend/tests/test_candidate_quick_rating.js",
+                    "test:authenticated-feature-lifecycle": "node backend/tests/test_authenticated_feature_lifecycle.js",
+                    "test:private-feature-auth": "node backend/tests/test_private_feature_auth.js"
                 },
     "keywords":  [
                      "ats",

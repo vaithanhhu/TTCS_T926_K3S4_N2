@@ -20,6 +20,11 @@
 (function () {
   'use strict';
 
+  const observers = [];
+  const pending = new Map();
+  let initialized = false;
+  let generation = 0;
+  const permitted = permission => window.ATS_AUTHENTICATED_FEATURES?.canUse(permission);
   const EDUCATION_NAMES = {
     NONE: 'Không yêu cầu',
     HIGH_SCHOOL: 'THPT / Trung cấp',
@@ -31,6 +36,17 @@
 
   // Helper gọi API có kèm token xác thực
   async function apiRequest(endpoint, options = {}) {
+    const key = sessionStorage.getItem('ats_token') + endpoint + (options.method || 'GET') + (options.body || '');
+    if (pending.has(key)) return pending.get(key);
+    const task = performApiRequest(endpoint, options);
+    pending.set(key, task);
+    try { return await task; } finally { if (pending.get(key) === task) pending.delete(key); }
+  }
+
+  async function performApiRequest(endpoint, options = {}) {
+    const permission = endpoint.endsWith('/screening-criteria') ? (options.method ? 'requisition.edit' : 'requisition.read') : endpoint.includes('/screening-candidates') ? 'candidate.read' : 'candidate.update';
+    if (!permitted(permission)) return { success: false, code: 'SESSION_REQUIRED' };
+    const revision = generation;
     const token = sessionStorage.getItem('ats_token');
     const headers = {
       'Content-Type': 'application/json',
@@ -39,7 +55,11 @@
     };
 
     const res = await fetch(endpoint, { ...options, headers });
-    return await res.json();
+    const data = await res.json();
+    if (!window.ATS_AUTHENTICATED_FEATURES.acceptResponse(token, res)) return null;
+    if (revision !== generation || token !== sessionStorage.getItem('ats_token') || !permitted(permission)) return null;
+    if (!res.ok) return { ...data, success: false };
+    return data;
   }
 
   /**
@@ -420,10 +440,11 @@
             const skillsStr = (c.requiredSkills || []).length > 0 ? c.requiredSkills.join(', ') : 'Không bắt buộc';
             summaryEl.textContent = `KN: ≥ ${c.minExperienceYears || 0} năm | Bằng cấp: ≥ ${EDUCATION_NAMES[c.requiredEducation] || 'Không yêu cầu'} | Kỹ năng: ${skillsStr}`;
           }
-        }).catch(() => {});
+        }).catch(error => window.ATS_AUTHENTICATED_FEATURES.reportError('Sàng lọc', error));
       }
     });
 
+    observers.push({ observer, modal });
     observer.observe(modal, { attributes: true, attributeFilter: ['class'] });
   }
 
@@ -509,10 +530,11 @@
           if (res && res.success && res.data) {
             renderCandidateScreeningCard(res.data);
           }
-        }).catch(() => {});
+        }).catch(error => window.ATS_AUTHENTICATED_FEATURES.reportError('Sàng lọc', error));
       }
     });
 
+    observers.push({ observer, modal });
     observer.observe(modal, { attributes: true, attributeFilter: ['class'] });
   }
 
@@ -548,21 +570,23 @@
     `;
   }
 
-  // Khởi động các hook khi DOM sẵn sàng
+  // Bind once when an authenticated route needs screening; reconnect observers on re-entry.
   function init() {
+    if (!permitted('candidate.update') && !permitted('requisition.read')) return;
+    if (initialized) {
+      observers.forEach(({ observer, modal }) => observer.observe(modal, { attributes: true, attributeFilter: ['class'] }));
+      return;
+    }
+    initialized = true;
     autoMountRequisitionDetailSection();
     autoMountCandidateDetailSection();
     ensureCriteriaModal();
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
-
   // Xuất API toàn cục
   window.CandidateScreening = {
+    init,
+    leave() { generation++; pending.clear(); observers.forEach(({ observer }) => observer.disconnect()); },
     fetchScreeningCriteria,
     saveScreeningCriteria,
     screenCandidateApi,
@@ -571,6 +595,4 @@
     renderScreeningBadge,
     openCriteriaModal
   };
-
-  console.log('[CandidateScreening] Frontend module initialized successfully (S5-09).');
 })();

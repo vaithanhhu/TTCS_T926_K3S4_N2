@@ -149,6 +149,7 @@
   }
 
   function handleSessionExpired() {
+    window.ATS_AUTHENTICATED_FEATURES?.leave();
     window.ATS_MOBILE_NAVIGATION.close();
     if (heartbeatTimer) clearInterval(heartbeatTimer);
     sessionStorage.removeItem('ats_token');
@@ -168,6 +169,7 @@
 
   // Logout Implementation (Required by S1-07 tests: performLogout)
   async function performLogout(showToastMsg = true) {
+    window.ATS_AUTHENTICATED_FEATURES?.leave();
     window.ATS_MOBILE_NAVIGATION.close();
     clearJobTitleSalaryState();
     clearRequisitionSalaryState();

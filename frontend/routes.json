@@ -201,6 +201,7 @@
     "/js/services/approval-configuration-api.js",
     "/js/pages/approval-configurations.js",
     "/js/shared/state.js",
+    "/js/shared/authenticated-features.js",
     "/js/shared/datetime.js",
     "/js/components/action-menu.js",
     "/js/components/mobile-navigation.js",

@@ -909,6 +909,7 @@ async function addOfferToTalentPoolApi(token, id, data) {
 }
 
 async function getOnboardingTemplatesApi(token, params = {}) {
+  if (!window.ATS_AUTHENTICATED_FEATURES?.canUse('candidate.read') || !token || token !== sessionStorage.getItem('ats_token')) return { ok: false, status: 401, data: { success: false, code: 'SESSION_REQUIRED', message: 'Phiên hoặc quyền truy cập không hợp lệ.' } };
   try {
     const query = new URLSearchParams();
     if (params.departmentId) query.append('departmentId', params.departmentId);
@@ -925,6 +926,7 @@ async function getOnboardingTemplatesApi(token, params = {}) {
 }
 
 async function createOnboardingTemplateApi(token, data) {
+  if (!window.ATS_AUTHENTICATED_FEATURES?.canUse('candidate.update') || !token || token !== sessionStorage.getItem('ats_token')) return { ok: false, status: 401, data: { success: false, code: 'SESSION_REQUIRED', message: 'Phiên hoặc quyền truy cập không hợp lệ.' } };
   try {
     const response = await fetch(`${API_BASE}/onboarding/templates`, {
       method: 'POST',
@@ -942,6 +944,7 @@ async function createOnboardingTemplateApi(token, data) {
 }
 
 async function getOnboardingTemplateByIdApi(token, id) {
+  if (!window.ATS_AUTHENTICATED_FEATURES?.canUse('candidate.read') || !token || token !== sessionStorage.getItem('ats_token')) return { ok: false, status: 401, data: { success: false, code: 'SESSION_REQUIRED', message: 'Phiên hoặc quyền truy cập không hợp lệ.' } };
   try {
     const response = await fetch(`${API_BASE}/onboarding/templates/${encodeURIComponent(id)}`, {
       method: 'GET',
@@ -955,6 +958,7 @@ async function getOnboardingTemplateByIdApi(token, id) {
 }
 
 async function initializeOnboardingApi(token, data) {
+  if (!window.ATS_AUTHENTICATED_FEATURES?.canUse('candidate.update') || !token || token !== sessionStorage.getItem('ats_token')) return { ok: false, status: 401, data: { success: false, code: 'SESSION_REQUIRED', message: 'Phiên hoặc quyền truy cập không hợp lệ.' } };
   try {
     const response = await fetch(`${API_BASE}/onboarding/initialize`, {
       method: 'POST',
@@ -972,6 +976,7 @@ async function initializeOnboardingApi(token, data) {
 }
 
 async function getCandidateOnboardingApi(token, candidateId) {
+  if (!window.ATS_AUTHENTICATED_FEATURES?.canUse('candidate.read') || !token || token !== sessionStorage.getItem('ats_token')) return { ok: false, status: 401, data: { success: false, code: 'SESSION_REQUIRED', message: 'Phiên hoặc quyền truy cập không hợp lệ.' } };
   try {
     const response = await fetch(`${API_BASE}/onboarding/candidates/${encodeURIComponent(candidateId)}`, {
       method: 'GET',
@@ -985,6 +990,7 @@ async function getCandidateOnboardingApi(token, candidateId) {
 }
 
 async function getOnboardingChecklistByIdApi(token, id) {
+  if (!window.ATS_AUTHENTICATED_FEATURES?.canUse('candidate.read') || !token || token !== sessionStorage.getItem('ats_token')) return { ok: false, status: 401, data: { success: false, code: 'SESSION_REQUIRED', message: 'Phiên hoặc quyền truy cập không hợp lệ.' } };
   try {
     const response = await fetch(`${API_BASE}/onboarding/checklists/${encodeURIComponent(id)}`, {
       method: 'GET',
@@ -998,6 +1004,7 @@ async function getOnboardingChecklistByIdApi(token, id) {
 }
 
 async function updateOnboardingChecklistItemApi(token, checklistId, itemId, data) {
+  if (!window.ATS_AUTHENTICATED_FEATURES?.canUse(null) || !token || token !== sessionStorage.getItem('ats_token')) return { ok: false, status: 401, data: { success: false, code: 'SESSION_REQUIRED', message: 'Phiên hoặc quyền truy cập không hợp lệ.' } };
   try {
     const response = await fetch(`${API_BASE}/onboarding/checklists/${encodeURIComponent(checklistId)}/items/${encodeURIComponent(itemId)}`, {
       method: 'PATCH',
@@ -1015,6 +1022,7 @@ async function updateOnboardingChecklistItemApi(token, checklistId, itemId, data
 }
 
 async function listOnboardingChecklistsApi(token, params = {}) {
+  if (!window.ATS_AUTHENTICATED_FEATURES?.canUse('candidate.read') || !token || token !== sessionStorage.getItem('ats_token')) return { ok: false, status: 401, data: { success: false, code: 'SESSION_REQUIRED', message: 'Phiên hoặc quyền truy cập không hợp lệ.' } };
   try {
     const query = new URLSearchParams();
     if (params.departmentId) query.append('departmentId', params.departmentId);
@@ -2259,7 +2267,17 @@ window.ATS_API.bulkInterviewsApi = async function(token,action,body) {
 };
 
 window.ATS_API.candidateMergeApi = async function(token,path,method='POST',body) {
-  try { const response=await fetch(API_BASE+'/candidates/merge'+path,{method,cache:'no-store',headers:{Authorization:'Bearer '+token,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});return {ok:response.ok,status:response.status,data:await response.json()}; }
+  const permission = path === '/recent' || path.endsWith('/undo') ? 'candidate.merge.undo' : path === '/compare' ? 'candidate.read' : 'candidate.merge';
+  if (!window.ATS_AUTHENTICATED_FEATURES?.canUse(permission) || !token || token !== sessionStorage.getItem('ats_token')) return { ok: false, status: 401, data: { success: false, code: 'SESSION_REQUIRED', message: 'Phiên hoặc quyền truy cập không hợp lệ.' } };
+  try {
+    const response = await fetch(API_BASE + '/candidates/merge' + path, {
+      method, cache: 'no-store', headers: { Authorization: 'Bearer ' + token, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+      ...(body ? { body: JSON.stringify(body) } : {})
+    });
+    const data = await response.json();
+    if (!window.ATS_AUTHENTICATED_FEATURES.acceptResponse(token, response)) return { ok: false, status: response.status, data: { success: false, code: 'SESSION_CHANGED' } };
+    return { ok: response.ok, status: response.status, data };
+  }
   catch { return {ok:false,status:0,data:{success:false,message:'Không thể kết nối tới chức năng gộp hồ sơ.'}}; }
 };
 

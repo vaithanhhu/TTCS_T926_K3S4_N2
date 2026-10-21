@@ -24,7 +24,12 @@
   if (window.__CANDIDATE_SLA_INITIALIZED__) return;
   window.__CANDIDATE_SLA_INITIALIZED__ = true;
 
-  console.log('[SLA] Initializing Candidate SLA Monitoring & Notification Component (SCRUM-120)...');
+  let generation = 0;
+  let activeToken = null;
+  let initialization = null;
+  let lifecycleObserver = null;
+  let detailObserver = null;
+  const pendingRequests = new Map();
 
   // Cache dữ liệu SLA
   let overdueCandidatesCache = new Map();
@@ -34,26 +39,29 @@
 
   // Lấy token xác thực
   function getAuthToken() {
-    try {
-      if (typeof localStorage !== 'undefined' && localStorage.getItem('token')) return localStorage.getItem('token');
-      if (typeof sessionStorage !== 'undefined') {
-        return sessionStorage.getItem('token') || sessionStorage.getItem('ats_token') || '';
-      }
-    } catch {}
-    return '';
+    return window.ATS_AUTHENTICATED_FEATURES?.canUse('candidate.read') ? sessionStorage.getItem('ats_token') : '';
   }
 
   function canUseSla() {
-    const token = getAuthToken();
-    if (!token) return false;
-    try {
-      const user = (typeof currentAuthenticatedUser !== 'undefined' && currentAuthenticatedUser)
-        || (typeof sessionStorage !== 'undefined' ? JSON.parse(sessionStorage.getItem('ats_user') || 'null') : null);
-      if (user && Array.isArray(user.roles)) {
-        return user.roles.some(r => ['ADMIN', 'HR_MANAGER', 'RECRUITER'].includes(r));
-      }
-    } catch {}
-    return true;
+    return Boolean(getAuthToken() && currentAuthenticatedUser.roles?.some(role => ['ADMIN', 'HR_MANAGER', 'RECRUITER'].includes(role)));
+  }
+
+  async function request(url, options = {}) {
+    const permission = options.method === 'PUT' && url.endsWith('/configs') ? 'requisition.edit' : 'candidate.read';
+    const empty = { ok: false, json: async () => ({ success: false, code: 'SESSION_REQUIRED' }) };
+    if (!canUseSla() || !window.ATS_AUTHENTICATED_FEATURES?.canUse(permission)) return empty;
+    const token = getAuthToken(), revision = generation;
+    const key = token + ':' + (options.method || 'GET') + ':' + url + ':' + (options.body || '');
+    if (pendingRequests.has(key)) return pendingRequests.get(key);
+    const task = (async () => {
+      const res = await fetch(url, options);
+      const data = await res.json();
+      if (revision !== generation || token !== getAuthToken()) return empty;
+      if (res.status === 401) handleSessionExpired();
+      return { ok: res.ok, status: res.status, json: async () => data };
+    })();
+    pendingRequests.set(key, task);
+    try { return await task; } finally { if (pendingRequests.get(key) === task) pendingRequests.delete(key); }
   }
 
   function getHeaders() {
@@ -71,7 +79,7 @@
   async function fetchSlaConfigs() {
     if (!canUseSla()) return null;
     try {
-      const res = await fetch('/api/v1/sla/configs', { headers: getHeaders() });
+      const res = await request('/api/v1/sla/configs', { headers: getHeaders() });
       const data = await res.json().catch(() => null);
       if (!res.ok) return null;
       if (data && data.success && Array.isArray(data.data)) {
@@ -87,7 +95,7 @@
   async function fetchOverdueCandidates() {
     if (!canUseSla()) return [];
     try {
-      const res = await fetch('/api/v1/sla/overdue-candidates?includeAll=true', { headers: getHeaders() });
+      const res = await request('/api/v1/sla/overdue-candidates?includeAll=true', { headers: getHeaders() });
       const data = await res.json().catch(() => null);
       if (!res.ok) return [];
       if (data && data.success && data.data && Array.isArray(data.data.candidates)) {
@@ -111,7 +119,7 @@
   async function fetchCandidateSlaDirect(candidateId) {
     if (!candidateId || !canUseSla()) return null;
     try {
-      const res = await fetch(`/api/v1/candidates/${encodeURIComponent(candidateId)}`, { headers: getHeaders() });
+      const res = await request(`/api/v1/candidates/${encodeURIComponent(candidateId)}`, { headers: getHeaders() });
       const data = await res.json().catch(() => null);
       if (res.ok && data) {
         const cand = data.data || data.candidate;
@@ -136,7 +144,7 @@
   async function fetchRecruiterReminders() {
     if (!canUseSla()) return [];
     try {
-      const res = await fetch('/api/v1/sla/reminders?unreadOnly=false&limit=20', { headers: getHeaders() });
+      const res = await request('/api/v1/sla/reminders?unreadOnly=false&limit=20', { headers: getHeaders() });
       const data = await res.json().catch(() => null);
       if (!res.ok) return [];
       if (data && data.success && data.data && Array.isArray(data.data.reminders)) {
@@ -153,7 +161,7 @@
   async function markReminderAsRead(reminderId) {
     if (!canUseSla()) return;
     try {
-      const res = await fetch(`/api/v1/sla/reminders/${encodeURIComponent(reminderId)}/read`, {
+      const res = await request(`/api/v1/sla/reminders/${encodeURIComponent(reminderId)}/read`, {
         method: 'PUT',
         headers: getHeaders()
       });
@@ -169,7 +177,7 @@
   async function markAllRemindersAsRead() {
     if (!canUseSla()) return;
     try {
-      const res = await fetch('/api/v1/sla/reminders/read-all', {
+      const res = await request('/api/v1/sla/reminders/read-all', {
         method: 'PUT',
         headers: getHeaders()
       });
@@ -184,7 +192,7 @@
 
   async function triggerSlaCheckNow() {
     try {
-      const res = await fetch('/api/v1/sla/check', {
+      const res = await request('/api/v1/sla/check', {
         method: 'POST',
         headers: getHeaders()
       });
@@ -194,7 +202,7 @@
         await fetchOverdueCandidates();
         await fetchRecruiterReminders();
         renderTableBadges();
-        handleCandidateDetailModal();
+        handleCandidateDetailModal().catch(error => window.ATS_AUTHENTICATED_FEATURES.reportError('SLA', error));
       } else {
         showToast(data.message || 'Lỗi khi quét SLA.', 'error');
       }
@@ -205,7 +213,7 @@
 
   async function saveSlaConfigs(configs) {
     try {
-      const res = await fetch('/api/v1/sla/configs', {
+      const res = await request('/api/v1/sla/configs', {
         method: 'PUT',
         headers: getHeaders(),
         body: JSON.stringify(configs)
@@ -217,7 +225,7 @@
         await fetchSlaConfigs();
         await fetchOverdueCandidates();
         renderTableBadges();
-        handleCandidateDetailModal();
+        handleCandidateDetailModal().catch(error => window.ATS_AUTHENTICATED_FEATURES.reportError('SLA', error));
         closeSlaConfigModal();
       } else {
         showToast(data.message || 'Lỗi khi lưu cấu hình SLA.', 'error');
@@ -232,7 +240,8 @@
   // ============================================================================
 
   function ensureTopBarSlaBell() {
-    if (document.getElementById('sla-bell-container')) return;
+    const existing = document.getElementById('sla-bell-container');
+    if (existing) { existing.classList.remove('hidden'); updateBellBadge(unreadReminders.length); return; }
 
     const topbarRight = document.querySelector('.topbar-right');
     if (!topbarRight) return;
@@ -508,6 +517,8 @@
   // ============================================================================
 
   async function handleCandidateDetailModal(explicitCandId = null) {
+    if (!canUseSla()) return;
+    const revision = generation;
     const modal = document.getElementById('candidate-detail-modal');
     if (!modal) return;
 
@@ -551,6 +562,7 @@
       sla = await fetchCandidateSlaDirect(candId);
     }
 
+    if (revision !== generation || !canUseSla()) return;
     const isOverdue = Boolean(sla && (sla.isOverdue || sla.is_sla_violated));
     const days = sla ? sla.daysInStage : 4;
     const limit = sla ? sla.thresholdDays : 3;
@@ -646,43 +658,14 @@
 
   // Hooking vào hàm mở chi tiết hồ sơ ứng viên để render tức thì
   function installViewDetailsHook() {
-    // 1. Hook vào window.ATS_APP_HELPERS.viewCandidateDetails
-    if (window.ATS_APP_HELPERS && typeof window.ATS_APP_HELPERS.viewCandidateDetails === 'function') {
-      if (!window.ATS_APP_HELPERS.viewCandidateDetails.__slaHooked__) {
-        const origViewDetails = window.ATS_APP_HELPERS.viewCandidateDetails;
-        window.ATS_APP_HELPERS.viewCandidateDetails = async function (id) {
-          window.__CURRENT_ACTIVE_CANDIDATE_ID__ = id;
-          try {
-            const res = await origViewDetails.apply(this, arguments);
-            // Render trực tiếp SLA ra màn hình modal ngay khi mở (retry liên tục các mốc thời gian để đón DOM)
-            [10, 50, 150, 300, 600].forEach(delay => {
-              setTimeout(() => handleCandidateDetailModal(id), delay);
-            });
-            return res;
-          } catch (e) {
-            handleCandidateDetailModal(id);
-            throw e;
-          }
-        };
-        window.ATS_APP_HELPERS.viewCandidateDetails.__slaHooked__ = true;
-      }
-    }
-
-    // 2. Tự động gắn hook vào MutationObserver trên candidate-detail-modal
     const modal = document.getElementById('candidate-detail-modal');
-    if (modal && !modal.__slaObserverAttached__) {
-      const modalObserver = new MutationObserver(() => {
-        if (!modal.classList.contains('hidden') && modal.style.display !== 'none') {
-          const idInput = modal.querySelector('#cand-detail-id');
-          const candId = (idInput && idInput.value) || window.__CURRENT_ACTIVE_CANDIDATE_ID__;
-          if (candId) {
-            handleCandidateDetailModal(candId);
-          }
-        }
-      });
-      modalObserver.observe(modal, { attributes: true, attributeFilter: ['class', 'style'] });
-      modal.__slaObserverAttached__ = true;
-    }
+    if (!modal || detailObserver) return;
+    detailObserver = new MutationObserver(() => {
+      if (canUseSla() && !modal.classList.contains('hidden')) {
+        handleCandidateDetailModal().catch(error => window.ATS_AUTHENTICATED_FEATURES.reportError('SLA', error));
+      }
+    });
+    detailObserver.observe(modal, { attributes: true, attributeFilter: ['class', 'style'] });
   }
 
   // ============================================================================
@@ -792,11 +775,14 @@
   }
 
   async function openSlaConfigModal() {
+    if (!canUseSla() || !window.ATS_AUTHENTICATED_FEATURES.canUse('requisition.edit')) return;
+    const revision = generation;
     ensureSlaConfigModal();
     const modal = document.getElementById('sla-configuration-modal');
     if (!modal) return;
 
     const configs = await fetchSlaConfigs();
+    if (revision !== generation || !canUseSla()) return;
     if (configs && Array.isArray(configs)) {
       for (const c of configs) {
         const inp = document.getElementById(`sla-input-${c.stage}`);
@@ -884,57 +870,50 @@
   // ============================================================================
 
   function runLifecycle() {
+    if (!canUseSla()) return;
     installViewDetailsHook();
     ensureTopBarSlaBell();
     renderTableBadges();
-    handleCandidateDetailModal();
+    handleCandidateDetailModal().catch(error => window.ATS_AUTHENTICATED_FEATURES.reportError('SLA', error));
   }
 
   async function init() {
-    installViewDetailsHook();
-    ensureTopBarSlaBell();
-    await fetchSlaConfigs();
-    await fetchOverdueCandidates();
-    await fetchRecruiterReminders();
-    runLifecycle();
-
-    // Lắng nghe thay đổi thuộc tính DOM một cách an toàn
-    try {
-      if (typeof MutationObserver !== 'undefined' && document.body) {
-        const observer = new MutationObserver((mutations) => {
-          let shouldRun = false;
-          for (const m of mutations) {
-            if (m.type === 'attributes') {
-              if (m.target && (m.target.id === 'candidate-detail-modal' || m.target.id === 'candidates-table-body' || m.target.id === 'cand-detail-id')) {
-                shouldRun = true;
-                break;
-              }
-            }
-          }
-          if (shouldRun) {
-            runLifecycle();
-          }
-        });
-
-        observer.observe(document.body, {
-          attributes: true,
-          subtree: true,
-          attributeFilter: ['class', 'style', 'data-candidate-id']
-        });
-      }
-    } catch (e) {
-      // Safe fallback cho môi trường test runner DOM giả lập
-    }
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
+    if (!canUseSla()) return;
+    if (initialization) return initialization;
+    if (activeToken === getAuthToken()) return;
+    activeToken = getAuthToken();
+    const revision = generation;
+    initialization = (async () => {
+      installViewDetailsHook();
+      ensureTopBarSlaBell();
+      await fetchSlaConfigs();
+      if (revision !== generation || !canUseSla()) return;
+      await fetchOverdueCandidates();
+      if (revision !== generation || !canUseSla()) return;
+      await fetchRecruiterReminders();
+      if (revision !== generation || !canUseSla()) return;
+      runLifecycle();
+      lifecycleObserver = new MutationObserver(mutations => {
+        if (mutations.some(m => ['candidate-detail-modal', 'candidates-table-body', 'cand-detail-id'].includes(m.target?.id))) runLifecycle();
+      });
+      lifecycleObserver.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['class', 'style', 'data-candidate-id'] });
+    })();
+    try { await initialization; } finally { if (revision === generation) initialization = null; }
   }
 
   // Export global API cho component khác khi cần
   window.CandidateSlaModule = {
+    init,
+    leave() {
+      generation++; activeToken = null; initialization = null; pendingRequests.clear();
+      lifecycleObserver?.disconnect(); lifecycleObserver = null;
+      detailObserver?.disconnect(); detailObserver = null;
+      overdueCandidatesCache.clear(); slaConfigsCache = null; unreadReminders = []; isBellOpen = false;
+      document.getElementById('sla-bell-container')?.classList.add('hidden');
+      const popover = document.getElementById('sla-reminders-popover');
+      if (popover) popover.style.display = 'none';
+      closeSlaConfigModal();
+    },
     fetchSlaConfigs,
     fetchOverdueCandidates,
     fetchRecruiterReminders,

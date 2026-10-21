@@ -127,6 +127,7 @@
   window.ATS_CANDIDATE_DETAILS={leave(){candidateDetailsGeneration++;}};
 
   async function openCandidateDetails(id) {
+    window.CandidateScreening?.init();
     const generation=++candidateDetailsGeneration,token=sessionStorage.getItem('ats_token'),view=currentActiveView;candidateDetailModal?.classList.add('hidden');
     const result=await window.ATS_API.getCandidateByIdApi(token,id);
     if(generation!==candidateDetailsGeneration||token!==sessionStorage.getItem('ats_token')||view!==currentActiveView)return;
@@ -276,7 +277,7 @@
       document.getElementById('cand-detail-parsed-box')?.classList.add('hidden');
     } else loadCandidateUnifiedProfile(id, token);
 
-    loadCandidateOnboarding(c, token);
+    loadCandidateOnboarding(c, token).catch(error => window.ATS_AUTHENTICATED_FEATURES.reportError('Onboarding', error));
 
     if(generation!==candidateDetailsGeneration||token!==sessionStorage.getItem('ats_token')||view!==currentActiveView)return;
     if (candidateDetailModal) candidateDetailModal.classList.remove('hidden');
@@ -852,7 +853,9 @@
   let currentOnboardingCandidate = null;
 
   async function loadCandidateOnboarding(c, token) {
-    if (!candDetailOnboardingPanel) return;
+    if (!candDetailOnboardingPanel || !window.ATS_AUTHENTICATED_FEATURES?.canUse('candidate.read') || token !== sessionStorage.getItem('ats_token')) return;
+    const revision = candidateDetailsGeneration;
+    const isCurrent = () => revision === candidateDetailsGeneration && token === sessionStorage.getItem('ats_token') && window.ATS_AUTHENTICATED_FEATURES.canUse('candidate.read');
     currentOnboardingCandidate = c;
     const isEligible = c.stage === 'HIRED' || c.stage === 'ONBOARDED';
     if (!isEligible) {
@@ -863,6 +866,8 @@
 
     try {
       const res = await window.ATS_API.getCandidateOnboardingApi(token, c.id);
+      if (!isCurrent()) return;
+      if (!res.ok) throw new Error(res.data?.message || 'Không thể tải checklist onboarding.');
       if (res.ok && res.data?.data) {
         const d = res.data.data;
         if (d.hasOnboarding) {
@@ -930,7 +935,10 @@
                 const itId = cb.getAttribute('data-item-id');
                 const newStatus = cb.checked ? 'COMPLETED' : 'PENDING';
                 try {
+                  if (!isCurrent()) return;
+                  cb.disabled = true;
                   const upRes = await window.ATS_API.updateOnboardingChecklistItemApi(token, ckId, itId, { status: newStatus });
+                  if (!isCurrent()) return;
                   if (upRes.ok && upRes.data?.success) {
                     showToast('success', 'Đã cập nhật', 'Tiến độ onboarding đã được cập nhật.');
                     await loadCandidateOnboarding(c, token);
@@ -951,8 +959,8 @@
                   }
                 } catch (err) {
                   cb.checked = !cb.checked;
-                  showToast('danger', 'Lỗi kết nối', err.message);
-                }
+                  if (isCurrent()) window.ATS_AUTHENTICATED_FEATURES.reportError('Onboarding', err);
+                } finally { if (isCurrent()) cb.disabled = false; }
               });
             });
           }
@@ -962,20 +970,24 @@
 
           if (candOnboardTemplateSelect && candOnboardTemplateSelect.children.length <= 1) {
             const tmplRes = await window.ATS_API.getOnboardingTemplatesApi(token, { departmentId: c.requisition?.department_id });
-            if (tmplRes.ok && Array.isArray(tmplRes.data?.data)) {
+            if (!isCurrent()) return;
+            if (!tmplRes.ok) throw new Error(tmplRes.data?.message || 'Không thể tải mẫu onboarding.');
+            if (Array.isArray(tmplRes.data?.data)) {
               candOnboardTemplateSelect.innerHTML = '<option value="">-- Chọn mẫu Onboarding --</option>' +
                 tmplRes.data.data.map(t => `<option value="${t.id}">${escapeHtml(t.name)} (${t.items?.length || 0} mục)</option>`).join('');
             }
           }
         }
       }
-    } catch {}
+    } catch (error) {
+      if (isCurrent()) window.ATS_AUTHENTICATED_FEATURES.reportError('Onboarding', error);
+    }
   }
 
   if (candOnboardInitBtn) {
     candOnboardInitBtn.addEventListener('click', async () => {
       const token = sessionStorage.getItem('ats_token');
-      if (!currentOnboardingCandidate || !token) return;
+      if (!currentOnboardingCandidate || !token || !window.ATS_AUTHENTICATED_FEATURES?.canUse('candidate.update') || candOnboardInitBtn.disabled) return;
       candOnboardInitBtn.disabled = true;
       try {
         const tmplId = candOnboardTemplateSelect?.value || null;
@@ -991,7 +1003,7 @@
           showToast('danger', 'Lỗi khởi tạo', initRes.data?.message || 'Không thể khởi tạo onboarding.');
         }
       } catch (err) {
-        showToast('danger', 'Lỗi kết nối', err.message);
+        window.ATS_AUTHENTICATED_FEATURES.reportError('Onboarding', err);
       } finally {
         candOnboardInitBtn.disabled = false;
       }
