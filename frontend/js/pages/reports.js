@@ -17,10 +17,17 @@
         const fillRateEl = document.getElementById('report-fill-rate');
         const newCandidatesEl = document.getElementById('report-new-candidates');
 
-        if (timeToHireEl) timeToHireEl.textContent = `${kpis.avgTimeToHireDays || 21} ngày`;
-        if (offerAcceptanceEl) offerAcceptanceEl.textContent = `${kpis.offerAcceptanceRate || 88.5}%`;
-        if (fillRateEl) fillRateEl.textContent = `${kpis.fillRatePercent || 76}%`;
-        if (newCandidatesEl) newCandidatesEl.textContent = `${kpis.newCandidatesThisMonth || 6}`;
+        if (timeToHireEl) timeToHireEl.textContent = kpis.avgTimeToHireDays == null ? '—' : `${kpis.avgTimeToHireDays} ngày`;
+        if (offerAcceptanceEl) offerAcceptanceEl.textContent = kpis.offerAcceptanceRate == null ? '—' : `${kpis.offerAcceptanceRate}%`;
+        if (fillRateEl) fillRateEl.textContent = kpis.fillRatePercent == null ? '—' : `${kpis.fillRatePercent}%`;
+        if (newCandidatesEl) newCandidatesEl.textContent = `${kpis.newCandidatesThisMonth ?? 0}`;
+
+        const funnelBody = document.getElementById('report-funnel-body');
+        if (funnelBody) funnelBody.innerHTML = (report.pipelineFunnel || []).map(row => `<tr><td>${escapeHtml(row.stage)}</td><td>${Number(row.count) || 0}</td><td>${row.percent == null ? '—' : Number(row.percent) + '%'}</td><td>${row.conversionFromPrevious == null ? '—' : Number(row.conversionFromPrevious) + '%'}</td></tr>`).join('');
+        const sourceBody = document.getElementById('report-source-body');
+        if (sourceBody) sourceBody.innerHTML = (report.sourceEffectiveness || []).map(row => `<tr><td>${escapeHtml(row.source)}</td><td>${Number(row.applications) || 0}</td><td>${Number(row.hired) || 0}</td><td>${row.hiredPercent == null ? '—' : Number(row.hiredPercent) + '%'}</td></tr>`).join('');
+        const rejectionBody = document.getElementById('report-rejection-body');
+        if (rejectionBody) rejectionBody.innerHTML = (report.rejectionReasons || []).map(row => `<tr><td>${escapeHtml(row.reason)}</td><td>${Number(row.count) || 0}</td></tr>`).join('');
 
         // Department Table
         const deptTableBody = document.getElementById('report-dept-table-body');

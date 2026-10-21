@@ -119,7 +119,7 @@ class SlaNotificationController {
 
         let body = {};
         if (typeof parseBody === 'function') {
-          try { body = await parseBody(req); } catch { body = {}; }
+          body = await parseBody(req);
         }
 
         const targetDate = body.date || parsedUrl.searchParams.get('date') || null;
@@ -144,12 +144,13 @@ class SlaNotificationController {
         message: 'Endpoint SLA không tồn tại.'
       });
     } catch (err) {
-      console.error('[SlaNotificationController] Error:', err);
+      if (err instanceof SyntaxError || err instanceof URIError) return this.send(res, 400, { success:false, statusCode:400, code:'INVALID_REQUEST', message:'Dữ liệu yêu cầu không hợp lệ.' });
+      console.error('[SlaNotificationController] SLA_INTERNAL_ERROR');
       return this.send(res, 500, {
         success: false,
         statusCode: 500,
         code: 'SLA_INTERNAL_ERROR',
-        message: 'Lỗi máy chủ nội bộ trong xử lý SLA: ' + err.message
+        message: 'Lỗi máy chủ nội bộ trong xử lý SLA.'
       });
     }
   }

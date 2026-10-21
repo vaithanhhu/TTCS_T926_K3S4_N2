@@ -1250,6 +1250,16 @@ async function createCandidateApi(token, candidateData) {
   }
 }
 
+async function updateCandidateRatingApi(token, id, rating) {
+  try {
+    const response = await fetch(`${API_BASE}/candidates/${encodeURIComponent(id)}/rating`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: token ? `Bearer ${token}` : '' },
+      body: JSON.stringify({ rating })
+    });
+    return { ok: response.ok, status: response.status, data: await response.json() };
+  } catch { return { ok: false, status: 0, data: { message: 'Không thể kết nối để lưu đánh giá.' } }; }
+}
+
 async function updateCandidateStageApi(token, id, stage, notes, rejectionReasonId) {
   try {
     const response = await fetch(`${API_BASE}/candidates/${id}/stage`, {
@@ -2170,6 +2180,7 @@ window.ATS_API = {
   uploadCareerPageMediaApi,
   getCandidatesApi,
   createCandidateApi,
+  updateCandidateRatingApi,
   updateCandidateStageApi,
   getRejectionReasonsApi,
   getCandidateStageHistoryApi,

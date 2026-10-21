@@ -19,6 +19,7 @@
 
   const recruitmentCatalogForm =
     document.getElementById('recruitment-catalog-form');
+  const recruitmentCatalogModal = document.getElementById('recruitment-catalog-modal');
 
   const recruitmentCatalogFormTitle =
     document.getElementById('recruitment-catalog-form-title');
@@ -183,6 +184,7 @@
 
     hideRecruitmentCatalogError();
 
+    recruitmentCatalogModal?.classList.remove('hidden');
     if (recruitmentCatalogCodeInput) {
       recruitmentCatalogCodeInput.focus();
     }
@@ -489,6 +491,7 @@
           sessionStorage.getItem('ats_token');
 
         if (!token) return;
+        if (recruitmentCatalogModal?.getAttribute('aria-busy') === 'true') return;
 
         hideRecruitmentCatalogError();
 
@@ -531,6 +534,7 @@
         if (recruitmentCatalogSaveBtn) {
           recruitmentCatalogSaveBtn.disabled = true;
         }
+        recruitmentCatalogModal?.setAttribute('aria-busy', 'true');
 
         try {
           const res = id
@@ -565,6 +569,7 @@
             }
 
             resetRecruitmentCatalogForm();
+            recruitmentCatalogModal?.classList.add('hidden');
             await loadRecruitmentCatalogs();
           } else {
             showRecruitmentCatalogError(
@@ -578,6 +583,7 @@
             'Lỗi kết nối khi lưu danh mục.'
           );
         } finally {
+          recruitmentCatalogModal?.removeAttribute('aria-busy');
           if (recruitmentCatalogSaveBtn) {
             recruitmentCatalogSaveBtn.disabled = false;
           }
@@ -631,6 +637,7 @@
       () => {
         resetRecruitmentCatalogForm();
 
+        recruitmentCatalogModal?.classList.remove('hidden');
         if (recruitmentCatalogCodeInput) {
           recruitmentCatalogCodeInput.focus();
         }

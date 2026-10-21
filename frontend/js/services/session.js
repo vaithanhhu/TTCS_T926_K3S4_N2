@@ -22,6 +22,7 @@
       ['cand-detail-offer-btn', 'offer.create'], ['btn-action-send-offer', 'offer.create'],
       ['btn-action-approve-offer', 'offer.approve'], ['btn-action-reject-offer', 'offer.approve'],
       ['department-new-btn','department.manage'],['department-save-btn','department.manage'],
+      ['competency-framework-new-btn','competency.manage'],['job-title-new-btn','competency.manage'],
       ['competency-framework-save-btn','competency.manage'],['competency-add-criterion-btn','competency.manage'],['job-title-save-btn','competency.manage']
     ]) document.getElementById(id)?.classList.toggle('hidden', !user.permissions?.includes(permission));
     document.getElementById('submit-interview-eval-btn')?.classList.toggle('hidden',!user.permissions?.some(permission=>['interview.update','interview.evaluate'].includes(permission)));

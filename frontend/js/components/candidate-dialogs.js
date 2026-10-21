@@ -163,7 +163,29 @@
     if (idInput) idInput.value = c.id;
     if (stageSelect) { stageSelect.value = c.stage || ''; stageSelect.disabled = publicProfile; }
     if (candDetailSaveStageBtn) candDetailSaveStageBtn.disabled = publicProfile;
-    if (ratingEl) ratingEl.textContent = publicProfile ? '—' : '★'.repeat(c.rating || 4) + '☆'.repeat(5 - (c.rating || 4));
+    if (ratingEl) ratingEl.textContent = publicProfile ? '—' : Number.isInteger(c.rating) && c.rating >= 1 && c.rating <= 5 ? '★'.repeat(c.rating) + '☆'.repeat(5 - c.rating) : 'Chưa đánh giá';
+    const ratingInput = document.getElementById('cand-detail-rating-input');
+    const ratingButton = document.getElementById('cand-detail-save-rating');
+    const canRate = !publicProfile && currentAuthenticatedUser?.roles?.some(role => ['ADMIN','HR_MANAGER','RECRUITER'].includes(role));
+    if (ratingInput) { ratingInput.value = c.rating == null ? '' : String(c.rating); ratingInput.disabled = !canRate; }
+    if (ratingButton) {
+      ratingButton.disabled = !canRate;
+      ratingButton.onclick = async () => {
+        if (ratingButton.disabled || generation !== candidateDetailsGeneration) return;
+        ratingButton.disabled = true;
+        const rating = ratingInput.value === '' ? null : Number(ratingInput.value);
+        try {
+          const result = await window.ATS_API.updateCandidateRatingApi(token, c.id, rating);
+          if (generation !== candidateDetailsGeneration || token !== sessionStorage.getItem('ats_token')) return;
+          if (!result.ok || !result.data?.success) { showToast('danger', 'Không thể lưu đánh giá', result.data?.message || 'Vui lòng thử lại.'); return; }
+          if (ratingEl) ratingEl.textContent = rating === null ? 'Chưa đánh giá' : '★'.repeat(rating) + '☆'.repeat(5 - rating);
+        } catch {
+          if (generation === candidateDetailsGeneration) showToast('danger', 'Không thể lưu đánh giá', 'Vui lòng thử lại.');
+        } finally {
+          if (generation === candidateDetailsGeneration) ratingButton.disabled = false;
+        }
+      };
+    }
 
     canEditCandidateRejectionReason = false;
     if (candDetailRejectionReasonSelect) candDetailRejectionReasonSelect.disabled = true;

@@ -45,6 +45,7 @@ function postgresSQL(source) {
 function pgTypes() {
   return { getTypeParser(oid, format) {
     if (oid === 1082) return value => value;
+    if (oid === 1114) return value => new Date(/[zZ]|[+-]\d{2}:?\d{2}$/.test(value) ? value : value.replace(' ', 'T') + 'Z').toISOString();
     if (oid === 1184) return value => new Date(value).toISOString();
     if (oid === 20 || oid === 1700) return value => { const n = Number(value); return Number.isFinite(n) && Math.abs(n) <= Number.MAX_SAFE_INTEGER ? n : value; };
     return types.getTypeParser(oid, format);
@@ -55,6 +56,11 @@ class PostgresDatabase {
   constructor(config, pool) {
     if (!pool && !config.DATABASE_URL) throw new Error('DATABASE_URL_REQUIRED');
     this.provider = 'postgres'; this.auditOrderColumn = 'sequence_id'; this.context = new AsyncLocalStorage();
+    if (pool) {
+      const customTypes = pgTypes();
+      if (pool.options) pool.options.types = customTypes;
+      if (Array.isArray(pool._clients)) { for (const c of pool._clients) { if (c) c._types = customTypes; } }
+    }
     this.pool = pool || new Pool({ connectionString: config.DATABASE_URL, types: pgTypes(), options: '-c timezone=UTC', application_name: 'internal-ats',
       ...(config.PG_SSL_MODE === 'disable' ? { ssl: false } : config.PG_SSL_MODE === 'verify' ? { ssl: { rejectUnauthorized: true } } : {}) });
     this.pool.on?.('error', () => console.error('[PostgreSQL] CONNECTION_ERROR'));

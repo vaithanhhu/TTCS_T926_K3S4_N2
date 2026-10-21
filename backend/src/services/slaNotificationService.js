@@ -1,5 +1,10 @@
 const crypto = require('node:crypto');
 const RequisitionService = require('./requisitionService');
+function databaseDate(value) {
+  if (value instanceof Date) return new Date(value.getTime());
+  const raw = String(value).trim().replace(' ', 'T');
+  return new Date(raw + (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(raw) ? 'Z' : ''));
+}
 
 /**
  * ==============================================================================
@@ -181,6 +186,22 @@ class SlaNotificationService {
            summary_json TEXT
          )`;
 
+    if (isPostgres) {
+      if (this.db.__slaInitialization) return this.db.__slaInitialization;
+      const pending = this.db.transaction(async () => {
+        await this.db.prepare('SELECT pg_advisory_xact_lock(?)').get(74265029);
+        for (const sql of [slaConfigTableSql, slaBreachesTableSql, slaRemindersTableSql, slaJobExecutionsTableSql]) await this.db.exec(sql);
+        for (const item of Object.values(DEFAULT_SLA_THRESHOLDS)) {
+          await this.db.prepare('INSERT INTO sla_configurations(id,stage,threshold_days,warning_days,description) VALUES(?,?,?,?,?) ON CONFLICT(id) DO NOTHING')
+            .run('sla-cfg-' + item.stage.toLowerCase(), item.stage, item.thresholdDays, item.warningDays, item.description);
+        }
+        this.db.__slaTablesInitialized = true;
+      });
+      this.db.__slaInitialization = pending;
+      pending.catch(() => { this.db.__slaInitialization = null; this.db.__slaTablesInitialized = false; });
+      return pending;
+    }
+
     try {
       this.db.exec(slaConfigTableSql);
       this.db.exec(slaBreachesTableSql);
@@ -198,7 +219,7 @@ class SlaNotificationService {
       this.seedDefaultConfigurationsSync();
       if (this.db) this.db.__slaTablesInitialized = true;
     } catch (err) {
-      console.warn('[SlaNotificationService] Table initialization note:', err.message);
+      throw err;
     }
   }
 
@@ -223,7 +244,7 @@ class SlaNotificationService {
         }
       }
     } catch (err) {
-      console.warn('[SlaNotificationService] Seed default configs note:', err.message);
+      throw err;
     }
   }
 
@@ -235,12 +256,16 @@ class SlaNotificationService {
    * Lấy danh sách cấu hình ngưỡng SLA (hệ thống hoặc theo vị trí tuyển dụng)
    */
   async getSlaConfigurations(requisitionId = null) {
+    await this.ensureTables();
     try {
-      let configs = [];
+      let configs = await this.db.prepare(
+        `SELECT * FROM sla_configurations WHERE requisition_id IS NULL ORDER BY stage ASC`
+      ).all();
       if (requisitionId) {
-        configs = await this.db.prepare(
+        const scoped = await this.db.prepare(
           `SELECT * FROM sla_configurations WHERE requisition_id = ? ORDER BY stage ASC`
         ).all(requisitionId);
+        configs = [...scoped, ...configs.filter(row => !scoped.some(item => item.stage === row.stage))];
       }
 
       if (!configs || configs.length === 0) {
@@ -276,7 +301,7 @@ class SlaNotificationService {
         success: false,
         statusCode: 500,
         code: 'SLA_CONFIG_READ_ERROR',
-        message: 'Lỗi khi đọc cấu hình SLA: ' + err.message
+        message: 'Không thể đọc cấu hình SLA.'
       };
     }
   }
@@ -293,6 +318,7 @@ class SlaNotificationService {
    * @param {string|null} requisitionId ID vị trí nếu cấu hình riêng
    */
   async updateSlaConfigurations(configs, currentUser, requisitionId = null) {
+    if (currentUser?.id) currentUser = await new (require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(currentUser.id, 'candidate.update') || { id: currentUser.id, roles: [] };
     if (!currentUser || !currentUser.id) {
       return { success: false, statusCode: 401, code: 'UNAUTHORIZED', message: 'Yêu cầu đăng nhập.' };
     }
@@ -317,17 +343,32 @@ class SlaNotificationService {
       };
     }
 
+    const normalized = [], stages = new Set();
+    for (const item of configs) {
+      const stage = typeof item?.stage === 'string' ? item.stage.trim().toUpperCase() : '';
+      const number = value => typeof value === 'number' || typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : NaN;
+      const thresholdDays = number(item?.thresholdDays);
+      const warningDays = item?.warningDays === undefined ? Math.max(0, thresholdDays - 1) : number(item.warningDays);
+      if (!['NEW','SCREENING','INTERVIEW','OFFER'].includes(stage) || stages.has(stage) || !Number.isSafeInteger(thresholdDays) || thresholdDays < 1 || !Number.isSafeInteger(warningDays) || warningDays < 0) return {success:false,statusCode:400,code:'INVALID_SLA_CONFIG',message:'Cấu hình SLA không hợp lệ.'};
+      stages.add(stage); normalized.push({...item,stage,thresholdDays,warningDays});
+    }
+    return this.db.transaction(async () => {
+    if (requisitionId) {
+      if (typeof requisitionId !== 'string') return {success:false,statusCode:400,code:'INVALID_REQUISITION'};
+      const scope = roles.some(role => ['ADMIN','HR_MANAGER'].includes(role)) ? null : this.requisitions.recruiterScope('r',currentUser.id);
+      if (!await this.db.prepare('SELECT r.id FROM requisitions r WHERE r.id=?' + (scope ? ' AND ('+scope.condition+')' : '')).get(requisitionId,...(scope?.params || []))) return {success:false,statusCode:404,code:'REQUISITION_NOT_FOUND'};
+    }
     const isPostgres = this.db.provider === 'postgres';
     const updated = [];
 
-    for (const item of configs) {
+    for (const item of normalized) {
       const stage = (item.stage || '').trim().toUpperCase();
       if (!['NEW', 'SCREENING', 'INTERVIEW', 'OFFER'].includes(stage)) {
         continue;
       }
 
-      const thresholdDays = Math.max(1, parseInt(item.thresholdDays, 10) || DEFAULT_SLA_THRESHOLDS[stage].thresholdDays);
-      const warningDays = Math.max(0, parseInt(item.warningDays, 10) || Math.max(1, thresholdDays - 1));
+      const thresholdDays = item.thresholdDays;
+      const warningDays = item.warningDays;
       const description = typeof item.description === 'string' ? item.description.trim() : (DEFAULT_SLA_THRESHOLDS[stage]?.description || '');
 
       let existing;
@@ -369,6 +410,7 @@ class SlaNotificationService {
       message: 'Cập nhật cấu hình ngưỡng SLA thành công.',
       data: updated
     };
+    });
   }
 
   // ============================================================================
@@ -406,7 +448,14 @@ class SlaNotificationService {
     let thresholdDays = DEFAULT_SLA_THRESHOLDS[stage]?.thresholdDays || 3;
     let warningDays = DEFAULT_SLA_THRESHOLDS[stage]?.warningDays || 2;
 
-    if (configMap && configMap[stage]) {
+    const requisitionId = candidate.requisition_id || candidate.requisitionId || candidate.requisition?.id || null;
+    const scopedConfig = requisitionId ? await this.db.prepare(
+      'SELECT threshold_days,warning_days FROM sla_configurations WHERE stage=? AND requisition_id=?'
+    ).get(stage,requisitionId) : null;
+    if (scopedConfig) {
+      thresholdDays = Number(scopedConfig.threshold_days);
+      warningDays = Number(scopedConfig.warning_days);
+    } else if (configMap && configMap[stage]) {
       thresholdDays = configMap[stage].thresholdDays;
       warningDays = configMap[stage].warningDays;
     } else {
@@ -429,22 +478,19 @@ class SlaNotificationService {
     // 2. Xác định thời điểm ứng viên bắt đầu ở giai đoạn hiện tại (stageEntryTime)
     // Ưu tiên tìm trong candidate_status_history, nếu không có lấy candidate.created_at
     let stageEntryTime = null;
-    try {
+    const historyPresent = await this.db.prepare(this.db.provider === 'postgres'
+      ? "SELECT table_name FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='candidate_status_history'"
+      : "SELECT name FROM sqlite_master WHERE type='table' AND name='candidate_status_history'").get();
+    if (historyPresent) {
       const historyEntry = await this.db.prepare(
-        `SELECT created_at FROM candidate_status_history
-         WHERE candidate_id = ? AND after_stage = ?
-         ORDER BY created_at DESC LIMIT 1`
+        'SELECT created_at FROM candidate_status_history WHERE candidate_id=? AND after_stage=? ORDER BY created_at DESC LIMIT 1'
       ).get(candidate.id, stage);
-      if (historyEntry && historyEntry.created_at) {
-        stageEntryTime = new Date(historyEntry.created_at);
-      }
-    } catch {
-      // Bảng candidate_status_history chưa tồn tại hoặc lỗi
+      if (historyEntry?.created_at) stageEntryTime = databaseDate(historyEntry.created_at);
     }
 
     if (!stageEntryTime || isNaN(stageEntryTime.getTime())) {
       const createdRaw = candidate.created_at || candidate.createdAt;
-      stageEntryTime = createdRaw ? new Date(createdRaw) : new Date();
+      stageEntryTime = createdRaw ? databaseDate(createdRaw) : new Date();
     }
 
     // 3. Tính số ngày đã trôi qua
@@ -492,6 +538,7 @@ class SlaNotificationService {
    * @param {object} options Bộ lọc (requisitionId, stage, search, limit, offset)
    */
   async getOverdueCandidates(currentUser, options = {}) {
+    if (currentUser?.id) currentUser = await new (require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(currentUser.id, 'candidate.read') || { id: currentUser.id, roles: [] };
     if (!currentUser || !currentUser.id) {
       return { success: false, statusCode: 401, code: 'UNAUTHORIZED', message: 'Yêu cầu đăng nhập.' };
     }
@@ -511,6 +558,7 @@ class SlaNotificationService {
 
     // Nạp cấu hình SLA
     const cfgResult = await this.getSlaConfigurations();
+    if (!cfgResult.success) throw new Error('SLA_CONFIGURATION_UNAVAILABLE');
     const configMap = {};
     for (const c of (cfgResult.data || [])) {
       configMap[c.stage] = c;
@@ -528,11 +576,9 @@ class SlaNotificationService {
 
     // Phân quyền phạm vi dữ liệu IDOR: Recruiter chỉ thấy hồ sơ thuộc vị trí mình phụ trách
     if (!isAdminOrHr && isRecruiter) {
-      sql += ` AND (
-        r.recruiter_id = ?
-        OR EXISTS (SELECT 1 FROM requisition_recruiter_supports WHERE requisition_id = r.id AND user_id = ?)
-      )`;
-      params.push(currentUser.id, currentUser.id);
+      const scope = this.requisitions.recruiterScope('r', currentUser.id);
+      sql += ' AND ' + scope.condition;
+      params.push(...scope.params);
     }
 
     if (options.requisitionId && options.requisitionId !== 'ALL') {
@@ -604,26 +650,42 @@ class SlaNotificationService {
    * @param {object|null} currentUser Người chạy tác vụ thủ công (nếu có)
    */
   async runDailySlaCheck(targetDate = null, currentUser = null) {
+    if (!currentUser?.id) return { success: false, statusCode: 401, code: 'UNAUTHORIZED' };
+    currentUser = await new (require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(currentUser.id, 'candidate.read');
+    if (!currentUser || !currentUser.roles.some(role => ['ADMIN', 'HR_MANAGER', 'RECRUITER'].includes(role))) return { success: false, statusCode: 403, code: 'SLA_FORBIDDEN' };
+    if (targetDate !== null && (typeof targetDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(targetDate) || !Number.isFinite(Date.parse(targetDate)) || new Date(targetDate).toISOString().slice(0, 10) !== targetDate)) return { success: false, statusCode: 400, code: 'INVALID_SLA_DATE' };
+    await this.ensureTables();
     const isPostgres = this.db.provider === 'postgres';
     const now = targetDate ? new Date(targetDate) : new Date();
-    const todayStr = targetDate || now.toISOString().slice(0, 10); // 'YYYY-MM-DD'
+    const todayStr = targetDate || new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+
+    return this.db.transaction(async () => {
+    if (isPostgres) await this.db.prepare('SELECT pg_advisory_xact_lock(hashtext(?))').get('sla-daily:' + todayStr);
+    currentUser = await new (require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(currentUser.id, 'candidate.read');
+    if (!currentUser?.roles.some(role => ['ADMIN','HR_MANAGER','RECRUITER'].includes(role))) return {success:false,statusCode:403,code:'SLA_FORBIDDEN'};
 
     // 1. Nạp cấu hình SLA
     const cfgResult = await this.getSlaConfigurations();
+    if (!cfgResult.success) throw new Error('SLA_CONFIGURATION_UNAVAILABLE');
     const configMap = {};
     for (const c of (cfgResult.data || [])) {
       configMap[c.stage] = c;
     }
 
     // 2. Lấy tất cả hồ sơ đang mở trong hệ thống
+    const scope = this.requisitions.candidateVisibility(currentUser);
     const candidates = await this.db.prepare(`
       SELECT c.*, r.title AS requisition_title, r.code AS requisition_code,
              r.recruiter_id
       FROM candidates c
       LEFT JOIN requisitions r ON r.id = c.requisition_id
       WHERE (c.stage IS NULL OR c.stage NOT IN ('HIRED', 'REJECTED', 'WITHDRAWN'))
-    `).all();
+      ${scope ? 'AND (' + scope.condition + ')' : ''}
+    `).all(...(scope?.params || []));
 
+    const supportsPresent = Boolean(await this.db.prepare(this.db.provider === 'postgres'
+      ? "SELECT table_name FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='requisition_recruiter_supports'"
+      : "SELECT name FROM sqlite_master WHERE type='table' AND name='requisition_recruiter_supports'").get());
     let scannedCount = 0;
     let breachesFound = 0;
     let remindersCreated = 0;
@@ -658,12 +720,12 @@ class SlaNotificationService {
               : `INSERT INTO candidate_sla_breaches (
                    id, candidate_id, requisition_id, stage, threshold_days, days_in_stage, is_overdue, flag_level, flagged_at, status
                  ) VALUES (?, ?, ?, ?, ?, ?, 1, 'BREACHED', datetime('now'), 'ACTIVE')`;
-            await this.db.prepare(insertBreachSql).run(
+            await this.db.prepare(insertBreachSql + " ON CONFLICT(id) DO UPDATE SET days_in_stage=excluded.days_in_stage,threshold_days=excluded.threshold_days,status='ACTIVE',resolved_at=NULL").run(
               breachId, cand.id, cand.requisition_id || null, sla.stage, sla.thresholdDays, sla.daysInStage
             );
           }
         } catch (bErr) {
-          console.warn('[runDailySlaCheck] Breach record note:', bErr.message);
+          throw bErr;
         }
 
         // 2.2 Xác định Recruiter cần nhận nhắc việc
@@ -673,7 +735,7 @@ class SlaNotificationService {
         }
 
         // Tìm thêm recruiter hỗ trợ cho vị trí này
-        if (cand.requisition_id) {
+        if (cand.requisition_id && supportsPresent) {
           try {
             const supports = await this.db.prepare(
               `SELECT user_id FROM requisition_recruiter_supports WHERE requisition_id = ?`
@@ -693,7 +755,7 @@ class SlaNotificationService {
               `SELECT u.id FROM users u
                JOIN user_roles ur ON ur.user_id = u.id
                JOIN roles r ON r.id = ur.role_id
-               WHERE r.code IN ('RECRUITER', 'ADMIN') AND u.status = 'ACTIVE'
+               WHERE r.code IN ('HR_MANAGER', 'ADMIN') AND u.status = 'ACTIVE'
                LIMIT 1`
             ).get();
             if (defaultRecruiter && defaultRecruiter.id) {
@@ -711,6 +773,10 @@ class SlaNotificationService {
         const reminderMessage = `Hồ sơ ứng viên "${cand.full_name}"${reqTitle} đã ở giai đoạn "${stageLabel}" ${sla.daysInStage} ngày, vượt quá ngưỡng SLA quy định (${sla.thresholdDays} ngày). Vui lòng kiểm tra và xử lý để tránh để hồ sơ nằm im.`;
 
         for (const recruiterId of recruiterIds) {
+          const recipient = await new (require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(recruiterId, 'candidate.read');
+          if (!recipient || !recipient.roles.some(role => ['ADMIN', 'HR_MANAGER', 'RECRUITER'].includes(role))) continue;
+          const recipientScope = this.requisitions.candidateVisibility(recipient);
+          if (recipientScope && !await this.db.prepare('SELECT c.id FROM candidates c LEFT JOIN requisitions r ON r.id=c.requisition_id WHERE c.id=? AND ' + recipientScope.condition).get(cand.id, ...recipientScope.params)) continue;
           // KIỂM TRA CHỐNG NHẮC TRÙNG: Trong cùng 1 ngày (todayStr), nếu đã nhắc rồi thì BỎ QUA
           const existingReminder = await this.db.prepare(
             `SELECT id FROM sla_reminders
@@ -718,7 +784,7 @@ class SlaNotificationService {
           ).get(cand.id, sla.stage, todayStr, recruiterId);
 
           if (!existingReminder) {
-            const reminderId = `sla-rem-${cand.id}-${recruiterId}-${todayStr}`;
+            const reminderId = `sla-rem-${cand.id}-${sla.stage}-${recruiterId}-${todayStr}`;
             try {
               const insertRemSql = isPostgres
                 ? `INSERT INTO sla_reminders (
@@ -730,31 +796,34 @@ class SlaNotificationService {
                      reminder_date, reminder_title, reminder_message, is_read, created_at
                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, datetime('now'))`;
 
-              await this.db.prepare(insertRemSql).run(
+              const inserted = await this.db.prepare(insertRemSql + " ON CONFLICT DO NOTHING").run(
                 reminderId, cand.id, cand.requisition_id || null, recruiterId, sla.stage,
                 sla.thresholdDays, sla.daysInStage, todayStr, reminderTitle, reminderMessage
               );
+              if (!inserted.changes) continue;
               remindersCreated++;
 
               // Gửi email thông báo nhắc việc (notification / email) tới Recruiter
               try {
                 const recruiterUser = await this.db.prepare('SELECT email, full_name FROM users WHERE id = ?').get(recruiterId);
                 if (recruiterUser && recruiterUser.email) {
-                  const EmailService = require('./emailService');
+                  const { EmailService } = require('./emailService');
                   const emailService = new EmailService(this.db);
-                  emailService.sendMail({
+                  const deliver = () => emailService.sendMail({
                     to: recruiterUser.email,
                     subject: reminderTitle,
                     text: reminderMessage,
                     templateName: 'SLA_REMINDER'
-                  }).catch(() => {});
+                  });
+                  if (this.db.afterCommit) this.db.afterCommit(deliver);
+                  else await deliver();
                 }
               } catch {
                 // Không làm gián đoạn tác vụ nếu cấu hình SMTP ngoại tuyến
               }
             } catch (rErr) {
               // Bỏ qua lỗi duplicate nếu đồng thời chèn
-              console.warn('[runDailySlaCheck] Duplicate reminder avoided:', rErr.message);
+              throw rErr;
             }
           }
         }
@@ -793,7 +862,7 @@ class SlaNotificationService {
         executionId, todayStr, scannedCount, breachesFound, remindersCreated, summaryJson
       );
     } catch (eErr) {
-      console.warn('[runDailySlaCheck] Job log note:', eErr.message);
+      throw eErr;
     }
 
     return {
@@ -808,6 +877,7 @@ class SlaNotificationService {
         breachedCandidatesCount: breachedCandidates.length
       }
     };
+    });
   }
 
   // ============================================================================
@@ -818,10 +888,17 @@ class SlaNotificationService {
    * Lấy danh sách nhắc việc quá hạn của Recruiter hiện tại
    */
   async getRecruiterReminders(currentUser, options = {}) {
+    if (currentUser?.id) {
+      currentUser = await new (require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(currentUser.id, 'candidate.read');
+      if (!currentUser?.roles.some(role => ['ADMIN','HR_MANAGER','RECRUITER'].includes(role))) return { success: false, statusCode: 403, code: 'SLA_FORBIDDEN' };
+    }
     if (!currentUser || !currentUser.id) {
       return { success: false, statusCode: 401, code: 'UNAUTHORIZED', message: 'Yêu cầu đăng nhập.' };
     }
 
+    const scope = this.requisitions.candidateVisibility({ ...currentUser, roles: currentUser.roles.filter(role => role !== 'CANDIDATE') });
+    const scopeCondition = scope ? scope.condition.replace(/\br\./g, 'req.') : '1=1';
+    const scopeParams = scope?.params || [];
     const unreadOnly = options.unreadOnly === true || options.unreadOnly === 'true';
     const limit = Math.min(100, Math.max(1, parseInt(options.limit, 10) || 50));
 
@@ -832,9 +909,9 @@ class SlaNotificationService {
       FROM sla_reminders r
       LEFT JOIN candidates c ON c.id = r.candidate_id
       LEFT JOIN requisitions req ON req.id = r.requisition_id
-      WHERE r.recruiter_id = ?
+      WHERE r.recruiter_id = ? AND (${scopeCondition})
     `;
-    const params = [currentUser.id];
+    const params = [currentUser.id, ...scopeParams];
 
     if (unreadOnly) {
       sql += ` AND r.is_read = 0`;
@@ -847,8 +924,8 @@ class SlaNotificationService {
 
     // Đếm tổng số chưa đọc
     const unreadCountRow = await this.db.prepare(
-      `SELECT COUNT(*) AS total FROM sla_reminders WHERE recruiter_id = ? AND is_read = 0`
-    ).get(currentUser.id);
+      `SELECT COUNT(*) AS total FROM sla_reminders reminder JOIN candidates c ON c.id=reminder.candidate_id JOIN requisitions req ON req.id=c.requisition_id WHERE reminder.recruiter_id = ? AND reminder.is_read = 0 AND (${scopeCondition})`
+    ).get(currentUser.id, ...scopeParams);
     const unreadCount = unreadCountRow ? Number(unreadCountRow.total) : 0;
 
     return {
@@ -880,16 +957,22 @@ class SlaNotificationService {
    * Đánh dấu nhắc việc là đã đọc
    */
   async markReminderAsRead(reminderId, currentUser) {
+    if (currentUser?.id) {
+      currentUser = await new (require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(currentUser.id, 'candidate.read');
+      if (!currentUser?.roles.some(role => ['ADMIN','HR_MANAGER','RECRUITER'].includes(role))) return { success: false, statusCode: 403, code: 'SLA_FORBIDDEN' };
+    }
     if (!currentUser || !currentUser.id) {
       return { success: false, statusCode: 401, code: 'UNAUTHORIZED', message: 'Yêu cầu đăng nhập.' };
     }
 
+    const scope = this.requisitions.candidateVisibility({ ...currentUser, roles: currentUser.roles.filter(role => role !== 'CANDIDATE') });
+    const allowed = `EXISTS (SELECT 1 FROM candidates c JOIN requisitions r ON r.id=c.requisition_id WHERE c.id=sla_reminders.candidate_id AND (${scope?.condition || '1=1'}))`;
     const isPostgres = this.db.provider === 'postgres';
     const updateSql = isPostgres
-      ? `UPDATE sla_reminders SET is_read = 1, read_at = CURRENT_TIMESTAMP WHERE id = ? AND recruiter_id = ?`
-      : `UPDATE sla_reminders SET is_read = 1, read_at = datetime('now') WHERE id = ? AND recruiter_id = ?`;
+      ? `UPDATE sla_reminders SET is_read = 1, read_at = CURRENT_TIMESTAMP WHERE id = ? AND recruiter_id = ? AND ${allowed}`
+      : `UPDATE sla_reminders SET is_read = 1, read_at = datetime('now') WHERE id = ? AND recruiter_id = ? AND ${allowed}`;
 
-    const res = await this.db.prepare(updateSql).run(reminderId, currentUser.id);
+    const res = await this.db.prepare(updateSql).run(reminderId, currentUser.id, ...(scope?.params || []));
 
     if (res.changes === 0) {
       return { success: false, statusCode: 404, message: 'Không tìm thấy nhắc việc hoặc không có quyền.' };
@@ -902,16 +985,22 @@ class SlaNotificationService {
    * Đánh dấu toàn bộ nhắc việc của recruiter là đã đọc
    */
   async markAllRemindersAsRead(currentUser) {
+    if (currentUser?.id) {
+      currentUser = await new (require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(currentUser.id, 'candidate.read');
+      if (!currentUser?.roles.some(role => ['ADMIN','HR_MANAGER','RECRUITER'].includes(role))) return { success: false, statusCode: 403, code: 'SLA_FORBIDDEN' };
+    }
     if (!currentUser || !currentUser.id) {
       return { success: false, statusCode: 401, code: 'UNAUTHORIZED', message: 'Yêu cầu đăng nhập.' };
     }
 
+    const scope = this.requisitions.candidateVisibility({ ...currentUser, roles: currentUser.roles.filter(role => role !== 'CANDIDATE') });
+    const allowed = `EXISTS (SELECT 1 FROM candidates c JOIN requisitions r ON r.id=c.requisition_id WHERE c.id=sla_reminders.candidate_id AND (${scope?.condition || '1=1'}))`;
     const isPostgres = this.db.provider === 'postgres';
     const updateSql = isPostgres
-      ? `UPDATE sla_reminders SET is_read = 1, read_at = CURRENT_TIMESTAMP WHERE recruiter_id = ? AND is_read = 0`
-      : `UPDATE sla_reminders SET is_read = 1, read_at = datetime('now') WHERE recruiter_id = ? AND is_read = 0`;
+      ? `UPDATE sla_reminders SET is_read = 1, read_at = CURRENT_TIMESTAMP WHERE recruiter_id = ? AND is_read = 0 AND ${allowed}`
+      : `UPDATE sla_reminders SET is_read = 1, read_at = datetime('now') WHERE recruiter_id = ? AND is_read = 0 AND ${allowed}`;
 
-    await this.db.prepare(updateSql).run(currentUser.id);
+    await this.db.prepare(updateSql).run(currentUser.id, ...(scope?.params || []));
     return { success: true, statusCode: 200, message: 'Đã đánh dấu tất cả nhắc việc là đã đọc.' };
   }
 
@@ -925,6 +1014,7 @@ class SlaNotificationService {
     }
 
     const overdueResult = await this.getOverdueCandidates(currentUser, { includeAll: true });
+    if (!overdueResult.success) return overdueResult;
     const all = overdueResult.data?.candidates || [];
     const totalActive = all.length;
     const totalOverdue = all.filter(c => c.sla.isOverdue).length;

@@ -4,6 +4,7 @@
   const departmentsTreeContainer = document.getElementById('departments-tree-container');
   const departmentsTotalBadge = document.getElementById('departments-total-badge');
   const departmentForm = document.getElementById('department-form');
+  const departmentModal = document.getElementById('department-modal');
   const departmentFormTitle = document.getElementById('department-form-title');
   const departmentIdInput = document.getElementById('department-id-input');
   const departmentCodeInput = document.getElementById('department-code-input');
@@ -193,6 +194,7 @@
 
     hideDepartmentFormError();
 
+    departmentModal?.classList.remove('hidden');
     if (departmentCodeInput) {
       departmentCodeInput.focus();
     }
@@ -313,6 +315,7 @@
       ]);
       if (version !== departmentsLoadVersion || token !== sessionStorage.getItem('ats_token')) return;
       departmentActionPermissions = new Set(permissionsRes.ok && Array.isArray(permissionsRes.data?.permissions) ? permissionsRes.data.permissions : []);
+      departmentNewBtn?.classList.toggle('hidden', !departmentActionPermissions.has('department.manage'));
 
       if (
         !departmentsRes.ok ||
@@ -522,6 +525,7 @@
           sessionStorage.getItem('ats_token');
 
         if (!token) return;
+        if (departmentModal?.getAttribute('aria-busy') === 'true') return;
 
         hideDepartmentFormError();
 
@@ -562,6 +566,7 @@
         if (departmentSaveBtn) {
           departmentSaveBtn.disabled = true;
         }
+        departmentModal?.setAttribute('aria-busy', 'true');
 
         try {
           const res = departmentId
@@ -590,6 +595,7 @@
             );
 
             resetDepartmentForm();
+            departmentModal?.classList.add('hidden');
             await loadDepartments();
           } else {
             showDepartmentFormError(
@@ -602,6 +608,7 @@
             error.message
           );
         } finally {
+          departmentModal?.removeAttribute('aria-busy');
           if (departmentSaveBtn) {
             departmentSaveBtn.disabled = false;
           }
@@ -619,8 +626,10 @@
     departmentNewBtn.addEventListener(
       'click',
       () => {
+        if (!departmentActionPermissions.has('department.manage')) return;
         resetDepartmentForm();
 
+        departmentModal?.classList.remove('hidden');
         if (departmentCodeInput) {
           departmentCodeInput.focus();
         }

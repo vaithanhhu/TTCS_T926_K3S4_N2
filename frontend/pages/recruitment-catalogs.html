@@ -30,7 +30,7 @@
             </button>
           </div>
 
-          <div style="display: grid; grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); gap: 16px; align-items: start;">
+          <div class="management-list-layout">
             <div class="panel-card" style="padding: 0; overflow: hidden;">
               <div class="table-responsive">
                 <table class="data-table">
@@ -54,10 +54,14 @@
               </div>
             </div>
 
-            <div class="panel-card" style="padding: 16px;">
-              <h3 id="recruitment-catalog-form-title" style="margin-top: 0;">Thêm giá trị danh mục</h3>
-
-              <div id="recruitment-catalog-form-alert" class="alert-box hidden" role="alert">
+            <div id="recruitment-catalog-modal" class="modal-overlay management-modal hidden" role="dialog" aria-modal="true" aria-labelledby="recruitment-catalog-form-title">
+              <div class="modal-card">
+                <div class="modal-header">
+                  <h3 id="recruitment-catalog-form-title" class="modal-title">Thêm giá trị danh mục</h3>
+                  <button type="button" class="modal-close" data-close-management-modal="recruitment-catalog-modal" aria-label="Đóng">&times;</button>
+                </div>
+                <div class="modal-body">
+                  <div id="recruitment-catalog-form-alert" class="alert-box hidden" role="alert">
                 <div class="alert-content">
                   <p id="recruitment-catalog-form-alert-msg" style="margin: 0;"></p>
                 </div>
@@ -128,6 +132,7 @@
                 </div>
 
                 <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
+                  <button type="button" class="btn btn-outline btn-sm" data-close-management-modal="recruitment-catalog-modal">Hủy</button>
                   <button type="button" id="recruitment-catalog-reset-btn" class="btn btn-outline btn-sm">
                     Làm lại
                   </button>
@@ -136,6 +141,8 @@
                   </button>
                 </div>
               </form>
+                </div>
+              </div>
             </div>
           </div>
         </div>

@@ -2,6 +2,8 @@
   const competencyFrameworkList = document.getElementById('competency-framework-list');
   const competencyFrameworksTotalBadge = document.getElementById('competency-frameworks-total-badge');
   const competencyFrameworkForm = document.getElementById('competency-framework-form');
+  const competencyFrameworkModal = document.getElementById('competency-framework-modal');
+  const competencyFrameworkNewBtn = document.getElementById('competency-framework-new-btn');
   const competencyFrameworkFormTitle = document.getElementById('competency-framework-form-title');
   const competencyFrameworkIdInput = document.getElementById('competency-framework-id-input');
   const competencyFrameworkCodeInput = document.getElementById('competency-framework-code-input');
@@ -18,6 +20,8 @@
   const jobTitleList = document.getElementById('job-title-list');
   const jobTitlesTotalBadge = document.getElementById('job-titles-total-badge');
   const jobTitleForm = document.getElementById('job-title-form');
+  const jobTitleModal = document.getElementById('job-title-modal');
+  const jobTitleNewBtn = document.getElementById('job-title-new-btn');
   const jobTitleFormTitle = document.getElementById('job-title-form-title');
   const jobTitleIdInput = document.getElementById('job-title-id-input');
   const jobTitleCodeInput = document.getElementById('job-title-code-input');
@@ -55,6 +59,7 @@
       jobTitleSalaryFields.classList.add('hidden');
     }
     if (jobTitleSaveBtn) jobTitleSaveBtn.disabled = true;
+    jobTitleNewBtn?.classList.add('hidden');
     renderJobTitles();
   }
 
@@ -330,6 +335,8 @@
       canManageCompetencies=jobTitleRes.data.canManage!==false;
       for(const form of [competencyFrameworkForm,jobTitleForm])form?.querySelectorAll('input,select,textarea,button').forEach(node=>{node.disabled=!canManageCompetencies;});
       canViewJobTitleSalary = jobTitleRes.data.canViewSalary === true;
+      competencyFrameworkNewBtn?.classList.toggle('hidden', !canManageCompetencies);
+      jobTitleNewBtn?.classList.toggle('hidden', !canManageCompetencies || !canViewJobTitleSalary);
       if (jobTitleSalaryFields) {
         jobTitleSalaryFields.disabled = !canViewJobTitleSalary;
         jobTitleSalaryFields.classList.toggle('hidden', !canViewJobTitleSalary);
@@ -467,6 +474,7 @@
     hideCompetencyFrameworkError();
     updateCompetencyTotalWeight();
 
+    competencyFrameworkModal?.classList.remove('hidden');
     if (competencyFrameworkCodeInput) {
       competencyFrameworkCodeInput.focus();
     }
@@ -524,6 +532,7 @@
 
         const token = sessionStorage.getItem('ats_token');
         if (!token) return;
+        if (competencyFrameworkModal?.getAttribute('aria-busy') === 'true') return;
 
         hideCompetencyFrameworkError();
 
@@ -597,6 +606,7 @@
         if (competencyFrameworkSaveBtn) {
           competencyFrameworkSaveBtn.disabled = true;
         }
+        competencyFrameworkModal?.setAttribute('aria-busy', 'true');
 
         try {
           const res = frameworkId
@@ -620,6 +630,7 @@
             );
 
             resetCompetencyFrameworkForm();
+            competencyFrameworkModal?.classList.add('hidden');
             await loadCompetencies();
           } else {
             showCompetencyFrameworkError(
@@ -630,6 +641,7 @@
         } catch (error) {
           showCompetencyFrameworkError(error.message);
         } finally {
+          competencyFrameworkModal?.removeAttribute('aria-busy');
           if (competencyFrameworkSaveBtn) {
             competencyFrameworkSaveBtn.disabled = false;
           }
@@ -719,6 +731,7 @@
 
     hideJobTitleError();
 
+    jobTitleModal?.classList.remove('hidden');
     if (jobTitleCodeInput) {
       jobTitleCodeInput.focus();
     }
@@ -748,6 +761,7 @@
 
         const token = sessionStorage.getItem('ats_token');
         if (!token) return;
+        if (jobTitleModal?.getAttribute('aria-busy') === 'true') return;
 
         hideJobTitleError();
 
@@ -808,6 +822,7 @@
           payload.maxSalary = Number(maximum);
         }
         if (jobTitleSaveBtn) jobTitleSaveBtn.disabled = true;
+        jobTitleModal?.setAttribute('aria-busy', 'true');
 
         try {
           const res = jobTitleId
@@ -831,6 +846,7 @@
             );
 
             resetJobTitleForm();
+            jobTitleModal?.classList.add('hidden');
             await loadCompetencies();
           } else {
             showJobTitleError(
@@ -841,6 +857,7 @@
         } catch (error) {
           showJobTitleError(error.message);
         } finally {
+          jobTitleModal?.removeAttribute('aria-busy');
           if (jobTitleSaveBtn) {
             jobTitleSaveBtn.disabled = !canViewJobTitleSalary && !jobTitleIdInput?.value;
           }
@@ -848,3 +865,15 @@
       }
     );
   }
+
+  competencyFrameworkNewBtn?.addEventListener('click', () => {
+    if (!canManageCompetencies) return;
+    resetCompetencyFrameworkForm();
+    competencyFrameworkModal?.classList.remove('hidden');
+  });
+
+  jobTitleNewBtn?.addEventListener('click', () => {
+    if (!canManageCompetencies || !canViewJobTitleSalary) return;
+    resetJobTitleForm();
+    jobTitleModal?.classList.remove('hidden');
+  });

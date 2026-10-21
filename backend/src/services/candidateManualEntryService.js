@@ -50,7 +50,7 @@ class CandidateManualEntryService {
   }
 
   async supportsMergeColumn() {
-    try { await this.db.prepare('SELECT merged_into_id FROM candidates LIMIT 0').all(); return true; }
+    try { if (this.db.provider === 'postgres') { const row = await this.db.prepare("SELECT column_name FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='candidates' AND column_name='merged_into_id'").get(); return Boolean(row); } await this.db.prepare('SELECT merged_into_id FROM candidates LIMIT 0').all(); return true; }
     catch { return false; }
   }
 
@@ -522,7 +522,7 @@ class CandidateManualEntryService {
     }
 
     // 6. Xử lý nguồn ứng viên (Source)
-    let sourceId = cleanData.sourceId;
+    let sourceId = cleanData.sourceId; let dbSourceId = sourceId;
     let sourceName = 'LinkedIn';
 
     try {
@@ -535,7 +535,7 @@ class CandidateManualEntryService {
 
       if (catItem) {
         sourceId = catItem.id;
-        sourceName = catItem.name;
+        sourceName = catItem.name; dbSourceId = catItem.id; } else if (this.db.provider === 'postgres') { dbSourceId = null;
       }
     } catch {
       // Bảng catalog chưa có hoặc không áp dụng
@@ -557,6 +557,9 @@ class CandidateManualEntryService {
         }
         const storagePath = path.join(UPLOADS_DIR, storageFileName);
         fs.writeFileSync(storagePath, cvValidation.buffer);
+        const portalDir = path.resolve(__dirname, '..', '..', 'data', 'cv_uploads');
+        if (!fs.existsSync(portalDir)) fs.mkdirSync(portalDir, { recursive: true });
+        fs.writeFileSync(path.join(portalDir, storageFileName), cvValidation.buffer);
       } catch (err) {
         // Fallback ghi log nếu môi trường không cho phép ghi đĩa (ví dụ test memory)
       }
@@ -602,7 +605,7 @@ class CandidateManualEntryService {
         cleanData.currentCompany || null,
         cleanData.expectedSalary || null,
         cleanData.notes || null,
-        sourceId || null,
+        dbSourceId || null,
         trackingCode
       );
     } catch (err) {
@@ -620,7 +623,7 @@ class CandidateManualEntryService {
         cleanData.phoneNumber || null,
         cleanData.requisitionId,
         cleanData.stage,
-        sourceId || null,
+        dbSourceId || null,
         trackingCode,
         nowIso
       );

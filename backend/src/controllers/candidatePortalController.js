@@ -108,7 +108,7 @@ class CandidatePortalController {
       }
 
       if (pathname === '/api/v1/candidates/my-referrals' && method === 'GET') {
-        const user = await this.rbac.authorize(req, res, this.auth);
+        const user = await this.rbac.authorize(req, res, this.auth, 'candidate.refer');
         if (!user) return;
         const result = await this.service.getMyReferrals(user);
         return this.send(res, 200, { success: true, data: result });
