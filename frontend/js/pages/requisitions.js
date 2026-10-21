@@ -60,7 +60,7 @@
           const recName = req.recruiter_name || req.recruiterName || (req.recruiter ? req.recruiter.fullName : '');
 
           return `
-            <tr ${req.overdue?'style="background:var(--color-danger-light, #fff1f0);"':''}>
+            <tr ${req.overdue?'style="background: var(--color-danger-light, #fff1f0); border-left: 4px solid var(--color-danger, #e11d48);"':''}>
               <td><code class="font-mono" style="font-weight: 600; color: var(--color-primary);">${escapeDepartmentHtml(req.code || '')}</code></td>
               <td>
                 <div style="font-weight: 600; color: var(--color-text);">${escapeDepartmentHtml(req.title || 'Yêu cầu chưa đặt tên')}</div>
@@ -69,7 +69,7 @@
               <td>${escapeDepartmentHtml(dept)}</td>
               <td style="text-align: center; font-weight: 600;">${req.headcount ?? '—'}</td>
               <td>${recName ? escapeDepartmentHtml(recName) : '<span style="color: var(--color-text-muted); font-style: italic;">Chưa phân công</span>'}${req.supportRecruiters?.length?'<div>Hỗ trợ: '+req.supportRecruiters.map(user=>escapeDepartmentHtml(user.name)).join(', ')+'</div>':''}</td>
-              <td><span class="badge ${statusBadge}">${escapeDepartmentHtml(statusText)}</span></td>
+              <td><span class="badge ${statusBadge}">${escapeDepartmentHtml(statusText)}</span>${req.overdue&&!requisitionTrackingEnabled?'<span class="badge badge-danger" style="margin-left: 4px;">Trễ hạn</span>':''}</td>
               ${requisitionTrackingEnabled?`<td><div>${req.daysOpen==null?'Chưa mở':(req.daysOpenEstimated?'~':'')+req.daysOpen+' ngày mở'}</div><div>${req.daysRemaining==null?'Chưa có ngày cần người':req.daysRemaining>=0?'Còn '+req.daysRemaining+' ngày':'Qua ngày cần người '+Math.abs(req.daysRemaining)+' ngày'}</div>${req.overdue?'<span class="badge badge-danger">Trễ hạn</span>':''}${req.paused?'<span class="badge badge-neutral">Đang tạm dừng</span>':''}</td>`:''}
               <td style="text-align: center;">
                 <div style="display: flex; gap: 6px; justify-content: center;">

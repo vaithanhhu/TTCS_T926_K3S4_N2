@@ -1150,8 +1150,8 @@ async function handleRequest(req, res) {
     const departments = (await db.prepare("SELECT id, name, parent_id AS parentId, status FROM departments WHERE status = 'ACTIVE' ORDER BY name").all());
     const s210Departments = (await db.prepare(`SELECT id, name, parent_id AS parentId, status FROM departments
       WHERE status='ACTIVE' AND (?=1 OR manager_id=?) ORDER BY name`).all(user.roles.some(role=>['HR_MANAGER','ADMIN'].includes(role)) ? 1 : 0, user.id));
-    const salaryColumns = (await canReadJobTitleSalary(user)) ? ', min_salary AS minSalary, max_salary AS maxSalary' : '';
-    const jobTitles = (await db.prepare(`SELECT id, code, name, level${salaryColumns} FROM job_titles WHERE status='ACTIVE' ORDER BY name`).all());
+    const salaryColumns = (await canReadJobTitleSalary(user)) ? ', jt.min_salary AS minSalary, jt.max_salary AS maxSalary' : '';
+    const jobTitles = (await db.prepare(`SELECT jt.id, jt.code, jt.name, jt.level, jt.framework_id AS frameworkId, cf.code AS frameworkCode, cf.name AS frameworkName${salaryColumns} FROM job_titles jt LEFT JOIN competency_frameworks cf ON jt.framework_id = cf.id WHERE jt.status='ACTIVE' ORDER BY jt.name`).all());
     const recruiters=await db.prepare("SELECT DISTINCT u.id,u.full_name AS fullName FROM users u JOIN user_roles ur ON ur.user_id=u.id JOIN roles r ON r.id=ur.role_id WHERE u.status='ACTIVE' AND r.code='RECRUITER' ORDER BY u.full_name").all();
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({ success: true, tree: departmentService.buildTree(departments), s210Departments, jobTitles, recruiters }));

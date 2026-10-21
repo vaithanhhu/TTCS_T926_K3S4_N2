@@ -1,13 +1,9 @@
 {
     "name":  "internal-recruitment-ats",
     "version":  "1.0.0",
-    "description":  "Hệ thống Tuyển dụng Nội bộ (ATS) - Sprint 1",
+    "description":  "Hß╗ç thß╗æng Tuyß╗ân dß╗Ñng Nß╗Öi bß╗Ö (ATS) - Sprint 1",
     "private":  true,
     "scripts":  {
-                    "test:sla-security": "node backend/tests/test_sla_security.js",
-                    "test:e2e213-reports": "node backend/tests/test_e2e213_reports.js",
-                    "test:e2e213-interview-integration": "node backend/tests/test_e2e213_bulk_invitation_integration.js",
-                    "test:candidate-quick-rating": "node backend/tests/test_candidate_quick_rating.js",
                     "setup:local":  "node backend/src/db/setup-local.js",
                     "sprint:start":  "node scripts/git-safety.js start",
                     "sprint:sync":  "node scripts/git-safety.js sync",
@@ -15,6 +11,9 @@
                     "sprint:push":  "node scripts/git-safety.js push",
                     "git:hooks":  "node scripts/install-git-hooks.js",
                     "test:sprint7-deep-audit":  "node backend/tests/test_sprint7_deep_audit.js",
+                    "test:full-system-deep-audit":  "node backend/tests/test_full_system_deep_audit.js",
+                    "test:requisition-audit":  "node backend/tests/test_requisition_headcount_approval_audit.js",
+                    "test:concurrency-security-audit":  "node backend/tests/test_concurrency_security_audit.js",
                     "test:git-safety":  "node backend/tests/test_git_safety.js",
                     "start:local":  "node backend/src/start-local.js",
                     "test:browser-e2e":  "node backend/tests/run_browser_e2e.js",
@@ -81,6 +80,7 @@
                     "migrate:s3-08-09":  "node backend/src/db/migrate-requisition-tracking-job-drafts.js",
                     "test:s3-08":  "node backend/tests/test_s3_08_09.js s3-08",
                     "test:s3-09":  "node backend/tests/test_s3_08_09.js s3-09",
+                    "test:s3-02-s3-08-ui-audit":  "node backend/tests/test_s3_02_s3_08_ui_audit.js",
                     "migrate:s3-10":  "node backend/src/db/migrate-job-publication.js",
                     "test:s3-10":  "node backend/tests/test_s3_10.js",
                     "test:s3-10:pg-live":  "node backend/tests/test_s3_10_pg_live.js",
@@ -147,7 +147,11 @@
                     "migrate:s7-08":  "node backend/src/db/migrate-onboarding-checklists.js",
                     "test:s7-08":  "node backend/tests/test_s7_08_onboarding.js",
                     "migrate:s7-09":  "node backend/src/db/migrate-bulk-candidate-communications.js",
-                    "test:s7-09":  "node backend/tests/test_s7_09_bulk_communications.js"
+                    "test:s7-09":  "node backend/tests/test_s7_09_bulk_communications.js",
+                    "test:sla-security":  "node backend/tests/test_sla_security.js",
+                    "test:e2e213-reports":  "node backend/tests/test_e2e213_reports.js",
+                    "test:e2e213-interview-integration":  "node backend/tests/test_e2e213_bulk_invitation_integration.js",
+                    "test:candidate-quick-rating":  "node backend/tests/test_candidate_quick_rating.js"
                 },
     "keywords":  [
                      "ats",

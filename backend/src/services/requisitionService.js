@@ -64,6 +64,12 @@ class RequisitionService {
         r.code,
         r.title,
         r.job_title_id,
+        jt.code AS job_title_code,
+        jt.name AS job_title_name,
+        jt.level AS job_title_level,
+        jt.framework_id,
+        cf.code AS framework_code,
+        cf.name AS framework_name,
         r.department_id,
         r.department_name,
         r.work_location_id,
@@ -87,6 +93,8 @@ class RequisitionService {
       FROM requisitions r
       LEFT JOIN users hm ON r.hiring_manager_id = hm.id
       LEFT JOIN users rec ON r.recruiter_id = rec.id
+      LEFT JOIN job_titles jt ON r.job_title_id = jt.id
+      LEFT JOIN competency_frameworks cf ON jt.framework_id = cf.id
       ${tracking?'LEFT JOIN requisition_lifecycle_state ls ON ls.requisition_id=r.id LEFT JOIN requisition_lifecycle_events le ON le.id=ls.last_event_id':''}
       ${whereClause}
       ORDER BY r.handover_required DESC, r.created_at DESC${tracking?',r.id':''}
@@ -104,6 +112,12 @@ class RequisitionService {
       code: r.code,
       title: r.title,
       jobTitleId: r.job_title_id || null,
+      jobTitleCode: r.job_title_code || null,
+      jobTitleName: r.job_title_name || null,
+      jobTitleLevel: r.job_title_level || null,
+      frameworkId: r.framework_id || null,
+      frameworkCode: r.framework_code || null,
+      frameworkName: r.framework_name || null,
       departmentId: r.department_id || null,
       departmentName: r.department_name,
       workLocationId: r.work_location_id || null,
@@ -387,10 +401,14 @@ class RequisitionService {
         r.proposed_salary_min, r.proposed_salary_max, r.needed_date,
         r.job_description, r.candidate_requirements, r.salary_justification,
         r.recruiter_id, rec.full_name AS recruiter_name, rec.email AS recruiter_email,
-        r.hiring_manager_id, hm.full_name AS hiring_manager_name, hm.email AS hiring_manager_email
+        r.hiring_manager_id, hm.full_name AS hiring_manager_name, hm.email AS hiring_manager_email,
+        jt.code AS job_title_code, jt.name AS job_title_name, jt.level AS job_title_level,
+        jt.framework_id, cf.code AS framework_code, cf.name AS framework_name
       FROM requisitions r
       LEFT JOIN users hm ON r.hiring_manager_id = hm.id
       LEFT JOIN users rec ON r.recruiter_id = rec.id
+      LEFT JOIN job_titles jt ON r.job_title_id = jt.id
+      LEFT JOIN competency_frameworks cf ON jt.framework_id = cf.id
       WHERE r.id = ?
     `);
     const r = (await stmt.get(id));
@@ -400,6 +418,12 @@ class RequisitionService {
       code: r.code,
       title: r.title,
       jobTitleId: r.job_title_id || null,
+      jobTitleCode: r.job_title_code || null,
+      jobTitleName: r.job_title_name || null,
+      jobTitleLevel: r.job_title_level || null,
+      frameworkId: r.framework_id || null,
+      frameworkCode: r.framework_code || null,
+      frameworkName: r.framework_name || null,
       departmentId: r.department_id || null,
       departmentName: r.department_name,
       workLocationId: r.work_location_id || null,

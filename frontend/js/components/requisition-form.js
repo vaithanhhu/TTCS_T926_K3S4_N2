@@ -70,7 +70,7 @@
     requisitionSalaryCheck = { key: null, status: null, message: '' };
     requisitionSalaryCheckRevision++;
     requisitionOptionsRevision++;
-    for (const id of ['create-req-salary-min-input', 'create-req-salary-max-input', 'create-req-justification-input']) {
+    for (const id of ['create-req-salary-min-input', 'create-req-salary-max-input', 'create-req-justification-input', 'create-req-framework-input']) {
       const node = document.getElementById(id); if (node) node.value = '';
     }
     for (const id of ['create-req-standard-salary', 'create-req-salary-warning']) {
@@ -81,6 +81,8 @@
 
   function updateRequisitionSalaryHint() {
     const job = requisitionJobTitles.find(item => item.id === createReqJobTitleSelect?.value);
+    const frameworkNode = document.getElementById('create-req-framework-input');
+    if (frameworkNode) frameworkNode.value = job?.frameworkName ? (job.frameworkCode ? `${job.frameworkCode} — ${job.frameworkName}` : job.frameworkName) : (job ? 'Chưa gắn khung năng lực' : '');
     const min = document.getElementById('create-req-salary-min-input').value;
     const max = document.getElementById('create-req-salary-max-input').value;
     const known = job && job.minSalary !== null && job.maxSalary !== null && job.minSalary !== undefined && job.maxSalary !== undefined;
