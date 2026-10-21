@@ -469,36 +469,77 @@ async function runTests() {
   });
 
   test('TC02: Reschedule automatically revokes old invitation tokens and creates fresh token/outbox entry', async () => {
-    const db = createSqliteDb();
-    await bootstrapSqlite(db);
-    await seedFixture(db);
-    const service = new RequisitionService(db);
-    const invService = new InterviewInvitationService(db);
+    for (const provider of ['sqlite', 'postgres']) {
+      const db = provider === 'sqlite' ? createSqliteDb() : await createPgliteDb();
+      const NativeDate = Date;
+      try {
+        await (provider === 'sqlite' ? bootstrapSqlite(db) : bootstrapPglite(db));
+        await seedFixture(db);
+        // Reproduce fast CI runs: both invitations share the same millisecond.
+        // created_at alone does not define which outbox entry is the current one.
+        const now = NativeDate.now();
+        global.Date = class extends NativeDate {
+          constructor(...args) { super(...(args.length ? args : [now])); }
+          static now() { return now; }
+          static [Symbol.hasInstance](value) { return value instanceof NativeDate; }
+        };
+        const service = new RequisitionService(db);
+        const invService = new InterviewInvitationService(db);
 
-    const oldInv = await invService.createInvitation('int-301');
-    const newTime = new Date(Date.now() + 86400000 * 4).toISOString();
-    await service.updateInterviewSchedule('int-301', {
-      scheduledTime: newTime,
-      durationMinutes: 60,
-      interviewFormat: 'ONLINE',
-      meetingLink: 'https://meet.google.com/new-link-test',
-      interviewerIds: ['u-int-1'],
-      rescheduleReason: 'Đổi sang hình thức trực tuyến'
-    }, { id: 'u-rec-1' });
+        const oldInv = await invService.createInvitation('int-301');
+        assert.equal(oldInv.success, true);
+        const oldDelivery = await db.prepare("SELECT outbox_id FROM interview_invitation_deliveries WHERE interview_id='int-301'").get();
+        assert.ok(oldDelivery);
+        const newTime = new Date(Date.now() + 86400000 * 4).toISOString();
+        const rescheduled = await service.updateInterviewSchedule('int-301', {
+          scheduledTime: newTime,
+          durationMinutes: 60,
+          interviewFormat: 'ONLINE',
+          meetingLink: 'https://meet.google.com/new-link-test',
+          interviewerIds: ['u-int-1'],
+          rescheduleReason: 'Đổi sang hình thức trực tuyến'
+        }, { id: 'u-rec-1' });
+        assert.equal(rescheduled.success, true);
+        const interview = await db.prepare("SELECT meeting_link, scheduled_time, candidate_response_status FROM interviews WHERE id='int-301'").get();
+        assert.equal(interview.meeting_link, 'https://meet.google.com/new-link-test');
+        assert.equal(new NativeDate(interview.scheduled_time).toISOString(), newTime);
+        assert.equal(interview.candidate_response_status, 'PENDING');
 
-    const oldTokenRow = await db.prepare('SELECT status FROM interview_invitation_tokens WHERE token_hash=?').get(oldInv.tokenHash);
-    assert.equal(oldTokenRow.status, 'REVOKED');
+        const oldTokenRow = await db.prepare('SELECT status FROM interview_invitation_tokens WHERE token_hash=?').get(oldInv.tokenHash);
+        assert.equal(oldTokenRow.status, 'REVOKED');
 
-    const oldResponse = await invService.respondToInvitation(oldInv.token, { action: 'CONFIRM' });
-    assert.equal(oldResponse.success, false);
-    assert.equal(oldResponse.code, 'TOKEN_REVOKED');
+        const oldResponse = await invService.respondToInvitation(oldInv.token, { action: 'CONFIRM' });
+        assert.equal(oldResponse.success, false);
+        assert.equal(oldResponse.code, 'TOKEN_REVOKED');
 
-    const activeTokens = await db.prepare("SELECT token_hash FROM interview_invitation_tokens WHERE interview_id='int-301' AND status='ACTIVE'").all();
-    assert.equal(activeTokens.length, 1);
+        const activeTokens = await db.prepare("SELECT token_hash FROM interview_invitation_tokens WHERE interview_id='int-301' AND status='ACTIVE'").all();
+        assert.equal(activeTokens.length, 1);
+        assert.notEqual(activeTokens[0].token_hash, oldInv.tokenHash);
 
-    const outboxRows = await db.prepare("SELECT subject, body_text FROM email_outbox WHERE recipient='minhanh@example.com' ORDER BY created_at DESC").all();
-    assert.ok(outboxRows.length >= 2);
-    assert.ok(outboxRows[0].body_text.includes('https://meet.google.com/new-link-test'));
+        const outboxRows = await db.prepare("SELECT id, created_at FROM email_outbox WHERE recipient='minhanh@example.com' AND template_name='S605_INTERVIEW_INVITATION'").all();
+        assert.equal(outboxRows.length, 2);
+        assert.ok(outboxRows.some(row => row.id === oldDelivery.outbox_id));
+        assert.equal(new NativeDate(outboxRows[0].created_at).getTime(), new NativeDate(outboxRows[1].created_at).getTime());
+        const delivery = await db.prepare(`SELECT o.id, o.recipient, o.body_text, o.body_html, o.status, d.state, d.attempts
+          FROM interview_invitation_deliveries d JOIN email_outbox o ON o.id=d.outbox_id
+          WHERE d.interview_id='int-301' AND o.template_name='S605_INTERVIEW_INVITATION'`).get();
+        assert.ok(delivery);
+        assert.notEqual(delivery.id, oldDelivery.outbox_id);
+        assert.equal(delivery.recipient, 'minhanh@example.com');
+        assert.equal(delivery.status, 'PENDING');
+        assert.equal(delivery.state, 'PENDING');
+        assert.equal(Number(delivery.attempts), 0);
+        for (const body of [delivery.body_text, delivery.body_html]) {
+          assert.ok(body.includes('https://meet.google.com/new-link-test'));
+          const token = body.match(/\/interviews\/invitation\?token=([a-f0-9]{64})/);
+          assert.ok(token, 'Current invitation email must contain a response token');
+          assert.equal(crypto.createHash('sha256').update(token[1]).digest('hex'), activeTokens[0].token_hash);
+        }
+      } finally {
+        global.Date = NativeDate;
+        await db.close();
+      }
+    }
   });
 
   test('TC03: Reschedule detects resource conflicts with overlapping interviews and supports override', async () => {
