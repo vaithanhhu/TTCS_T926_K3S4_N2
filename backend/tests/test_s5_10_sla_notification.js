@@ -26,7 +26,9 @@ function setupDatabase() {
       id TEXT PRIMARY KEY,
       email TEXT UNIQUE NOT NULL,
       full_name TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'ACTIVE'
+      status TEXT NOT NULL DEFAULT 'ACTIVE',
+      locked_until TEXT,
+      must_change_password INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE TABLE roles (
@@ -40,6 +42,9 @@ function setupDatabase() {
       role_id TEXT NOT NULL,
       PRIMARY KEY (user_id, role_id)
     );
+
+    CREATE TABLE permissions(id TEXT PRIMARY KEY, code TEXT UNIQUE NOT NULL);
+    CREATE TABLE role_permissions(role_id TEXT NOT NULL REFERENCES roles(id),permission_id TEXT NOT NULL REFERENCES permissions(id),PRIMARY KEY(role_id,permission_id));
 
     CREATE TABLE requisitions (
       id TEXT PRIMARY KEY,
@@ -84,7 +89,7 @@ function setupDatabase() {
     );
   `);
 
-  return db;
+  return require('../src/db/postgres').sqliteBoundary(db);
 }
 
 async function runTestSuite() {
@@ -133,6 +138,8 @@ async function runTestSuite() {
   const candActor = { id: 'cand-user-1', email: 'candidate@example.com', roles: ['CANDIDATE'] };
 
   // Khởi tạo service
+  db.exec("INSERT INTO permissions(id,code) VALUES('candidate-read','candidate.read'),('candidate-update','candidate.update'); INSERT INTO role_permissions(role_id,permission_id) VALUES('role-recruiter','candidate-read'),('role-recruiter','candidate-update');");
+  require('../src/config/config').REQUISITION_OPERATIONS_ENABLED = true;
   const slaService = new SlaNotificationService(db);
 
   // Mốc thời gian thử nghiệm: 2026-10-16 12:00:00Z

@@ -8,9 +8,13 @@
               </div>
               <p>Quản lý bộ tiêu chí đánh giá, trọng số và khung năng lực dùng chung cho nhiều chức danh</p>
             </div>
+            <div class="management-create-actions">
+              <button type="button" id="competency-framework-new-btn" class="btn btn-primary btn-sm hidden">Thêm khung năng lực</button>
+              <button type="button" id="job-title-new-btn" class="btn btn-primary btn-sm hidden">Thêm chức danh</button>
+            </div>
           </div>
 
-          <div style="display: grid; grid-template-columns: minmax(360px, 1fr) minmax(380px, 1fr); gap: var(--space-4); align-items: start;">
+          <div class="management-list-layout">
             <div class="panel-card">
               <div class="panel-header">
                 <div class="panel-title">
@@ -25,14 +29,14 @@
               </div>
             </div>
 
-            <div class="panel-card">
-              <div class="panel-header">
-                <div class="panel-title">
-                  <span id="competency-framework-form-title">Thêm khung năng lực</span>
+            <div id="competency-framework-modal" class="modal-overlay management-modal hidden" role="dialog" aria-modal="true" aria-labelledby="competency-framework-form-title">
+              <div class="modal-card">
+                <div class="modal-header">
+                  <h3 id="competency-framework-form-title" class="modal-title">Thêm khung năng lực</h3>
+                  <button type="button" class="modal-close" data-close-management-modal="competency-framework-modal" aria-label="Đóng">&times;</button>
                 </div>
-              </div>
-
-              <form id="competency-framework-form" style="padding: 16px;">
+                <div class="modal-body">
+                  <form id="competency-framework-form">
                 <input type="hidden" id="competency-framework-id-input" />
 
                 <div class="form-group">
@@ -111,6 +115,7 @@
                     Làm mới
                   </button>
 
+                  <button type="button" class="btn btn-outline btn-sm" data-close-management-modal="competency-framework-modal">Hủy</button>
                   <button
                     type="submit"
                     id="competency-framework-save-btn"
@@ -120,10 +125,12 @@
                   </button>
                 </div>
               </form>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div style="display: grid; grid-template-columns: minmax(360px, 1fr) minmax(380px, 1fr); gap: var(--space-4); align-items: start; margin-top: var(--space-4);">
+          <div class="management-list-layout">
             <div class="panel-card">
               <div class="panel-header">
                 <div class="panel-title">
@@ -138,14 +145,14 @@
               </div>
             </div>
 
-            <div class="panel-card">
-              <div class="panel-header">
-                <div class="panel-title">
-                  <span id="job-title-form-title">Thêm chức danh</span>
+            <div id="job-title-modal" class="modal-overlay management-modal hidden" role="dialog" aria-modal="true" aria-labelledby="job-title-form-title">
+              <div class="modal-card">
+                <div class="modal-header">
+                  <h3 id="job-title-form-title" class="modal-title">Thêm chức danh</h3>
+                  <button type="button" class="modal-close" data-close-management-modal="job-title-modal" aria-label="Đóng">&times;</button>
                 </div>
-              </div>
-
-              <form id="job-title-form" style="padding: 16px;">
+                <div class="modal-body">
+                  <form id="job-title-form">
                 <input type="hidden" id="job-title-id-input" />
 
                 <div class="form-group">
@@ -214,6 +221,7 @@
                     Làm mới
                   </button>
 
+                  <button type="button" class="btn btn-outline btn-sm" data-close-management-modal="job-title-modal">Hủy</button>
                   <button
                     type="submit"
                     id="job-title-save-btn"
@@ -223,6 +231,8 @@
                   </button>
                 </div>
               </form>
+                </div>
+              </div>
             </div>
           </div>
         </div>

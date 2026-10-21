@@ -790,12 +790,12 @@ class CandidateScreeningService {
     }
 
     if (options.filter === 'passed_only') {
-      conditions.push('sr.mandatory_pass = 1');
+      conditions.push(this.db.provider === 'postgres' ? 'sr.mandatory_pass = TRUE' : 'sr.mandatory_pass = 1');
     } else if (options.filter === 'failed_only') {
-      conditions.push('(sr.mandatory_pass = 0 OR sr.mandatory_pass IS NULL)');
+      conditions.push(this.db.provider === 'postgres' ? '(sr.mandatory_pass = FALSE OR sr.mandatory_pass IS NULL)' : '(sr.mandatory_pass = 0 OR sr.mandatory_pass IS NULL)');
     }
 
-    let orderBy = 'COALESCE(sr.fit_score, 0) DESC, COALESCE(sr.mandatory_pass, 0) DESC, c.created_at DESC';
+    let orderBy = this.db.provider === 'postgres' ? 'COALESCE(sr.fit_score, 0) DESC, COALESCE(sr.mandatory_pass, FALSE) DESC, c.created_at DESC' : 'COALESCE(sr.fit_score, 0) DESC, COALESCE(sr.mandatory_pass, 0) DESC, c.created_at DESC';
     if (options.sortBy === 'created_at_desc') {
       orderBy = 'c.created_at DESC';
     }

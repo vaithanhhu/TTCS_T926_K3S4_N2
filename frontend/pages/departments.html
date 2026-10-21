@@ -13,7 +13,7 @@
             </button>
           </div>
 
-          <div class="department-workspace">
+          <div class="department-workspace management-list-layout">
             <div class="panel-card">
               <div class="panel-header">
                 <div class="panel-title">
@@ -28,14 +28,14 @@
               </div>
             </div>
 
-            <div class="panel-card">
-              <div class="panel-header">
-                <div class="panel-title">
-                  <span id="department-form-title">Thêm phòng ban</span>
+            <div id="department-modal" class="modal-overlay management-modal hidden" role="dialog" aria-modal="true" aria-labelledby="department-form-title">
+              <div class="modal-card">
+                <div class="modal-header">
+                  <h3 id="department-form-title" class="modal-title">Thêm phòng ban</h3>
+                  <button type="button" class="modal-close" data-close-management-modal="department-modal" aria-label="Đóng">&times;</button>
                 </div>
-              </div>
-
-              <form id="department-form" style="padding: 16px;">
+                <div class="modal-body">
+                  <form id="department-form">
                 <input type="hidden" id="department-id-input" />
 
                 <div class="form-group">
@@ -87,6 +87,7 @@
                 </div>
 
                 <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
+                  <button type="button" class="btn btn-outline btn-sm" data-close-management-modal="department-modal">Hủy</button>
                   <button type="button" id="department-reset-btn" class="btn btn-outline btn-sm">
                     Làm mới
                   </button>
@@ -96,6 +97,8 @@
                   </button>
                 </div>
               </form>
+                </div>
+              </div>
             </div>
           </div>
         </div>

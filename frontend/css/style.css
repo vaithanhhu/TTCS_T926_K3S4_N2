@@ -1221,6 +1221,20 @@ button, input, select, textarea {
 /* Corporate Data Tables */
 .department-workspace { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr); gap: var(--space-4); align-items: start; }
 .department-workspace > .panel-card { min-width: 0; }
+.management-list-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); margin-bottom: var(--space-4); }
+.department-workspace.management-list-layout { grid-template-columns: minmax(0, 1fr); }
+.management-create-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.management-modal .modal-card { max-width: 720px; max-height: 90dvh; }
+.management-modal .modal-header { flex-shrink: 0; gap: 16px; }
+.management-modal .modal-body { min-height: 0; overscroll-behavior: contain; }
+.management-modal form > div:last-child { flex-wrap: wrap; }
+.management-modal input, .management-modal select, .management-modal textarea { min-width: 0; }
+@media (max-width: 480px) {
+  .management-modal { padding: 8px; }
+  .management-modal .modal-card { max-height: calc(100dvh - 16px); }
+  .management-modal .modal-header, .management-modal .modal-body { padding: 12px; }
+  .management-modal .competency-criterion-row { grid-template-columns: minmax(0, 1fr) 80px auto !important; }
+}
 @media (max-width: 900px) {
   .department-workspace { grid-template-columns: minmax(0, 1fr); }
 }

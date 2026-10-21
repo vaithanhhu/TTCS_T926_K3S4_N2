@@ -102,11 +102,18 @@ class BulkInterviewService {
           interviews.push(result.data);
           await this.db.prepare('INSERT INTO interview_batch_items(batch_id,interview_id,candidate_id) VALUES(?,?,?)').run(batchId,result.id,slot.candidateId);
           const candidate=plan.candidates.find(row=>row.id===slot.candidateId);
-          const recipient=candidate.email.trim(),outboxId='invite-'+digest([result.id,recipient.toLowerCase(),'INTERVIEW_INVITATION']);
+          const existingDelivery=await this.db.prepare('SELECT d.outbox_id,o.body_text,o.body_html FROM interview_invitation_deliveries d JOIN email_outbox o ON o.id=d.outbox_id WHERE d.interview_id=?').get(result.id);
+          const recipient=candidate.email.trim(),outboxId=existingDelivery?.outbox_id || 'invite-'+digest([result.id,recipient.toLowerCase(),'INTERVIEW_INVITATION']);
           const date=value=>new Date(value).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',hour12:false});
           const text=`Xin chào ${candidate.full_name},\nVị trí: ${plan.requisition.title}\nVòng: ${config.roundName}\nThời gian: ${date(slot.start)} – ${date(slot.end)} (Asia/Ho_Chi_Minh)\nHình thức: ${config.interviewFormat}\n${config.interviewFormat==='ONLINE'?config.meetingLink:config.meetingRoom}`;
-          await this.db.prepare("INSERT INTO email_outbox(id,recipient,subject,body_html,body_text,template_name,status) VALUES(?,?,?,?,?,?,'PENDING')").run(outboxId,recipient,'[ATS] Lời mời phỏng vấn',`<p>${escapeEmailHtml(text).replace(/\n/g,'<br>')}</p>`,text,'S603_INTERVIEW_INVITATION');
-          await this.db.prepare("INSERT INTO interview_invitation_deliveries(outbox_id,interview_id,state,updated_at) VALUES(?,?,'PENDING',?)").run(outboxId,result.id,new Date().toISOString());
+          const invitationText=existingDelivery?existingDelivery.body_text+'\n'+text:text;
+          const html=(existingDelivery?.body_html || '')+`<p>${escapeEmailHtml(text).replace(/\n/g,'<br>')}</p>`;
+          if(existingDelivery){
+            await this.db.prepare('UPDATE email_outbox SET recipient=?,subject=?,body_html=?,body_text=?,template_name=? WHERE id=?').run(recipient,'[ATS] Lời mời phỏng vấn',html,invitationText,'S603_INTERVIEW_INVITATION',outboxId);
+          }else{
+            await this.db.prepare("INSERT INTO email_outbox(id,recipient,subject,body_html,body_text,template_name,status) VALUES(?,?,?,?,?,?,'PENDING')").run(outboxId,recipient,'[ATS] Lời mời phỏng vấn',html,invitationText,'S603_INTERVIEW_INVITATION');
+            await this.db.prepare("INSERT INTO interview_invitation_deliveries(outbox_id,interview_id,state,updated_at) VALUES(?,?,'PENDING',?)").run(outboxId,result.id,new Date().toISOString());
+          }
         }
         const result={success:true,statusCode:201,batchId,interviews};
         await this.db.prepare('UPDATE interview_batches SET result_json=? WHERE id=?').run(JSON.stringify(result),batchId);

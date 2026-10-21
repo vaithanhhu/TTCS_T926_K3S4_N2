@@ -1,5 +1,6 @@
 const crypto = require('node:crypto');
 const { getDatabase } = require('../db/database');
+const { escapeEmailHtml } = require('./emailService');
 const candidateStages = Object.freeze(['NEW', 'APPLIED', 'SCREENING', 'INTERVIEW', 'OFFER', 'HIRED', 'ONBOARDED', 'REJECTED']);
 
 class RequisitionService {
@@ -1217,9 +1218,11 @@ class RequisitionService {
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
+    const ratingColumn = await require('../db/migrate-candidate-quick-rating').hasColumn(this.db);
     const stmt = this.db.prepare(`
       SELECT
         CASE WHEN ${internalScope ? internalScope.condition : '1=1'} THEN 1 ELSE 0 END AS in_internal_scope,
+        ${ratingColumn ? 'c.rating' : 'NULL'} AS rating,
         c.id,
         c.full_name,
         c.email,
@@ -1279,6 +1282,7 @@ class RequisitionService {
         return {
           id: r.id,
           code,
+          ...(ratingColumn ? { rating: r.rating === null ? null : Number(r.rating) } : {}),
           fullName: r.full_name,
           email: r.email,
           phoneNumber: r.phone_number,
@@ -1770,22 +1774,71 @@ class RequisitionService {
   }
 
   async getReports(options = {}) {
-    const stats = (await this.getDashboardStats(options));
-    return {
-      success: true,
-      report: {
-        summary: stats.stats,
-        pipelineFunnel: [
-          { stage: 'Ứng tuyển mới', count: stats.stats.candidates.new || 0, percent: 100 },
-          { stage: 'Sàng lọc hồ sơ', count: stats.stats.candidates.screening || 0, percent: 80 },
-          { stage: 'Phỏng vấn', count: stats.stats.candidates.interview || 0, percent: 50 },
-          { stage: 'Đề xuất Offer', count: stats.stats.candidates.offer || 0, percent: 30 },
-          { stage: 'Tuyển dụng thành công', count: stats.stats.candidates.hired || 0, percent: 20 }
-        ],
-        timeToHireAverageDays: 18,
-        costPerHireAverageVnd: '12.500.000 đ'
-      }
+    const actor=await new(require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(options.viewer?.id,'report.read');
+    if(!actor)return{success:false,statusCode:403,code:'REPORT_FORBIDDEN'};
+    const scoped={...options,viewer:actor},stats=await this.getDashboardStats(scoped);
+    const requests=(await this.getRequisitions(scoped)).items.filter(row=>row.status!=='DRAFT'||row.createdBy===actor.id);
+    const requestIds=new Set(requests.map(row=>row.id));
+    let candidates=(await this.getCandidates({viewer:actor})).candidates.filter(row=>requestIds.has(row.requisition?.id)&&typeof row.stage==='string');
+    const columns=async table=>(await this.db.prepare(this.db.provider==='postgres'
+      ? 'SELECT column_name AS name FROM information_schema.columns WHERE table_schema=current_schema() AND table_name=?'
+      : 'PRAGMA table_info('+table+')').all(...(this.db.provider==='postgres'?[table]:[]))).map(row=>row.name);
+    const candidateColumns=await columns('candidates');
+    if(candidates.length&&candidateColumns.includes('merged_into_id')){
+      const hidden=await this.db.prepare('SELECT id FROM candidates WHERE id IN ('+candidates.map(()=>'?').join(',')+') AND merged_into_id IS NOT NULL').all(...candidates.map(row=>row.id));
+      const ids=new Set(hidden.map(row=>row.id));candidates=candidates.filter(row=>!ids.has(row.id));
+    }
+    const offerColumns=await columns('offers'),postingColumns=await columns('job_postings');
+    const idList=candidates.map(row=>row.id),reqList=[...requestIds];
+    const offers=idList.length&&['sent_at','responded_at'].every(name=>offerColumns.includes(name))
+      ?await this.db.prepare('SELECT candidate_id,requisition_id,status,sent_at,responded_at FROM offers WHERE candidate_id IN ('+idList.map(()=>'?').join(',')+') AND (requisition_id IS NULL OR requisition_id IN ('+reqList.map(()=>'?').join(',')+'))').all(...idList,...reqList):[];
+    const postings=reqList.length&&postingColumns.includes('published_at')
+      ?await this.db.prepare('SELECT requisition_id,published_at FROM job_postings WHERE requisition_id IN ('+reqList.map(()=>'?').join(',')+') AND published_at IS NOT NULL').all(...reqList):[];
+    const eventColumns=await columns('job_posting_publication_events');
+    if(reqList.length&&['posting_id','action','created_at'].every(name=>eventColumns.includes(name))){
+      postings.push(...await this.db.prepare('SELECT p.requisition_id,e.created_at AS published_at FROM job_posting_publication_events e JOIN job_postings p ON p.id=e.posting_id WHERE p.requisition_id IN ('+reqList.map(()=>'?').join(',')+') AND e.action=?').all(...reqList,'PUBLISH'));
+    }
+    const stamp=value=>{
+      if(value===null||value===undefined)return NaN;
+      const text=String(value),normalized=/^\d{4}-\d\d-\d\d[ T]\d\d:\d\d:\d\d(?:\.\d+)?$/.test(text)?text.replace(' ','T')+'Z':text;
+      return Date.parse(normalized);
     };
+    const firstPublished=new Map();
+    for(const row of postings){const time=stamp(row.published_at);if(Number.isFinite(time)&&(!firstPublished.has(row.requisition_id)||time<firstPublished.get(row.requisition_id)))firstPublished.set(row.requisition_id,time);}
+    const candidateRequests=new Map(candidates.map(row=>[row.id,row.requisition.id]));
+    for(const row of offers)if(!row.requisition_id)row.requisition_id=candidateRequests.get(row.candidate_id);
+    const issued=offers.filter(row=>row.sent_at),accepted=issued.filter(row=>row.status==='ACCEPTED');
+    const durations=accepted.map(row=>(stamp(row.responded_at)-firstPublished.get(row.requisition_id))/86400000).filter(value=>Number.isFinite(value)&&value>=0);
+    const rounded=value=>Math.round(value*100)/100;
+    const rate=(part,total)=>total?rounded(part*100/total):null;
+    const sources=new Map(),rejections=new Map(),departments=new Map();
+    for(const row of requests){const name=row.departmentName||'Chưa phân loại',group=departments.get(name)||{departmentName:name,totalPositions:0,totalHeadcount:0,totalCandidates:0,hiredCount:0};group.totalPositions++;group.totalHeadcount+=Number(row.headcount)||0;departments.set(name,group);}
+    const hired=row=>['HIRED','ONBOARDED'].includes(row.stage);
+    for(const row of candidates){
+      const name=row.sourceName||'Chưa phân loại',source=sources.get(name)||{source:name,applications:0,hired:0};source.applications++;if(hired(row))source.hired++;sources.set(name,source);
+      if(row.stage==='REJECTED'){const reason=row.rejectionReasonName||'Chưa ghi nhận',group=rejections.get(reason)||{reason,count:0};group.count++;rejections.set(reason,group);}
+      const department=departments.get(row.requisition.departmentName||'Chưa phân loại');if(department){department.totalCandidates++;if(hired(row))department.hiredCount++;}
+    }
+    const pipeline=[['NEW','Ứng tuyển mới'],['SCREENING','Sàng lọc hồ sơ'],['INTERVIEW','Phỏng vấn'],['OFFER','Đề xuất Offer'],['HIRED','Tuyển dụng thành công']].map(([code,stage])=>{const count=candidates.filter(row=>code==='NEW'?['NEW','APPLIED'].includes(row.stage):code==='HIRED'?hired(row):row.stage===code).length;return{code,stage,count,percent:rate(count,candidates.length)};});
+    const historyColumns=await columns('candidate_status_history');
+    const history=idList.length&&['before_stage','after_stage','candidate_id'].every(name=>historyColumns.includes(name))
+      ?await this.db.prepare('SELECT candidate_id,before_stage,after_stage FROM candidate_status_history WHERE candidate_id IN ('+idList.map(()=>'?').join(',')+')').all(...idList):[];
+    const normalize=stage=>stage==='APPLIED'?'NEW':stage==='ONBOARDED'?'HIRED':stage;
+    for(let index=0;index<pipeline.length;index++){
+      const row=pipeline[index];
+      if(index===0){row.conversionFromPrevious=rate(candidates.length,candidates.length);continue;}
+      const previous=pipeline[index-1].code,entered=new Set(candidates.filter(candidate=>normalize(candidate.stage)===previous).map(candidate=>candidate.id));
+      for(const event of history)if([normalize(event.before_stage),normalize(event.after_stage)].includes(previous))entered.add(event.candidate_id);
+      const converted=new Set(history.filter(event=>normalize(event.before_stage)===previous&&normalize(event.after_stage)===row.code).map(event=>event.candidate_id));
+      row.observedPreviousStage=entered.size;row.observedTransitions=converted.size;row.conversionFromPrevious=history.length?rate(converted.size,entered.size):null;
+    }
+    const average=durations.length?rounded(durations.reduce((sum,value)=>sum+value,0)/durations.length):null;
+    const month=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Ho_Chi_Minh',year:'numeric',month:'2-digit'}).format(new Date());
+    const hiredCount=candidates.filter(hired).length,totalHeadcount=requests.reduce((sum,row)=>sum+(Number(row.headcount)||0),0);
+    const kpis={avgTimeToHireDays:average,offerAcceptanceRate:rate(accepted.length,issued.length),fillRatePercent:rate(hiredCount,totalHeadcount),newCandidatesThisMonth:candidates.filter(row=>Number.isFinite(stamp(row.createdAt))&&new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Ho_Chi_Minh',year:'numeric',month:'2-digit'}).format(new Date(stamp(row.createdAt)))===month).length};
+    const current=await new(require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(actor.id,'report.read');
+    if(!current)return{success:false,statusCode:403,code:'REPORT_FORBIDDEN'};
+    return{success:true,report:{summary:stats.stats,kpis,pipelineFunnel:pipeline,timeToHireAverageDays:average,timeToHireSampleCount:durations.length,acceptedWithoutPublicationCount:accepted.length-durations.length,costPerHireAverageVnd:null,sourceEffectiveness:[...sources.values()].map(row=>({...row,hiredPercent:rate(row.hired,row.applications)})),rejectionReasons:[...rejections.values()],departmentPerformance:[...departments.values()].map(row=>({...row,completionRate:rate(row.hiredCount,row.totalHeadcount)})),dataAvailability:{offerDelivery:offerColumns.includes('sent_at')&&offerColumns.includes('responded_at'),publication:postingColumns.includes('published_at'),historicalStageConversion:history.length>0},metricDefinitions:{timeToHire:'first recorded publication to accepted offer; missing dates excluded',pipelinePercent:'current stage applications / all scoped applications',historicalStageConversion:'distinct recorded adjacent transitions / distinct scoped profiles observed at previous stage; missing legacy history is not inferred'}}};
   }
 
   async validateCandidateCatalog(id, expectedType) {
@@ -1823,12 +1876,27 @@ class RequisitionService {
       : { success: false, statusCode: 400, code: 'INVALID_CANDIDATE_STAGE', message: 'Giai đoạn không hợp lệ.' };
   }
 
+  async updateCandidateRating(id, rating, actor) {
+    return this.db.transaction(async () => {
+      const access = await this.candidateAccess(id, actor, 'candidate.update');
+      if (!access.success) return access;
+      if (rating !== null && (!Number.isInteger(rating) || rating < 1 || rating > 5)) {
+        return { success: false, statusCode: 400, code: 'INVALID_CANDIDATE_RATING', message: 'Điểm đánh giá phải là số nguyên từ 1 đến 5.' };
+      }
+      if (!await require('../db/migrate-candidate-quick-rating').hasColumn(this.db)) {
+        return { success: false, statusCode: 503, code: 'CANDIDATE_QUICK_RATING_MIGRATION_REQUIRED' };
+      }
+      await this.db.prepare('UPDATE candidates SET rating=? WHERE id=?').run(rating, id);
+      return { success: true, data: { id, rating } };
+    });
+  }
+
   async createCandidate(data = {},actor=null,withinTransaction=false) {
     const stage = data.stage || 'NEW';
     const stageValidation = this.validateCandidateStage(stage);
     if (!stageValidation.success) return stageValidation;
     if(!actor&&!withinTransaction)return this.db.transaction(()=>this.createCandidate(data,null,true));
-    if(actor)return this.db.transaction(async()=>{const fresh=await new(require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(actor.id,'candidate.create');if(!fresh)return{success:false,statusCode:403,code:'CANDIDATE_FORBIDDEN',message:'Bạn không có quyền tạo hồ sơ ứng viên.'};if(fresh.roles.every(role=>role==='CANDIDATE')||fresh.roles.includes('CANDIDATE')&&!fresh.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))&&typeof data.email==='string'&&data.email.trim().toLowerCase()===fresh.email.toLowerCase())data={...data,email:fresh.email,fullName:fresh.fullName,stage:'NEW',notes:null,rejectionReasonId:null};else if(!fresh.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))&&(!fresh.roles.includes('RECRUITER')||!await this.recruiterAssigned(data.requisitionId,fresh.id)))return{success:false,statusCode:403,code:'CANDIDATE_OUT_OF_SCOPE',message:'Chỉ được tạo ứng viên cho vị trí bạn đang được phân công.'};return this.createCandidate(data,null,true);});
+    if(actor)return this.db.transaction(async()=>{const fresh=await new(require('../middlewares/rbacMiddleware'))(this.db).getAuthorizedActor(actor.id,'candidate.create');if(!fresh)return{success:false,statusCode:403,code:'CANDIDATE_FORBIDDEN',message:'Bạn không có quyền tạo hồ sơ ứng viên.'};if(fresh.roles.every(role=>role==='CANDIDATE')||fresh.roles.includes('CANDIDATE')&&!fresh.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))&&typeof data.email==='string'&&data.email.trim().toLowerCase()===fresh.email.toLowerCase())data={...data,email:fresh.email,fullName:fresh.fullName,stage:'NEW',notes:null,rejectionReasonId:null,rating:null};else if(!fresh.roles.some(role=>['ADMIN','HR_MANAGER'].includes(role))&&(!fresh.roles.includes('RECRUITER')||!await this.recruiterAssigned(data.requisitionId,fresh.id)))return{success:false,statusCode:403,code:'CANDIDATE_OUT_OF_SCOPE',message:'Chỉ được tạo ứng viên cho vị trí bạn đang được phân công.'};return this.createCandidate(data,null,true);});
     const fullName = typeof data.fullName === 'string' ? data.fullName.trim() : '';
     const email = typeof data.email === 'string' ? data.email.trim() : '';
     const phoneNumber = typeof data.phoneNumber === 'string' ? data.phoneNumber.trim() : '';
@@ -1854,12 +1922,20 @@ class RequisitionService {
       return { success: false, statusCode: 400, message: 'Email ứng viên là bắt buộc.' };
     }
 
+    const rating = data.rating ?? null;
+    if (rating !== null && (!Number.isInteger(rating) || rating < 1 || rating > 5)) {
+      return { success: false, statusCode: 400, code: 'INVALID_CANDIDATE_RATING', message: 'Điểm đánh giá phải là số nguyên từ 1 đến 5.' };
+    }
+    if (rating !== null && !await require('../db/migrate-candidate-quick-rating').hasColumn(this.db)) {
+      return { success: false, statusCode: 503, code: 'CANDIDATE_QUICK_RATING_MIGRATION_REQUIRED', message: 'Chức năng lưu điểm đánh giá chưa sẵn sàng.' };
+    }
     const id = 'cand-' + crypto.randomUUID();
     const insertStmt = this.db.prepare(`
       INSERT INTO candidates (id, full_name, email, phone_number, requisition_id, source_id, stage, experience_years, current_company, expected_salary, notes, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
     `);
     (await insertStmt.run(id, fullName, email, phoneNumber, requisitionId, sourceId, stage, experienceYears, currentCompany, expectedSalary, notes));
+    if (rating !== null) await this.db.prepare('UPDATE candidates SET rating=? WHERE id=?').run(rating, id);
 
     return {
       success: true,
@@ -1957,7 +2033,7 @@ class RequisitionService {
     const action = async()=>{
       const rbac=new (require('../middlewares/rbacMiddleware'))(this.db);
       const permission=updateId?'interview.update':'interview.create';
-      const existing=updateId?await this.db.prepare('SELECT id,candidate_id,requisition_id,status,feedback,score FROM interviews WHERE id=?'+(this.db.provider==='postgres'?' FOR UPDATE':'')).get(updateId):null;
+      const existing=updateId?await this.db.prepare('SELECT id,candidate_id,requisition_id,round_name,status,feedback,score FROM interviews WHERE id=?'+(this.db.provider==='postgres'?' FOR UPDATE':'')).get(updateId):null;
       if(updateId&&!existing)return{success:false,statusCode:404,code:'INTERVIEW_NOT_FOUND'};
       if(updateId){
         if(existing.status==='COMPLETED'||existing.score!==null||existing.feedback!==null)return{success:false,statusCode:400,code:'INTERVIEW_ALREADY_EVALUATED',message:'Không thể dời lịch buổi phỏng vấn đã hoàn thành hoặc đã có đánh giá.'};
@@ -1966,7 +2042,7 @@ class RequisitionService {
           if (hasEval) return {success:false,statusCode:400,code:'INTERVIEW_ALREADY_EVALUATED',message:'Không thể dời lịch buổi phỏng vấn đã có đánh giá đã nộp.'};
         }
         if(existing.status==='CANCELLED')return{success:false,statusCode:400,code:'INTERVIEW_ALREADY_CANCELLED',message:'Không thể dời lịch buổi phỏng vấn đã bị hủy.'};
-        data={...data,candidateId:existing.candidate_id};
+        data={...data,candidateId:existing.candidate_id,roundName:data.roundName===undefined?existing.round_name:data.roundName};
       }
       if(!await rbac.getAuthorizedActor(actor.id,permission))return{success:false,statusCode:403,code:'FORBIDDEN_PERMISSION_DENIED',message:'Bạn không có quyền điều phối lịch phỏng vấn.'};
       const candidate=await this.db.prepare('SELECT id,requisition_id FROM candidates WHERE id=?'+(this.db.provider==='postgres' && !preview?' FOR UPDATE':'')).get(data.candidateId);
@@ -2102,6 +2178,7 @@ class RequisitionService {
     return this.db.transaction(async () => {
       if(data._updateId){
         const id=data._updateId,primaryInterviewerId=interviewerIds[0]||null,locationOrLink=data.locationOrLink||(interviewFormat==='IN_PERSON'?meetingRoom:meetingLink)||'Google Meet Online';
+        const previousPanel=await this.db.prepare('SELECT user_id FROM interview_interviewers WHERE interview_id=? UNION SELECT interviewer_id AS user_id FROM interviews WHERE id=?').all(id,id);
         const hasReschedCols = await this.hasCancelReschedCols();
         const rescheduleReason = typeof data.rescheduleReason === 'string' ? data.rescheduleReason.trim() : (typeof data.reason === 'string' ? data.reason.trim() : null);
         const hasResponseCols = await this.hasResponseCols();
@@ -2121,6 +2198,8 @@ class RequisitionService {
           const InvitationService = require('./interviewInvitationService');
           await new InvitationService(this.db).createInvitation(id);
         }
+
+        await this.#queuePanelScheduleNotification(id,previousPanel.map(row=>row.user_id),'RESCHEDULED',rescheduleReason);
 
         await this.recordCandidateStatusHistory({
           id: 'csh-' + crypto.randomUUID(),
@@ -2232,6 +2311,18 @@ class RequisitionService {
     });
   }
 
+  async #queuePanelScheduleNotification(id,previousIds,event,reason) {
+    if(!await this.hasEmailOutboxTable())return;
+    const interview=await this.db.prepare('SELECT i.interviewer_id,i.round_name,i.scheduled_time,i.location_or_link,c.full_name,r.title FROM interviews i JOIN candidates c ON c.id=i.candidate_id LEFT JOIN requisitions r ON r.id=COALESCE(i.requisition_id,c.requisition_id) WHERE i.id=?').get(id);
+    const panel=await this.hasInterviewSchedulingColumns()?await this.db.prepare('SELECT user_id FROM interview_interviewers WHERE interview_id=?').all(id):[];
+    const ids=[...new Set([...previousIds,...panel.map(row=>row.user_id),interview.interviewer_id].filter(Boolean))];
+    if(!ids.length)return;
+    const users=await this.db.prepare('SELECT email FROM users WHERE id IN ('+ids.map(()=>'?').join(',')+')').all(...ids);
+    const recipients=[...new Set(users.map(row=>row.email?.trim().toLowerCase()).filter(Boolean))];
+    const text=[event,interview.full_name,interview.title,interview.round_name,interview.scheduled_time,interview.location_or_link,reason].filter(Boolean).join('\n');
+    for(const recipient of recipients)await this.db.prepare("INSERT INTO email_outbox(id,recipient,subject,body_html,body_text,template_name,status) VALUES(?,?,?,?,?,?,'PENDING')").run('out-'+crypto.randomUUID(),recipient,'[ATS] Interview '+event,`<p>${escapeEmailHtml(text).replace(/\n/g,'<br>')}</p>`,text,'S606_PANEL_'+event);
+  }
+
   async cancelInterview(id, data = {}, actor = null) {
     if (!actor?.id) return { success: false, statusCode: 403, code: 'INTERVIEW_ACTOR_REQUIRED', message: 'Yêu cầu thông tin người thực hiện.' };
     return this.db.transaction(async () => {
@@ -2293,13 +2384,15 @@ class RequisitionService {
         const outboxId = 'out-' + crypto.randomUUID();
         const subject = `[Thông báo hủy] Lịch phỏng vấn vị trí ${requisitionTitle}`;
         const bodyText = `Kính gửi ${candidate.full_name},\n\nBuổi phỏng vấn vị trí ${requisitionTitle} (${existing.round_name}) dự kiến diễn ra lúc ${existing.scheduled_time} đã bị hủy.\nLý do: ${cancellationReason}\n\nBộ phận tuyển dụng xin lỗi vì sự bất tiện này.`;
-        const bodyHtml = `<p>Kính gửi <strong>${candidate.full_name}</strong>,</p><p>Chúng tôi rất tiếc phải thông báo buổi phỏng vấn vị trí <strong>${requisitionTitle}</strong> (${existing.round_name}) dự kiến lúc ${existing.scheduled_time} đã bị hủy.</p><p><strong>Lý do:</strong> ${cancellationReason}</p><p>Bộ phận tuyển dụng xin lỗi vì sự bất tiện này.</p>`;
+        const bodyHtml = `<p>${escapeEmailHtml(bodyText).replace(/\n/g,'<br>')}</p>`;
 
         await this.db.prepare(`
           INSERT INTO email_outbox (id, recipient, subject, body_html, body_text, template_name, status)
           VALUES (?, ?, ?, ?, ?, 'S606_INTERVIEW_CANCELLATION', 'PENDING')
         `).run(outboxId, candidate.email, subject, bodyHtml, bodyText);
       }
+
+      await this.#queuePanelScheduleNotification(id,[],'CANCELLED',cancellationReason);
 
       await this.recordCandidateStatusHistory({
         id: 'csh-' + crypto.randomUUID(),

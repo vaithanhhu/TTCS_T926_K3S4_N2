@@ -50,7 +50,7 @@ async function initializeApplication() {
   if (config.REQUISITION_LIFECYCLE_ENABLED) await require('./db/migrate-requisition-lifecycle').verify(db);
   if (config.REQUISITION_TRACKING_ENABLED || config.JOB_POSTING_DRAFTS_ENABLED) await require('./db/migrate-requisition-tracking-job-drafts').verify(db);
   if(config.JOB_POSTING_PUBLICATION_ENABLED)await require('./db/migrate-job-publication').verify(db);
-  if(config.CANDIDATE_PORTAL_ENABLED)await require('./db/migrate-candidate-portal').verify(db);
+  if(config.CANDIDATE_PORTAL_ENABLED){await require('./db/migrate-candidate-portal').verify(db);try{await require('./db/sync-permissions').synchronizeCandidatePortalPermissions(db);}catch{}}
   await require('./db/migrate-candidate-merges').migrate(db);
   if(db.provider==='sqlite')await require('./db/migrate-interview-conflict-override').migrate(db);
   if (!isTestEnv) {
@@ -242,7 +242,7 @@ async function handleRequest(req, res) {
     return;
   }
 
-  const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+  const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`); parsedUrl.query = Object.fromEntries(parsedUrl.searchParams.entries());
   const pathname = parsedUrl.pathname;
   const frontendPath = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
   if (frontendRoutes.has(frontendPath)) res.setHeader('Vary', 'Accept');
@@ -1700,7 +1700,7 @@ async function handleRequest(req, res) {
   }
 
   // 13.4.1 API: Get Single Requisition Details
-  if (req.method === 'GET' && (pathname.startsWith('/api/v1/requisitions/') || pathname.startsWith('/requisitions/')) && !pathname.endsWith('/handover') && !pathname.endsWith('/dashboard-stats')) {
+  if (req.method === 'GET' && /^\/(?:api\/v1\/)?requisitions\/[^/]+$/.test(pathname) && !pathname.endsWith('/handover') && !pathname.endsWith('/dashboard-stats')) {
     const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'requisition.read'));
     if (!user) return;
     const reqId = pathname.replace(/^\/api\/v1\/requisitions\//, '').replace(/^\/requisitions\//, '');
@@ -1722,7 +1722,7 @@ async function handleRequest(req, res) {
   }
 
   // 13.4.2 API: Update Requisition Details
-  if (req.method === 'PUT' && (pathname.startsWith('/api/v1/requisitions/') || pathname.startsWith('/requisitions/')) && !pathname.endsWith('/handover')) {
+  if (req.method === 'PUT' && /^\/(?:api\/v1\/)?requisitions\/[^/]+$/.test(pathname) && !pathname.endsWith('/handover')) {
     const reqId = pathname.replace(/^\/api\/v1\/requisitions\//, '').replace(/^\/requisitions\//, '');
     const current = (await requisitionService.getRequisitionById(reqId));
     const isS210Draft = current?.formVersion === 'S2-10' && current.status === 'DRAFT';
@@ -1751,7 +1751,7 @@ async function handleRequest(req, res) {
   if (req.method === 'GET' && (pathname === '/api/v1/admin/email-logs' || pathname === '/admin/email-logs')) {
     const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'audit.read'));
     if (!user) return;
-    const logs = (await db.prepare('SELECT * FROM email_logs ORDER BY created_at DESC LIMIT 50').all());
+    const logs = (await db.prepare('SELECT * FROM email_logs ORDER BY sent_at DESC LIMIT 50').all());
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({ success: true, total: logs.length, logs }));
     return;
@@ -1907,7 +1907,15 @@ async function handleRequest(req, res) {
     return;
   }
 
-  if(req.method==='GET'&&/^\/(?:api\/v1\/)?candidates\/[^/]+$/.test(pathname)){
+  // S5-07 (SCRUM-117): Candidate Unified Activity Timeline API
+  if (/^\/(?:api\/v1\/)?candidates\/[^/]+\/timeline$/.test(pathname)) {
+    const CandidateTimelineService = require('./services/candidateTimelineService');
+    const CandidateTimelineController = require('./controllers/candidateTimelineController');
+    await new CandidateTimelineController(new CandidateTimelineService(db), rbacMiddleware, authController.authService).handle(req, res, parsedUrl, parseBody);
+    return;
+  }
+
+  if(req.method==='GET'&&/^\/(?:api\/v1\/)?candidates\/[^/]+$/.test(pathname)&&!pathname.endsWith('/export-excel')&&!pathname.endsWith('/export')){
     const user=await rbacMiddleware.authorize(req,res,authController.authService,'candidate.read');
     if(!user)return;
     let candidateId;
@@ -1936,7 +1944,7 @@ async function handleRequest(req, res) {
   }
 
   // S6-01 (SCRUM-84): Export Candidate List to Excel (.xlsx)
-  if (req.method === 'GET' && (pathname === '/api/v1/candidates/export-excel' || pathname === '/candidates/export-excel')) {
+  if (req.method === 'GET' && (pathname === '/api/v1/candidates/export-excel' || pathname === '/candidates/export-excel' || pathname === '/api/v1/candidates/export' || pathname === '/candidates/export')) {
     const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.read'));
     if (!user) return;
     try {
@@ -2130,6 +2138,18 @@ async function handleRequest(req, res) {
   }
 
   // 13.7.2 API: Update Candidate Stage
+  if (req.method === 'PUT' && /^\/(?:api\/v1\/)?candidates\/[^/]+\/rating$/.test(pathname)) {
+    const user = await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.update');
+    if (!user) return;
+    let body, id;
+    try { body = await parseBody(req); id = decodeURIComponent(pathname.split('/').at(-2)); }
+    catch { res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ success: false, code: 'BAD_REQUEST' })); return; }
+    const result = await requisitionService.updateCandidateRating(id, body?.rating, user);
+    res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(result));
+    return;
+  }
+
   if (req.method === 'PUT' && ((pathname.startsWith('/api/v1/candidates/') && pathname.endsWith('/stage')) || (pathname.startsWith('/candidates/') && pathname.endsWith('/stage')))) {
     const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.update'));
     if (!user) return;
@@ -2758,7 +2778,7 @@ async function handleRequest(req, res) {
     const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.read'));
     if (!user) return;
     try {
-      const departmentId = url.searchParams.get('departmentId');
+      const departmentId = parsedUrl.searchParams.get('departmentId');
       const result = await requisitionService.getOnboardingTemplates({ departmentId }, user);
       res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
@@ -2883,9 +2903,9 @@ async function handleRequest(req, res) {
     const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.read'));
     if (!user) return;
     try {
-      const departmentId = url.searchParams.get('departmentId');
-      const status = url.searchParams.get('status');
-      const search = url.searchParams.get('search');
+      const departmentId = parsedUrl.searchParams.get('departmentId');
+      const status = parsedUrl.searchParams.get('status');
+      const search = parsedUrl.searchParams.get('search');
       const result = await requisitionService.listOnboardingChecklists({ departmentId, status, search }, user);
       res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
@@ -2944,11 +2964,11 @@ async function handleRequest(req, res) {
     const user = (await rbacMiddleware.authorize(req, res, authController.authService, 'candidate.read'));
     if (!user) return;
     try {
-      const candidateId = url.searchParams.get('candidateId');
-      const batchId = url.searchParams.get('batchId');
-      const type = url.searchParams.get('type');
-      const limit = url.searchParams.get('limit');
-      const offset = url.searchParams.get('offset');
+      const candidateId = parsedUrl.searchParams.get('candidateId');
+      const batchId = parsedUrl.searchParams.get('batchId');
+      const type = parsedUrl.searchParams.get('type');
+      const limit = parsedUrl.searchParams.get('limit');
+      const offset = parsedUrl.searchParams.get('offset');
       const result = await requisitionService.getCommunicationsHistory({ candidateId, batchId, type, limit, offset }, user);
       res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
@@ -2977,7 +2997,7 @@ async function handleRequest(req, res) {
     if (denyInternalCandidate(res, sessionResult.user)) return;
     const reportUser=await rbacMiddleware.authorize(req,res,authController.authService,'report.read');if(!reportUser)return;
     const result = (await requisitionService.getReports({viewer:reportUser,approvalEnabled:config.REQUISITION_APPROVAL_ENABLED}));
-    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.writeHead(result.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(result));
     return;
   }

@@ -5,7 +5,8 @@ const config = require('../config/config');
 const { EmailService, escapeEmailHtml } = require('./emailService');
 const Rbac = require('../middlewares/rbacMiddleware');
 const Requisitions = require('./requisitionService');
-const pdfParse = require('pdf-parse');
+let pdfParse = null;
+try { pdfParse = require('pdf-parse'); } catch {}
 
 const UPLOADS_DIR = path.resolve(__dirname, '..', '..', 'data', 'cv_uploads');
 

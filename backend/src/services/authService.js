@@ -245,7 +245,8 @@ class AuthService {
       WHERE email = ? AND reason IN ('LOGIN_INVALID_CREDENTIALS', 'LOGIN_ATTEMPTS_LIMIT')
       ORDER BY rowid DESC LIMIT ?`).all(email, config.MAX_FAILED_ATTEMPTS));
     if (records[0]?.reason === 'LOGIN_ATTEMPTS_LIMIT') {
-      const issued = new Date(/[zZ]|[+-]\d{2}:\d{2}$/.test(records[0].attempted_at) ? records[0].attempted_at : records[0].attempted_at.replace(' ', 'T') + 'Z').getTime();
+      const rawAttemptedAt = records[0].attempted_at instanceof Date ? records[0].attempted_at.toISOString() : String(records[0].attempted_at || '');
+      const issued = new Date(/[zZ]|[+-]\d{2}:\d{2}$/.test(rawAttemptedAt) ? rawAttemptedAt : rawAttemptedAt.replace(' ', 'T') + 'Z').getTime();
       const until = issued + config.LOCK_TIME_MINUTES * 60000;
       return until > Date.now() ? { failed_attempts: config.MAX_FAILED_ATTEMPTS, locked_until: new Date(until).toISOString() } : { failed_attempts: 0 };
     }
